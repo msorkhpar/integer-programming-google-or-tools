@@ -1,0 +1,148 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "03-integer-programming-foundations",
+    "10-cuts-presolve-heuristics"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 3,
+  "ingested": "2026-11-13",
+  "title": "Search the RINS neighbourhood",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A feeder-reinforcement model maximizes $`\\sum_j v_j x_j`$ subject to $`\\sum_j c_j x_j \\le B`$ and $`x_j \\in \\{0, 1\\}`$. The search has an incumbent plan $`\\hat x`$ and an LP optimum $`x^*`$. Write the RINS step for it."
+    },
+    {
+      "type": "para",
+      "text": "Write `rins(values, costs, budget, incumbent, x)` in `rins.py`. `incumbent` maps each item to 0 or 1 and `x` maps it to its LP value."
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "**Fix where they agree.** Item $`j`$ is fixed at $`\\hat x_j`$ when $`|x^*_j - \\hat x_j| < 10^{-6}`$; every other item is free.",
+        "**Solve the neighbourhood.** Over every 0-1 choice of the free items, with the fixed items at their values, keep the choices whose total cost (fixed items included) is at most $`B`$, and return the sorted list of the items in the most valuable one. On a tie, keep the one found first when the free items, sorted by name, are tried with `itertools.product((0, 1), repeat=...)`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "If no choice fits the budget (it happens only when the items fixed at 1 already cost more than $`B`$, so the incumbent itself broke the budget), there is no plan in the neighbourhood: return `None`, not an empty list, since the empty plan is not in the neighbourhood either. The reference solution does exactly that."
+    },
+    {
+      "type": "para",
+      "text": "The tests have at most four free items, so trying every choice is fast."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport itertools\n\nEPS = 1e-6\n\n\ndef rins(values: dict[str, float], costs: dict[str, float], budget: float,\n         incumbent: dict[str, int], x: dict[str, float]) -> list[str] | None:\n    \"\"\"The best plan among those that keep every variable the incumbent and the LP agree on.\"\"\"\n    fixed = {j: incumbent[j] for j in incumbent if abs(x[j] - incumbent[j]) < EPS}\n    free = sorted(j for j in incumbent if j not in fixed)\n    best, best_value = None, None\n    for choice in itertools.product((0, 1), repeat=len(free)):\n        plan = {**fixed, **dict(zip(free, choice))}\n        if sum(costs[j] * plan[j] for j in plan) > budget:\n            continue\n        total = sum(values[j] * plan[j] for j in plan)\n        if best_value is None or total > best_value:\n            best, best_value = plan, total\n    if best is None:\n        return None\n    return sorted(j for j in best if best[j])\n\n\nif __name__ == \"__main__\":\n    values, costs = {\"A\": 7, \"B\": 6, \"C\": 5, \"D\": 2}, {\"A\": 5, \"B\": 4, \"C\": 3, \"D\": 1}\n    print(rins(values, costs, 9, {\"A\": 1, \"B\": 0, \"C\": 0, \"D\": 1}, {\"A\": 0.2, \"B\": 1, \"C\": 1, \"D\": 1}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport itertools\n\nEPS = 1e-6\n\n\ndef rins(values: dict[str, float], costs: dict[str, float], budget: float,\n         incumbent: dict[str, int], x: dict[str, float]) -> list[str] | None:\n    \"\"\"The best plan among those that keep every variable the incumbent and the LP agree on.\"\"\"\n    # TODO: fix the items where |x_j - incumbent_j| < EPS; try every 0-1 choice of the free items\n    # with itertools.product; keep the best one within the budget.\n    return []\n\n\nif __name__ == \"__main__\":\n    values, costs = {\"A\": 7, \"B\": 6, \"C\": 5, \"D\": 2}, {\"A\": 5, \"B\": 4, \"C\": 3, \"D\": 1}\n    print(rins(values, costs, 9, {\"A\": 1, \"B\": 0, \"C\": 0, \"D\": 1}, {\"A\": 0.2, \"B\": 1, \"C\": 1, \"D\": 1}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "68411f7a87828bbd326954a9525d94cd8567d7b03b051896b8ff5892921fd0d1",
+  "starting_code": "from __future__ import annotations\n\nimport itertools\n\nEPS = 1e-6\n\n\ndef rins(values: dict[str, float], costs: dict[str, float], budget: float,\n         incumbent: dict[str, int], x: dict[str, float]) -> list[str] | None:\n    \"\"\"The best plan among those that keep every variable the incumbent and the LP agree on.\"\"\"\n    # TODO: fix the items where |x_j - incumbent_j| < EPS; try every 0-1 choice of the free items\n    # with itertools.product; keep the best one within the budget.\n    return []\n\n\nif __name__ == \"__main__\":\n    values, costs = {\"A\": 7, \"B\": 6, \"C\": 5, \"D\": 2}, {\"A\": 5, \"B\": 4, \"C\": 3, \"D\": 1}\n    print(rins(values, costs, 9, {\"A\": 1, \"B\": 0, \"C\": 0, \"D\": 1}, {\"A\": 0.2, \"B\": 1, \"C\": 1, \"D\": 1}))\n",
+  "exercise": {
+    "main_path": "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-03/practice-3/rins.py",
+    "test_path": "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-03/practice-3/test_rins.py",
+    "run_command": [
+      "python3",
+      "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-03/practice-3/rins.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-03/practice-3/target/report.xml",
+      "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-03/practice-3/test_rins.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_best_plan_of_the_neighbourhood_is_returned",
+        "kind": "main",
+        "says": "with one variable fixed by agreement, the best plan over the three free ones is returned"
+      },
+      {
+        "id": "test_with_no_agreement_the_whole_problem_is_searched",
+        "kind": "main",
+        "says": "when the incumbent and the LP agree nowhere, every item is free and the best plan overall is returned"
+      },
+      {
+        "id": "test_an_lp_value_just_under_one_agrees_with_a_one",
+        "kind": "edge",
+        "says": "an LP value of 0.9999999 agrees with an incumbent 1, so that variable stays fixed"
+      },
+      {
+        "id": "test_a_fractional_value_never_agrees",
+        "kind": "edge",
+        "says": "an LP value of 0.3 does not agree with an incumbent 0, so that variable is free"
+      },
+      {
+        "id": "test_a_neighbourhood_with_no_plan_in_budget_gives_none",
+        "kind": "edge",
+        "says": "when the fixed items alone break the budget, the step returns None"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-03/practice-3/target/report.xml"
+    },
+    "origin": {
+      "path": "10-cuts-presolve-heuristics/README_3.3.3.md",
+      "section": "RINS Solves a Small MIP Where the Incumbent and the LP Disagree"
+    },
+    "concepts": [
+      "variables where the incumbent and the LP agree are fixed and the rest solved exactly"
+    ]
+  }
+}

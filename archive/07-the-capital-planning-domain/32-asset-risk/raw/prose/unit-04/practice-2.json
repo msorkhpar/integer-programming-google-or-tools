@@ -1,0 +1,131 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "07-the-capital-planning-domain",
+    "32-asset-risk"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Coefficients over a fixed service period",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A gas utility's planners fix the end-of-horizon effect differently from lesson 7.3.4. Instead of one window from the plan's first year, they credit every start with the same **service period**: the risk removed in the `service_years` years that follow the end of its work, whenever that is. Each year's reduction is discounted at `rate` back to the plan's first year `first_year`."
+    },
+    {
+      "type": "para",
+      "text": "`yearly_cut(main, years, start, duration, keep)` is written for you: the lesson's yearly risk reduction, for any list of calendar years that begins at `first_year`. Write `coefficients(main, starts, first_year, duration, keep, service_years, rate)` in `coefficients.py`: a dict from each start year in `starts` to its coefficient, $k."
+    },
+    {
+      "type": "para",
+      "text": "In the lesson's notation, write $`\\text{rr}_{s}`$ as a sum: over which years $`y`$, of what $`\\delta_{s,y}`$, divided by what. Remember that the reduction is 0 while the work goes on, so you may include those years or not. The tests compute the yearly reductions with `scipy.stats.weibull_min.logsf`. About six lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Main:\n    age: float          # in the plan's first year\n    beta: float\n    eta: float\n    cof: float          # $k per failure\n\n\ndef failures(age: float, beta: float, eta: float) -> float:\n    return ((age + 1) / eta) ** beta - (age / eta) ** beta\n\n\ndef yearly_cut(main: Main, years: list[int], start: int, duration: int, keep: float) -> dict[int, float]:\n    \"\"\"Risk removed in each year ($k); `years` starts at the plan's first year.\"\"\"\n    done = start + duration\n    cut = {}\n    for y in years:\n        old = main.age + (y - years[0])\n        new = old if y < done else keep * (main.age + done - years[0]) + (y - done)\n        cut[y] = main.cof * (failures(old, main.beta, main.eta) - failures(new, main.beta, main.eta))\n    return cut\n\n\ndef coefficients(main: Main, starts: list[int], first_year: int, duration: int, keep: float,\n                 service_years: int, rate: float) -> dict[int, float]:\n    \"\"\"For each start year: the risk removed over its service years, discounted to `first_year`.\"\"\"\n    out = {}\n    for s in starts:\n        years = list(range(first_year, s + duration + service_years))\n        cut = yearly_cut(main, years, s, duration, keep)\n        out[s] = sum(cut[y] / (1 + rate) ** (y - first_year) for y in years)\n    return out\n\n\nif __name__ == \"__main__\":\n    print(coefficients(Main(48, 2.8, 45, 1_200), [2027, 2028, 2029], 2027, 2, 0.0, 10, 0.06))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Main:\n    age: float          # in the plan's first year\n    beta: float\n    eta: float\n    cof: float          # $k per failure\n\n\ndef failures(age: float, beta: float, eta: float) -> float:\n    return ((age + 1) / eta) ** beta - (age / eta) ** beta\n\n\ndef yearly_cut(main: Main, years: list[int], start: int, duration: int, keep: float) -> dict[int, float]:\n    \"\"\"Risk removed in each year ($k); `years` starts at the plan's first year.\"\"\"\n    done = start + duration\n    cut = {}\n    for y in years:\n        old = main.age + (y - years[0])\n        new = old if y < done else keep * (main.age + done - years[0]) + (y - done)\n        cut[y] = main.cof * (failures(old, main.beta, main.eta) - failures(new, main.beta, main.eta))\n    return cut\n\n\ndef coefficients(main: Main, starts: list[int], first_year: int, duration: int, keep: float,\n                 service_years: int, rate: float) -> dict[int, float]:\n    \"\"\"For each start year: the risk removed over its service years, discounted to `first_year`.\"\"\"\n    # TODO: sum each start's yearly reductions up to the end of its service period, discounted.\n    return {s: -1.0 for s in starts}\n\n\nif __name__ == \"__main__\":\n    print(coefficients(Main(48, 2.8, 45, 1_200), [2027, 2028, 2029], 2027, 2, 0.0, 10, 0.06))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "01f247823c08f837ca473fd482c268008673396f9fd84069bb74d64ca6a97994",
+  "starting_code": "from dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Main:\n    age: float          # in the plan's first year\n    beta: float\n    eta: float\n    cof: float          # $k per failure\n\n\ndef failures(age: float, beta: float, eta: float) -> float:\n    return ((age + 1) / eta) ** beta - (age / eta) ** beta\n\n\ndef yearly_cut(main: Main, years: list[int], start: int, duration: int, keep: float) -> dict[int, float]:\n    \"\"\"Risk removed in each year ($k); `years` starts at the plan's first year.\"\"\"\n    done = start + duration\n    cut = {}\n    for y in years:\n        old = main.age + (y - years[0])\n        new = old if y < done else keep * (main.age + done - years[0]) + (y - done)\n        cut[y] = main.cof * (failures(old, main.beta, main.eta) - failures(new, main.beta, main.eta))\n    return cut\n\n\ndef coefficients(main: Main, starts: list[int], first_year: int, duration: int, keep: float,\n                 service_years: int, rate: float) -> dict[int, float]:\n    \"\"\"For each start year: the risk removed over its service years, discounted to `first_year`.\"\"\"\n    # TODO: sum each start's yearly reductions up to the end of its service period, discounted.\n    return {s: -1.0 for s in starts}\n\n\nif __name__ == \"__main__\":\n    print(coefficients(Main(48, 2.8, 45, 1_200), [2027, 2028, 2029], 2027, 2, 0.0, 10, 0.06))\n",
+  "exercise": {
+    "main_path": "practice/07-the-capital-planning-domain/32-asset-risk/prose/unit-04/practice-2/coefficients.py",
+    "test_path": "practice/07-the-capital-planning-domain/32-asset-risk/prose/unit-04/practice-2/test_coefficients.py",
+    "run_command": [
+      "python3",
+      "practice/07-the-capital-planning-domain/32-asset-risk/prose/unit-04/practice-2/coefficients.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/07-the-capital-planning-domain/32-asset-risk/prose/unit-04/practice-2/target/report.xml",
+      "practice/07-the-capital-planning-domain/32-asset-risk/prose/unit-04/practice-2/test_coefficients.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_first_year_start_undiscounted_sums_its_service_years",
+        "kind": "main",
+        "says": "undiscounted, a start in the plan's first year sums the risk removed over its service years"
+      },
+      {
+        "id": "test_a_later_start_counts_as_many_service_years",
+        "kind": "edge",
+        "says": "every start counts the same number of years after its work ends"
+      },
+      {
+        "id": "test_every_start_is_discounted_to_the_plans_first_year",
+        "kind": "edge",
+        "says": "every year's reduction is discounted back to the plan's first year, whatever the start"
+      },
+      {
+        "id": "test_discounting_compounds_each_year",
+        "kind": "edge",
+        "says": "a reduction t years after the plan's first year is divided by (1 + rate) to the power t"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/07-the-capital-planning-domain/32-asset-risk/prose/unit-04/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "32-asset-risk/README_7.3.4.md",
+      "section": "Count the Reduction Over a Fixed Window and Discount It"
+    },
+    "concepts": [
+      "a fixed counting period and discounting turn yearly reductions into one coefficient per start"
+    ]
+  }
+}

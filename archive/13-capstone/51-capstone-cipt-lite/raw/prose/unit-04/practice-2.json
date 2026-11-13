@@ -1,0 +1,174 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "13-capstone",
+    "51-capstone-cipt-lite"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "One planner message for an infeasible Budget Lock scenario",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "Finance has locked the practice utility's numbers for the year (the utility is fictional), and the locked scenario has no plan. Planners will not read row names or a solver status; they need **one message**: which rules clash, the arithmetic that shows it, and the smallest change to a number the scenario set that gives the scenario a plan, checked by a solve."
+    },
+    {
+      "type": "para",
+      "text": "`lock.py` gives you milestone 2's model: `build(snapshot, scenario)` returns a `Built` with the MathOpt `model`, the start variables `x` and `rows`, every row by name (`must_J1`, `force_J4`, `alt_G1`, `after_J5_2028`, `budget_2029`, `region_North_2028`, `crews_lines_2028`, `floor_South`). A scenario's `fix_start` and `force_out` are bounds on the variables, not rows. Also given: `feasible(b)` (does the model have a plan?) and `describe(row, snapshot, scenario)`, one row in the planners' words."
+    },
+    {
+      "type": "para",
+      "text": "Write:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`conflict(b)`: a **deletion filter** (lesson 9.1.3) over the *limit* rows only, the families in `LIMITS`; the decision rows (`once`, `alt`, `after`) stay on. Switch a row off by setting its bounds to $`-\\infty, +\\infty`$; if the model is still infeasible, leave it off for good, otherwise switch it back on. First do this for each whole family, in the order of `LIMITS` (skipping a family with no row), then for each row of the families that stayed, in the order the model holds them (lesson 9.1.5). Return the rows left, sorted, and the number of `feasible` calls. Count only the family and row calls: `conflict` does not first solve to confirm the scenario is infeasible (`message` is only called on one that is). Whatever happens, give every row its own bounds back before you return.",
+        "`required(snapshot, scenario, rows)`: each project a `must_` or `force_` row of the conflict names, with its window's start years, in the conflict's order; then each project the scenario fixes, by id, with its fixed year only.",
+        "`arithmetic(snapshot, scenario, rows)`: for every combination of the required projects' starts (`itertools.product`, in `required`'s order), the **first** `budget_` or `crews_` row of the conflict, in its sorted order, that the combination overruns, counting only the required projects. Lines read `- J1 2027, J2 2028: the 2027 budget needs $200k, has $150k.` or `- J1 2027, J2 2028: lines crews in 2028 need 4, have 3.`; a combination that overruns none gets no line.",
+        "`repair(snapshot, scenario, rows)`: for each conflict row, in order, that is a number the *scenario* set: a crews row, raise it by 1 at a time; a budget row, by $10k at a time. The steps stop at the snapshot's own figure and never pass it: a budget locked at $155k with a snapshot figure of $200k tries $165k, $175k, $185k and $195k, and not $200k, because $205k would be past it. Return the first value that `feasible(build(...))` accepts, as `lines crews in 2028 at 4 instead of 3` or `the 2027 budget at $200k instead of $150k`, or `None`. Every dollar amount in the message, here and in the arithmetic lines, is written with a thousands separator: `$1,250k`.",
+        [
+          "`message(snapshot, scenario)`, exactly these lines:",
+          {
+            "type": "code",
+            "lang": "text",
+            "text": "Budget Lock '<name>' has no plan. These <N> rules cannot all hold:\n- <describe(row)>\n- <id> is fixed by this scenario to start in <year>.\nEvery way to start <required ids, joined with \", \"> runs out:\n<the arithmetic lines>\nSmallest change, checked by a solve: <repair>."
+          },
+          "The `- <describe(row)>` line comes once for each conflict row, in the conflict's order, and the `- <id> is fixed ...` line once for each project the scenario fixes, by id. `<N>` counts the conflict rows and the fixed projects, and the last line is `No single number of the scenario ends it.` when `repair` finds nothing."
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The header names the planning step, `Budget Lock '<name>'`, where the lesson's library writes `Scenario '<name>'`: every scenario this practice sees is a Budget Lock one. The lesson's message also numbers its rules and reports the pre-solve checks and the solve count; this one leaves those out, so that its lines are the conflict, the arithmetic and the change. Lesson 9.1.6 explains why the message names rules, shows the arithmetic and checks its repair by a solve."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport math\nfrom dataclasses import dataclass, field\nfrom itertools import product\n\nfrom ortools.math_opt.python import mathopt\n\n# --- Given: the milestone-2 model, with every row named --------------------------------------------\n\n\ndef starts(project: dict) -> list[int]:\n    return list(range(project[\"earliest\"], project[\"latest\"] + 1))\n\n\ndef spend(project: dict, start: int) -> dict[int, int]:\n    return {start + k: amount for k, amount in enumerate(project[\"cost\"])}\n\n\ndef budget(snapshot: dict, scenario: dict, year: int) -> int:\n    return scenario.get(\"budget\", {}).get(year, snapshot[\"budget\"][year])\n\n\ndef crews(snapshot: dict, scenario: dict, program: str, year: int) -> int:\n    return scenario.get(\"crews\", {}).get(program, {}).get(year, snapshot[\"crews\"][program][year])\n\n\n@dataclass\nclass Built:\n    model: mathopt.Model\n    x: dict[tuple[str, int], mathopt.Variable]\n    rows: dict[str, mathopt.LinearConstraint] = field(default_factory=dict)\n\n\ndef build(snapshot: dict, scenario: dict) -> Built:\n    model = mathopt.Model(name=scenario.get(\"name\", \"base\"))\n    projects = snapshot[\"projects\"]\n    x = {(pid, t): model.add_binary_variable(name=f\"x_{pid}_{t}\") for pid, p in projects.items() for t in starts(p)}\n    b = Built(model, x)\n\n    def row(name, expr):\n        b.rows[name] = model.add_linear_constraint(expr, name=name)\n\n    def started(pid):\n        return mathopt.LinearExpression() + mathopt.fast_sum(x[pid, t] for t in starts(projects[pid]))\n\n    for pid, year in scenario.get(\"fix_start\", {}).items():\n        for t in starts(projects[pid]):\n            x[pid, t].lower_bound = x[pid, t].upper_bound = 1.0 if t == year else 0.0\n    for pid in scenario.get(\"force_out\", []):\n        for t in starts(projects[pid]):\n            x[pid, t].upper_bound = 0.0\n    for pid, p in projects.items():\n        row(f\"must_{pid}\" if p[\"must\"] else f\"once_{pid}\", started(pid) == 1 if p[\"must\"] else started(pid) <= 1)\n    for pid in sorted(scenario.get(\"force_in\", [])):\n        row(f\"force_{pid}\", started(pid) >= 1)\n    for g in sorted({p[\"group\"] for p in projects.values() if p[\"group\"]}):\n        row(f\"alt_{g}\", mathopt.fast_sum(started(pid) for pid, p in projects.items() if p[\"group\"] == g) <= 1)\n    for c, p in projects.items():\n        if p[\"parent\"]:\n            parent = projects[p[\"parent\"]]\n            for t in starts(p):\n                row(f\"after_{c}_{t}\", mathopt.LinearExpression()\n                    + mathopt.fast_sum(x[c, u] for u in starts(p) if u <= t)\n                    - mathopt.fast_sum(x[p[\"parent\"], s] for s in starts(parent) if s <= t - p[\"lag\"]) <= 0)\n    for y in snapshot[\"years\"]:\n        terms = [a * x[pid, t] for pid, p in projects.items() for t in starts(p) for yy, a in spend(p, t).items() if yy == y]\n        row(f\"budget_{y}\", mathopt.LinearExpression() + mathopt.fast_sum(terms) <= budget(snapshot, scenario, y))\n        for r, limits in sorted(snapshot[\"region_budget\"].items()):\n            terms = [a * x[pid, t] for pid, p in projects.items() if p[\"region\"] == r\n                     for t in starts(p) for yy, a in spend(p, t).items() if yy == y]\n            row(f\"region_{r}_{y}\", mathopt.LinearExpression() + mathopt.fast_sum(terms) <= limits[y])\n        for g in sorted(snapshot[\"crews\"]):\n            terms = [p[\"crews\"] * x[pid, t] for pid, p in projects.items() if p[\"program\"] == g\n                     for t in starts(p) if y in spend(p, t)]\n            row(f\"crews_{g}_{y}\", mathopt.LinearExpression() + mathopt.fast_sum(terms) <= crews(snapshot, scenario, g, y))\n    for r, floor in sorted(snapshot[\"floor\"].items()):\n        row(f\"floor_{r}\", mathopt.LinearExpression() + mathopt.fast_sum(\n            sum(p[\"cost\"]) * x[pid, t] for pid, p in projects.items() if p[\"region\"] == r for t in starts(p)) >= floor)\n    model.maximize(mathopt.fast_sum(p[\"npv\"][t] * x[pid, t] for pid, p in projects.items() for t in starts(p)))\n    return b\n\n\ndef feasible(b: Built) -> bool:\n    \"\"\"Does the model have a plan? HiGHS on a model with its objective set to 0.\"\"\"\n    objective = b.model.objective.as_linear_expression()\n    b.model.objective.clear()\n    try:\n        return mathopt.solve(b.model, mathopt.SolverType.HIGHS).termination.reason == mathopt.TerminationReason.OPTIMAL\n    finally:\n        b.model.maximize(objective)\n\n\ndef describe(name: str, snapshot: dict, scenario: dict) -> str:\n    \"\"\"One row in the planners' words.\"\"\"\n    kind, _, rest = name.partition(\"_\")\n    if kind == \"must\":\n        years = \" or \".join(str(t) for t in starts(snapshot[\"projects\"][rest]))\n        return f\"{rest} (must-do) has to start in {years}.\"\n    if kind == \"force\":\n        return f\"{rest} was forced into the plan.\"\n    if kind == \"budget\":\n        set_by = \"in this scenario\" if int(rest) in scenario.get(\"budget\", {}) else \"in the snapshot\"\n        return f\"The {rest} budget is ${budget(snapshot, scenario, int(rest)):,}k {set_by} (snapshot: ${snapshot['budget'][int(rest)]:,}k).\"\n    if kind == \"crews\":\n        program, year = rest.rsplit(\"_\", 1)\n        return (f\"{program.capitalize()} crews have {crews(snapshot, scenario, program, int(year))} crew-months in {year} \"\n                f\"(snapshot: {snapshot['crews'][program][int(year)]}).\")\n    if kind == \"region\":\n        region, year = rest.rsplit(\"_\", 1)\n        return f\"{region} may spend at most ${snapshot['region_budget'][region][int(year)]:,}k in {year}.\"\n    if kind == \"floor\":\n        return f\"{rest} must receive at least ${snapshot['floor'][rest]:,}k.\"\n    return name\n\n\n# --- Yours: the conflict and the message ------------------------------------------------------------\n\nLIMITS = (\"must\", \"force\", \"budget\", \"region\", \"crews\", \"floor\")\n\n\ndef family(name: str) -> str:\n    return name.partition(\"_\")[0]\n\n\ndef conflict(b: Built) -> tuple[list[str], int]:\n    \"\"\"An irreducible set of limit rows that cannot all hold, and the number of solves it took.\"\"\"\n    saved = {n: (r.lower_bound, r.upper_bound) for n, r in b.rows.items()}\n\n    def off(names):\n        for n in names:\n            b.rows[n].lower_bound, b.rows[n].upper_bound = -math.inf, math.inf\n\n    def on(names):\n        for n in names:\n            b.rows[n].lower_bound, b.rows[n].upper_bound = saved[n]\n\n    solves, kept = 0, []\n    try:\n        for fam in LIMITS:\n            names = [n for n in b.rows if family(n) == fam]\n            if not names:\n                continue\n            off(names)\n            solves += 1\n            if feasible(b):\n                on(names)\n                kept += names\n        members = list(kept)\n        for n in kept:\n            off([n])\n            solves += 1\n            if feasible(b):\n                on([n])\n            else:\n                members.remove(n)\n        return sorted(members), solves\n    finally:\n        on(saved)\n\n\ndef required(snapshot: dict, scenario: dict, rows: list[str]) -> dict[str, list[int]]:\n    \"\"\"The projects the conflict's must and force rows name, and every project the scenario fixes,\n    with the start years left to each.\"\"\"\n    out = {}\n    for n in rows:\n        if family(n) in (\"must\", \"force\"):\n            out[n.partition(\"_\")[2]] = starts(snapshot[\"projects\"][n.partition(\"_\")[2]])\n    for pid, year in sorted(scenario.get(\"fix_start\", {}).items()):\n        out[pid] = [year]\n    return out\n\n\ndef arithmetic(snapshot: dict, scenario: dict, rows: list[str]) -> list[str]:\n    \"\"\"For every way to start the conflict's projects, the first of its limits that runs out.\"\"\"\n    need = required(snapshot, scenario, rows)\n    lines = []\n    for chosen in product(*need.values()):\n        plan = dict(zip(need, chosen))\n        for n in rows:\n            kind, _, rest = n.partition(\"_\")\n            if kind == \"budget\":\n                y = int(rest)\n                use = sum(spend(snapshot[\"projects\"][pid], t).get(y, 0) for pid, t in plan.items())\n                cap, what = budget(snapshot, scenario, y), f\"the {y} budget needs ${use:,}k, has $\"\n            elif kind == \"crews\":\n                g, y = rest.rsplit(\"_\", 1)\n                y = int(y)\n                use = sum(snapshot[\"projects\"][pid][\"crews\"] for pid, t in plan.items()\n                          if snapshot[\"projects\"][pid][\"program\"] == g and y in spend(snapshot[\"projects\"][pid], t))\n                cap, what = crews(snapshot, scenario, g, y), f\"{g} crews in {y} need {use}, have \"\n            else:\n                continue\n            if use > cap:\n                starts_text = \", \".join(f\"{pid} {t}\" for pid, t in plan.items())\n                lines.append(f\"- {starts_text}: {what}{cap:,}{'k' if kind == 'budget' else ''}.\")\n                break\n    return lines\n\n\ndef repair(snapshot: dict, scenario: dict, rows: list[str]) -> str | None:\n    \"\"\"The smallest raise of one number the scenario set that gives the scenario a plan, by solving.\"\"\"\n    for n in rows:\n        kind, _, rest = n.partition(\"_\")\n        if kind == \"crews\":\n            g, y = rest.rsplit(\"_\", 1)\n            y = int(y)\n            locked = scenario.get(\"crews\", {}).get(g, {}).get(y)\n            if locked is None:\n                continue\n            for value in range(locked + 1, snapshot[\"crews\"][g][y] + 1):\n                trial = {**scenario, \"crews\": {**scenario[\"crews\"], g: {**scenario[\"crews\"][g], y: value}}}\n                if feasible(build(snapshot, trial)):\n                    return f\"{g} crews in {y} at {value} instead of {locked}\"\n        if kind == \"budget\":\n            y = int(rest)\n            locked = scenario.get(\"budget\", {}).get(y)\n            if locked is None:\n                continue\n            for value in range(locked + 10, snapshot[\"budget\"][y] + 1, 10):\n                if feasible(build(snapshot, {**scenario, \"budget\": {**scenario[\"budget\"], y: value}})):\n                    return f\"the {y} budget at ${value:,}k instead of ${locked:,}k\"\n    return None\n\n\ndef message(snapshot: dict, scenario: dict) -> str:\n    rows, _ = conflict(build(snapshot, scenario))\n    need = required(snapshot, scenario, rows)\n    fixed = sorted(scenario.get(\"fix_start\", {}).items())\n    lines = [f\"Budget Lock '{scenario['name']}' has no plan. These {len(rows) + len(fixed)} rules cannot all hold:\"]\n    lines += [f\"- {describe(n, snapshot, scenario)}\" for n in rows]\n    lines += [f\"- {pid} is fixed by this scenario to start in {year}.\" for pid, year in fixed]\n    lines.append(f\"Every way to start {', '.join(need)} runs out:\")\n    lines += arithmetic(snapshot, scenario, rows)\n    fix = repair(snapshot, scenario, rows)\n    lines.append(f\"Smallest change, checked by a solve: {fix}.\" if fix else \"No single number of the scenario ends it.\")\n    return \"\\n\".join(lines)\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport math\nfrom dataclasses import dataclass, field\nfrom itertools import product\n\nfrom ortools.math_opt.python import mathopt\n\n# --- Given: the milestone-2 model, with every row named --------------------------------------------\n\n\ndef starts(project: dict) -> list[int]:\n    return list(range(project[\"earliest\"], project[\"latest\"] + 1))\n\n\ndef spend(project: dict, start: int) -> dict[int, int]:\n    return {start + k: amount for k, amount in enumerate(project[\"cost\"])}\n\n\ndef budget(snapshot: dict, scenario: dict, year: int) -> int:\n    return scenario.get(\"budget\", {}).get(year, snapshot[\"budget\"][year])\n\n\ndef crews(snapshot: dict, scenario: dict, program: str, year: int) -> int:\n    return scenario.get(\"crews\", {}).get(program, {}).get(year, snapshot[\"crews\"][program][year])\n\n\n@dataclass\nclass Built:\n    model: mathopt.Model\n    x: dict[tuple[str, int], mathopt.Variable]\n    rows: dict[str, mathopt.LinearConstraint] = field(default_factory=dict)\n\n\ndef build(snapshot: dict, scenario: dict) -> Built:\n    model = mathopt.Model(name=scenario.get(\"name\", \"base\"))\n    projects = snapshot[\"projects\"]\n    x = {(pid, t): model.add_binary_variable(name=f\"x_{pid}_{t}\") for pid, p in projects.items() for t in starts(p)}\n    b = Built(model, x)\n\n    def row(name, expr):\n        b.rows[name] = model.add_linear_constraint(expr, name=name)\n\n    def started(pid):\n        return mathopt.LinearExpression() + mathopt.fast_sum(x[pid, t] for t in starts(projects[pid]))\n\n    for pid, year in scenario.get(\"fix_start\", {}).items():\n        for t in starts(projects[pid]):\n            x[pid, t].lower_bound = x[pid, t].upper_bound = 1.0 if t == year else 0.0\n    for pid in scenario.get(\"force_out\", []):\n        for t in starts(projects[pid]):\n            x[pid, t].upper_bound = 0.0\n    for pid, p in projects.items():\n        row(f\"must_{pid}\" if p[\"must\"] else f\"once_{pid}\", started(pid) == 1 if p[\"must\"] else started(pid) <= 1)\n    for pid in sorted(scenario.get(\"force_in\", [])):\n        row(f\"force_{pid}\", started(pid) >= 1)\n    for g in sorted({p[\"group\"] for p in projects.values() if p[\"group\"]}):\n        row(f\"alt_{g}\", mathopt.fast_sum(started(pid) for pid, p in projects.items() if p[\"group\"] == g) <= 1)\n    for c, p in projects.items():\n        if p[\"parent\"]:\n            parent = projects[p[\"parent\"]]\n            for t in starts(p):\n                row(f\"after_{c}_{t}\", mathopt.LinearExpression()\n                    + mathopt.fast_sum(x[c, u] for u in starts(p) if u <= t)\n                    - mathopt.fast_sum(x[p[\"parent\"], s] for s in starts(parent) if s <= t - p[\"lag\"]) <= 0)\n    for y in snapshot[\"years\"]:\n        terms = [a * x[pid, t] for pid, p in projects.items() for t in starts(p) for yy, a in spend(p, t).items() if yy == y]\n        row(f\"budget_{y}\", mathopt.LinearExpression() + mathopt.fast_sum(terms) <= budget(snapshot, scenario, y))\n        for r, limits in sorted(snapshot[\"region_budget\"].items()):\n            terms = [a * x[pid, t] for pid, p in projects.items() if p[\"region\"] == r\n                     for t in starts(p) for yy, a in spend(p, t).items() if yy == y]\n            row(f\"region_{r}_{y}\", mathopt.LinearExpression() + mathopt.fast_sum(terms) <= limits[y])\n        for g in sorted(snapshot[\"crews\"]):\n            terms = [p[\"crews\"] * x[pid, t] for pid, p in projects.items() if p[\"program\"] == g\n                     for t in starts(p) if y in spend(p, t)]\n            row(f\"crews_{g}_{y}\", mathopt.LinearExpression() + mathopt.fast_sum(terms) <= crews(snapshot, scenario, g, y))\n    for r, floor in sorted(snapshot[\"floor\"].items()):\n        row(f\"floor_{r}\", mathopt.LinearExpression() + mathopt.fast_sum(\n            sum(p[\"cost\"]) * x[pid, t] for pid, p in projects.items() if p[\"region\"] == r for t in starts(p)) >= floor)\n    model.maximize(mathopt.fast_sum(p[\"npv\"][t] * x[pid, t] for pid, p in projects.items() for t in starts(p)))\n    return b\n\n\ndef feasible(b: Built) -> bool:\n    \"\"\"Does the model have a plan? HiGHS on a model with its objective set to 0.\"\"\"\n    objective = b.model.objective.as_linear_expression()\n    b.model.objective.clear()\n    try:\n        return mathopt.solve(b.model, mathopt.SolverType.HIGHS).termination.reason == mathopt.TerminationReason.OPTIMAL\n    finally:\n        b.model.maximize(objective)\n\n\ndef describe(name: str, snapshot: dict, scenario: dict) -> str:\n    \"\"\"One row in the planners' words.\"\"\"\n    kind, _, rest = name.partition(\"_\")\n    if kind == \"must\":\n        years = \" or \".join(str(t) for t in starts(snapshot[\"projects\"][rest]))\n        return f\"{rest} (must-do) has to start in {years}.\"\n    if kind == \"force\":\n        return f\"{rest} was forced into the plan.\"\n    if kind == \"budget\":\n        set_by = \"in this scenario\" if int(rest) in scenario.get(\"budget\", {}) else \"in the snapshot\"\n        return f\"The {rest} budget is ${budget(snapshot, scenario, int(rest)):,}k {set_by} (snapshot: ${snapshot['budget'][int(rest)]:,}k).\"\n    if kind == \"crews\":\n        program, year = rest.rsplit(\"_\", 1)\n        return (f\"{program.capitalize()} crews have {crews(snapshot, scenario, program, int(year))} crew-months in {year} \"\n                f\"(snapshot: {snapshot['crews'][program][int(year)]}).\")\n    if kind == \"region\":\n        region, year = rest.rsplit(\"_\", 1)\n        return f\"{region} may spend at most ${snapshot['region_budget'][region][int(year)]:,}k in {year}.\"\n    if kind == \"floor\":\n        return f\"{rest} must receive at least ${snapshot['floor'][rest]:,}k.\"\n    return name\n\n\n# --- Yours: the conflict and the message ------------------------------------------------------------\n\nLIMITS = (\"must\", \"force\", \"budget\", \"region\", \"crews\", \"floor\")\n\n\ndef family(name: str) -> str:\n    return name.partition(\"_\")[0]\n\n\ndef conflict(b: Built) -> tuple[list[str], int]:\n    \"\"\"An irreducible set of limit rows that cannot all hold, and the number of solves it took.\"\"\"\n    # TODO: a deletion filter (the lessons \"IIS with MathOpt, gurobipy and Pyomo\" and\n    # \"CP-SAT assumptions as a conflict finder\"): whole families first, then rows.\n    return [], 0\n\n\ndef required(snapshot: dict, scenario: dict, rows: list[str]) -> dict[str, list[int]]:\n    \"\"\"The projects the conflict's must and force rows name, and every project the scenario fixes,\n    with the start years left to each.\"\"\"\n    # TODO\n    return {}\n\n\ndef arithmetic(snapshot: dict, scenario: dict, rows: list[str]) -> list[str]:\n    \"\"\"For every way to start the conflict's projects, the first of its limits that runs out.\"\"\"\n    # TODO\n    return []\n\n\ndef repair(snapshot: dict, scenario: dict, rows: list[str]) -> str | None:\n    \"\"\"The smallest raise of one number the scenario set that gives the scenario a plan, by solving.\"\"\"\n    # TODO\n    return None\n\n\ndef message(snapshot: dict, scenario: dict) -> str:\n    # TODO: the format in the statement.\n    return \"\"\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "bfa601409cd0c217f1584ebf3117aec23b35a53adf728d9d3f1f0020d6d59ec1",
+  "starting_code": "from __future__ import annotations\n\nimport math\nfrom dataclasses import dataclass, field\nfrom itertools import product\n\nfrom ortools.math_opt.python import mathopt\n\n# --- Given: the milestone-2 model, with every row named --------------------------------------------\n\n\ndef starts(project: dict) -> list[int]:\n    return list(range(project[\"earliest\"], project[\"latest\"] + 1))\n\n\ndef spend(project: dict, start: int) -> dict[int, int]:\n    return {start + k: amount for k, amount in enumerate(project[\"cost\"])}\n\n\ndef budget(snapshot: dict, scenario: dict, year: int) -> int:\n    return scenario.get(\"budget\", {}).get(year, snapshot[\"budget\"][year])\n\n\ndef crews(snapshot: dict, scenario: dict, program: str, year: int) -> int:\n    return scenario.get(\"crews\", {}).get(program, {}).get(year, snapshot[\"crews\"][program][year])\n\n\n@dataclass\nclass Built:\n    model: mathopt.Model\n    x: dict[tuple[str, int], mathopt.Variable]\n    rows: dict[str, mathopt.LinearConstraint] = field(default_factory=dict)\n\n\ndef build(snapshot: dict, scenario: dict) -> Built:\n    model = mathopt.Model(name=scenario.get(\"name\", \"base\"))\n    projects = snapshot[\"projects\"]\n    x = {(pid, t): model.add_binary_variable(name=f\"x_{pid}_{t}\") for pid, p in projects.items() for t in starts(p)}\n    b = Built(model, x)\n\n    def row(name, expr):\n        b.rows[name] = model.add_linear_constraint(expr, name=name)\n\n    def started(pid):\n        return mathopt.LinearExpression() + mathopt.fast_sum(x[pid, t] for t in starts(projects[pid]))\n\n    for pid, year in scenario.get(\"fix_start\", {}).items():\n        for t in starts(projects[pid]):\n            x[pid, t].lower_bound = x[pid, t].upper_bound = 1.0 if t == year else 0.0\n    for pid in scenario.get(\"force_out\", []):\n        for t in starts(projects[pid]):\n            x[pid, t].upper_bound = 0.0\n    for pid, p in projects.items():\n        row(f\"must_{pid}\" if p[\"must\"] else f\"once_{pid}\", started(pid) == 1 if p[\"must\"] else started(pid) <= 1)\n    for pid in sorted(scenario.get(\"force_in\", [])):\n        row(f\"force_{pid}\", started(pid) >= 1)\n    for g in sorted({p[\"group\"] for p in projects.values() if p[\"group\"]}):\n        row(f\"alt_{g}\", mathopt.fast_sum(started(pid) for pid, p in projects.items() if p[\"group\"] == g) <= 1)\n    for c, p in projects.items():\n        if p[\"parent\"]:\n            parent = projects[p[\"parent\"]]\n            for t in starts(p):\n                row(f\"after_{c}_{t}\", mathopt.LinearExpression()\n                    + mathopt.fast_sum(x[c, u] for u in starts(p) if u <= t)\n                    - mathopt.fast_sum(x[p[\"parent\"], s] for s in starts(parent) if s <= t - p[\"lag\"]) <= 0)\n    for y in snapshot[\"years\"]:\n        terms = [a * x[pid, t] for pid, p in projects.items() for t in starts(p) for yy, a in spend(p, t).items() if yy == y]\n        row(f\"budget_{y}\", mathopt.LinearExpression() + mathopt.fast_sum(terms) <= budget(snapshot, scenario, y))\n        for r, limits in sorted(snapshot[\"region_budget\"].items()):\n            terms = [a * x[pid, t] for pid, p in projects.items() if p[\"region\"] == r\n                     for t in starts(p) for yy, a in spend(p, t).items() if yy == y]\n            row(f\"region_{r}_{y}\", mathopt.LinearExpression() + mathopt.fast_sum(terms) <= limits[y])\n        for g in sorted(snapshot[\"crews\"]):\n            terms = [p[\"crews\"] * x[pid, t] for pid, p in projects.items() if p[\"program\"] == g\n                     for t in starts(p) if y in spend(p, t)]\n            row(f\"crews_{g}_{y}\", mathopt.LinearExpression() + mathopt.fast_sum(terms) <= crews(snapshot, scenario, g, y))\n    for r, floor in sorted(snapshot[\"floor\"].items()):\n        row(f\"floor_{r}\", mathopt.LinearExpression() + mathopt.fast_sum(\n            sum(p[\"cost\"]) * x[pid, t] for pid, p in projects.items() if p[\"region\"] == r for t in starts(p)) >= floor)\n    model.maximize(mathopt.fast_sum(p[\"npv\"][t] * x[pid, t] for pid, p in projects.items() for t in starts(p)))\n    return b\n\n\ndef feasible(b: Built) -> bool:\n    \"\"\"Does the model have a plan? HiGHS on a model with its objective set to 0.\"\"\"\n    objective = b.model.objective.as_linear_expression()\n    b.model.objective.clear()\n    try:\n        return mathopt.solve(b.model, mathopt.SolverType.HIGHS).termination.reason == mathopt.TerminationReason.OPTIMAL\n    finally:\n        b.model.maximize(objective)\n\n\ndef describe(name: str, snapshot: dict, scenario: dict) -> str:\n    \"\"\"One row in the planners' words.\"\"\"\n    kind, _, rest = name.partition(\"_\")\n    if kind == \"must\":\n        years = \" or \".join(str(t) for t in starts(snapshot[\"projects\"][rest]))\n        return f\"{rest} (must-do) has to start in {years}.\"\n    if kind == \"force\":\n        return f\"{rest} was forced into the plan.\"\n    if kind == \"budget\":\n        set_by = \"in this scenario\" if int(rest) in scenario.get(\"budget\", {}) else \"in the snapshot\"\n        return f\"The {rest} budget is ${budget(snapshot, scenario, int(rest)):,}k {set_by} (snapshot: ${snapshot['budget'][int(rest)]:,}k).\"\n    if kind == \"crews\":\n        program, year = rest.rsplit(\"_\", 1)\n        return (f\"{program.capitalize()} crews have {crews(snapshot, scenario, program, int(year))} crew-months in {year} \"\n                f\"(snapshot: {snapshot['crews'][program][int(year)]}).\")\n    if kind == \"region\":\n        region, year = rest.rsplit(\"_\", 1)\n        return f\"{region} may spend at most ${snapshot['region_budget'][region][int(year)]:,}k in {year}.\"\n    if kind == \"floor\":\n        return f\"{rest} must receive at least ${snapshot['floor'][rest]:,}k.\"\n    return name\n\n\n# --- Yours: the conflict and the message ------------------------------------------------------------\n\nLIMITS = (\"must\", \"force\", \"budget\", \"region\", \"crews\", \"floor\")\n\n\ndef family(name: str) -> str:\n    return name.partition(\"_\")[0]\n\n\ndef conflict(b: Built) -> tuple[list[str], int]:\n    \"\"\"An irreducible set of limit rows that cannot all hold, and the number of solves it took.\"\"\"\n    # TODO: a deletion filter (the lessons \"IIS with MathOpt, gurobipy and Pyomo\" and\n    # \"CP-SAT assumptions as a conflict finder\"): whole families first, then rows.\n    return [], 0\n\n\ndef required(snapshot: dict, scenario: dict, rows: list[str]) -> dict[str, list[int]]:\n    \"\"\"The projects the conflict's must and force rows name, and every project the scenario fixes,\n    with the start years left to each.\"\"\"\n    # TODO\n    return {}\n\n\ndef arithmetic(snapshot: dict, scenario: dict, rows: list[str]) -> list[str]:\n    \"\"\"For every way to start the conflict's projects, the first of its limits that runs out.\"\"\"\n    # TODO\n    return []\n\n\ndef repair(snapshot: dict, scenario: dict, rows: list[str]) -> str | None:\n    \"\"\"The smallest raise of one number the scenario set that gives the scenario a plan, by solving.\"\"\"\n    # TODO\n    return None\n\n\ndef message(snapshot: dict, scenario: dict) -> str:\n    # TODO: the format in the statement.\n    return \"\"\n",
+  "exercise": {
+    "main_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-04/practice-2/lock.py",
+    "test_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-04/practice-2/test_lock.py",
+    "run_command": [
+      "python3",
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-04/practice-2/lock.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/13-capstone/51-capstone-cipt-lite/prose/unit-04/practice-2/target/report.xml",
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-04/practice-2/test_lock.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_budget_lock_scenario_yields_the_expected_message",
+        "kind": "main",
+        "says": "the infeasible Budget Lock scenario yields the expected message: the clashing rules, every start combination's shortfall, and the smallest checked change"
+      },
+      {
+        "id": "test_families_are_filtered_before_their_rows",
+        "kind": "edge",
+        "says": "the filter drops whole families before single rows, so it finds the same three rules in 13 solves"
+      },
+      {
+        "id": "test_the_filter_leaves_the_model_as_it_found_it",
+        "kind": "edge",
+        "says": "after the filter, every row has its own bounds back and the model is as infeasible as before"
+      },
+      {
+        "id": "test_a_forced_project_is_a_limit_the_filter_can_name",
+        "kind": "edge",
+        "says": "a project planners forced in is one of the rules the filter can name"
+      },
+      {
+        "id": "test_the_change_offered_is_the_smallest_that_works",
+        "kind": "edge",
+        "says": "the change offered is the smallest raise that gives a plan, found by solving, not the snapshot's own figure"
+      },
+      {
+        "id": "test_a_fixed_start_takes_part_in_the_arithmetic",
+        "kind": "edge",
+        "says": "a project the scenario fixes to one year is listed as a rule and counted in the arithmetic"
+      },
+      {
+        "id": "test_amounts_of_a_thousand_or_more_carry_a_thousands_separator",
+        "kind": "edge",
+        "says": "dollar amounts of $1,000k or more are written with a thousands separator"
+      },
+      {
+        "id": "test_the_raises_never_pass_the_snapshot_figure",
+        "kind": "edge",
+        "says": "the $10k raises stop before they pass the snapshot figure, so no change is offered when the next step would pass it"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-04/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "51-capstone-cipt-lite/README_13.1.4.md",
+      "section": "The Message States the Rules, the Arithmetic and One Checked Change"
+    },
+    "concepts": [
+      "a deletion filter over the limit rows, families first, turned into one planner message with its arithmetic and a repair checked by a solve"
+    ]
+  }
+}

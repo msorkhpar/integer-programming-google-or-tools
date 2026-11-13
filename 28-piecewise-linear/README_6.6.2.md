@@ -1,0 +1,297 @@
+# 6.6.2 The Lambda (SOS2-Style) Formulation Built From Binaries
+
+Lesson 6.6.1 ended with the treasury's second offer for the small portfolio: a credit line whose
+first $1,500k costs 0.45 per $k drawn, the next $1,500k 0.25 and the last $2,000k 0.10. The cost is
+concave, the objective pushes it down, and the segment rows let the solver take the cheap tiers
+first: the model charged $620k for a draw that really costs $1,110k. The planners still want the
+true best plan under this offer. That needs a formulation that is exact for a curve of any shape,
+pushed either way. This lesson builds the standard one, the lambda form, from MathOpt's plain binary
+variables, in four rules.
+
+GridCap is a fictional utility's portfolio, generated for this course; the credit line and the
+board approval are invented.
+
+## Weights on the Breakpoints Describe Every Point of the Curve
+
+Take the curve's breakpoints $`(X_0, F_0), \dots, (X_K, F_K)`$; for the falling tiers they are
+(0, 0), (1,500, 675), (3,000, 1,050) and (5,000, 1,250). Give each breakpoint a weight
+$`\lambda_j \ge 0`$, the weights adding up to 1, and let the point be the weighted average of the
+breakpoints:
+
+```math
+b = \sum_{j=0}^{K} \lambda_j X_j, \qquad y = \sum_{j=0}^{K} \lambda_j F_j, \qquad \sum_{j=0}^{K} \lambda_j = 1, \qquad \lambda_j \ge 0
+```
+
+A weighted average of points with non-negative weights that add up to 1 is a **convex combination**
+of them (lesson 1.2.3). Every point of the curve is one. A draw of $2,000k lies on the segment from
+1,500 to 3,000, a third of the way along, so $`\lambda_1 = 2/3`$, $`\lambda_2 = 1/3`$ and the others 0
+give $`b = 2{,}000`$ and $`y = \tfrac23 \cdot 675 + \tfrac13 \cdot 1{,}050 = 800`$, the true cost.
+
+The trouble is the converse. The weights describe every convex combination of the breakpoints, not
+only the points on the curve. $`\lambda_0 = 0.6`$ and $`\lambda_3 = 0.4`$ also give $`b = 2{,}000`$,
+with $`y = 0.4 \times 1{,}250 = 500`$: a point on the straight line from the first breakpoint to the
+last, below the curve. The program fixes $`b`$ and asks HiGHS for the lowest and highest $`y`$ the
+weights allow:
+
+```text
+MathOpt Model methods naming SOS: []
+CP-SAT CpModel methods naming SOS: []
+falling tiers, breakpoints [(0.0, 0.0), (1500.0, 675.0), (3000.0, 1050.0), (5000.0, 1250.0)]
+x     | f(x) | weights only  | weights + segment binaries
+1000  |  450 | 250 to 450    | 450
+2000  |  800 | 500 to 800    | 800
+3500  | 1100 | 875 to 1100   | 1100
+4500  | 1200 | 1125 to 1200  | 1200
+```
+
+(The first two lines and the last column belong to the next two rules.) With weights only, $`y`$ may lie
+anywhere between the chord from the first to the last breakpoint and the curve itself. A cost pushed
+down slides to the chord. On GridCap small the program solves the credit-line model of lesson 6.6.1
+with the cost written as weights only:
+
+```text
+weights only          : objective $26,768k, drawn $4,900k, weights [0.02, 0.0, 0.0, 0.98]
+                        cost charged $1,225k, real cost $1,240k, plan really worth $26,753k
+```
+
+The solver put its weight on breakpoints 0 and 3, which are not neighbours, and charged $1,225k for a
+$4,900k draw that really costs $1,240k. Here the plan happens to be right and the claim is off by
+$15k; at other draws the table shows the gap reaching $300k (at $2,000k: 500 against 800).
+
+## Two Neighbouring Weights Pin the Point to the Curve
+
+The fix is a rule about which weights may be positive: **at most two, and they must be
+neighbours**, $`\lambda_{k-1}`$ and $`\lambda_k`$ for one segment $`k`$. A convex combination of two
+neighbouring breakpoints is a point on the straight piece between them, which is the curve. So with
+the rule, every allowed $`(b, y)`$ is on the curve, and every point of the curve is allowed. The rule
+does not care about the curve's shape or the push, which is what this lesson needed.
+
+An ordered list of variables of which at most two may be nonzero, and only two consecutive ones, is
+called a **special ordered set of type 2**, or **SOS2**; Vielma's survey traces SOS constraints to
+Beale and Tomlin. (Type 1, SOS1, allows at most one nonzero.) Some modeling tools hand an SOS2
+constraint to the solver as it is (Pyomo's `Piecewise` does by default, lesson 6.6.4). MathOpt's
+Python model cannot: the first line of the output above lists every method of `mathopt.Model` whose
+name mentions SOS, and the second every such method of CP-SAT's `CpModel`; there is none. The OR-Tools MathOpt overview lists
+SOS among the constraint kinds MathOpt's design covers, but OR-Tools 9.15's Python `Model`
+(`model.py`) has `add_linear_constraint`, `add_quadratic_constraint` and `add_indicator_constraint`
+and no SOS method. So in this course the rule is written with binaries,
+which every MILP solver accepts.
+
+## One Binary per Segment Enforces the Neighbour Rule
+
+Give each segment $`k = 1, \dots, K`$ a binary $`z_k`$: 1 if the point lies on segment $`k`$. Exactly
+one segment is chosen, and a breakpoint may carry weight only if a segment it belongs to is chosen.
+Breakpoint 0 belongs to segment 1 only, breakpoint $`K`$ to segment $`K`$ only, and every other
+breakpoint $`j`$ to segments $`j`$ and $`j+1`$:
+
+```math
+\begin{aligned}
+\sum_{k=1}^{K} z_k &= 1 && \text{(one segment)} \\
+\lambda_0 &\le z_1 && \\
+\lambda_j &\le z_j + z_{j+1} && j = 1, \dots, K-1 \quad \text{(near}_j) \\
+\lambda_K &\le z_K && \\
+z_k &\in \{0, 1\} && k = 1, \dots, K
+\end{aligned}
+```
+
+Read it for one choice: $`z_2 = 1`$ and the others 0. Then $`\lambda_0 \le 0`$, $`\lambda_1 \le 1`$,
+$`\lambda_2 \le 1`$, $`\lambda_3 \le 0`$: only the two ends of segment 2 may carry weight, and the
+point lies on segment 2. Each choice of $`z`$ opens exactly one segment, and the weights must add up
+to 1 on it. This is the standard MIP formulation of SOS2 in Vielma's survey (section 6), the
+constraint written with binaries instead of being handed to the solver:
+
+```python
+n = len(curve.xs)
+lam = [model.add_variable(lb=0, ub=1, name=f"{name}_lam{j}") for j in range(n)]
+model.add_linear_constraint(sum(lam) == 1, name=f"{name}_weights")
+seg = []
+if binaries:
+    seg = [model.add_binary_variable(name=f"{name}_seg{k}") for k in range(n - 1)]
+    model.add_linear_constraint(sum(seg) == 1, name=f"{name}_one_segment")
+    for j in range(n):
+        touching = [seg[k] for k in (j - 1, j) if 0 <= k < n - 1]
+        model.add_linear_constraint(lam[j] <= sum(touching), name=f"{name}_near{j}")
+x = sum(curve.xs[j] * lam[j] for j in range(n))
+y = sum(curve.ys[j] * lam[j] for j in range(n))
+```
+
+(Python numbers segments from 0, so `seg[k]` is $`z_{k+1}`$ and breakpoint `j` touches `seg[j-1]` and
+`seg[j]`.) The last column of the table above is this form: at every fixed draw, the lowest and the
+highest $`y`$ coincide, and they are $`f(b)`$. On GridCap small:
+
+```text
+weights + seg binaries: objective $26,753k, drawn $4,900k, weights [0.0, 0.0, 0.05, 0.95]
+                        cost charged $1,240k, real cost $1,240k, plan really worth $26,753k
+                        segment binaries [0, 0, 1]
+```
+
+The solver chose segment 3, put its weight on breakpoints 2 and 3 (5% and 95%: a draw of
+$`0.05 \times 3{,}000 + 0.95 \times 5{,}000 = 4{,}900`$), and charged the real cost. The objective,
+$26,753k, is now what the plan is really worth, and it is the true best plan under the falling-tier
+offer. Compare lesson 6.6.1: the segment rows chose a $3,600k draw and claimed $26,861k for a plan
+worth $26,371k.
+
+The price is $`K`$ binaries per curve, here 3, on top of the 40 project binaries. Lesson 6.6.3 shows
+two other ways to write the same rule, one with fewer binaries.
+
+<!-- practice 1 -->
+
+## The Segment Binaries Are Decisions Other Rules Can Use
+
+$`z_k`$ is not only bookkeeping: it says which segment the plan is on, and other rules can read it.
+GridCap's board must approve any draw from the last tier, above $3,000k, and an approval costs the
+treasury $`A`$ thousand dollars in fees and time. One binary $`a`$ for the approval, and one row:
+
+```math
+a \ge z_3 \qquad \text{(needs\_board)}, \qquad \text{objective} \;-\; A\,a
+```
+
+```python
+board = sel.model.add_binary_variable(name="board")
+sel.model.add_linear_constraint(board >= loan.binaries[2], name="needs_board")
+sel.model.maximize(sel.model.objective.as_linear_expression() - approval * board)
+```
+
+```text
+the board must approve any draw from the last tier (above $3,000k); approval costs $A k
+  A = 200: objective $26,553k, drawn $4,900k, segment binaries [0, 0, 1], board 1
+  A = 500: objective $26,253k, drawn $4,900k, segment binaries [0, 0, 1], board 1
+  A = 800: objective $26,043k, drawn $2,970k, segment binaries [0, 1, 0], board 0
+```
+
+Up to $500k of approval cost, the large draw still pays. At $800k, the plan stays in segment 2,
+draws $2,970k and skips the board.
+
+One detail decides how such a rule reads: **at a breakpoint, both neighbouring segments are
+allowed.** A draw of exactly $3,000k is the end of segment 2 and the start of segment 3; with
+$`z_2 = 1`$ it is $`\lambda_2 = 1`$, and no approval is triggered. So $`a \ge z_3`$ states "a draw
+*above* $3,000k needs the board", which is what the board asked for. A rule that must fire *at*
+$3,000k as well cannot be written with $`z`$ alone: the model can always place a draw of exactly
+$3,000k on segment 2. A MILP cannot tell "above" from "at least" on a continuous quantity, so when
+the difference matters, ask the business which side the threshold belongs to and put the
+breakpoint there.
+
+<!-- practice 2 -->
+
+## The Model
+
+The selection model of lesson 1.1.1 on GridCap small with the falling-tier credit line in lambda
+form, marked. `credit_exact.py` solves it, then adds the board approval of the last rule.
+
+**Sets.** $`P`$ the candidate projects; $`M`$, $`C`$ and $`\mathcal{G}`$ the must-do projects, the
+child projects (parent $`p(c)`$) and the alternative groups; $`j = 0, \dots, K`$ the credit line's
+breakpoints and $`k = 1, \dots, K`$ its segments ($`K = 3`$). ← this lesson
+
+**Parameters.** $`\text{capex}_i`$ and $`\text{npv}_i`$ ($k); $`B = 38{,}390`$ ($k);
+$`(X_j, F_j)`$, the breakpoints: $k drawn and its total cost, (0, 0), (1,500, 675), (3,000, 1,050),
+(5,000, 1,250); $`A`$, the board's approval cost ($k), in the last rule only. ← this lesson
+
+**Variables.**
+
+```math
+\begin{aligned}
+& x_i \in \{0, 1\} && \forall i \in P && \text{(1 if project } i \text{ is funded)} \\
+& 0 \le \lambda_j \le 1 && j = 0, \dots, K && \text{(weight on breakpoint } j\text{)} \quad \leftarrow \text{this lesson} \\
+& z_k \in \{0, 1\} && k = 1, \dots, K && \text{(1 if the draw lies on segment } k\text{)} \quad \leftarrow \text{this lesson} \\
+& a \in \{0, 1\} && && \text{(board approval; last rule only)} \quad \leftarrow \text{this lesson}
+\end{aligned}
+```
+
+**Objective.**
+
+```math
+\max \; \sum_{i \in P} \text{npv}_i\, x_i - \sum_{j=0}^{K} F_j\, \lambda_j \;\big[\, - A\, a \,\big]
+```
+
+**Constraints.**
+
+```math
+\begin{aligned}
+\sum_{i \in P} \text{capex}_i\, x_i &\le B + \sum_{j=0}^{K} X_j\, \lambda_j && && \text{(budget)} \quad \leftarrow \text{this lesson} \\
+\sum_{j=0}^{K} \lambda_j &= 1 && && \text{(loan\_weights)} \quad \leftarrow \text{this lesson} \\
+\sum_{k=1}^{K} z_k &= 1 && && \text{(loan\_one\_segment)} \quad \leftarrow \text{this lesson} \\
+\lambda_j &\le z_j + z_{j+1} && j = 0, \dots, K \quad (z_0 = z_{K+1} = 0) && \text{(loan\_near}_j) \quad \leftarrow \text{this lesson} \\
+a &\ge z_K && && \text{(needs\_board; last rule only)} \quad \leftarrow \text{this lesson} \\
+x_i &= 1 && \forall i \in M && \text{(must}_i) \\
+x_c &\le x_{p(c)} && \forall c \in C && \text{(parent}_c) \\
+\sum_{i \in g} x_i &\le 1 && \forall g \in \mathcal{G} && \text{(alt}_g)
+\end{aligned}
+```
+
+In the code the segments are `loan_seg0` to `loan_seg2` and the near rows `loan_near0` to `loan_near3`.
+
+## Summary
+
+- **Weights on the breakpoints describe every point of the curve.** But weights alone allow any
+  convex combination of breakpoints, so a cost pushed down slides to the chord below the curve.
+- **Two neighbouring weights pin the point to the curve.** The rule is SOS2; MathOpt's Python model
+  (OR-Tools 9.15) has no SOS method, so it is written with binaries.
+- **One binary per segment enforces the neighbour rule.** $`\sum_k z_k = 1`$ and
+  $`\lambda_j \le z_j + z_{j+1}`$; exact for any shape and any push. GridCap's falling tiers: $26,753k,
+  the true best.
+- **The segment binaries are decisions other rules can use.** $`a \ge z_3`$ charges the board's
+  approval exactly when the draw is above $3,000k; at a breakpoint either segment is allowed.
+
+## Reference
+
+| Piece | Rows |
+| --- | --- |
+| the point | $`b = \sum_j \lambda_j X_j`$, $`y = \sum_j \lambda_j F_j`$ |
+| weights | $`\sum_j \lambda_j = 1`$, $`\lambda_j \ge 0`$ |
+| one segment | $`\sum_k z_k = 1`$, $`z_k \in \{0, 1\}`$ |
+| neighbours (SOS2) | $`\lambda_0 \le z_1`$, $`\lambda_j \le z_j + z_{j+1}`$, $`\lambda_K \le z_K`$ |
+| size | $`K + 1`$ weights, $`K`$ binaries, $`K + 3`$ rows |
+
+| Term | Meaning |
+| --- | --- |
+| convex combination | a weighted average with non-negative weights adding up to 1 (lesson 1.2.3) |
+| SOS1 / SOS2 | an ordered set of variables with at most one nonzero / at most two, consecutive |
+| lambda form | a curve written as weights on its breakpoints (also called the convex combination model) |
+
+**Further reading:** [MathOpt (OR-Tools)](https://developers.google.com/optimization/math_opt) (the model features MathOpt lists, SOS constraints among them, and the solvers it calls); [MathOpt `Model` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/model.py) (its `add_*` methods, none of them for SOS in the Python API); [CP-SAT `cp_model` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/sat/python/cp_model.py) (CP-SAT's `CpModel` methods, none of them for SOS either); [Vielma, Mixed Integer Linear Programming Formulation Techniques](https://juan-pablo-vielma.github.io/publications/Mixed-Integer-Linear-Programming-Formulation-Techniques.pdf) (section 6, Example 10: SOS1, SOS2 and their standard binary formulations); [Integer Programming, Chapter 9 of Applied Mathematical Programming (MIT 15.053)](https://web.mit.edu/15.053/www/AMP-Chapter-09.pdf) (section 9.2: economies of scale in a maximization need the binary formulation).
+
+## Challenges
+
+1. Write the rows for a curve with a single segment ($`K = 1`$). How many binaries does it need, and why?
+2. Change `needs_board` so the board must approve any draw of $3,000k or more. What does the model
+   do at exactly $3,000k now? (Hint: add a tiny gap, or a fourth breakpoint.)
+3. Use the lambda form for the *rising* tiers of lesson 6.6.1. The plan cannot change; does anything
+   in the model's size or LP bound?
+
+## Design Note: One Formulation per Curve, Chosen by Its Shape
+
+The lambda form is always correct, so it is tempting to use it for every curve. It costs a binary per
+segment, and lesson 6.6.1 showed that a convex cost pushed down, or a concave value pushed up, needs
+none. A model builder that checks each curve's shape and push, and writes the binary-free form when
+it is enough, keeps the search over the project decisions only. The renewal model of lesson 6.6.4
+does this per asset. Keep the check and the choice in one function, so a reviewer sees in one place
+why a curve did or did not get binaries.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson
+shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy
+of the code, so the course's own files never change.
+
+**adjacent_weights.py.** Checks MathOpt for an SOS method, then fixes the draw and asks how low and
+high the cost may go with weights only and with segment binaries (*Weights on the Breakpoints*, *One
+Binary per Segment*). *Try:* Add 3000 to `POINTS`. Predict both columns at that draw.
+
+- Program: [adjacent_weights.py](src/adjacent_weights.py)
+
+**credit_exact.py.** Solves GridCap small with the falling tiers as weights only and with segment
+binaries, then adds the board approval (*Weights on the Breakpoints*, *One Binary per Segment*, *The
+Segment Binaries Are Decisions*). *Try:* Set the approval cost to 650. Predict whether the plan
+crosses into the last tier.
+
+- Program: [credit_exact.py](src/credit_exact.py)
+
+**piecewise.py.** The curve and the formulations; `add_lambda` is this lesson's.
+
+- Library: [piecewise.py](src/piecewise.py)
+
+**credit_line.py.** Lesson 6.6.1's program: the two credit lines and `with_credit`, which puts any
+formulation of a curve into the selection model. *Try:* Solve the falling tiers with `add_lambda` in
+place of `add_segments`. Predict the objective.
+
+- Program: [credit_line.py](src/credit_line.py)

@@ -1,0 +1,147 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "27-dependencies-and-groups"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "What a parks department's mandates cost",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A city parks department picks this year's projects under one budget. Each project has a cost and a value (both in $k), and some are **mandated**: a court order or a safety inspection requires them. The council asks the question every planner hears: what do the mandates cost us?"
+    },
+    {
+      "type": "para",
+      "text": "Write two functions in `parks.py`:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`best_value(projects, budget, enforced)`: the value of the best selection that fits the budget, in which every project in `enforced` is funded. A mandated project that is not in `enforced` is treated like any other project: the selection may fund it or not.",
+        "`mandate_costs(projects, budget)`: a dict with one entry per mandated project, its cost, and one entry `\"all\"`, the cost of every mandate together. A mandate's cost is how much more the best selection is worth when that mandate (or, for `\"all\"`, every mandate) is lifted."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Every instance in the tests can fund all its mandates within the budget."
+    },
+    {
+      "type": "para",
+      "text": "Write the model of `best_value` first, with $`P`$ the projects, $`E \\subseteq P`$ the enforced ones, $`c_i`$ and $`v_i`$ the cost and value, and $`B`$ the budget: the variables with their domains, the objective, and each row with its label. Then decide, for each entry of `mandate_costs`, which `enforced` sets it compares. Before you code `\"all\"`, ask whether the single costs can tell you its value."
+    },
+    {
+      "type": "para",
+      "text": "The tests compare your numbers with values worked out by hand on small instances. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    mandated: bool = False\n\n\ndef best_value(projects: list[Project], budget: int, enforced: set[str]) -> float:\n    \"\"\"The best total value within the budget, with every project in `enforced` funded.\"\"\"\n    model = mathopt.Model(name=\"parks\")\n    pick = {p.pid: model.add_binary_variable(name=f\"pick_{p.pid}\") for p in projects}\n    model.add_linear_constraint(sum(p.cost * pick[p.pid] for p in projects) <= budget, name=\"budget\")\n    for pid in enforced:\n        pick[pid].lower_bound = 1.0\n    model.maximize(sum(p.value * pick[p.pid] for p in projects))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    return result.objective_value()\n\n\ndef mandate_costs(projects: list[Project], budget: int) -> dict[str, float]:\n    \"\"\"Each mandated project's cost, and the cost of all mandates together under \"all\".\"\"\"\n    mandated = {p.pid for p in projects if p.mandated}\n    with_all = best_value(projects, budget, mandated)\n    costs = {pid: best_value(projects, budget, mandated - {pid}) - with_all for pid in sorted(mandated)}\n    costs[\"all\"] = best_value(projects, budget, set()) - with_all\n    return costs\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"PLAY\", 4, 5, mandated=True), Project(\"POOL\", 6, 9), Project(\"PATH\", 3, 4)]\n    print(mandate_costs(projects, 9))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    mandated: bool = False\n\n\ndef best_value(projects: list[Project], budget: int, enforced: set[str]) -> float:\n    \"\"\"The best total value within the budget, with every project in `enforced` funded.\"\"\"\n    # TODO: build the selection model, solve it and return its objective value.\n    return 0.0\n\n\ndef mandate_costs(projects: list[Project], budget: int) -> dict[str, float]:\n    \"\"\"Each mandated project's cost, and the cost of all mandates together under \"all\".\"\"\"\n    # TODO: compare best values with and without each mandate. Every cost below is a placeholder.\n    costs = {p.pid: -1.0 for p in projects if p.mandated}\n    costs[\"all\"] = -1.0\n    return costs\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"PLAY\", 4, 5, mandated=True), Project(\"POOL\", 6, 9), Project(\"PATH\", 3, 4)]\n    print(mandate_costs(projects, 9))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "f84f5a69087d6d1fb1ec8b772a91ac042d83c86b60d9a33989fdf4c29199ef64",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    mandated: bool = False\n\n\ndef best_value(projects: list[Project], budget: int, enforced: set[str]) -> float:\n    \"\"\"The best total value within the budget, with every project in `enforced` funded.\"\"\"\n    # TODO: build the selection model, solve it and return its objective value.\n    return 0.0\n\n\ndef mandate_costs(projects: list[Project], budget: int) -> dict[str, float]:\n    \"\"\"Each mandated project's cost, and the cost of all mandates together under \"all\".\"\"\"\n    # TODO: compare best values with and without each mandate. Every cost below is a placeholder.\n    costs = {p.pid: -1.0 for p in projects if p.mandated}\n    costs[\"all\"] = -1.0\n    return costs\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"PLAY\", 4, 5, mandated=True), Project(\"POOL\", 6, 9), Project(\"PATH\", 3, 4)]\n    print(mandate_costs(projects, 9))\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-2/parks.py",
+    "test_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-2/test_parks.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-2/parks.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-2/target/report.xml",
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-2/test_parks.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_best_value_keeps_every_mandate",
+        "kind": "main",
+        "says": "the best value funds every enforced mandate and fits the budget"
+      },
+      {
+        "id": "test_each_mandate_is_priced",
+        "kind": "main",
+        "says": "each mandate's cost is the value gained by lifting it alone"
+      },
+      {
+        "id": "test_a_mandate_the_plan_meets_anyway_costs_nothing",
+        "kind": "edge",
+        "says": "a mandated project the best plan funds anyway costs nothing"
+      },
+      {
+        "id": "test_the_joint_cost_is_not_the_sum",
+        "kind": "edge",
+        "says": "the joint cost comes from lifting every mandate in one solve, not from adding the single costs"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "27-dependencies-and-groups/README_6.5.1.md",
+      "section": "The Cost of a Mandate Is the NPV You Give Up for It"
+    },
+    "concepts": [
+      "a mandate's cost is the best value without its row less the best value with it, and costs of several mandates are measured together"
+    ]
+  }
+}

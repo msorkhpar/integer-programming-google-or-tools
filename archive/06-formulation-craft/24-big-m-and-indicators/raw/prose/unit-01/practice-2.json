@@ -1,0 +1,153 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "24-big-m-and-indicators"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "A loading dock with an overflow yard",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A warehouse ships orders to a utility's storeroom. Each order ships this week by at most one of its options (a small truck, a big truck, rail, ...), and each option unloads a known number of pallets at dock D, or none if it goes to another dock. Dock D takes at most `capacity` pallets a week, **unless** the overflow yard is opened, a binary decision."
+    },
+    {
+      "type": "para",
+      "text": "`choice_variables` (given) creates a binary $`c_{o,k}`$ for each order $`o`$ and option $`k`$, and the row \"at most one option per order\". Write two functions in `dock.py`:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`dock_m(orders, capacity)`: the smallest $`M`$ for dock D's row that the \"at most one option per order\" rows justify (no solve). `orders[o][k]` is the pallets option $`k`$ of order $`o`$ unloads at dock D.",
+        "`add_dock_row(model, choose, orders, capacity, overflow)`: dock D's row, switched by `overflow`, using `dock_m`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The model so far, with $`p_{o,k}`$ the pallets, $`K`$ the capacity and $`v`$ the overflow binary:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& c_{o,k} \\in \\{0, 1\\}, \\quad v \\in \\{0, 1\\} && \\forall o,\\ k \\\\\n& \\textstyle\\sum_{k} c_{o,k} \\le 1 && \\forall o \\quad \\text{(one}_o) \\\\\n& \\text{?} && \\text{(dock\\_D)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Write the row and the formula for $`M`$ in this notation first, then code them. Check $`M`$ by hand on a two-order example before running the tests, and decide what $`M`$ must be when the dock can never be over capacity."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix a plan by its variables' bounds and ask the solver whether it is allowed, so any correct row passes; two more tests check the value `dock_m` returns. About four lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n# orders[order][option] = pallets that option unloads at dock D (0 if it uses another dock)\nOrders = dict[str, dict[str, int]]\n\n\ndef choice_variables(model: mathopt.Model, orders: Orders) -> dict:\n    \"\"\"choose[order, option] = 1: the order ships this week by that option. At most one per order.\"\"\"\n    choose = {(o, opt): model.add_binary_variable(name=f\"choose_{o}_{opt}\") for o, options in orders.items()\n              for opt in options}\n    for o, options in orders.items():\n        model.add_linear_constraint(sum(choose[o, opt] for opt in options) <= 1, name=f\"one_{o}\")\n    return choose\n\n\ndef dock_m(orders: Orders, capacity: int) -> int:\n    \"\"\"The smallest M for dock D's row that the one-option-per-order rows justify.\"\"\"\n    most = sum(max(options.values()) for options in orders.values())\n    return max(0, most - capacity)\n\n\ndef add_dock_row(model: mathopt.Model, choose: dict, orders: Orders, capacity: int,\n                 overflow: mathopt.Variable) -> None:\n    \"\"\"Pallets unloaded at dock D stay within `capacity`, unless the overflow yard is opened.\"\"\"\n    load = sum(pallets * choose[o, opt] for o, options in orders.items() for opt, pallets in options.items())\n    model.add_linear_constraint(load <= capacity + dock_m(orders, capacity) * overflow, name=\"dock_D\")\n\n\nif __name__ == \"__main__\":\n    orders = {\"O1\": {\"small\": 4, \"big\": 9}, \"O2\": {\"small\": 3, \"big\": 7}}\n    print(\"M =\", dock_m(orders, 10))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n# orders[order][option] = pallets that option unloads at dock D (0 if it uses another dock)\nOrders = dict[str, dict[str, int]]\n\n\ndef choice_variables(model: mathopt.Model, orders: Orders) -> dict:\n    \"\"\"choose[order, option] = 1: the order ships this week by that option. At most one per order.\"\"\"\n    choose = {(o, opt): model.add_binary_variable(name=f\"choose_{o}_{opt}\") for o, options in orders.items()\n              for opt in options}\n    for o, options in orders.items():\n        model.add_linear_constraint(sum(choose[o, opt] for opt in options) <= 1, name=f\"one_{o}\")\n    return choose\n\n\ndef dock_m(orders: Orders, capacity: int) -> int:\n    \"\"\"The smallest M for dock D's row that the one-option-per-order rows justify.\"\"\"\n    # TODO\n    return 0\n\n\ndef add_dock_row(model: mathopt.Model, choose: dict, orders: Orders, capacity: int,\n                 overflow: mathopt.Variable) -> None:\n    \"\"\"Pallets unloaded at dock D stay within `capacity`, unless the overflow yard is opened.\"\"\"\n    # TODO: your row.\n    return None\n\n\nif __name__ == \"__main__\":\n    orders = {\"O1\": {\"small\": 4, \"big\": 9}, \"O2\": {\"small\": 3, \"big\": 7}}\n    print(\"M =\", dock_m(orders, 10))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "58973cf3fe8a8d0901ebd2adaa0caa2d093baf229221b6619f1fb7251813fd8e",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n# orders[order][option] = pallets that option unloads at dock D (0 if it uses another dock)\nOrders = dict[str, dict[str, int]]\n\n\ndef choice_variables(model: mathopt.Model, orders: Orders) -> dict:\n    \"\"\"choose[order, option] = 1: the order ships this week by that option. At most one per order.\"\"\"\n    choose = {(o, opt): model.add_binary_variable(name=f\"choose_{o}_{opt}\") for o, options in orders.items()\n              for opt in options}\n    for o, options in orders.items():\n        model.add_linear_constraint(sum(choose[o, opt] for opt in options) <= 1, name=f\"one_{o}\")\n    return choose\n\n\ndef dock_m(orders: Orders, capacity: int) -> int:\n    \"\"\"The smallest M for dock D's row that the one-option-per-order rows justify.\"\"\"\n    # TODO\n    return 0\n\n\ndef add_dock_row(model: mathopt.Model, choose: dict, orders: Orders, capacity: int,\n                 overflow: mathopt.Variable) -> None:\n    \"\"\"Pallets unloaded at dock D stay within `capacity`, unless the overflow yard is opened.\"\"\"\n    # TODO: your row.\n    return None\n\n\nif __name__ == \"__main__\":\n    orders = {\"O1\": {\"small\": 4, \"big\": 9}, \"O2\": {\"small\": 3, \"big\": 7}}\n    print(\"M =\", dock_m(orders, 10))\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-2/dock.py",
+    "test_path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-2/test_dock.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-2/dock.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-2/target/report.xml",
+      "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-2/test_dock.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_load_over_capacity_needs_the_overflow_yard",
+        "kind": "main",
+        "says": "a load within the dock's capacity is allowed without the overflow yard, and one over it refused"
+      },
+      {
+        "id": "test_the_overflow_yard_takes_the_heaviest_plan",
+        "kind": "edge",
+        "says": "with the overflow yard open, every order on its heaviest option is allowed"
+      },
+      {
+        "id": "test_each_order_counts_only_its_heaviest_option",
+        "kind": "edge",
+        "says": "M counts each order once, at its heaviest option"
+      },
+      {
+        "id": "test_m_is_zero_when_the_dock_can_never_overflow",
+        "kind": "edge",
+        "says": "M is 0 when no plan can exceed the dock's capacity"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "24-big-m-and-indicators/README_6.2.1.md",
+      "section": "Rows That Cap a Group Give a Smaller M"
+    },
+    "concepts": [
+      "when at most one variable of a group can be 1, the group adds only its largest coefficient to M",
+      "a row that can never be exceeded needs an M of 0"
+    ]
+  }
+}

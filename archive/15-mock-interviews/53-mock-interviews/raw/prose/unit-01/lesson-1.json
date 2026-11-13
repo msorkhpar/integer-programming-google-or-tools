@@ -1,0 +1,531 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "15-mock-interviews",
+    "53-mock-interviews"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Mock 1: modeling and formulation",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "15.1.1 Mock 1: Modeling and Formulation"
+    },
+    {
+      "type": "para",
+      "text": "You are interviewing for an optimization engineer role on a utility's capital-planning tool. The first round is the one every loop has: the interviewer describes planning rules in words and asks you to turn them into a model, out loud and then on a whiteboard. You practised on GridCap, the course's fictional utility; the interviewer brings their own (also fictional) company, a water utility renewing its pipes. Nothing on this page is real data."
+    },
+    {
+      "type": "para",
+      "text": "How to use the page: read a question, answer it aloud or on paper in about two minutes, and only then open the model answer. Each model answer ends with the follow-ups an interviewer asks next and the lessons that teach the answer. The trap questions are built from answers that sound right and are wrong; some of them come from study guides written for this kind of role. The whiteboard at the end is graded twice: by you, against the model formulation, and by tests, when you code it."
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Part",
+        "Minutes"
+      ],
+      "rows": [
+        [
+          "Rounds 1 and 2: six questions",
+          "10"
+        ],
+        [
+          "Trap questions",
+          "5"
+        ],
+        [
+          "Code practice: lags before the solve",
+          "5"
+        ],
+        [
+          "Whiteboard and its code practice",
+          "10"
+        ]
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Round 1: A Model Is Decisions, One Objective and Labelled Rules"
+    },
+    {
+      "type": "para",
+      "text": "The interviewer starts broad and narrows down. Say the formulation in the order sets, parameters, variables with their domains, objective, labelled constraints: it is the order an interviewer checks."
+    },
+    {
+      "type": "para",
+      "text": "**Q1. A planner says: \"We have 300 candidate pipe renewals and a budget for each of the next five years. Which should we fund, and when?\" What are the decisions, the objective and the rules?**"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Model answer",
+      "open": false,
+      "blocks": [
+        {
+          "type": "para",
+          "text": "The decisions are yes/no choices: fund renewal $`i`$ starting in year $`t`$, one binary $`x_{i,t} \\in \\{0,1\\}`$ for each renewal and each year it may start. The objective is one number that ranks every plan, here the total value of the funded work, $`\\max \\sum_{i,t} v_{i,t}\\, x_{i,t}`$. A second goal (risk, a regional balance) is either folded into that number with a stated weight or written as a constraint; otherwise the model answers a different question. The rules are constraints: each renewal starts at most once, each year's spend stays within its budget, and every rule the planners care about (must-dos, dependencies, alternatives) is a row, because a rule the model does not know about is one it will break. Checking one plan against the rules is cheap; finding the best of $`2^{300}`$ or more is why a solver is needed."
+        },
+        {
+          "type": "para",
+          "text": "*Follow-ups.* \"Why not rank by value per dollar?\" A ranking ignores every rule but one and cannot say *when*. \"What if the value is uncertain?\" Predictions enter as coefficients, and their errors travel with them: ask how wrong a coefficient can be before the plan changes."
+        },
+        {
+          "type": "para",
+          "text": "*Taught in:* lesson 1.1.1; lesson 1.1.2; lesson 6.4.1."
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Q2. Why one binary per renewal and start year, and not one integer variable \"start year\" per renewal?**"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Model answer",
+      "open": false,
+      "blocks": [
+        {
+          "type": "para",
+          "text": "Because everything that depends on the start year, the value, the spend in each year and the crews needed, becomes a nonlinear function of a single integer start year. With one binary per year, each of them is a plain sum of data times variables: the spend in year $`y`$ is $`\\sum_{t \\le y} c_{i,y-t}\\, x_{i,t}`$, linear in the $`x`$. The trade is more variables for every expression linear. A timing window costs nothing: create $`x_{i,t}`$ only for the years in the window, and check that a start in year $`t`$ still finishes inside the horizon."
+        },
+        {
+          "type": "para",
+          "text": "*Follow-ups.* \"What stops a renewal starting twice?\" The row $`\\sum_t x_{i,t} \\le 1`$, or $`= 1`$ for a must-do; forget it and the solver claims the value twice. \"How do you read the schedule?\" From the variables whose value is above 0.5, never `== 1`, because a MILP solver promises whole numbers only within a tolerance."
+        },
+        {
+          "type": "para",
+          "text": "*Taught in:* lesson 6.4.1; lesson 6.4.2."
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Q3. A renewal costs $2.4M over three years. Can you charge it all to its start year?**"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Model answer",
+      "open": false,
+      "blocks": [
+        {
+          "type": "para",
+          "text": "No. A project's cost lands in the years it is worked on, so the budget row of year $`y`$ sums, over every start year $`t \\le y`$, the cost of the project's $`(y-t)`$-th year of work. Charging everything to the start year breaks the budgets the plan claims to respect: on GridCap small it overstated NPV by $656k and overspent 2031 by $3.47M. Build the spend of each year once, as an expression, and let every money rule (budgets, caps, regional floors) reuse it."
+        },
+        {
+          "type": "para",
+          "text": "*Follow-ups.* \"And unspent money?\" If it may carry over, a carry variable links each year to the next and the cash row stays an inequality, because money that is neither spent nor carried lapses; written as an equation, it makes a feasible plan infeasible."
+        },
+        {
+          "type": "para",
+          "text": "*Taught in:* lesson 6.4.2; lesson 6.4.4."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Round 2: Business Rules Are Rows, Written Strong"
+    },
+    {
+      "type": "para",
+      "text": "The interviewer now adds the rules planners actually bring, one at a time, and listens for whether you can say each one as a row."
+    },
+    {
+      "type": "para",
+      "text": "**Q4. \"Renewal R12 is a regulatory must-do.\" Can you give it a very large value instead of a constraint?**"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Model answer",
+      "open": false,
+      "blocks": [
+        {
+          "type": "para",
+          "text": "No. A must-do is an equality row, $`\\sum_t x_{i,t} = 1`$. A large weight hides an infeasible mandate behind an `OPTIMAL` plan that quietly drops the project; the equality makes the solver report `INFEASIBLE`, which is the truth the planners need. Must-dos claim their money first, so you can check before solving that each one fits its window and that the must-dos' least spend fits each year; those checks are necessary, not sufficient."
+        },
+        {
+          "type": "para",
+          "text": "*Follow-ups.* \"What does the mandate cost?\" Solve with and without the row and compare the optima; the costs of several mandates do not add up. \"One of three mains must be renewed, any one?\" One row on the group's sum, $`\\ge 1`$; making each a must-do over-mandates."
+        },
+        {
+          "type": "para",
+          "text": "*Taught in:* lesson 6.5.1."
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Q5. \"R7 may start only after R3 has started, at least two years later.\" Write the rule.**"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Model answer",
+      "open": false,
+      "blocks": [
+        {
+          "type": "para",
+          "text": "Write it in the cumulative form, one row per year of the child's window: the child can have started by year $`t`$ only if the parent had started by $`t - L`$,"
+        },
+        {
+          "type": "code",
+          "lang": "math",
+          "text": "\\sum_{u \\in T_c,\\ u \\le t} x_{c,u} \\;\\le \\sum_{s \\in T_p,\\ s \\le t - L} x_{p,s} \\qquad \\forall t \\in T_c \\qquad \\text{(after}_{c,t})"
+        },
+        {
+          "type": "para",
+          "text": "with $`L = 2`$ here. It needs no big-M: if the parent is never funded, the right side is 0 in every year and the child cannot start. The aggregated alternative, one row comparing start years with a big-M term, allows the same 0/1 plans but has a weaker LP bound; in 96 GridCap scenarios the cumulative bound was never weaker and was tighter in 9."
+        },
+        {
+          "type": "para",
+          "text": "*Follow-ups.* \"What if the lag is from the parent's finish?\" Convert it first: finish-to-start with gap $`g`$ is start-to-start with lag $`d_p + g`$, where $`d_p`$ is the parent's duration. \"A maximum lag too?\" A second row bounds the child from below, switched off when the child is unfunded."
+        },
+        {
+          "type": "para",
+          "text": "*Taught in:* lesson 6.5.2; lesson 6.5.4; lesson 6.4.3."
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Q6. \"For main M4 we can repair or replace, not both.\" And if you must use a big-M somewhere, how do you choose M?**"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Model answer",
+      "open": false,
+      "blocks": [
+        {
+          "type": "para",
+          "text": "Alternatives for one asset share one at-most-one row over all their start variables, $`\\sum_{i \\in g} \\sum_t x_{i,t} \\le 1`$; without it a plan can repair and replace the same asset and claim value that does not exist. A \"keep\" option makes the row an equality and names the choice."
+        },
+        {
+          "type": "para",
+          "text": "For a big-M, the smallest valid $`M`$ is the most the switched row's left side can exceed its right side over every plan the rest of the model allows; variable bounds give a safe value with no solve. Too small an $`M`$ silently refuses real plans; too large weakens the LP bound and lets the integrality tolerance switch a rule off (with $`M = 10^7`$, HiGHS reported `OPTIMAL` for a plan worth more than any allowed plan). After every solve, check the plan against the rule from the data."
+        },
+        {
+          "type": "para",
+          "text": "*Follow-ups.* \"Why not an indicator constraint?\" See the trap questions below."
+        },
+        {
+          "type": "para",
+          "text": "*Taught in:* lesson 6.5.3; lesson 6.2.1; lesson 6.2.2."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Trap Questions: Rows That Look Right and Are Not"
+    },
+    {
+      "type": "para",
+      "text": "Each trap is a question whose common answer is wrong. Decide what is wrong before you open it."
+    },
+    {
+      "type": "para",
+      "text": "**T1. \"A lasts $`d_A`$ years, and B may start only after a gap of $`g`$ years once A has finished, so B starts at least $`d_A + g`$ years after A starts. Write $`\\sum_t t\\,x_{B,t} \\ge \\sum_t (t + d_A + g)\\,x_{A,t} - M(1 - \\sum_t x_{B,t})`$.\" Is that right?**"
+    },
+    {
+      "type": "disclosure",
+      "summary": "What is wrong",
+      "open": false,
+      "blocks": [
+        {
+          "type": "para",
+          "text": "The row compares start years, which is fine when both are funded, but when A is not funded its right side is $`-M(1 - \\sum_t x_{B,t})`$, at most 0, so B may start whenever it likes: the rule \"B needs A\" has gone. The program `formulation_traps.py` fixes three plans and asks HiGHS whether each form allows them (A lasts 2 years, then a 1-year gap, so the lag start to start is 3):"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "child B may start 3 years after parent A starts (A lasts 2 years, then a 1-year gap)\n  plan                   time sum and big-M   cumulative rows\n  A unfunded, B in 2028  allowed              refused\n  A in 2027, B in 2030   allowed              allowed\n  A in 2027, B in 2029   refused              refused"
+        },
+        {
+          "type": "para",
+          "text": "The row also needs an $`M`$ the size of a calendar year (2034 here), which is the scaling trouble of lesson 6.2.2. The cumulative rows of Q5 state both the need and the lag with no $`M`$."
+        },
+        {
+          "type": "para",
+          "text": "*Taught in:* lesson 6.5.4; lesson 6.4.3."
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**T2. \"B may start one year after A is completed: $`\\sum_{s \\le t-1} x_{A,s} \\ge x_{B,t}`$ for every $`t`$.\" Is that the rule?**"
+    },
+    {
+      "type": "disclosure",
+      "summary": "What is wrong",
+      "open": false,
+      "blocks": [
+        {
+          "type": "para",
+          "text": "That row is start-to-start with a lag of one year: it lets B start one year after A *starts*. If A takes three years, \"one year after A is completed\" is start-to-start with lag $`d_A + 1 = 4`$. Convert every lag to start-to-start before writing rows: $`L = d_A + g`$ for a finish-to-start gap $`g`$. Read that way, lesson 6.5.4 found that one of GridCap's projects could never start in its window, which is worth knowing before the solve."
+        },
+        {
+          "type": "para",
+          "text": "*Taught in:* lesson 6.5.4."
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**T3. \"Indicator constraints avoid big-M, so always use them.\" Agree?**"
+    },
+    {
+      "type": "disclosure",
+      "summary": "What is wrong",
+      "open": false,
+      "blocks": [
+        {
+          "type": "para",
+          "text": "Whether an indicator helps depends on the solver. In OR-Tools 9.15, MathOpt's `add_indicator_constraint` is solved by SCIP (one-sided implied rows only: no ranges, no equalities), and refused by HiGHS, CP-SAT through MathOpt, GLOP and PDLP, so a model written with indicators cannot move to HiGHS without being rewritten. A solver that accepts one still needs bounds on the variables to relax it. Use a tight big-M when the data give the bounds, an indicator when they do not and the solver takes it, and check the plan against the rule after every solve. CP-SAT's own `only_enforce_if` is the native form when the model is all-integer."
+        },
+        {
+          "type": "para",
+          "text": "*Taught in:* lesson 4.3.1; lesson 6.2.3."
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**T4. \"Two renewals are identical, so add $`x_{1,t} \\ge x_{2,t}`$ for every year to break the symmetry.\" Safe?**"
+    },
+    {
+      "type": "disclosure",
+      "summary": "What is wrong",
+      "open": false,
+      "blocks": [
+        {
+          "type": "para",
+          "text": "An ordering row must keep at least one copy of every plan. This one says \"if the second starts in year $`t`$, the first starts in that same year\", so a plan that starts the two in different years has no copy left. With one start a year affordable, the best plan funds both, a year apart, and the same-year row throws it away:"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "two identical projects, one start a year fits the budget\n  no order rows     best value  100  plan: S1 2028, S2 2027\n  same-year order   best value   50  plan: S1 2027\n  started-by order  best value  100  plan: S1 2027, S2 2028"
+        },
+        {
+          "type": "para",
+          "text": "Order by \"started by year $`t`$\" instead, $`\\sum_{u \\le t} x_{1,u} \\ge \\sum_{u \\le t} x_{2,u}`$: the first renewal starts no later than the second, and every plan keeps one copy. Then measure: HiGHS also breaks symmetry itself."
+        },
+        {
+          "type": "para",
+          "text": "*Taught in:* lesson 6.7.3."
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Every lag in an interview question arrives in the words of whoever wrote the rule: from a start, from a finish, sometimes to a finish. The first code practice converts them and removes the years no parent start can serve, which is what lesson 6.5.4 does before the solve."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Whiteboard: Pipe Renewals Under Spread Budgets"
+    },
+    {
+      "type": "para",
+      "text": "The interviewer hands you a marker. \"Our renewals each have a window of start years and a cost profile over the years they are worked on. Each year has a budget. Some renewals may start only a number of years after another renewal has started. Some renewals are alternatives for one main, at most one of them. Write the model, then code it.\""
+    },
+    {
+      "type": "para",
+      "text": "Write the sets, parameters, variables with their domains, the objective and every labelled row before you open the model answer."
+    },
+    {
+      "type": "disclosure",
+      "summary": "Model formulation",
+      "open": false,
+      "blocks": [
+        {
+          "type": "para",
+          "text": "**Sets.** $`P`$ the renewals; $`Y`$ the plan's years; $`T_i \\subseteq Y`$ the start years of renewal $`i`$; $`\\mathcal{G}`$ the alternative groups, each a set of renewals; $`C \\subseteq P`$ the renewals with a predecessor, $`p(c)`$ the predecessor of $`c`$."
+        },
+        {
+          "type": "para",
+          "text": "**Parameters.** $`c_{i,k}`$, what renewal $`i`$ spends in its $`k`$-th year of work, $`k = 0, 1, \\dots`$ ($k); $`B_y`$, the budget of year $`y`$ ($k); $`L_c`$, the start-to-start lag of $`c`$ after $`p(c)`$ (years); $`v_{i,t}`$, the value of renewal $`i`$ started in year $`t`$."
+        },
+        {
+          "type": "para",
+          "text": "**Variables.** $`x_{i,t} \\in \\{0, 1\\}`$ for every $`i \\in P`$, $`t \\in T_i`$: renewal $`i`$ starts in year $`t`$."
+        },
+        {
+          "type": "para",
+          "text": "**Objective.**"
+        },
+        {
+          "type": "code",
+          "lang": "math",
+          "text": "\\max \\; \\sum_{i \\in P} \\sum_{t \\in T_i} v_{i,t}\\, x_{i,t}"
+        },
+        {
+          "type": "para",
+          "text": "**Constraints.**"
+        },
+        {
+          "type": "code",
+          "lang": "math",
+          "text": "\\begin{aligned}\n\\sum_{t \\in T_i} x_{i,t} &\\le 1 && \\forall i \\in P && \\text{(once}_i) \\\\\n\\sum_{i \\in P} \\sum_{t \\in T_i,\\ 0 \\le y - t < |c_i|} c_{i,\\,y-t}\\, x_{i,t} &\\le B_y && \\forall y \\in Y && \\text{(budget}_y) \\\\\n\\sum_{u \\in T_c,\\ u \\le t} x_{c,u} &\\le \\sum_{s \\in T_{p(c)},\\ s \\le t - L_c} x_{p(c),s} && \\forall c \\in C,\\ t \\in T_c && \\text{(after}_{c,t}) \\\\\n\\sum_{i \\in g} \\sum_{t \\in T_i} x_{i,t} &\\le 1 && \\forall g \\in \\mathcal{G} && \\text{(alt}_g)\n\\end{aligned}"
+        },
+        {
+          "type": "para",
+          "text": "A year with no possible spend has an empty sum and gets no row. The interviewer's follow-ups: \"Which row would you unit-test first, and how?\" Each one on a hand-made instance where it alone can bind, with an allowed plan and a refused plan at the boundary (lesson 12.3.1). \"Which form of the precedence row, and why?\" The cumulative one, for its LP bound (lesson 6.4.3)."
+        }
+      ]
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Round 1.** Decisions are binaries, one per renewal and start year; the objective is one number; every rule is a labelled row. A cost spread over years is charged in each year it is spent, and an integer \"start year\" variable would make every year-dependent quantity nonlinear.",
+        "**Round 2.** A must-do is an equality row, never a large weight. Precedence is a cumulative row per year, with the lag converted to start-to-start first. Alternatives share one at-most-one row. A big-M comes from bounds, and a loose one weakens the bound and invites tolerance tricks.",
+        "**Traps.** A time-sum precedence row with big-M lets the child start when the parent is unfunded. A start-to-start row does not state a lag from the parent's finish. Indicator support depends on the solver (SCIP takes them through MathOpt, HiGHS refuses them). A symmetry row must keep one copy of every plan; a same-year order row keeps none for plans that start the two in different years."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Question",
+        "Lessons"
+      ],
+      "rows": [
+        [
+          "Q1 decisions, objective, rules",
+          "1.1.1; 1.1.2"
+        ],
+        [
+          "Q2 start-year binaries",
+          "6.4.1"
+        ],
+        [
+          "Q3 spread costs, carry-over",
+          "6.4.2; 6.4.4"
+        ],
+        [
+          "Q4 must-dos",
+          "6.5.1"
+        ],
+        [
+          "Q5, T1, T2 precedence and lags",
+          "6.5.2; 6.5.4; 6.4.3"
+        ],
+        [
+          "Q6 alternatives and big-M",
+          "6.5.3; 6.2.1; 6.2.2"
+        ],
+        [
+          "T3 indicators",
+          "4.3.1; 6.2.3"
+        ],
+        [
+          "T4 symmetry",
+          "6.7.3"
+        ],
+        [
+          "Whiteboard",
+          "12.3.1; the capstone's *Model: multi-period selection with all section 6 rules*; project lesson *Business rules: must-dos, bundles, parents and alternatives*"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [MathOpt `Model` (OR-Tools source, read in the pinned 9.15 wheel)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/model.py) (`add_binary_variable`, `add_linear_constraint` and `add_indicator_constraint`, the calls every answer here uses); [MathOpt indicator constraints (OR-Tools source, read in the pinned 9.15 wheel)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/indicator_constraints.py) (the indicator, the implied row and `activate_on_zero`, whose acceptance the solver decides)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Add a regional cap to the whiteboard model: at most $`S_r`$ spent in region $`r`$ over the whole plan. Which expression do you reuse?",
+        "In `formulation_traps.py`, give A a window that ends in 2028 and predict which of the three plans each form allows.",
+        "Write the \"started-by\" order row of T4 for three identical renewals. How many rows per year?"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Answer With the Formulation, Then the Code"
+    },
+    {
+      "type": "para",
+      "text": "Interviewers grade the formulation more than the code. Say the sets and the variables' domains before any row, name each row with a label you will reuse in code, and say which plans each row allows and refuses. When a rule is ambiguous (\"after\", \"within\"), ask which event the lag is measured from before writing anything: half of the traps on this page are a lag read the wrong way."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each output above was printed by one of these programs. Open one, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**formulation_traps.py.** Fixes plans through the variables' bounds and asks HiGHS whether a time-sum precedence row and the cumulative rows allow them, then solves two identical renewals with no order rows, a same-year order row and a started-by order row (*Trap Questions: Rows That Look Right and Are Not*). *Try:* Change `GAP` to 0 and predict which plans each precedence form allows."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [formulation_traps.py](src/formulation_traps.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**mock_support.py.** The quiet HiGHS solve and the allowed-plan check the module's programs import. It runs nothing itself."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [mock_support.py](src/mock_support.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 10,
+    "paras": 23,
+    "code": 0,
+    "tables": 2,
+    "lists": 4,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 11
+  },
+  "content_sha256": "5a6f07f65445a7c7eaaeab5bf03c6ffa0f578db7e38ac3555597540be57e56ae"
+}

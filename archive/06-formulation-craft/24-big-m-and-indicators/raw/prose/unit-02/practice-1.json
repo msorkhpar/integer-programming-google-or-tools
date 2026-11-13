@@ -1,0 +1,154 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "24-big-m-and-indicators"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Mobile generators and their hookups",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "During a storm, a utility places mobile generators at critical sites (a hospital feeder, a water plant, a shelter). The fleet has `fleet` generator-hours in all. Site $`s`$ is worth a value per generator-hour and can use at most a number of hours (its demand). A site gets generator-hours **only if** a hookup is built there first, which costs a fixed fee. The planners maximize value less fees."
+    },
+    {
+      "type": "para",
+      "text": "`build(sites, fleet, big_m, integer)` in `generators.py` already creates the hours $`g_s \\ge 0`$, the hookup binaries $`h_s`$, the demand and fleet rows and the objective. Write three things:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "the hookup row in `build`, one per site, switched by $`h_s`$, using `big_m[s]`;",
+        "`tight_m(sites, fleet)`: each site's smallest valid $`M`$, from the rows the model already has (no solve);",
+        "`bounds(sites, fleet)`: the LP relaxation's value with $`M = 10^6`$ for every site (`\"loose\"`), the LP relaxation's value with `tight_m` (`\"tight\"`), and the MILP optimum with `tight_m` (`\"milp\"`). Use GLOP for the LPs and HiGHS for the MILP."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The model, with $`v_s`$ the value per hour, $`D_s`$ the demand, $`f_s`$ the fee and $`H`$ the fleet:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& \\textstyle\\sum_s v_s\\, g_s - \\sum_s f_s\\, h_s \\\\\n& g_s \\ge 0, \\quad h_s \\in \\{0, 1\\} && \\forall s \\\\\n& g_s \\le D_s && \\forall s \\quad \\text{(demand}_s) \\\\\n& \\textstyle\\sum_s g_s \\le H && \\text{(fleet)} \\\\\n& \\text{?} && \\forall s \\quad \\text{(hookup}_s)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Write the hookup row and the formula for $`M_s`$ in this notation first. Before running anything, predict which of the two LP values is higher, and why."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix a plan by its variables' bounds and ask the solver whether it is allowed, so any correct row passes; two more tests check `tight_m`'s values and the three numbers `bounds` returns. About ten lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n# sites[name] = (value per generator-hour in $k, hours the site can use, hookup fee in $k)\nSites = dict[str, tuple[float, float, float]]\n\n\ndef build(sites: Sites, fleet: float, big_m: dict[str, float], integer: bool = True):\n    \"\"\"Generator-hours per site, a hookup binary per site, and the fleet's total hours.\"\"\"\n    model = mathopt.Model(name=\"generators\")\n    hours = {s: model.add_variable(lb=0, name=f\"hours_{s}\") for s in sites}\n    hook = {s: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"hook_{s}\") for s in sites}\n    for s, (_, demand, _) in sites.items():\n        model.add_linear_constraint(hours[s] <= demand, name=f\"demand_{s}\")\n    model.add_linear_constraint(sum(hours.values()) <= fleet, name=\"fleet\")\n    for s in sites:\n        model.add_linear_constraint(hours[s] <= big_m[s] * hook[s], name=f\"hookup_{s}\")\n    model.maximize(sum(v * hours[s] for s, (v, _, _) in sites.items())\n                   - sum(fee * hook[s] for s, (_, _, fee) in sites.items()))\n    return model, hours, hook\n\n\ndef tight_m(sites: Sites, fleet: float) -> dict[str, float]:\n    \"\"\"The smallest M for each site's hookup row that the demand and fleet rows justify.\"\"\"\n    return {s: min(demand, fleet) for s, (_, demand, _) in sites.items()}\n\n\ndef bounds(sites: Sites, fleet: float) -> dict[str, float]:\n    \"\"\"The LP bound with M = 1e6, the LP bound with the tight M, and the MILP optimum.\"\"\"\n    loose = {s: 1e6 for s in sites}\n    tight = tight_m(sites, fleet)\n    return {\n        \"loose\": mathopt.solve(build(sites, fleet, loose, integer=False)[0], mathopt.SolverType.GLOP).objective_value(),\n        \"tight\": mathopt.solve(build(sites, fleet, tight, integer=False)[0], mathopt.SolverType.GLOP).objective_value(),\n        \"milp\": mathopt.solve(build(sites, fleet, tight)[0], mathopt.SolverType.HIGHS).objective_value(),\n    }\n\n\nif __name__ == \"__main__\":\n    sites = {\"A\": (40, 30, 500), \"B\": (25, 80, 300), \"C\": (30, 50, 900)}\n    print(tight_m(sites, 100))\n    print(bounds(sites, 100))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n# sites[name] = (value per generator-hour in $k, hours the site can use, hookup fee in $k)\nSites = dict[str, tuple[float, float, float]]\n\n\ndef build(sites: Sites, fleet: float, big_m: dict[str, float], integer: bool = True):\n    \"\"\"Generator-hours per site, a hookup binary per site, and the fleet's total hours.\"\"\"\n    model = mathopt.Model(name=\"generators\")\n    hours = {s: model.add_variable(lb=0, name=f\"hours_{s}\") for s in sites}\n    hook = {s: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"hook_{s}\") for s in sites}\n    for s, (_, demand, _) in sites.items():\n        model.add_linear_constraint(hours[s] <= demand, name=f\"demand_{s}\")\n    model.add_linear_constraint(sum(hours.values()) <= fleet, name=\"fleet\")\n    # TODO: a site gets generator-hours only if it is hooked up, with that site's big_m[s].\n    model.maximize(sum(v * hours[s] for s, (v, _, _) in sites.items())\n                   - sum(fee * hook[s] for s, (_, _, fee) in sites.items()))\n    return model, hours, hook\n\n\ndef tight_m(sites: Sites, fleet: float) -> dict[str, float]:\n    \"\"\"The smallest M for each site's hookup row that the demand and fleet rows justify.\"\"\"\n    return {s: 0.0 for s in sites}\n\n\ndef bounds(sites: Sites, fleet: float) -> dict[str, float]:\n    \"\"\"The LP bound with M = 1e6, the LP bound with the tight M, and the MILP optimum.\"\"\"\n    # TODO: build and solve the three models.\n    return {\"loose\": 0.0, \"tight\": 0.0, \"milp\": 0.0}\n\n\nif __name__ == \"__main__\":\n    sites = {\"A\": (40, 30, 500), \"B\": (25, 80, 300), \"C\": (30, 50, 900)}\n    print(tight_m(sites, 100))\n    print(bounds(sites, 100))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "4d8ef742583bd5167f764778a62bd8baef97f616fd6efbc15fdd38a76891dc78",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n# sites[name] = (value per generator-hour in $k, hours the site can use, hookup fee in $k)\nSites = dict[str, tuple[float, float, float]]\n\n\ndef build(sites: Sites, fleet: float, big_m: dict[str, float], integer: bool = True):\n    \"\"\"Generator-hours per site, a hookup binary per site, and the fleet's total hours.\"\"\"\n    model = mathopt.Model(name=\"generators\")\n    hours = {s: model.add_variable(lb=0, name=f\"hours_{s}\") for s in sites}\n    hook = {s: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"hook_{s}\") for s in sites}\n    for s, (_, demand, _) in sites.items():\n        model.add_linear_constraint(hours[s] <= demand, name=f\"demand_{s}\")\n    model.add_linear_constraint(sum(hours.values()) <= fleet, name=\"fleet\")\n    # TODO: a site gets generator-hours only if it is hooked up, with that site's big_m[s].\n    model.maximize(sum(v * hours[s] for s, (v, _, _) in sites.items())\n                   - sum(fee * hook[s] for s, (_, _, fee) in sites.items()))\n    return model, hours, hook\n\n\ndef tight_m(sites: Sites, fleet: float) -> dict[str, float]:\n    \"\"\"The smallest M for each site's hookup row that the demand and fleet rows justify.\"\"\"\n    return {s: 0.0 for s in sites}\n\n\ndef bounds(sites: Sites, fleet: float) -> dict[str, float]:\n    \"\"\"The LP bound with M = 1e6, the LP bound with the tight M, and the MILP optimum.\"\"\"\n    # TODO: build and solve the three models.\n    return {\"loose\": 0.0, \"tight\": 0.0, \"milp\": 0.0}\n\n\nif __name__ == \"__main__\":\n    sites = {\"A\": (40, 30, 500), \"B\": (25, 80, 300), \"C\": (30, 50, 900)}\n    print(tight_m(sites, 100))\n    print(bounds(sites, 100))\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-02/practice-1/generators.py",
+    "test_path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-02/practice-1/test_generators.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-02/practice-1/generators.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-02/practice-1/target/report.xml",
+      "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-02/practice-1/test_generators.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_generator_hours_need_a_hookup",
+        "kind": "main",
+        "says": "generator-hours at a hooked-up site are allowed, and at a site with no hookup refused"
+      },
+      {
+        "id": "test_a_hooked_site_may_use_all_its_demand",
+        "kind": "edge",
+        "says": "a hooked-up site may use every hour it can, as long as the fleet has them"
+      },
+      {
+        "id": "test_m_is_the_smaller_of_demand_and_fleet",
+        "kind": "edge",
+        "says": "each site's M is the smaller of its demand and the fleet's hours"
+      },
+      {
+        "id": "test_the_tight_m_lowers_the_lp_bound_and_keeps_the_best_plan",
+        "kind": "edge",
+        "says": "the tight M gives a lower LP bound than 1e6, and the MILP optimum is the same"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "24-big-m-and-indicators/README_6.2.2.md",
+      "section": "A Loose M Weakens the LP Bound; the MILP Optimum Does Not Move"
+    },
+    "concepts": [
+      "a loose M raises the LP bound while every valid M gives the same MILP optimum",
+      "in the LP relaxation a fee-switched rule costs the fee divided by M per unit over the limit"
+    ]
+  }
+}

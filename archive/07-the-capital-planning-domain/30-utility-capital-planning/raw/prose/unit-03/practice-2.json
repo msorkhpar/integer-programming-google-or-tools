@@ -1,0 +1,159 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "07-the-capital-planning-domain",
+    "30-utility-capital-planning"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "A book of scenarios that keeps the planning cycle's rules",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility (a fictional one) keeps its planning scenarios in a **book**: a dictionary from a scenario's name to a record `{\"stage\", \"inputs\", \"plan\", \"parent\"}`. Its planning cycle has the four stages Initial, Pre-Opt, Post-Opt and Budget Lock, and the book must refuse any step that breaks the cycle. Each function returns `True` when it did the step and `False` when it refused, and a refused step changes nothing."
+    },
+    {
+      "type": "para",
+      "text": "Write the six functions in `book.py`:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`create(book, name, inputs)`: a new scenario in Initial, with its own copy of `inputs`, no plan and no parent. A name already in the book is refused.",
+        "`checked(book, name)`: the data checks passed, so an Initial scenario moves to Pre-Opt.",
+        "`optimized(book, name, plan)`: a run finished, so a Pre-Opt scenario moves to Post-Opt and keeps the plan.",
+        "`edit(book, name, changes)`: update the inputs with `changes`. A scenario in Budget Lock refuses. An edit to a scenario in Post-Opt makes its plan out of date: it goes back to Pre-Opt and loses its plan. In Initial or Pre-Opt the stage stays as it is.",
+        "`lock(book, name)`: a Post-Opt scenario becomes the plan of record. There is only ever one: while any scenario of the book is in Budget Lock, every other lock is refused.",
+        "`copy(book, source, name)`: a new scenario in Initial whose inputs start as the source's, with no plan and `parent` set to the source. Editing either one must never change the other."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Any scenario may be copied, whatever its stage; copying a locked plan of record is how a change after lock starts. `create` and `copy` refuse a new name that is already in the book. Every other name the functions receive (the scenario to check, run, edit, lock, or copy from) is one the book has: the tests never pass an unknown one, and the reference simply looks it up, so an unknown name raises `KeyError`."
+    },
+    {
+      "type": "para",
+      "text": "Before you code, draw the four stages and mark which function moves a scenario along each arrow, and which arrows go back. About thirty lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom copy import deepcopy\n\n# A book maps each scenario name to {\"stage\", \"inputs\", \"plan\", \"parent\"}.\n\n\ndef create(book: dict, name: str, inputs: dict) -> bool:\n    if name in book:\n        return False\n    book[name] = {\"stage\": \"Initial\", \"inputs\": deepcopy(inputs), \"plan\": None, \"parent\": None}\n    return True\n\n\ndef checked(book: dict, name: str) -> bool:\n    \"\"\"The data checks passed: Initial moves to Pre-Opt.\"\"\"\n    if book[name][\"stage\"] != \"Initial\":\n        return False\n    book[name][\"stage\"] = \"Pre-Opt\"\n    return True\n\n\ndef edit(book: dict, name: str, changes: dict) -> bool:\n    s = book[name]\n    if s[\"stage\"] == \"Budget Lock\":\n        return False\n    s[\"inputs\"].update(deepcopy(changes))\n    if s[\"stage\"] == \"Post-Opt\":\n        s[\"stage\"], s[\"plan\"] = \"Pre-Opt\", None\n    return True\n\n\ndef optimized(book: dict, name: str, plan: dict) -> bool:\n    s = book[name]\n    if s[\"stage\"] != \"Pre-Opt\":\n        return False\n    s[\"stage\"], s[\"plan\"] = \"Post-Opt\", dict(plan)\n    return True\n\n\ndef lock(book: dict, name: str) -> bool:\n    if book[name][\"stage\"] != \"Post-Opt\" or any(s[\"stage\"] == \"Budget Lock\" for s in book.values()):\n        return False\n    book[name][\"stage\"] = \"Budget Lock\"\n    return True\n\n\ndef copy(book: dict, source: str, name: str) -> bool:\n    if name in book:\n        return False\n    book[name] = {\"stage\": \"Initial\", \"inputs\": deepcopy(book[source][\"inputs\"]), \"plan\": None, \"parent\": source}\n    return True\n\n\nif __name__ == \"__main__\":\n    book = {}\n    print(create(book, \"base\", {\"budget\": 900}), checked(book, \"base\"), optimized(book, \"base\", {\"W1\": 2027}))\n    print(lock(book, \"base\"), edit(book, \"base\", {\"budget\": 800}), book[\"base\"][\"stage\"])\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom copy import deepcopy\n\n# A book maps each scenario name to {\"stage\", \"inputs\", \"plan\", \"parent\"}.\n# TODO: every function below refuses everything and changes nothing; make each one keep the rules.\n\n\ndef create(book: dict, name: str, inputs: dict) -> bool:\n    return False\n\n\ndef checked(book: dict, name: str) -> bool:\n    \"\"\"The data checks passed: Initial moves to Pre-Opt.\"\"\"\n    return False\n\n\ndef edit(book: dict, name: str, changes: dict) -> bool:\n    return False\n\n\ndef optimized(book: dict, name: str, plan: dict) -> bool:\n    return False\n\n\ndef lock(book: dict, name: str) -> bool:\n    return False\n\n\ndef copy(book: dict, source: str, name: str) -> bool:\n    return False\n\n\nif __name__ == \"__main__\":\n    book = {}\n    print(create(book, \"base\", {\"budget\": 900}), checked(book, \"base\"), optimized(book, \"base\", {\"W1\": 2027}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "2c09a91f4d94884da645454bdab89f39524b7f37097c9ce18376a381da555963",
+  "starting_code": "from __future__ import annotations\n\nfrom copy import deepcopy\n\n# A book maps each scenario name to {\"stage\", \"inputs\", \"plan\", \"parent\"}.\n# TODO: every function below refuses everything and changes nothing; make each one keep the rules.\n\n\ndef create(book: dict, name: str, inputs: dict) -> bool:\n    return False\n\n\ndef checked(book: dict, name: str) -> bool:\n    \"\"\"The data checks passed: Initial moves to Pre-Opt.\"\"\"\n    return False\n\n\ndef edit(book: dict, name: str, changes: dict) -> bool:\n    return False\n\n\ndef optimized(book: dict, name: str, plan: dict) -> bool:\n    return False\n\n\ndef lock(book: dict, name: str) -> bool:\n    return False\n\n\ndef copy(book: dict, source: str, name: str) -> bool:\n    return False\n\n\nif __name__ == \"__main__\":\n    book = {}\n    print(create(book, \"base\", {\"budget\": 900}), checked(book, \"base\"), optimized(book, \"base\", {\"W1\": 2027}))\n",
+  "exercise": {
+    "main_path": "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-03/practice-2/book.py",
+    "test_path": "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-03/practice-2/test_book.py",
+    "run_command": [
+      "python3",
+      "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-03/practice-2/book.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-03/practice-2/target/report.xml",
+      "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-03/practice-2/test_book.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_scenario_walks_the_four_stages",
+        "kind": "main",
+        "says": "a scenario goes from Initial to Pre-Opt, Post-Opt and Budget Lock, keeping its plan"
+      },
+      {
+        "id": "test_steps_out_of_order_are_refused",
+        "kind": "main",
+        "says": "a step taken from the wrong stage, or a duplicate name, is refused and changes nothing"
+      },
+      {
+        "id": "test_a_locked_scenario_refuses_edits_and_a_copy_does_not",
+        "kind": "edge",
+        "says": "a locked scenario refuses edits, and its copy starts over and accepts them"
+      },
+      {
+        "id": "test_editing_after_a_run_sends_it_back_and_drops_the_plan",
+        "kind": "edge",
+        "says": "an edit after a run sends the scenario back to Pre-Opt and drops its plan"
+      },
+      {
+        "id": "test_a_copy_has_its_own_inputs",
+        "kind": "edge",
+        "says": "editing a copy leaves the scenario it was copied from unchanged"
+      },
+      {
+        "id": "test_only_one_plan_of_record",
+        "kind": "edge",
+        "says": "a second scenario cannot be locked while one plan of record exists"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-03/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "30-utility-capital-planning/README_7.1.3.md",
+      "section": "Budget Lock Freezes the Plan of Record, and a Change Means a New Scenario"
+    },
+    "concepts": [
+      "Initial, Pre-Opt, Post-Opt and Budget Lock each allow different changes, and steps happen in order",
+      "a locked plan of record refuses edits, and a change goes to a copy with its own inputs",
+      "an edit after a run sends the scenario back to Pre-Opt and invalidates its plan"
+    ]
+  }
+}

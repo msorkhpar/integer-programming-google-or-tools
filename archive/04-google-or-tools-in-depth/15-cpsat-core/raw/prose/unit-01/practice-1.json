@@ -1,0 +1,146 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "15-cpsat-core"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Vans for a food bank's weekend drive",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A food bank (not GridCap) leases vans for its weekend drive. Each van type $`t`$ carries $`\\text{cap}_t`$ pallets and costs $`c_t`$ dollars for the weekend. The dealer has $`a_t`$ vans of the type, and leases them only in packs of $`k_t`$ (a pack of 2 means 0, 2, 4, ... vans). The drive must move `demand` pallets, the board approved `budget` dollars, and every van needs one of the `drivers` volunteers."
+    },
+    {
+      "type": "para",
+      "text": "Write `build(types, demand, budget, drivers)` in `vans.py`. It returns a CP-SAT model and a dict `n` of its variables, one per van type, keyed by the type's name. The model is:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\min \\;& \\sum_{t \\in T} c_t\\, n_t \\\\\n\\text{s.t. }& \\sum_{t \\in T} \\text{cap}_t\\, n_t \\ge \\text{demand} && \\text{(cover)} \\\\\n& \\sum_{t \\in T} c_t\\, n_t \\le \\text{budget} && \\text{(budget)} \\\\\n& \\sum_{t \\in T} n_t \\le \\text{drivers} && \\text{(drivers)} \\\\\n& n_t \\in \\{0, k_t, 2k_t, \\dots\\},\\ n_t \\le a_t && \\forall t \\in T\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The last line is each variable's domain, not a row: give every $`n_t`$ exactly the values a lease allows when you create it."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix every $`n_t`$ to a value with an equality and ask CP-SAT whether the model still has a solution, so they check which fleets your model allows and refuses. About eight lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass VanType:\n    name: str\n    capacity: int     # pallets per van\n    cost: int         # dollars for the weekend\n    available: int    # vans of this type the dealer has\n    pack: int         # vans of this type are leased in packs of this many\n\n\ndef build(types: list[VanType], demand: int, budget: int, drivers: int) -> tuple[cp_model.CpModel, dict]:\n    \"\"\"The cheapest fleet that carries the demand, within the budget and the drivers.\"\"\"\n    model = cp_model.CpModel()\n    n = {}\n    for t in types:\n        packs = cp_model.Domain.from_values(range(0, t.available + 1, t.pack))\n        n[t.name] = model.new_int_var_from_domain(packs, f\"n_{t.name}\")\n    model.add(sum(t.capacity * n[t.name] for t in types) >= demand)\n    model.add(sum(t.cost * n[t.name] for t in types) <= budget)\n    model.add(sum(n.values()) <= drivers)\n    model.minimize(sum(t.cost * n[t.name] for t in types))\n    return model, n\n\n\nif __name__ == \"__main__\":\n    fleet = [VanType(\"small\", 4, 300, 6, 2), VanType(\"box\", 10, 650, 3, 1)]\n    model, n = build(fleet, 30, 3_000, 5)\n    solver = cp_model.CpSolver()\n    status = solver.solve(model)\n    print(solver.status_name(status), {name: solver.value(v) for name, v in n.items()})\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass VanType:\n    name: str\n    capacity: int     # pallets per van\n    cost: int         # dollars for the weekend\n    available: int    # vans of this type the dealer has\n    pack: int         # vans of this type are leased in packs of this many\n\n\ndef build(types: list[VanType], demand: int, budget: int, drivers: int) -> tuple[cp_model.CpModel, dict]:\n    \"\"\"The cheapest fleet that carries the demand, within the budget and the drivers.\"\"\"\n    model = cp_model.CpModel()\n    n = {t.name: model.new_int_var(0, 1_000, f\"n_{t.name}\") for t in types}   # TODO: each type's own domain\n    # TODO: the cover, budget and drivers rows, and the objective.\n    return model, n\n\n\nif __name__ == \"__main__\":\n    fleet = [VanType(\"small\", 4, 300, 6, 2), VanType(\"box\", 10, 650, 3, 1)]\n    model, n = build(fleet, 30, 3_000, 5)\n    solver = cp_model.CpSolver()\n    status = solver.solve(model)\n    print(solver.status_name(status), {name: solver.value(v) for name, v in n.items()})\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "3d7463c0908a0f1faeaa67a7b105e989b8ea14a733195e12dec2d34ed17d7a48",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass VanType:\n    name: str\n    capacity: int     # pallets per van\n    cost: int         # dollars for the weekend\n    available: int    # vans of this type the dealer has\n    pack: int         # vans of this type are leased in packs of this many\n\n\ndef build(types: list[VanType], demand: int, budget: int, drivers: int) -> tuple[cp_model.CpModel, dict]:\n    \"\"\"The cheapest fleet that carries the demand, within the budget and the drivers.\"\"\"\n    model = cp_model.CpModel()\n    n = {t.name: model.new_int_var(0, 1_000, f\"n_{t.name}\") for t in types}   # TODO: each type's own domain\n    # TODO: the cover, budget and drivers rows, and the objective.\n    return model, n\n\n\nif __name__ == \"__main__\":\n    fleet = [VanType(\"small\", 4, 300, 6, 2), VanType(\"box\", 10, 650, 3, 1)]\n    model, n = build(fleet, 30, 3_000, 5)\n    solver = cp_model.CpSolver()\n    status = solver.solve(model)\n    print(solver.status_name(status), {name: solver.value(v) for name, v in n.items()})\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-1/vans.py",
+    "test_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-1/test_vans.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-1/vans.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-1/target/report.xml",
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-1/test_vans.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_fleet_must_carry_the_demand",
+        "kind": "main",
+        "says": "a fleet that carries the demand is allowed, and one a few pallets short is refused"
+      },
+      {
+        "id": "test_the_fleet_must_fit_the_budget",
+        "kind": "main",
+        "says": "a fleet within the budget is allowed, and a dearer one is refused"
+      },
+      {
+        "id": "test_every_van_needs_a_driver",
+        "kind": "main",
+        "says": "a fleet with one van per driver is allowed, and one with more vans than drivers is refused"
+      },
+      {
+        "id": "test_vans_come_in_whole_packs",
+        "kind": "edge",
+        "says": "a count that is not a whole number of packs is refused even when every row holds"
+      },
+      {
+        "id": "test_no_more_vans_than_the_dealer_has",
+        "kind": "edge",
+        "says": "a count above what the dealer has is refused even when it is a whole number of packs"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "15-cpsat-core/README_4.4.1.md",
+      "section": "A Linear Constraint Has Whole-Number Coefficients"
+    },
+    "concepts": [
+      "every CP-SAT variable is an integer with a finite domain, given as bounds or as a listed set of values",
+      "linear constraints take whole-number coefficients and bounds, and ranges and not-equal are allowed"
+    ]
+  }
+}

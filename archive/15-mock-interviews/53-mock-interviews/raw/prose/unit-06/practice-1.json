@@ -1,0 +1,148 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "15-mock-interviews",
+    "53-mock-interviews"
+  ],
+  "variant": "prose",
+  "unit": 6,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "An independent plan checker",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A telecom operator wants every plan its optimizer returns checked by code that shares nothing with the model: it reads only the data and the plan. Write `broken_rules(plan, projects, limits)` in `checker.py`. `plan` is the set of funded project ids. It returns the sorted list of labels of every rule the plan breaks, and an empty list when it breaks none:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`\"budget\"`: the plan's total cost is above `limits.budget`;",
+        "`\"crews\"`: its total crew-weeks are above `limits.crew`;",
+        "`\"region_<r>\"`: more projects in region `r` than `limits.region_cap[r]`; a region with no entry in `limits.region_cap` has no cap, however many of its projects are funded;",
+        "`\"conflict_<a>_<b>\"`: both projects of a pair in `limits.conflicts` are funded;",
+        "`\"needs_<a>_<b>\"`: for a pair `(a, b)` in `limits.needs`, `a` is funded without `b`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Report every broken rule, not only the first. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int            # $k\n    crew: int            # crew-weeks\n    region: str\n    value: int = 0\n\n\n@dataclass(frozen=True)\nclass Limits:\n    budget: int\n    crew: int\n    region_cap: dict[str, int]\n    conflicts: list[tuple[str, str]] = field(default_factory=list)   # not both\n    needs: list[tuple[str, str]] = field(default_factory=list)       # (a, b): a only if b\n\n\ndef broken_rules(plan: set[str], projects: list[Project], limits: Limits) -> list[str]:\n    \"\"\"Every rule the plan breaks, read from the data alone, as sorted labels.\"\"\"\n    chosen = [p for p in projects if p.pid in plan]\n    broken = []\n    if sum(p.cost for p in chosen) > limits.budget:\n        broken.append(\"budget\")\n    if sum(p.crew for p in chosen) > limits.crew:\n        broken.append(\"crews\")\n    for region, cap in limits.region_cap.items():\n        if sum(1 for p in chosen if p.region == region) > cap:\n            broken.append(f\"region_{region}\")\n    for a, b in limits.conflicts:\n        if a in plan and b in plan:\n            broken.append(f\"conflict_{a}_{b}\")\n    for a, b in limits.needs:\n        if a in plan and b not in plan:\n            broken.append(f\"needs_{a}_{b}\")\n    return sorted(broken)\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"A\", 40, 3, \"N\"), Project(\"B\", 30, 2, \"N\")]\n    print(broken_rules({\"A\", \"B\"}, projects, Limits(60, 4, {\"N\": 1})))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int            # $k\n    crew: int            # crew-weeks\n    region: str\n    value: int = 0\n\n\n@dataclass(frozen=True)\nclass Limits:\n    budget: int\n    crew: int\n    region_cap: dict[str, int]\n    conflicts: list[tuple[str, str]] = field(default_factory=list)   # not both\n    needs: list[tuple[str, str]] = field(default_factory=list)       # (a, b): a only if b\n\n\ndef broken_rules(plan: set[str], projects: list[Project], limits: Limits) -> list[str]:\n    \"\"\"Every rule the plan breaks, read from the data alone, as sorted labels.\"\"\"\n    # TODO: check each rule against the plan, using only the data.\n    return [\"unchecked\"]\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"A\", 40, 3, \"N\"), Project(\"B\", 30, 2, \"N\")]\n    print(broken_rules({\"A\", \"B\"}, projects, Limits(60, 4, {\"N\": 1})))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 2,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "524a295b8ea744960a720e54790f0d585c97ff7e2b14062b700321d3e3fbbf01",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int            # $k\n    crew: int            # crew-weeks\n    region: str\n    value: int = 0\n\n\n@dataclass(frozen=True)\nclass Limits:\n    budget: int\n    crew: int\n    region_cap: dict[str, int]\n    conflicts: list[tuple[str, str]] = field(default_factory=list)   # not both\n    needs: list[tuple[str, str]] = field(default_factory=list)       # (a, b): a only if b\n\n\ndef broken_rules(plan: set[str], projects: list[Project], limits: Limits) -> list[str]:\n    \"\"\"Every rule the plan breaks, read from the data alone, as sorted labels.\"\"\"\n    # TODO: check each rule against the plan, using only the data.\n    return [\"unchecked\"]\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"A\", 40, 3, \"N\"), Project(\"B\", 30, 2, \"N\")]\n    print(broken_rules({\"A\", \"B\"}, projects, Limits(60, 4, {\"N\": 1})))\n",
+  "exercise": {
+    "main_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-1/checker.py",
+    "test_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-1/test_checker.py",
+    "run_command": [
+      "python3",
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-1/checker.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-1/target/report.xml",
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-1/test_checker.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_valid_plan_breaks_nothing_and_an_expensive_one_breaks_the_budget",
+        "kind": "main",
+        "says": "a plan within every rule breaks nothing, and one over the budget breaks the budget"
+      },
+      {
+        "id": "test_a_conflicting_pair_is_reported",
+        "kind": "main",
+        "says": "a plan with both projects of a conflicting pair breaks that conflict"
+      },
+      {
+        "id": "test_a_need_runs_one_way",
+        "kind": "edge",
+        "says": "a project that is needed may be funded alone, and one that needs it may not"
+      },
+      {
+        "id": "test_a_region_exactly_at_its_cap_is_fine",
+        "kind": "edge",
+        "says": "a region with exactly its cap of projects breaks nothing"
+      },
+      {
+        "id": "test_every_broken_rule_is_reported",
+        "kind": "edge",
+        "says": "a plan that breaks several rules reports all of them"
+      },
+      {
+        "id": "test_a_region_with_no_cap_entry_has_no_cap",
+        "kind": "edge",
+        "says": "a region missing from the caps has no cap, and a region with a cap still has one"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "53-mock-interviews/README_15.1.6.md",
+      "section": "Trap Questions: Quick Answers That Are Wrong"
+    },
+    "concepts": [
+      "check a returned plan against every rule from the data alone, and name each rule it breaks"
+    ]
+  }
+}

@@ -1,0 +1,154 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "46-input-data-quality"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Cross-job checks for a track-renewal snapshot",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A rail operator plans track and signal renewals over a few years. Each job uses one crew type for a number of crew-weeks; each crew type has a supply of crew-weeks over the whole horizon. Some jobs are required, a job may need another job done first (`after`), and some jobs are alternatives: at most one job of each `exclusive` group may be done. The operator's model, with $`J`$ the jobs, $`R \\subseteq J`$ the required jobs, $`a(j)`$ the prerequisite of job $`j`$ (if any), $`E_g`$ the jobs of exclusive group $`g`$, $`w_j`$ the crew-weeks of job $`j`$, $`k(j)`$ its crew type and $`S_k`$ the supply of crew type $`k`$:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\nz_j &\\in \\{0, 1\\} && \\forall j \\in J && \\text{(job } j \\text{ is done)} \\\\\nz_j &= 1 && \\forall j \\in R && \\text{(required}_j) \\\\\nz_j &\\le z_{a(j)} && \\forall j \\text{ with a prerequisite} && \\text{(after}_j) \\\\\n\\sum_{j \\in E_g} z_j &\\le 1 && \\forall g && \\text{(exclusive}_g) \\\\\n\\sum_{j:\\, k(j) = k} w_j\\, z_j &\\le S_k && \\forall k && \\text{(crew}_k)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The snapshot has passed its schema. Before the solve, find the clashes between jobs that prove no plan exists. First write down which jobs every plan must do, and why the rows force each of them. Then, in `cross.py`, write `required(snapshot)` and `cross_checks(snapshot)`, which returns a sorted list of `(rule, subject)` pairs:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`(\"exclusive-required\", g)`, once per exclusive group $`g`$ that holds two or more jobs every plan must do;",
+        "`(\"crew-short\", k)` for each crew type $`k`$ whose supply is below the crew-weeks of the jobs every plan must do."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "A rule may fire only when no plan can exist. The schema has already checked that every job's crew type is a key of `crews`, so you may assume it; the reference loops over the crew types in `crews` and would never report a type missing from it. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom collections import Counter\n\n\ndef required(snapshot: dict) -> set[str]:\n    \"\"\"Jobs every plan must do: the required ones and, through `after`, all their prerequisites.\"\"\"\n    by_id = {j[\"id\"]: j for j in snapshot[\"jobs\"]}\n    need, todo = set(), [j[\"id\"] for j in snapshot[\"jobs\"] if j[\"required\"]]\n    while todo:\n        jid = todo.pop()\n        if jid not in need:\n            need.add(jid)\n            if by_id[jid][\"after\"]:\n                todo.append(by_id[jid][\"after\"])\n    return need\n\n\ndef cross_checks(snapshot: dict) -> list[tuple[str, str]]:\n    \"\"\"(rule, subject) for each cross-job problem that proves no plan exists, sorted.\"\"\"\n    by_id = {j[\"id\"]: j for j in snapshot[\"jobs\"]}\n    need = required(snapshot)\n    found = []\n    taken = Counter(by_id[jid][\"exclusive\"] for jid in need if by_id[jid][\"exclusive\"])\n    found += [(\"exclusive-required\", group) for group, n in taken.items() if n > 1]\n    for crew, supply in snapshot[\"crews\"].items():\n        demand = sum(by_id[jid][\"crew_weeks\"] for jid in need if by_id[jid][\"crew\"] == crew)\n        if demand > supply:\n            found.append((\"crew-short\", crew))\n    return sorted(found)\n\n\nif __name__ == \"__main__\":\n    jobs = [{\"id\": \"T1\", \"crew\": \"track\", \"crew_weeks\": 4, \"required\": True, \"after\": None, \"exclusive\": \"G1\"},\n            {\"id\": \"T2\", \"crew\": \"track\", \"crew_weeks\": 3, \"required\": True, \"after\": None, \"exclusive\": \"G1\"}]\n    print(cross_checks({\"crews\": {\"track\": 10}, \"jobs\": jobs}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom collections import Counter\n\n\ndef required(snapshot: dict) -> set[str]:\n    \"\"\"Jobs every plan must do: the required ones and, through `after`, all their prerequisites.\"\"\"\n    # TODO: the required jobs, then their prerequisites, and theirs, until none is new.\n    return set()\n\n\ndef cross_checks(snapshot: dict) -> list[tuple[str, str]]:\n    \"\"\"(rule, subject) for each cross-job problem that proves no plan exists, sorted.\"\"\"\n    # TODO: write the two rules from the statement, using required().\n    return [(\"not-checked\", \"\")]\n\n\nif __name__ == \"__main__\":\n    jobs = [{\"id\": \"T1\", \"crew\": \"track\", \"crew_weeks\": 4, \"required\": True, \"after\": None, \"exclusive\": \"G1\"},\n            {\"id\": \"T2\", \"crew\": \"track\", \"crew_weeks\": 3, \"required\": True, \"after\": None, \"exclusive\": \"G1\"}]\n    print(cross_checks({\"crews\": {\"track\": 10}, \"jobs\": jobs}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "a6d4ed8f3a010f8c58676a0ed939a7974bb4fb462025003b8dd4c888cdfa97ab",
+  "starting_code": "from __future__ import annotations\n\nfrom collections import Counter\n\n\ndef required(snapshot: dict) -> set[str]:\n    \"\"\"Jobs every plan must do: the required ones and, through `after`, all their prerequisites.\"\"\"\n    # TODO: the required jobs, then their prerequisites, and theirs, until none is new.\n    return set()\n\n\ndef cross_checks(snapshot: dict) -> list[tuple[str, str]]:\n    \"\"\"(rule, subject) for each cross-job problem that proves no plan exists, sorted.\"\"\"\n    # TODO: write the two rules from the statement, using required().\n    return [(\"not-checked\", \"\")]\n\n\nif __name__ == \"__main__\":\n    jobs = [{\"id\": \"T1\", \"crew\": \"track\", \"crew_weeks\": 4, \"required\": True, \"after\": None, \"exclusive\": \"G1\"},\n            {\"id\": \"T2\", \"crew\": \"track\", \"crew_weeks\": 3, \"required\": True, \"after\": None, \"exclusive\": \"G1\"}]\n    print(cross_checks({\"crews\": {\"track\": 10}, \"jobs\": jobs}))\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-1/cross.py",
+    "test_path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-1/test_cross.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-1/cross.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-1/target/report.xml",
+      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-1/test_cross.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_clean_snapshot_passes_and_two_required_alternatives_are_found",
+        "kind": "main",
+        "says": "a clean snapshot passes, and two required jobs in one exclusive group are found"
+      },
+      {
+        "id": "test_a_prerequisite_of_a_required_job_counts_as_required",
+        "kind": "edge",
+        "says": "a prerequisite of a required job is required too, so it can clash in its own group"
+      },
+      {
+        "id": "test_optional_jobs_never_trigger_a_rule",
+        "kind": "edge",
+        "says": "an optional job never makes a rule fire, however much crew it needs"
+      },
+      {
+        "id": "test_a_group_is_reported_once",
+        "kind": "edge",
+        "says": "a group with three required jobs is reported once"
+      },
+      {
+        "id": "test_required_crew_weeks_above_the_supply_are_found_and_equal_to_it_pass",
+        "kind": "edge",
+        "says": "required work equal to the crew supply fits; one week more does not"
+      },
+      {
+        "id": "test_a_prerequisite_uses_its_own_crew",
+        "kind": "edge",
+        "says": "a required prerequisite's crew-weeks count against its own crew type"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "46-input-data-quality/README_12.2.2.md",
+      "section": "Rules Across Projects Catch Errors No Single Field Shows"
+    },
+    "concepts": [
+      "rules that look across several jobs at once, counting a required job's prerequisites as required, and firing only when no plan can exist"
+    ]
+  }
+}

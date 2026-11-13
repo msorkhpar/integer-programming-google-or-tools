@@ -1,0 +1,159 @@
+{
+  "project_api": 1,
+  "title": "Prove each run repeats, and start from last cycle's plan",
+  "before": "../../../../55-project-cipt-planner/steps/07",
+  "after": "../../../../55-project-cipt-planner/steps/08",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the demo export matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "cipt/trust.py",
+      "signature": "def plan_digest(plan: Plan) -> str",
+      "contract": "Returns the sha256 hex digest of the plan's canonical JSON, status and starts only.",
+      "idea": "Two runs agree exactly when their plan digests do.",
+      "lesson": {
+        "title": "10.2.5 Building the Deterministic Run Harness",
+        "href": "../../../../10-numerics-and-determinism/41-determinism-and-reproducibility/units/unit-05/10.2.5-building-the-deterministic-run-harness.unit.html"
+      }
+    },
+    {
+      "file": "cipt/trust.py",
+      "signature": "def harness(raw: dict, runs: int = 3, scenario: Scenario = Scenario(\"base\")) -> Harness",
+      "contract": "Plans the same export, under a scenario ('base' by default), `runs` times from scratch, and returns a Harness of the plans' digests.",
+      "idea": "A determinism harness reruns from scratch and compares digests, not objective values.",
+      "lesson": {
+        "title": "10.2.5 Building the Deterministic Run Harness",
+        "href": "../../../../10-numerics-and-determinism/41-determinism-and-reproducibility/units/unit-05/10.2.5-building-the-deterministic-run-harness.unit.html"
+      }
+    },
+    {
+      "file": "cipt/trust.py",
+      "signature": "def manifest(raw: dict, scenario: Scenario, plan: Plan) -> dict",
+      "contract": "Returns what a run depended on: the export's content hash as input, the scenario as a dictionary, the solver (name HIGHS, the OR-Tools version, the thread count), the plan's digest and its NPV rounded to cents.",
+      "idea": "A run is reproducible when its manifest pins the input, the settings and the solver.",
+      "lesson": {
+        "title": "10.2.4 Versioned Input Snapshots, Pinned Solvers and Run Manifests",
+        "href": "../../../../10-numerics-and-determinism/41-determinism-and-reproducibility/units/unit-04/10.2.4-versioned-input-snapshots-pinned-solvers-and-run-manifests.unit.html"
+      }
+    },
+    {
+      "file": "cipt/trust.py",
+      "signature": "def check_golden(raw: dict, path: str | Path) -> list[str]",
+      "contract": "Returns every way today's plan of the export differs from the golden file: a changed input alone when the hashes differ (`input changed: golden <12 hex digits>, now <12 hex digits>`); otherwise, in this order, `status <golden> -> <now>` when the status differs, each project whose start differs as `<id>: start <golden> -> <now>` over the projects of both plans in id order (`None` for a project a plan does not fund), and `npv <golden> -> <now>` (whole $k, thousands commas) when the NPV moves by more than 0.5. Empty when they agree.",
+      "idea": "A golden test pins a reviewed plan of a fixed input, so a change that moves the plan fails until someone reviews it.",
+      "lesson": {
+        "title": "12.3.3 Golden Datasets and Regression Tests",
+        "href": "../../../../12-engineering-the-optimization-service/47-testing-optimization-code/units/unit-03/12.3.3-golden-datasets-and-regression-tests.unit.html"
+      }
+    },
+    {
+      "file": "cipt/trust.py",
+      "signature": "def write_golden(raw: dict, path: str | Path) -> None",
+      "contract": "Writes today's plan of the export as the golden file: one JSON object with the keys input (the export's content hash), npv, starts and status, sorted, indented by one space, with a final newline.",
+      "idea": "The golden plan is written by the code and reviewed by a person.",
+      "lesson": {
+        "title": "12.3.3 Golden Datasets and Regression Tests",
+        "href": "../../../../12-engineering-the-optimization-service/47-testing-optimization-code/units/unit-03/12.3.3-golden-datasets-and-regression-tests.unit.html"
+      }
+    },
+    {
+      "file": "cipt/solve.py",
+      "signature": "def hint_values(built: Built, previous: Plan) -> dict[tuple[str, int], float]",
+      "contract": "Returns a value for every variable of the model: 1.0 where the previous plan starts that project in that year, else 0.0. A previous start the model has no variable for is dropped.",
+      "idea": "A MIP start must name only variables the new model has.",
+      "lesson": {
+        "title": "11.2.1 MIP Starts From Last Cycle's Plan",
+        "href": "../../../../11-performance-at-scale/43-warm-starts-and-tuning/units/unit-01/11.2.1-mip-starts-from-last-cycles-plan.unit.html"
+      }
+    },
+    {
+      "file": "cipt/solve.py",
+      "signature": "def solve(request: Request, previous: Plan | None = None) -> Plan",
+      "contract": "Plans a request; with a previous plan, hands HiGHS the hint as a starting solution.",
+      "idea": "A warm start changes where the search begins, never the optimal plan.",
+      "lesson": {
+        "title": "11.2.1 MIP Starts From Last Cycle's Plan",
+        "href": "../../../../11-performance-at-scale/43-warm-starts-and-tuning/units/unit-01/11.2.1-mip-starts-from-last-cycles-plan.unit.html"
+      }
+    },
+    {
+      "file": "cipt/trust.py",
+      "signature": "def warm_solve(raw: dict, previous: Plan) -> Plan",
+      "contract": "Plans the export starting from last cycle's plan.",
+      "idea": "Next cycle starts from this cycle's plan.",
+      "lesson": {
+        "title": "11.2.1 MIP Starts From Last Cycle's Plan",
+        "href": "../../../../11-performance-at-scale/43-warm-starts-and-tuning/units/unit-01/11.2.1-mip-starts-from-last-cycles-plan.unit.html"
+      }
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_trust.py::test_harness_finds_identical_runs",
+      "main",
+      "three runs of the same export give the same plan digest"
+    ],
+    [
+      "tests/test_trust.py::test_plan_digest_changes_with_the_plan",
+      "main",
+      "the plan digest changes exactly when the plan does"
+    ],
+    [
+      "tests/test_trust.py::test_manifest_records_the_input_and_the_settings",
+      "main",
+      "the run manifest records the input hash, the plan digest and the solver settings"
+    ],
+    [
+      "tests/test_trust.py::test_golden_check_reports_each_changed_start",
+      "edge",
+      "the golden check reports a project the golden plan did not fund as well as one it did"
+    ],
+    [
+      "tests/test_trust.py::test_golden_check_refuses_a_changed_input",
+      "main",
+      "the golden check refuses to compare a plan of a changed export"
+    ],
+    [
+      "tests/test_trust.py::test_demo_plan_matches_its_golden",
+      "main",
+      "the demo plan matches its golden file"
+    ],
+    [
+      "tests/test_trust.py::test_hint_keeps_only_starts_this_model_has",
+      "edge",
+      "the warm-start hint drops starts the model no longer has"
+    ],
+    [
+      "tests/test_trust.py::test_warm_start_gives_the_cold_plan",
+      "main",
+      "a warm start gives the same plan as a cold one"
+    ]
+  ],
+  "plants": {
+    "tests/test_trust.py::test_golden_check_reports_each_changed_start": [
+      [
+        "cipt/trust.py",
+        "    for pid in sorted(set(golden[\"starts\"]) | set(plan.starts)):",
+        "    for pid in sorted(golden[\"starts\"]):"
+      ]
+    ],
+    "tests/test_trust.py::test_hint_keeps_only_starts_this_model_has": [
+      [
+        "cipt/solve.py",
+        "    return {key: float(previous.starts.get(key[0]) == key[1]) for key in built.x}",
+        "    return {(pid, t): 1.0 for pid, t in previous.starts.items()}"
+      ]
+    ]
+  },
+  "cites": {
+    "path": "55-project-cipt-planner/README_14.2.8.md",
+    "section": null
+  }
+}

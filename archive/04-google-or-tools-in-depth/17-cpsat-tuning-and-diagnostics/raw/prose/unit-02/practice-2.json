@@ -1,0 +1,136 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "17-cpsat-tuning-and-diagnostics"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Which crew rules clash?",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A utility plans an outage week. Its decisions are how many crews go to each district, each an integer in a range (`variables`, for example `{\"north\": (2, 6)}`), and its planners keep adding rules: caps, minimums, pairs of districts that share a depot. Each `Rule` has a name, a linear expression over the districts, a sense (`\"<=\"` or `\">=\"`) and a right-hand side; `add_rule` adds one to a CP-SAT model and returns the constraint. When a scenario has no plan at all, the planners want to know which of their rules are to blame."
+    },
+    {
+      "type": "para",
+      "text": "Write `clashing_rules(variables, rules)`. Return the names of the rules CP-SAT reports as sufficient for infeasibility, or `[]` if the rules can all hold. Guard every rule with its own flag, assume every flag, and solve with one worker."
+    },
+    {
+      "type": "para",
+      "text": "With $`D`$ the districts, $`[l_d, u_d]`$ their ranges and $`R`$ the rules, each with coefficients $`a_{r,d}`$, a sense and a right-hand side $`b_r`$, the model is"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& y_d \\in \\{l_d, \\dots, u_d\\} && \\forall d \\in D && \\text{(crews per district)} \\\\\n& f_r \\in \\{0, 1\\} && \\forall r \\in R && \\text{(rule } r \\text{ is on)} \\\\\n& f_r = 1 \\;\\Rightarrow\\; \\textstyle\\sum_{d} a_{r,d}\\, y_d \\;\\{\\le, \\ge\\}\\; b_r && \\forall r \\in R && \\text{(rule}_r) \\\\\n& f_r = 1 \\text{ assumed} && \\forall r \\in R\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The solver reports flags by variable index; map them back to rule names. Every kind of rule needs its flag: guard the `\">=\"` minimums exactly as you guard the `\"<=\"` caps. A rule added without a flag is always on, so the solver can never name it: a clash between a minimum and a cap must name both. About twelve lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Rule:\n    name: str\n    terms: dict[str, int]       # variable name -> coefficient\n    sense: str                  # \"<=\" or \">=\"\n    rhs: int\n\n\ndef add_rule(model: cp_model.CpModel, var: dict[str, cp_model.IntVar], rule: Rule):\n    \"\"\"Given: add one rule as a linear constraint and return it.\"\"\"\n    expr = sum(coef * var[name] for name, coef in rule.terms.items())\n    return model.add(expr <= rule.rhs) if rule.sense == \"<=\" else model.add(expr >= rule.rhs)\n\n\ndef clashing_rules(variables: dict[str, tuple[int, int]], rules: list[Rule]) -> list[str]:\n    \"\"\"Names of a set of rules that cannot hold together, as CP-SAT reports it; [] if all can.\"\"\"\n    model = cp_model.CpModel()\n    var = {name: model.new_int_var(low, high, name) for name, (low, high) in variables.items()}\n    flag = {}\n    for rule in rules:\n        flag[rule.name] = model.new_bool_var(f\"flag_{rule.name}\")\n        add_rule(model, var, rule).only_enforce_if(flag[rule.name])\n    model.add_assumptions(list(flag.values()))\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    if solver.solve(model) != cp_model.INFEASIBLE:\n        return []\n    by_index = {f.index: name for name, f in flag.items()}\n    return sorted(by_index[i] for i in solver.sufficient_assumptions_for_infeasibility())\n\n\nif __name__ == \"__main__\":\n    crews = {\"north\": (2, 6), \"south\": (1, 6)}\n    print(clashing_rules(crews, [Rule(\"pair_cap\", {\"north\": 1, \"south\": 1}, \"<=\", 2)]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Rule:\n    name: str\n    terms: dict[str, int]       # variable name -> coefficient\n    sense: str                  # \"<=\" or \">=\"\n    rhs: int\n\n\ndef add_rule(model: cp_model.CpModel, var: dict[str, cp_model.IntVar], rule: Rule):\n    \"\"\"Given: add one rule as a linear constraint and return it.\"\"\"\n    expr = sum(coef * var[name] for name, coef in rule.terms.items())\n    return model.add(expr <= rule.rhs) if rule.sense == \"<=\" else model.add(expr >= rule.rhs)\n\n\ndef clashing_rules(variables: dict[str, tuple[int, int]], rules: list[Rule]) -> list[str]:\n    \"\"\"Names of a set of rules that cannot hold together, as CP-SAT reports it; [] if all can.\"\"\"\n    # TODO: one flag per rule, assume every flag, solve with one worker, map indices to names.\n    return []\n\n\nif __name__ == \"__main__\":\n    crews = {\"north\": (2, 6), \"south\": (1, 6)}\n    print(clashing_rules(crews, [Rule(\"pair_cap\", {\"north\": 1, \"south\": 1}, \"<=\", 2)]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "d1dd3e4fda8a6934d8deab78b52845170b0ac2957a7ab2a140549e74baa90da4",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Rule:\n    name: str\n    terms: dict[str, int]       # variable name -> coefficient\n    sense: str                  # \"<=\" or \">=\"\n    rhs: int\n\n\ndef add_rule(model: cp_model.CpModel, var: dict[str, cp_model.IntVar], rule: Rule):\n    \"\"\"Given: add one rule as a linear constraint and return it.\"\"\"\n    expr = sum(coef * var[name] for name, coef in rule.terms.items())\n    return model.add(expr <= rule.rhs) if rule.sense == \"<=\" else model.add(expr >= rule.rhs)\n\n\ndef clashing_rules(variables: dict[str, tuple[int, int]], rules: list[Rule]) -> list[str]:\n    \"\"\"Names of a set of rules that cannot hold together, as CP-SAT reports it; [] if all can.\"\"\"\n    # TODO: one flag per rule, assume every flag, solve with one worker, map indices to names.\n    return []\n\n\nif __name__ == \"__main__\":\n    crews = {\"north\": (2, 6), \"south\": (1, 6)}\n    print(clashing_rules(crews, [Rule(\"pair_cap\", {\"north\": 1, \"south\": 1}, \"<=\", 2)]))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-2/crew_rules.py",
+    "test_path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-2/test_crew_rules.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-2/crew_rules.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-2/target/report.xml",
+      "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-2/test_crew_rules.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_clash_with_the_crews_domains_is_named",
+        "kind": "main",
+        "says": "an infeasible scenario names rules that cannot hold together on their own"
+      },
+      {
+        "id": "test_a_scenario_that_can_be_met_names_nothing",
+        "kind": "main",
+        "says": "a scenario whose rules can all hold names no rule"
+      },
+      {
+        "id": "test_a_clash_between_a_minimum_and_a_maximum_names_both",
+        "kind": "edge",
+        "says": "a minimum rule that clashes with a maximum is named along with it"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "17-cpsat-tuning-and-diagnostics/README_4.6.2.md",
+      "section": "sufficient_assumptions_for_infeasibility Names Flags That Clash, Not Always the Fewest"
+    },
+    "concepts": [
+      "each rule gets a flag through only_enforce_if and every flag is assumed",
+      "the sufficient assumptions come back as variable indices that a map turns into rule names"
+    ]
+  }
+}

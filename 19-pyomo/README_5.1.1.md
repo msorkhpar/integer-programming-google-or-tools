@@ -1,0 +1,474 @@
+# 5.1.1 Concrete Models With Indexed Sets, Params, Vars and Constraints
+
+GridCap's analytics team has inherited a set of planning scripts written in **Pyomo**, and its
+planners want the five-year model of lesson 6.4.1 (GridCap small: 40 projects, a budget for each of
+2027 to 2031, a start window per project) available in the same tool, so the two teams can share
+one model. The model already exists in MathOpt, and lesson 6.4.1 printed its answer: NPV $24,260k,
+27 of 40 projects started. This lesson ports it to Pyomo, one component at a time, and checks that
+the port gives the same plan. GridCap's data is fictional, as everywhere in this course.
+
+The model comes from lesson 6.4.1, in section 6, which this course reaches later. You do not need
+to have read it: *The Model* below restates it in full. When this lesson says the port gives "the
+same numbers as lesson 6.4.1", it compares with the output that lesson recorded from its MathOpt
+model, solved with HiGHS on GridCap small, shown here as that lesson printed it:
+
+<!-- unverified -->
+```text
+OPTIMAL NPV $24,260k
+started 27 of 40; 9 later than their earliest year
+  P008 window 2029-2031 starts 2031  NPV 264 -> 182
+  P010 window 2030-2031 starts 2031  NPV 26 -> 19
+  P011 window 2029-2031 starts 2031  NPV 240 -> 140
+  P012 window 2030-2031 starts 2031  NPV 201 -> 168
+  P021 window 2028-2030 starts 2029  NPV 1,241 -> 1,012
+  P025 window 2027-2029 starts 2028  NPV 1,009 -> 880
+  P029 window 2030-2031 starts 2031  NPV 302 -> 233
+  P031 window 2027-2028 starts 2028  NPV 1,000 -> 809
+  P039 window 2027-2029 starts 2028  NPV 546 -> 386
+starts per year: {2027: 4, 2028: 7, 2029: 4, 2030: 5, 2031: 7}
+```
+
+A line such as `P008 window 2029-2031 starts 2031  NPV 264 -> 182` is a deferred project: P008
+may start in 2029, 2030 or 2031, the plan starts it in 2031, and its NPV falls from 264 (started
+in 2029) to 182. The module's tests rebuild lesson 6.4.1's MathOpt model and compare with it
+directly, so the comparison does not rest on this copy.
+
+Pyomo is an **algebraic modeling language** written in Python: you declare named, indexed
+components (sets, data, variables, rows, an objective) much as they appear on paper, and Pyomo
+turns them into a matrix for whichever solver you choose. MathOpt (section 4) builds the same
+matrix from Python objects too, so the difference is in style, not in power. Pyomo's style is the
+one most textbooks and much inherited code use, which is why an interview may hand you Pyomo code.
+
+## The Model
+
+The model being ported, as lesson 6.4.1 states it, with each label next to the name the Pyomo
+component gets.
+
+**Sets.** $`P`$ the projects; $`Y`$ the plan's years; $`S = \{(i, t) : i \in P,\ t \in T_i\}`$ the
+allowed (project, start year) pairs, where $`T_i`$ is project $`i`$'s window; $`M \subseteq P`$ the
+must-do projects; $`\mathcal{G}`$ the alternative groups, each a set of projects; $`C`$ the pairs
+$`(c, t)`$ of a child project $`c`$ (parent $`p(c)`$, lag $`L_c`$ years) and one of its start years.
+
+**Parameters.** $`\text{npv}_{i,t}`$ for $`(i, t) \in S`$, the NPV of project $`i`$ started in year
+$`t`$ ($k); $`\text{cost}_{i,t,y}`$, what project $`i`$ started in $`t`$ spends in calendar year
+$`y`$ ($k, 0 for a year it does no work); $`B_y`$, the budget of year $`y`$ ($k).
+
+**Variables.** $`x_{i,t} \in \{0, 1\}`$ for every $`(i, t) \in S`$: project $`i`$ starts in year
+$`t`$. No variable exists outside $`S`$.
+
+**Objective.**
+
+```math
+\max \; \sum_{(i,t) \in S} \text{npv}_{i,t}\, x_{i,t}
+```
+
+**Constraints.**
+
+```math
+\begin{aligned}
+\sum_{t \in T_i} x_{i,t} &\le 1 \;\; (i \notin M), \quad = 1 \;\; (i \in M) && \forall i \in P && \text{(once}_i) \\
+\sum_{i \in g} \sum_{t \in T_i} x_{i,t} &\le 1 && \forall g \in \mathcal{G} && \text{(alt}_g) \\
+\sum_{u \in T_c,\, u \le t} x_{c,u} &\le \sum_{s \in T_{p(c)},\, s \le t - L_c} x_{p(c),s} && \forall (c, t) \in C && \text{(after}_{c,t}) \\
+\sum_{(i,t) \in S} \text{cost}_{i,t,y}\, x_{i,t} &\le B_y && \forall y \in Y && \text{(spend\_cap}_y)
+\end{aligned}
+```
+
+| Label | Pyomo component in `pyomo_timing.py` | Lesson 6.4.1's MathOpt name |
+| --- | --- | --- |
+| $`P, Y, S, M, \mathcal{G}, C`$ | `m.P`, `m.Y`, `m.S`, `m.M`, `m.G` with `m.members[g]`, `m.C` | Python lists |
+| $`\text{npv}, \text{cost}, B`$ | `m.npv`, `m.cost`, `m.budget` | numbers read from the portfolio |
+| $`x_{i,t}`$ | `m.x[i, t]` | `x_P017_2030` |
+| once$`_i`$ | `m.once[i]` | `once_P017`, `must_P002` |
+| alt$`_g`$, after$`_{c,t}`$ | `m.alt[g]`, `m.after[c, t]` | `alt_G006`, `after_P023_2029` |
+| spend_cap$`_y`$ | `m.spend_cap[y]` | `budget_2029` |
+
+## A ConcreteModel Is Built From Data You Already Have
+
+Pyomo has two kinds of model. A `ConcreteModel` is built immediately: every component you attach
+to it is constructed on the spot, from Python data you already hold. An `AbstractModel` declares
+the components first and receives the data later, from a data file or a dictionary passed to
+`create_instance()`. Everything in this course has its data in Python objects before the model is
+built (a GridCap `Portfolio`), so every model here is concrete; you will meet `AbstractModel` in
+older code and in the Pyomo book, and reading it only needs the extra step of where its data comes
+from.
+
+A component becomes part of the model by being **assigned as an attribute**: `m.x = pyo.Var(...)`
+names the component `x` and registers it with `m`. The attribute name is the name the solver and
+every printout use.
+
+```python
+import pyomo.environ as pyo
+
+from gridcap import generate
+from pyomo_timing import build
+
+tiny = generate("tiny")
+
+m = pyo.ConcreteModel()
+```
+
+`pyomo.environ` is the import that brings in the modeling components and the solver plug-ins; the
+course always imports it as `pyo`, as the Pyomo documentation does.
+
+## Sets Name the Indices, and a Set of Pairs Keeps a Sparse Index Sparse
+
+A `Set` is a named collection of index values. `initialize=` takes any iterable, and Pyomo keeps
+the members in the order given (sets are ordered by default):
+
+```python
+m.P = pyo.Set(initialize=[p.project_id for p in tiny.projects])
+m.Y = pyo.Set(initialize=tiny.years)
+m.S = pyo.Set(dimen=2, initialize=[(p.project_id, t) for p in tiny.projects for t in p.starts()])
+print("P:", list(m.P))
+print(f"P x Y has {len(m.P * m.Y)} pairs; S has {len(m.S)}:", list(m.S)[:4], "...")
+```
+
+```text
+P: ['P001', 'P002', 'P003', 'P004', 'P005', 'P006', 'P007', 'P008']
+P x Y has 24 pairs; S has 13: [('P001', 2028), ('P001', 2029), ('P002', 2028), ('P002', 2029)] ...
+```
+
+`m.P * m.Y` is the **cross product**, every (project, year) pair: 8 × 3 = 24. A variable indexed by
+it would include starts outside every window, which lesson 6.4.1 avoided by never creating them.
+In Pyomo the same idea is a set whose members are the allowed pairs only: `m.S` holds 13, the same
+13 start variables lesson 6.4.1 counted on tiny. `dimen=2` tells Pyomo each member is a pair, which
+it also checks when a member is added; it is required when Pyomo cannot see the size of the tuples,
+for example when the set starts empty. Such a set of tuples is called **sparse**: it lists the
+index combinations that exist instead of all the combinations the separate sets allow.
+
+`m.M = pyo.Set(within=m.P, ...)` in `pyomo_timing.py` uses `within=` to declare the must-do
+projects a subset of the projects; Pyomo refuses a member outside it. A set can also be **indexed**:
+`m.members = pyo.Set(m.G, ...)` is one set of projects per alternative group, read as
+`m.members[g]`.
+
+## Params Hold the Data, and a Mutable Param Can Change After the Build
+
+A `Param` is data keyed by a set. `initialize=` takes a dict from index to value. For an index
+inside the set but missing from the dict, `default=` supplies the value; for an index outside the
+set, Pyomo raises an error rather than invent a number:
+
+```python
+m.npv = pyo.Param(m.S, initialize={(p.project_id, t): p.npv[t] for p in tiny.projects for t in p.starts()})
+m.cost = pyo.Param(m.S, m.Y, default=0, initialize={
+    (p.project_id, t, y): c for p in tiny.projects for t in p.starts() for y, c in p.spend(t).items()})
+m.budget = pyo.Param(m.Y, initialize=dict(tiny.budget), mutable=True)
+print("npv[P001,2029] =", m.npv["P001", 2029], "  budget[2027] =", pyo.value(m.budget[2027]))
+print("cost[P003,2027,2028] =", m.cost["P003", 2027, 2028], "  cost[P003,2027,2029] =", m.cost["P003", 2027, 2029])
+try:
+    m.npv["P001", 2027]
+except KeyError as error:
+    print("npv[P001,2027]:", type(error).__name__, error)
+```
+
+```text
+npv[P001,2029] = 1077   budget[2027] = 2300
+cost[P003,2027,2028] = 1490   cost[P003,2027,2029] = 0
+npv[P001,2027]: KeyError "Index '('P001', 2027)' is not valid for indexed component 'npv'"
+```
+
+`m.cost` is indexed by `m.S, m.Y`: two sets as arguments make a three-part index (project, start
+year, calendar year). P003 started in 2027 spends 1,490 in 2028, its second year, and nothing in
+2029, which comes from `default=0`, not from the dict. `npv["P001", 2027]` is refused because
+(P001, 2027) is not a member of `m.S`: P001 cannot start in 2027, so no NPV exists for it.
+
+The budget is declared `mutable=True`. An ordinary (immutable) Param is replaced by its number
+when a row uses it, so the row holds 2300, and changing the data afterwards changes nothing. A
+mutable Param stays in the row as a name, and assigning a new value reaches every row that uses it:
+
+```python
+full = build(tiny)
+print("spend_cap[2027] upper side:", full.spend_cap[2027].upper, "=", pyo.value(full.spend_cap[2027].upper))
+full.budget[2027] = 1500
+print("after full.budget[2027] = 1500:", full.spend_cap[2027].upper, "=", pyo.value(full.spend_cap[2027].upper))
+```
+
+```text
+spend_cap[2027] upper side: budget[2027] = 2300
+after full.budget[2027] = 1500: budget[2027] = 1500
+```
+
+The row's right side prints as `budget[2027]`, the Param itself, and `pyo.value` evaluates it to
+the current number. That is how a scenario study ("cut 2027 by $800k") re-solves the same model
+without rebuilding it. The price, according to the Pyomo documentation, is some extra work when
+the model is written out for the solver, so declare mutable only the data you will change.
+
+## A Var Takes Its Domain and Bounds From Its Declaration
+
+A `Var` indexed by a set creates one variable per member. `domain=` is the set of values it may
+take: `pyo.Binary`, `pyo.NonNegativeReals`, `pyo.Reals`, `pyo.NonNegativeIntegers`, `pyo.Integers`,
+and `pyo.UnitInterval` for $`[0, 1]`$, among others. `bounds=` adds a lower and an upper bound,
+either as a pair or as a rule that receives the model and the index and returns a pair. Some
+domains bring bounds of their own:
+
+```python
+m.x = pyo.Var(m.S, domain=pyo.Binary)
+print(f"x: {len(m.x)} variables, x[P001,2028] in {m.x['P001', 2028].domain}, bounds {m.x['P001', 2028].bounds}")
+```
+
+```text
+x: 13 variables, x[P001,2028] in Binary, bounds (0, 1)
+```
+
+One variable per allowed start, and `Binary` implies the bounds 0 and 1. The formulation's
+$`x_{i,t} \in \{0, 1\}\ \forall (i,t) \in S`$ is exactly this line. A variable declared with no
+domain and no bounds is a free real, unbounded both ways, which is rarely what a model means: say
+the domain every time, as the formulation does. `pyomo_timing.build(..., integer=False)` swaps
+`Binary` for `UnitInterval` to get the LP relaxation, the model with every $`x_{i,t}`$ allowed
+anywhere in $`[0, 1]`$.
+
+## A Constraint Rule Writes One Row per Index, and Constraint.Skip Writes None
+
+An indexed `Constraint` takes a **rule**: a function Pyomo calls once per member of the index set,
+with the model and that member, and which returns one row. A row is a Pyomo relation built with
+`<=`, `>=` or `==` (or a tuple `(lower, expression, upper)` for a two-sided row). The rule may
+instead return `pyo.Constraint.Skip`, and then that index gets no row at all:
+
+```python
+def once_rule(m, i):
+    starts = [m.x[j, t] for j, t in m.S if j == i]
+    if len(starts) == 1:
+        return pyo.Constraint.Skip       # one start variable: its 0/1 domain already says "at most once"
+    return sum(starts) <= 1
+
+
+m.once = pyo.Constraint(m.P, rule=once_rule)
+print("once rows:", [m.once[i].name for i in m.once], f"({len(m.once)} of {len(m.P)} projects)")
+print("once[P008]:", m.once["P008"].expr)
+```
+
+```text
+once rows: ['once[P001]', 'once[P002]', 'once[P007]', 'once[P008]'] (4 of 8 projects)
+once[P008]: x[P008,2027] + x[P008,2028] + x[P008,2029]  <=  1
+```
+
+Four of the eight tiny projects have a single allowed start, and for them "at most once" is already
+true of one binary, so the rule skips them (this small example writes only the "at most once" row;
+`pyomo_timing.py` writes `== 1` for must-do projects, as the formulation says). The row's name is the
+component's name and its index, `once[P008]`, which is the name a solver log, an infeasibility
+report or lesson 5.1.4's tools will show you.
+
+Skip is not an optional nicety. A sum over no terms is the Python number 0, so a rule whose sum is
+empty returns a plain `True` or `False` (here `0 <= 1`), and Pyomo refuses it:
+
+```python
+try:
+    m.bad = pyo.Constraint(rule=lambda m: sum(m.x[i, t] for i, t in m.S if t == 2035) <= 1)
+except ValueError as error:
+    print("bad:", type(error).__name__, str(error).splitlines()[0])
+```
+
+```text
+bad: InvalidConstraintError Invalid constraint expression. The constraint expression resolved to a trivial Boolean (True) instead of a Pyomo object. Please modify your rule to return Constraint.Feasible instead of True.
+```
+
+Pyomo also logs the same error, in a few `ERROR:` lines, before raising it; on Run you will see them
+above this line. The fix is to look at the terms before summing, as `once_rule` does, and return
+`pyo.Constraint.Skip` when there are none. MathOpt has the same trap: there too an empty sum is the
+Python number 0, and a row built from it is a `bool` that MathOpt refuses. `pyomo_timing.py`'s
+budget rule checks for it the same way. A single, unindexed row needs no rule:
+`pyo.Constraint(expr=...)` takes the relation directly, as the objective takes
+`pyo.Objective(expr=..., sense=pyo.maximize)`.
+
+## HiGHS Solves the Model, and a Scalar Mutable Param Changes Between Solves
+
+A model is solved by a **solver object**. `pyo.SolverFactory("appsi_highs")` makes one for HiGHS,
+the open-source MILP solver that section 4 used through MathOpt, and its `config` holds the
+options: `config.mip_gap = 0.0` asks for a proven optimum rather than one within HiGHS's default
+tolerance (lesson 5.1.2 explains the gap and reads everything a solve returns). `solver.solve(m)`
+solves the model and loads the answer onto the variables, so `pyo.value(m.x[i])` and
+`pyo.value(m.total)` read it.
+
+The model here is the smallest selection: GridCap tiny's eight projects $`P`$, each funded at its
+earliest start or not, with only a budget row. Parameters $`\text{capex}_i`$ and $`\text{value}_i`$
+($k) and one budget $`B`$ ($k); variables $`x_i \in \{0, 1\}`$:
+
+```math
+\begin{aligned}
+\max \;& \sum_{i \in P} \text{value}_i\, x_i \\
+& \sum_{i \in P} \text{capex}_i\, x_i \le B && \text{(spend)} \\
+& x_i \in \{0, 1\} && \forall i \in P
+\end{aligned}
+```
+
+$`B`$ is one number, so its Param has no index set: a **scalar** Param. Declared `mutable=True`, it
+stays in the row as a name, and assigning to it, `m.budget = b`, sets its value for the next solve.
+One model, built once, is solved at three budgets:
+
+```python
+m = pyo.ConcreteModel()
+m.P = pyo.Set(initialize=[p.project_id for p in tiny.projects])
+m.capex = pyo.Param(m.P, initialize={p.project_id: p.capex for p in tiny.projects})
+m.value = pyo.Param(m.P, initialize={p.project_id: p.value for p in tiny.projects})
+m.budget = pyo.Param(initialize=3000, mutable=True)      # no index set: a scalar Param, one number
+m.x = pyo.Var(m.P, domain=pyo.Binary)
+m.spend = pyo.Constraint(expr=sum(m.capex[i] * m.x[i] for i in m.P) <= m.budget)
+m.total = pyo.Objective(expr=sum(m.value[i] * m.x[i] for i in m.P), sense=pyo.maximize)
+print("spend row:", m.spend.expr)
+
+solver = pyo.SolverFactory("appsi_highs")       # HiGHS through Pyomo's appsi interface
+solver.config.mip_gap = 0.0                     # stop only at a proven optimum
+for b in (3000, 5000, 8000):
+    m.budget = b                                # assigning to a scalar mutable Param sets its value
+    solver.solve(m)
+    funded = [i for i in m.P if pyo.value(m.x[i]) > 0.5]
+    print(f"budget {pyo.value(m.budget):>5}: value {pyo.value(m.total):>5}, funded {funded}")
+```
+
+```text
+spend row: 2150*x[P001] + 2730*x[P002] + 2470*x[P003] + 3000*x[P004] + 250*x[P005] + 1970*x[P006] + 290*x[P007] + 580*x[P008]  <=  budget
+budget  3000: value 2120.0, funded ['P004']
+budget  5000: value 3367.0, funded ['P004', 'P006']
+budget  8000: value 5155.0, funded ['P001', 'P004', 'P006', 'P007', 'P008']
+```
+
+The row's right side prints as `budget`, the Param's name, so each solve reads the value assigned
+just before it, and each budget gets its own plan. An indexed mutable Param is set one entry at a
+time instead, `m.budget[2027] = 1500`, as the Params section did.
+
+<!-- practice 1 -->
+
+<!-- practice 2 -->
+
+## The Port Gives Lesson 6.4.1's Optimum
+
+`pyomo_timing.build` is the whole model of *The Model* above in about forty lines. Two rules worth
+reading in it: `after_rule` reads the parent and the lag from Params (`m.parent[c]`, `m.lag[c]`),
+so the rule never touches the portfolio object; and the objective is one `Objective` over `m.S`.
+The module's programs make their solver with `highs()`, defined at the end of `pyomo_timing.py`:
+the solver object of the last section, with its gap as an argument.
+
+```python
+def highs(gap: float = 0.0):
+    """HiGHS through Pyomo's appsi interface, asked for a proven optimum."""
+    solver = pyo.SolverFactory("appsi_highs")
+    solver.config.mip_gap = gap
+    return solver
+```
+
+Solving the port on GridCap small (lesson 5.1.2 is about solving and reading the answer):
+
+```python
+import pyomo.environ as pyo
+
+from gridcap import generate
+from pyomo_timing import build, highs, schedule
+
+small = generate("small")
+m = build(small)
+print(f"{len(m.x)} variables, {m.nconstraints()} rows:",
+      {c.local_name: len(c) for c in m.component_objects(pyo.Constraint)})
+highs().solve(m)
+plan = schedule(m)
+print(f"NPV ${pyo.value(m.value):,.0f}k")
+late = {pid: t for pid, t in plan.items() if t > small.project(pid).earliest_start}
+print(f"started {len(plan)} of {len(small.projects)}; {len(late)} later than their earliest year")
+by_year = {y: sum(1 for t in plan.values() if t == y) for y in small.years}
+print("starts per year:", by_year)
+```
+
+```text
+80 variables, 49 rows: {'once': 40, 'alt': 2, 'after': 2, 'spend_cap': 5}
+NPV $24,260k
+started 27 of 40; 9 later than their earliest year
+starts per year: {2027: 4, 2028: 7, 2029: 4, 2030: 5, 2031: 7}
+```
+
+Every line matches lesson 6.4.1's MathOpt output, shown at the top of this lesson: $24,260k, 27 projects started, 9 deferred, and
+the same starts per year. The module's tests go further and check, on tiny and small, as MILP and as
+LP relaxation, that the two models have the same number of variables and rows and the same optimum,
+and that they choose the same start year for every project. Two independent builds of one
+formulation agreeing is the cheapest proof that neither has a typo in a row, the check lesson 6.6.4
+made between MathOpt and Pyomo's `Piecewise`.
+
+`m.component_objects(pyo.Constraint)` walks the model's constraint components (`once`, `alt`, ...);
+`m.component_data_objects(pyo.Var)` walks every single variable. These two calls are how you
+inspect any Pyomo model you are handed.
+
+## Summary
+
+- **A ConcreteModel is built from data you already have.** Components are attached as attributes,
+  and the attribute name is the component's name.
+- **Sets name the indices, and a set of pairs keeps a sparse index sparse.** `m.S` holds the 13
+  allowed starts on tiny where the cross product has 24.
+- **Params hold the data, and a mutable Param can change after the build.** `default=` fills
+  indices inside the set; an index outside it is an error; a mutable Param stays a name in its rows.
+- **A Var takes its domain and bounds from its declaration.** `Binary` brings bounds (0, 1).
+- **A Constraint rule writes one row per index, and Constraint.Skip writes none.** A rule that
+  returns `True` or `False` is refused.
+- **HiGHS solves the model, and a scalar mutable Param changes between solves.**
+  `SolverFactory("appsi_highs")` with `config.mip_gap = 0.0`; `m.budget = b` sets a scalar Param.
+- **The port gives lesson 6.4.1's optimum.** $24,260k with the same plan, checked by the tests.
+
+## Reference
+
+| Component | Declaration | Read |
+| --- | --- | --- |
+| model | `m = pyo.ConcreteModel()` | `m.nconstraints()`, `m.nvariables()` |
+| set | `pyo.Set(initialize=..., dimen=2, within=other)` | `list(m.S)`, `len(m.S)`, `x in m.S` |
+| indexed set | `pyo.Set(m.G, initialize={g: [...]})` | `m.members[g]` |
+| param | `pyo.Param(m.S, initialize={...}, default=0, mutable=True)` | `m.npv[i, t]`, `pyo.value(m.budget[y])` |
+| var | `pyo.Var(m.S, domain=pyo.Binary, bounds=(lo, hi))` | `m.x[i, t].value`, `.bounds`, `.domain` |
+| constraint | `pyo.Constraint(m.P, rule=f)` or `pyo.Constraint(expr=...)` | `m.once[i].expr`, `.upper`, `.lower`, `.name` |
+| no row | `return pyo.Constraint.Skip` | |
+| objective | `pyo.Objective(expr=..., sense=pyo.maximize)` | `pyo.value(m.value)` |
+| scalar param | `pyo.Param(initialize=v, mutable=True)` | `m.budget = b` sets it; `pyo.value(m.budget)` |
+| solver | `s = pyo.SolverFactory("appsi_highs")`; `s.config.mip_gap = 0.0` | `s.solve(m)` loads the answer onto the variables |
+
+| Domain | Values |
+| --- | --- |
+| `Binary` | 0 or 1 |
+| `UnitInterval` | $`[0, 1]`$ |
+| `NonNegativeReals`, `Reals` | $`[0, \infty)`$, $`(-\infty, \infty)`$ |
+| `NonNegativeIntegers`, `Integers` | $`0, 1, 2, \dots`$; every integer |
+
+**Further reading.** Pyomo documentation, [Sets](https://pyomo.readthedocs.io/en/stable/explanation/modeling/math_programming/sets.html)
+(ordered sets, `dimen`, `within`, cross products and sparse index sets),
+[Parameters](https://pyomo.readthedocs.io/en/stable/explanation/modeling/math_programming/parameters.html)
+(`default`, `mutable` and its cost), [Variables](https://pyomo.readthedocs.io/en/stable/explanation/modeling/math_programming/variables.html)
+and [Constraints](https://pyomo.readthedocs.io/en/stable/explanation/modeling/math_programming/constraints.html)
+(rules with indices, the three-part tuple for a ranged row).
+[MO-book](https://mobook.github.io/MO-book/), *Hands-On Mathematical Optimization with Python*,
+whose notebooks build every model in Pyomo in the style of this lesson.
+
+## Challenges
+
+1. Build `m.S` as the cross product `m.P * m.Y` instead, and give the out-of-window starts a fixed
+   value of 0 (`m.x[i, t].fix(0)`). Count the variables Pyomo hands to the solver, and compare.
+2. Change `m.budget` on the small model to 4,000 in 2030 and 2031 and re-solve without rebuilding.
+   Lesson 5.1.4 explains what comes back.
+3. Write the alternative-group row with `m.members[g]` but without the helper `started`.
+
+## Design Note: One Formulation, Two Builds, One Test
+
+Porting a model is a translation, and translations have typos. The module's tests build the
+MathOpt model of lesson 6.4.1 and the Pyomo model of this lesson from the same portfolio and compare
+the optimum, the sizes and the plan. Keep such a test whenever two implementations of one model live
+side by side: the day one of them changes alone, the test says so.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson
+shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy
+of the code, so the course's own files never change.
+
+**first_model.py.** Builds a model on GridCap tiny one component at a time and prints what Pyomo
+made of each (*Sets*, *Params*, *A Var*, *A Constraint Rule*). *Try:* Give `m.npv` a `default=0`
+and ask for `npv["P001", 2027]` again. Predict whether the error changes.
+
+- Program: [first_model.py](src/first_model.py)
+
+**first_solve.py.** The one-budget selection on GridCap tiny, solved with HiGHS at three budgets
+by assigning the scalar mutable Param (*HiGHS Solves the Model*). *Try:* Add 2,000 to the list of
+budgets. Predict which projects it funds before you run it.
+
+- Program: [first_solve.py](src/first_solve.py)
+
+**port_check.py.** Solves the ported model on GridCap small (*The Port Gives Lesson 6.4.1's
+Optimum*). *Try:* Build it with `integer=False` and print the LP relaxation's NPV.
+
+- Program: [port_check.py](src/port_check.py)
+
+**pyomo_timing.py.** The Pyomo model builder, with `schedule` to read the plan and `highs` to make
+a solver. It runs nothing itself.
+
+- Library: [pyomo_timing.py](src/pyomo_timing.py)

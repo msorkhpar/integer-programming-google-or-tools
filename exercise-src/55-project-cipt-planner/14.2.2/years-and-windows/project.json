@@ -1,0 +1,134 @@
+{
+  "project_api": 1,
+  "title": "Plan by year, with windows and spread costs",
+  "before": "../../../../55-project-cipt-planner/steps/01",
+  "after": "../../../../55-project-cipt-planner/steps/02",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the demo export matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "cipt/model.py",
+      "signature": "def build(request: Request) -> Built",
+      "contract": "Takes a Request. Returns a Built with one binary x[(id, t)] per project and allowed start year t, a row `once_<id>` per project (it starts at most once), a row `budget_<y>` per plan year (that year's spread spend within that year's budget), and the summed value of the starts as the objective to maximize.",
+      "idea": "A start-year variable per project and year carries the when, and the window is the set of variables that exist: a start outside it has no variable at all.",
+      "lesson": {
+        "title": "6.4.1 Start-Time Variables x[i,t] and Timing Windows",
+        "href": "../../../../06-formulation-craft/26-multi-period-timing/units/unit-01/6.4.1-start-time-variables-x-i-t-and-timing-windows.unit.html"
+      }
+    },
+    {
+      "file": "cipt/data.py",
+      "signature": "def starts(self, project: Project) -> range",
+      "contract": "Returns the start years a project may use: from the later of its earliest start and the plan's first year, to the earlier of its latest start and the last year that lets all its work end inside the plan. An empty range when no start fits.",
+      "idea": "Cutting the window in the data keeps the model free of rows that only forbid impossible starts.",
+      "lesson": {
+        "title": "6.4.1 Start-Time Variables x[i,t] and Timing Windows",
+        "href": "../../../../06-formulation-craft/26-multi-period-timing/units/unit-01/6.4.1-start-time-variables-x-i-t-and-timing-windows.unit.html"
+      }
+    },
+    {
+      "file": "cipt/model.py",
+      "signature": "def spend_by_year(request: Request, x: dict) -> dict[int, mathopt.LinearSum]",
+      "contract": "Returns one linear expression per plan year, with an entry for every plan year (an empty sum when no start can spend in it): for every project and allowed start, each year's amount of its cost profile times that start's variable, summed into the calendar year it is spent in.",
+      "idea": "A start in year t spends profile[k] in year t + k, so a yearly budget row sums over starts, not over projects.",
+      "lesson": {
+        "title": "6.4.2 Cash-Flow Spreading Across Years",
+        "href": "../../../../06-formulation-craft/26-multi-period-timing/units/unit-02/6.4.2-cash-flow-spreading-across-years.unit.html"
+      },
+      "stub": "return {}"
+    },
+    {
+      "file": "cipt/solve.py",
+      "signature": "def read_plan(built: Built, result: mathopt.SolveResult) -> Plan",
+      "contract": "Turns a SolveResult into a Plan whose starts map each funded project to the year its variable is 1.",
+      "idea": "The schedule is read off the variables that are 1; the key of each variable says the year.",
+      "lesson": {
+        "title": "6.4.1 Start-Time Variables x[i,t] and Timing Windows",
+        "href": "../../../../06-formulation-craft/26-multi-period-timing/units/unit-01/6.4.1-start-time-variables-x-i-t-and-timing-windows.unit.html"
+      }
+    },
+    {
+      "file": "cipt/report.py",
+      "signature": "def spend_by_year(request: Request, plan: Plan) -> dict[int, int]",
+      "contract": "Returns what a Plan spends in each plan year, in whole $k, from the funded projects' starts and cost profiles, with 0 for a year nothing spends in.",
+      "idea": "Compute the report's numbers from the plan and the data, not from the model, so the report checks the model instead of repeating it.",
+      "lesson": {
+        "title": "14.2.2 Many Years: Start Years, Windows and Cash-Flow Spreading",
+        "href": "../../../../14-growing-real-projects/55-project-cipt-planner/units/unit-02/14.2.2-many-years-start-years-windows-and-cash-flow-spreading.unit.html"
+      },
+      "stub": "return {}"
+    },
+    {
+      "file": "cipt/report.py",
+      "signature": "def render(request: Request, plan: Plan) -> str",
+      "contract": "Returns the report: the status line, the funded line with the total of all yearly budgets, one line per plan year reading `  <year>  spend $<spend>k of $<budget>k`, then one line per funded project.",
+      "idea": "A yearly budget is only trusted when the report shows each year against its own limit.",
+      "lesson": {
+        "title": "14.2.2 Many Years: Start Years, Windows and Cash-Flow Spreading",
+        "href": "../../../../14-growing-real-projects/55-project-cipt-planner/units/unit-02/14.2.2-many-years-start-years-windows-and-cash-flow-spreading.unit.html"
+      }
+    },
+    {
+      "file": "cipt/data.py",
+      "signature": "def load_request(raw: dict) -> Request",
+      "contract": "Builds a Request from the export's dictionary: each project's cost profile, NPV for its earliest start, earliest and latest start; the plan's years; and the budget of each year, keyed by an int year. Refuses duplicate project ids.",
+      "idea": "Read the columns the model needs now, and only those.",
+      "lesson": {
+        "title": "14.2.2 Many Years: Start Years, Windows and Cash-Flow Spreading",
+        "href": "../../../../14-growing-real-projects/55-project-cipt-planner/units/unit-02/14.2.2-many-years-start-years-windows-and-cash-flow-spreading.unit.html"
+      }
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_years.py::test_spread_cost_counts_in_every_year_of_work",
+      "main",
+      "a project's cost counts in every year of its work"
+    ],
+    [
+      "tests/test_years.py::test_each_year_stays_within_its_budget",
+      "main",
+      "each year's spend stays within that year's budget"
+    ],
+    [
+      "tests/test_years.py::test_start_stays_inside_the_window",
+      "main",
+      "a project starts in a year of its window"
+    ],
+    [
+      "tests/test_years.py::test_work_must_end_inside_the_plan",
+      "edge",
+      "a project whose work would run past the plan's last year is not funded"
+    ],
+    [
+      "tests/test_years.py::test_report_shows_spend_against_each_budget",
+      "main",
+      "the report shows each year's spend against its budget"
+    ]
+  ],
+  "plants": {
+    "tests/test_years.py::test_work_must_end_inside_the_plan": [
+      [
+        "cipt/data.py",
+        "        last = min(project.latest_start, self.years[-1] - project.duration + 1)",
+        "        last = min(project.latest_start, self.years[-1])"
+      ],
+      [
+        "cipt/model.py",
+        "                terms[year].append(amount * x[p.project_id, t])",
+        "                if year in terms:\n                    terms[year].append(amount * x[p.project_id, t])"
+      ]
+    ]
+  },
+  "cites": {
+    "path": "55-project-cipt-planner/README_14.2.2.md",
+    "section": null
+  }
+}

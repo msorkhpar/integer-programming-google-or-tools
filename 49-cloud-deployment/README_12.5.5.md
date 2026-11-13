@@ -1,0 +1,345 @@
+# 12.5.5 Terraform for the Optimization Stack
+
+Lessons 12.5.2 and 12.5.3 created a bucket, a compute environment, a job queue, a job definition, a
+state machine and four roles, each with a boto3 call against moto. In AWS someone has to create them
+too, the same way in staging and in production, and change them later without breaking the runs
+already stored. Clicking through the console does not repeat, and a script of boto3 calls does not
+know what already exists. **Terraform** does both: you describe the resources you want in files, it
+compares them with what exists, shows you the difference as a **plan**, and makes only that change.
+This lesson reads the GridCap stack's Terraform and writes a check that refuses a plan which would
+destroy history. (GridCap is fictional; no number in it is real.)
+
+**This lesson is read-along for its Terraform.** The course's runner has no Terraform and no network,
+and the course has no AWS account: the `.tf` files below were never planned or applied. The Python
+programs that read the policy and a plan did run, and their output is printed. No model is built or
+changed here.
+
+## Terraform Describes the Stack, plan Shows the Change, apply Makes It
+
+Terraform's configuration language, HCL, describes each piece as a **resource** block: a type from
+a **provider** (here `hashicorp/aws`), a local name, and arguments. A resource can refer to another's
+attributes, `aws_s3_bucket.runs.arn`, and Terraform orders the work from those references. It
+records what it created in a **state** file, which maps each block to the real resource's id.
+
+The working loop has three commands:
+
+| Command | What it does |
+| --- | --- |
+| `terraform plan -out=tfplan` | compare the files with the state and the real resources; save the planned changes |
+| `terraform show -json tfplan` | the saved plan as JSON, for programs to read |
+| `terraform apply tfplan` | make exactly the saved changes, nothing else |
+
+Terraform's documentation calls the saved plan file opaque, meant for `apply`, and says to treat it
+as sensitive. Applying the saved file, rather than planning again inside `apply`, means what was
+reviewed is what happens. The stack's files sit in `deploy/terraform/`: `variables.tf` for what
+changes per environment (bucket name, image, subnets), `main.tf` for the resources, `outputs.tf` for
+the names the API's configuration reads afterwards.
+
+## The Bucket Keeps History: Versioning, No Public Access, prevent_destroy
+
+The bucket holds every snapshot and result (lesson 12.5.3). Three blocks protect it:
+
+```hcl
+resource "aws_s3_bucket" "runs" {
+  bucket = var.bucket_name
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "aws_s3_bucket_versioning" "runs" {
+  bucket = aws_s3_bucket.runs.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "runs" {
+  bucket                  = aws_s3_bucket.runs.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+```
+
+- **`prevent_destroy`** makes Terraform fail any plan that would destroy the bucket, including a
+  replacement (destroy, then create). Terraform's documentation notes the limit: delete the whole
+  block from the files and the protection goes with it.
+- **Versioning** is its own resource in the AWS provider. Lesson 12.5.3 showed why it matters: an
+  overwritten snapshot was still recoverable. The provider's documentation adds that destroying this
+  resource suspends versioning on the bucket.
+- **The public access block** turns on all four of S3's Block Public Access settings. The provider
+  defaults each to `false`; AWS recommends turning all four on. Planning data never needs a public
+  URL.
+
+The image registry gets the same treatment for a different reason:
+
+```hcl
+resource "aws_ecr_repository" "solver" {
+  name                 = "gridcap-solver"
+  image_tag_mutability = "IMMUTABLE"
+}
+```
+
+With immutable tags, a tag pushed once can never point at another image. CI tags each image with
+its commit (lesson 12.5.6), so a job definition that names a tag always runs the same bytes, which is
+lesson 12.5.1's point about pinning, carried to the registry.
+
+## Batch and Step Functions Are Declared the Way the Programs Created Them
+
+The Batch resources match the moto calls of lesson 12.5.2 field for field. The compute environment
+and the job definition:
+
+```hcl
+resource "aws_batch_compute_environment" "fargate" {
+  name         = "gridcap-fargate"
+  type         = "MANAGED"
+  service_role = aws_iam_role.batch_service.arn
+
+  compute_resources {
+    type               = "FARGATE"
+    max_vcpus          = 16
+    subnets            = var.subnet_ids
+    security_group_ids = var.security_group_ids
+  }
+```
+
+```hcl
+resource "aws_batch_job_definition" "solve" {
+  name                  = "gridcap-solve"
+  type                  = "container"
+  platform_capabilities = ["FARGATE"]
+
+  container_properties = jsonencode({
+    image            = var.image
+    command          = ["python", "-c", "import solve_worker; raise SystemExit(solve_worker.main())"]
+    executionRoleArn = aws_iam_role.solve_execution.arn
+    jobRoleArn       = aws_iam_role.solve_job.arn
+    resourceRequirements = [
+      { type = "VCPU", value = "2" },
+      { type = "MEMORY", value = "8192" },
+    ]
+    environment = [
+      { name = "RESULT_BUCKET", value = aws_s3_bucket.runs.bucket },
+      { name = "PYTHON_CPU_COUNT", value = "2" },
+    ]
+    networkConfiguration = { assignPublicIp = "DISABLED" }
+  })
+
+  retry_strategy {
+    attempts = 2
+  }
+
+  timeout {
+    attempt_duration_seconds = 3600
+  }
+}
+```
+
+`container_properties` is the same JSON the boto3 call sent, written with `jsonencode`; references
+replace the literal ARNs. `max_vcpus = 16` caps the whole environment: at 2 vCPUs a job, at most
+eight solves run at once, and the rest wait in the queue, the throttle lesson 12.4.2's thread
+pool provided on one machine. The state machine reads the definition file of lesson 12.5.2 itself,
+so the JSON the program inspected is the JSON that is deployed:
+
+```hcl
+resource "aws_sfn_state_machine" "solve_run" {
+  name       = "gridcap-solve-run"
+  role_arn   = aws_iam_role.solve_run.arn
+  definition = file("${path.module}/../stepfunctions/solve-run.asl.json")
+}
+```
+
+There is no database resource. The run index is the API's local SQLite file (lesson 12.5.3), and
+everything the cloud side keeps is in the bucket.
+
+## Each Role Gets Only What Its Part Needs
+
+Four roles, one per part, each **assumed** by one AWS service (the `assume_role_policy` names it):
+
+| Role | Assumed by | May |
+| --- | --- | --- |
+| `gridcap-solve-execution` | Fargate (`ecs-tasks.amazonaws.com`) | pull the image, write logs (AWS's managed execution policy) |
+| `gridcap-solve-job` | the solve container | read snapshots, write results |
+| `gridcap-record-failure` | Lambda | write results |
+| `gridcap-solve-run` | Step Functions | submit, describe and stop Batch jobs; invoke the failure function |
+
+The job role's policy is a file, rendered by Terraform's `templatefile` with the bucket's ARN:
+
+```hcl
+resource "aws_iam_role_policy" "solve_job" {
+  name   = "gridcap-solve-job"
+  role   = aws_iam_role.solve_job.id
+  policy = templatefile("${path.module}/solve-job-policy.json", { bucket_arn = aws_s3_bucket.runs.arn })
+}
+```
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadSnapshots",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": ["${bucket_arn}/snapshots/*"]
+    },
+    {
+      "Sid": "WriteResults",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject"],
+      "Resource": ["${bucket_arn}/results/*"]
+    }
+  ]
+}
+```
+
+The worker reads snapshots and writes results, so that is all it may do: no `DeleteObject`, no write
+under `snapshots/`, no other bucket. Lesson 12.5.4 showed that moto checks no permissions, so the
+policy is checked by reading it. `job_policy.py` renders the same file with Python's
+`string.Template` (which reads `${bucket_arn}` the way `templatefile` does) and asks a small model of
+IAM, Allow statements matched by action and resource with `*` as a wildcard, about five requests:
+
+```python
+def allows(doc: dict, action: str, resource: str) -> bool:
+    return any(s["Effect"] == "Allow"
+               and any(fnmatch.fnmatchcase(action.lower(), a.lower()) for a in s["Action"])
+               and any(fnmatch.fnmatchcase(resource, r) for r in s["Resource"])
+               for s in doc["Statement"])
+```
+
+```text
+s3:GetObject     snapshots/sha256/730c8b40b1eb.json     allowed
+s3:PutObject     results/730c8b40b1eb/run-0007.json     allowed
+s3:PutObject     snapshots/sha256/730c8b40b1eb.json     denied
+s3:DeleteObject  results/730c8b40b1eb/run-0007.json     denied
+s3:GetObject     results/730c8b40b1eb/run-0006.json     denied
+```
+
+The worker can do its job and nothing that would rewrite history. The model is deliberately small:
+it knows no `Deny`, no conditions and no other kinds of policy, so it confirms what this file says,
+not everything AWS will decide. The Step Functions role takes the policy the Step Functions
+documentation gives for `submitJob.sync`; its Batch actions name `*` because, the documentation
+explains, job ids exist only at run time.
+
+<!-- practice 1 -->
+
+## A Plan Is Data: Stop the Ones That Destroy History
+
+`terraform show -json` turns a saved plan into JSON, documented in Terraform's "JSON output format".
+Each entry of `resource_changes` has the resource's address and a list of `actions`: `["no-op"]`,
+`["create"]`, `["read"]`, `["update"]`, `["delete"]`, or a replacement, `["delete", "create"]`
+(destroy first) or `["create", "delete"]` (create first). A program can read it before `apply`
+runs, and refuse. `plan_review.py` stops any plan that would delete a resource holding history: the
+bucket, its versioning, or the image registry.
+
+```python
+KEEPS_HISTORY = {"aws_s3_bucket", "aws_s3_bucket_versioning", "aws_ecr_repository"}
+```
+
+```python
+def blocked(change: dict) -> bool:
+    return change["type"] in KEEPS_HISTORY and "delete" in change["change"]["actions"]
+```
+
+The plan it reads, `deploy/terraform/sample-plan.json`, was written by hand in the documented shape;
+no Terraform ran. It holds one change of each kind: someone removed the versioning block (a destroy),
+renamed the compute environment (the provider says a new name forces a new resource, so a
+replacement), updated the Lambda code, and added a policy:
+
+```text
+aws_ecr_repository.solver              no change
+aws_lambda_function.record_failure     update in place
+aws_iam_role_policy.record_failure     create
+aws_batch_compute_environment.fargate  replace (destroy first)
+aws_s3_bucket_versioning.runs          destroy  <- blocked
+apply allowed: False | stopped by: ['aws_s3_bucket_versioning.runs']
+```
+
+`prevent_destroy` on the bucket would not have caught this: the bucket is not destroyed, only its
+versioning resource, whose block was deleted from the files. The plan check sees the plan, not the
+files, so it catches it. Replacing the compute environment passes: it holds no data, and queued jobs
+are the only thing to plan around. Lesson 12.5.6 runs this check in CI, between `plan` and `apply`.
+
+<!-- practice 2 -->
+
+## Summary
+
+- **Terraform describes the stack; `plan` shows the change; `apply` makes it.** Apply the saved plan,
+  so what was reviewed is what happens.
+- **The bucket keeps history:** versioning, all four public-access blocks, `prevent_destroy`; the
+  registry's tags are immutable.
+- **Batch and Step Functions are declared the way the programs created them;** the state machine
+  reads the same definition file. No database resource: the index is the API's SQLite file.
+- **Each role gets only what its part needs.** The job reads `snapshots/*` and writes `results/*`.
+- **A plan is data: stop the ones that destroy history.** `resource_changes[].change.actions`.
+
+## Reference
+
+| Plan actions | Meaning |
+| --- | --- |
+| `["no-op"]` | nothing changes |
+| `["create"]`, `["update"]`, `["delete"]`, `["read"]` | create; change in place; destroy; read a data source |
+| `["delete", "create"]` | replace, destroying first |
+| `["create", "delete"]` | replace, creating first |
+
+| Block or argument | What it does |
+| --- | --- |
+| `lifecycle { prevent_destroy = true }` | fail any plan that destroys or replaces this resource |
+| `aws_s3_bucket_versioning` | keep every object version |
+| `aws_s3_bucket_public_access_block` | the four Block Public Access settings (default `false`) |
+| `image_tag_mutability = "IMMUTABLE"` | an ECR tag can never move |
+| `templatefile(path, vars)`, `file(path)`, `jsonencode(value)` | render a file; read a file; write JSON |
+
+**Further reading:** OR-Tools, [Installing OR-Tools for Python](https://developers.google.com/optimization/install/python)
+(the package the image holds); Terraform, [`terraform plan`](https://developer.hashicorp.com/terraform/cli/commands/plan)
+(`-out`, saved plans are sensitive), [JSON output format](https://developer.hashicorp.com/terraform/internals/json-format)
+(`resource_changes`, `actions`) and [the `lifecycle` meta-argument](https://developer.hashicorp.com/terraform/language/meta-arguments/lifecycle)
+(`prevent_destroy` and its limit); the AWS provider's documentation for
+[`aws_batch_compute_environment`](https://github.com/hashicorp/terraform-provider-aws/blob/main/website/docs/r/batch_compute_environment.html.markdown),
+[`aws_batch_job_definition`](https://github.com/hashicorp/terraform-provider-aws/blob/main/website/docs/r/batch_job_definition.html.markdown),
+[`aws_batch_job_queue`](https://github.com/hashicorp/terraform-provider-aws/blob/main/website/docs/r/batch_job_queue.html.markdown),
+[`aws_s3_bucket_versioning`](https://github.com/hashicorp/terraform-provider-aws/blob/main/website/docs/r/s3_bucket_versioning.html.markdown),
+[`aws_s3_bucket_public_access_block`](https://github.com/hashicorp/terraform-provider-aws/blob/main/website/docs/r/s3_bucket_public_access_block.html.markdown),
+[`aws_ecr_repository`](https://github.com/hashicorp/terraform-provider-aws/blob/main/website/docs/r/ecr_repository.html.markdown),
+[`aws_lambda_function`](https://github.com/hashicorp/terraform-provider-aws/blob/main/website/docs/r/lambda_function.html.markdown)
+and [`aws_sfn_state_machine`](https://github.com/hashicorp/terraform-provider-aws/blob/main/website/docs/r/sfn_state_machine.html.markdown);
+Amazon S3, [Block Public Access](https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html);
+AWS Step Functions, [Run AWS Batch workloads](https://docs.aws.amazon.com/step-functions/latest/dg/connect-batch.html)
+(the `.sync` IAM policy); Amazon ECS, [Task IAM roles](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-iam-roles.html).
+
+## Challenges
+
+1. Give the worker permission to read the result of an earlier run of the same snapshot (to pass it as a
+   solution hint, lesson 4.3.3). Write the narrowest statement you can, and the request your `allows` must
+   still deny.
+2. A colleague wants `force_destroy = true` on the bucket "to make teardown easier in staging". What
+   does it change, and how would you allow it in staging only?
+3. Extend the plan check to refuse a replacement of the state machine while executions are running.
+   What does it need to know that the plan does not say?
+
+## Design Note: The Files Are the Review
+
+With Terraform, a change to the stack is a change to text: it goes through a pull request, a
+reviewer reads the diff, CI prints the plan, and the check of this lesson refuses what no reviewer
+should have to catch by eye. The console and ad-hoc scripts skip all of that, and leave a stack
+nobody can rebuild. Terraform's state file is the price: it must be stored safely (it is kept out of
+the image by lesson 12.5.1's `.dockerignore`) and shared by everyone who applies.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson
+shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy
+of the code, so the course's own files never change.
+
+**job_policy.py.** Renders the job role's policy from the Terraform file and asks five requests
+(*Each Role Gets Only What Its Part Needs*). *Try:* Change `s3:GetObject` to `s3:Get*` in the
+policy file. Predict which denied line changes.
+
+**plan_review.py.** Reads the sample plan and blocks deletes of resources that hold history (*A Plan
+Is Data*). *Try:* Change the versioning change's actions to `["update"]`. Predict the last line.
+
+- Program: [job_policy.py](src/job_policy.py)
+- Program: [plan_review.py](src/plan_review.py)

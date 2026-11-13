@@ -1,0 +1,346 @@
+# 14.3.3 Substation Bundles and Outage Coordination
+
+The ten-year plan reached the operations team, who schedule the outages, and came back with two
+comments:
+
+> **Request 3.** A transformer can only be swapped with its substation out of service. Each outage
+> costs about $300k (switching, a mobile substation, overtime), whether we swap one unit or five, so
+> units at one substation should be done together. And the system operator allows each region at
+> most two planned substation outages a year. The plan must pay for its outages from the same
+> budget and stay within the operator's limit.
+
+The code before this lesson is snapshot `steps/02`; after it, `steps/03`. The fleet is the invented
+500-unit one.
+
+## The Ten-Year Model Prices Units, Not Outages, So Its Plan Breaks Both Rules
+
+The model of the last lesson has one variable per unit and year and a budget row that adds up unit
+costs. An outage appears nowhere. `bundles.py` takes that plan and counts what it would really cost:
+
+```text
+ten-year plan, costed : 161 units, 137 outages (1.18 units each), years over budget 10, most outages in a region-year 9
+```
+
+137 outages for 161 units: the plan almost never puts two units of one substation in the same
+year, because nothing told it that doing so saves anything. Costed at $300k each, every one of the
+ten years goes over budget, and one region takes nine outages in a year where the operator allows
+two. The plan is not a plan.
+
+No coefficient change can fix this. An outage's cost is shared by every unit at the substation that
+year: it is paid once if any of them is replaced, and once only. That is a **fixed charge**, and a
+fixed charge needs a variable of its own, linked to the others by an implication (lesson 6.1.2).
+
+Adding $300k to every unit's cost $`c_i`$ is the obvious coefficient change, and it shows why. The
+budget row stays linear, the model gains no variable and no row, and the money lands in the budget
+row, where $`c_i`$ already is. It is wrong for one reason: it charges two units at one substation
+for two outages in a year where they share one.
+
+## An Outage Is a Binary per Substation and Year, Linked to the Units It Serves
+
+The new decision is $`o_{s,t} \in \{0,1\}`$: substation $`s`$ is out of service in year $`t`$. Three
+rules use it:
+
+1. **No replacement without its outage.** If any unit of substation $`s`$ is replaced in year
+   $`t`$, then $`o_{s,t} = 1`$.
+2. **The budget pays for outages:** each year's spend is its units' costs plus $`F`$ per outage.
+3. **Coordination:** each region has at most $`O`$ outages a year.
+
+Rules 2 and 3 are rows on sums of $`o`$. Rule 1, the link, has two standard forms, and choosing
+between them is this lesson's design decision:
+
+| Form | Rows | Says |
+| --- | --- | --- |
+| aggregated | one per substation and year | $`\sum_{i \in I_s} x_{i,t} \le n_s\, o_{s,t}`$ |
+| per unit | one per unit and year | $`x_{i,t} \le o_{s(i),t}`$ for each $`i \in I_s`$ |
+
+Here $`I_s`$ is the set of candidates at substation $`s`$ and $`n_s = |I_s|`$ their number. Both forms
+allow exactly the same 0-1 plans: with $`o_{s,t} = 0`$ both force every $`x_{i,t}`$ at $`s`$ to 0, and
+with $`o_{s,t} = 1`$ both allow any of them. The aggregated form is the one engineers write first,
+because it is one row per substation and year, where the per-unit form has one per unit and year.
+The project takes it, for now, and leaves a note: the two forms differ in their LP relaxation
+(lesson 6.7.1), and if the model gets slow at scale, this is the first place to look. A later
+lesson of this module comes back to it.
+
+A third option was considered and rejected: a variable per *bundle*, "replace this set of units at
+this substation in this year", one for each subset. It states the rule exactly and needs no link,
+but a substation of 14 candidates has $`2^{14}`$ subsets. That is column generation's territory
+(lesson 11.3.4), not this project's.
+
+## The Model
+
+The ten-year model with outages. Changes from the last lesson are marked.
+
+**Sets.** $`I`$, the candidates (age 40 or more); $`Y`$, the plan years 2027–2036; $`W`$, the
+20-year risk window; $`S`$, the substations with at least one candidate $`\leftarrow`$; $`I_s
+\subseteq I`$, the candidates at substation $`s`$ $`\leftarrow`$; $`G`$, the regions, and $`S_g
+\subseteq S`$ the substations of region $`g`$ $`\leftarrow`$.
+
+**Parameters.** $`\text{rr}_{i,t}`$, discounted risk removed ($k); $`c_i`$, replacement cost ($k);
+$`B`$, budget per year ($k); $`F`$, the cost of one substation outage ($k) $`\leftarrow`$; $`O`$,
+the most outages a region may have in a year $`\leftarrow`$; $`n_s = |I_s|`$ $`\leftarrow`$.
+
+**Variables.** $`x_{i,t} \in \{0,1\}`$ for $`i \in I`$, $`t \in Y`$: unit $`i`$ is replaced in year
+$`t`$; $`o_{s,t} \in \{0,1\}`$ for $`s \in S`$, $`t \in Y`$: substation $`s`$ has an outage in year
+$`t`$ $`\leftarrow`$.
+
+**Objective.**
+
+```math
+\max \; \sum_{i \in I} \sum_{t \in Y} \text{rr}_{i,t} \, x_{i,t}
+```
+
+**Constraints.**
+
+```math
+\begin{aligned}
+\sum_{t \in Y} x_{i,t} &\le 1 && \forall i \in I && \text{(once}_i) \\
+\sum_{i \in I_s} x_{i,t} &\le n_s \, o_{s,t} && \forall s \in S,\ t \in Y && \text{(outage}_{s,t}) \quad \leftarrow \text{this lesson} \\
+\sum_{s \in S_g} o_{s,t} &\le O && \forall g \in G,\ t \in Y && \text{(coord}_{g,t}) \quad \leftarrow \text{this lesson} \\
+\sum_{i \in I} c_i \, x_{i,t} + F \sum_{s \in S} o_{s,t} &\le B && \forall t \in Y && \text{(budget}_t) \quad \leftarrow \text{changed}
+\end{aligned}
+```
+
+The objective does not price outages: their cost is in the budget row, where it competes with
+replacements for the same money, which is what operations asked for. In the code the rows are
+`outage_S0007_2029`, `coord_north_2029` and `budget_2029`, and the outage variables `out_S0007_2029`.
+
+## The Change, File by File
+
+**`request.py`: two fields become real.** `outage_cost` is $`F`$ and `outages` is $`O`$, with
+`None` for "no limit". The defaults (0 and `None`) leave the model of the last lesson unchanged, and
+`has_outages` says whether the outage variables are needed at all. Three stubs belong to the next
+lesson.
+
+```diff
+--- 02/renewal/request.py
++++ 03/renewal/request.py
+@@
+-from dataclasses import dataclass
++from dataclasses import dataclass, field
+
+ from .fleet import FIRST_YEAR
+@@
+     rate: float = 0.07          # discount rate for risk removed in later years
+     min_age: int = 0            # units younger than this, in FIRST_YEAR, are not candidates
+     gap: float = 0.0            # stop when the plan is within this share of the bound
++    outage_cost: int = 0        # $k for each substation taken out of service in a year
++    outages: int | None = None  # most substation outages per region per year; None: no limit
+     # Stubs: the next lesson gives these fields their meaning; this model ignores them.
+-    outage_cost: int = 0
+-    outages: int | None = None
++    crew_weeks: int | None = None
++    lead_times: bool = False
++    spares: dict[str, int] = field(default_factory=dict)
++
++    def has_outages(self) -> bool:
++        return self.outage_cost > 0 or self.outages is not None
+```
+
+**`model.py`: outage variables, two row families, and a budget row that pays for outages.**
+`Built` gains `out`, the outage variables by `(substation, year)`, with an empty default so that
+every old caller still works, and `build` hands it over at the end:
+
+```diff
+--- 02/renewal/model.py
++++ 03/renewal/model.py
+@@
+-from dataclasses import dataclass
++from dataclasses import dataclass, field
+
+ from ortools.math_opt.python import mathopt
+
+-from .fleet import Transformer
++from .fleet import REGIONS, Transformer
+ from .request import Request
+ from .risk import risk_removed
+@@
+     budget: dict[int, mathopt.LinearConstraint]     # one row per year
++    out: dict[tuple[str, int], mathopt.Variable] = field(default_factory=dict)   # out[s, t] = 1: outage
+@@
+     model.maximize(sum(risk_removed(t, y, request) * x[t.tid, y] for t in units for y in years))
+-    return Built(model, x, budget)
++    return Built(model, x, budget, out)
+```
+
+Between the variables and the objective, the last lesson's `budget` comprehension gives way to the
+three blocks this lesson adds, and they are yours to write in the practice. Each is one line of the
+model above:
+
+- **The outage variables.** Only when `request.has_outages()`; otherwise `out` stays an empty dict
+  and the model is the last lesson's. Then one binary $`o_{s,t}`$ for each substation $`s`$ with at
+  least one candidate (`t.substation`, in sorted order) and each plan year, named `out_<s>_<year>`
+  and kept in `out` under the key `(s, year)`.
+- **$`\text{outage}_{s,t}`$.** For each of those substations and years, the sum of $`x_{i,t}`$ over
+  the substation's candidates at most their count $`n_s`$ times $`o_{s,t}`$, named
+  `outage_<s>_<year>`. With $`o_{s,t} = 0`$ the row forces every one of those $`x_{i,t}`$ to 0; with
+  $`o_{s,t} = 1`$ it allows all of them, which is why the coefficient is $`n_s`$ and not 1.
+- **$`\text{coord}_{g,t}`$.** Only when `request.outages` is not `None`. For each region in
+  `REGIONS` and each plan year, the sum of $`o_{s,t}`$ over the region's substations with candidates
+  at most `request.outages`, named `coord_<region>_<year>`. Skip a region with no candidate
+  substations: its sum would be an empty sum, the number 0, which MathOpt refuses as a row.
+- **$`\text{budget}_t`$, changed.** Each year's row is the last lesson's sum of $`c_i \, x_{i,t}`$
+  plus `request.outage_cost` times the sum of that year's $`o_{s,t}`$, still at most
+  `request.budget` and still named `budget_<year>`. With no outages the added term is zero.
+
+Write them plainly, scanning the candidates where you need a substation's or a region's members: on
+211 candidates that costs nothing anyone could measure. It is the kind of line a fleet ten times
+larger finds, and the scale lesson of this module measures it.
+
+**`report.py`: outages in the money.** `outages` lists the substation-years a plan needs, one per
+substation and year however many units, and `spend_by_year` charges each once:
+
+```diff
+--- 02/renewal/report.py
++++ 03/renewal/report.py
+@@
++def outages(fleet: list[Transformer], replace: dict[str, int]) -> set[tuple[str, int]]:
++    """The (substation, year) outages the replacements need: one per substation and year."""
++    substation = {t.tid: t.substation for t in fleet}
++    return {(substation[tid], y) for tid, y in replace.items()}
++
++
+ def spend_by_year(fleet: list[Transformer], replace: dict[str, int], outage_cost: int = 0) -> dict[int, int]:
+-    """What the replacements cost in each year, $k. (Stub: the next lesson adds `outage_cost`.)"""
++    """What the replacements cost in each year, with their outages, $k."""
+     cost = {t.tid: t.cost for t in fleet}
+     spend: dict[int, int] = {}
+     for tid, y in replace.items():
+         spend[y] = spend.get(y, 0) + cost[tid]
++    for _, y in outages(fleet, replace):
++        spend[y] += outage_cost
+     return dict(sorted(spend.items()))
+```
+
+This is the report's own count, written apart from the model, so a test can compare the two.
+
+## Pricing the Outage Bundles the Work; the Region Limit Then Spreads It
+
+`bundles.py` solves the 500-unit fleet three ways: the ten-year plan costed afterwards (above), the
+outage cost alone, and the cost with the limit of two outages per region and year:
+
+```text
+ten-year plan, costed : 161 units, 137 outages (1.18 units each), years over budget 10, most outages in a region-year 9
+outage cost only      : 144 units,  62 outages (2.32 units each), years over budget 0, most outages in a region-year 4
+cost and region limit : 140 units,  59 outages (2.37 units each), years over budget 0, most outages in a region-year 2
+ten-year plan         : risk removed $523,787k (bound $528,226k, OPTIMAL)
+outage cost only      : risk removed $464,438k (bound $471,541k, OPTIMAL)
+cost and region limit : risk removed $464,155k (bound $471,135k, OPTIMAL)
+```
+
+With outages priced, the plan replaces 144 units in 62 outages, about twice as many units per
+outage, and every year fits its budget. It replaces 17 fewer units, because $18,600k of the ten
+years' money now pays for outages. The region limit then brings the busiest region-year from four
+outages to two.
+
+The last two values differ by $283k, and that difference means nothing. Each run stops within 2%
+of its bound, and 2% of $471,000k is about $9,400k: the solver may have stopped at either plan's
+value with a better one left unfound. All the runs can say is that the limit costs at most $7,386k
+(the bound without the limit, $471,541k, less the plan with it, $464,155k), and possibly nothing. A
+comparison between two runs is only as fine as
+the looser of their gaps, a point a later lesson of this module returns to.
+
+## The Tests Pin the Fixed Charge, the Bundle, the Region Limit and the Report
+
+Each test builds two or three units at one or two substations:
+
+- **one outage serves every unit at its substation that year:** two $400k units at S1 plus one
+  outage is $1,100k and fits a $1,100k budget; one unit at S1 and one at S2 needs two outages,
+  $1,400k, and is refused.
+- **the plan bundles:** A and B at S1, C at S2, all $300k with equal risk, $900k a year and $300k
+  outages: the plan must take A and B (one outage), not A and C (two).
+- **a region takes a limited number of outages a year:** with a limit of one, S1 in 2027 and S2 in
+  2028 is allowed; both in 2027 is refused; a third substation in another region is not affected.
+- **spend counts each outage once**, in the report's own arithmetic.
+
+```text
+step 03 tests on the code of step 02 (before): 15 passed, 4 failed
+  FAILED test_outages.py::test_one_outage_serves_every_replacement_at_its_substation_that_year (AssertionError)
+         assert not True
+  FAILED test_outages.py::test_the_plan_bundles_replacements_at_one_substation (AssertionError)
+         assert ['A', 'B', 'C'] == ['A', 'B']
+  FAILED test_outages.py::test_a_region_takes_a_limited_number_of_outages_a_year (AssertionError)
+         assert not True
+  FAILED test_outages.py::test_spend_counts_each_outage_once (AssertionError)
+         assert {2027: 800, 2028: 400} == {2027: 1100, 2028: 700}
+```
+
+The old model, which ignores outages, allows the two-substation list it should refuse, buys all
+three units where the outage cost leaves room for two, and its report leaves out $300k per outage.
+After the change all 19 tests pass:
+
+```text
+step 03 tests on the code of step 03 (after): 19 passed, 0 failed
+tests step 03 adds or changes: 4
+```
+
+## What the Step Did to the Code
+
+```text
+02       10    195         17     15          97  solve.read_plan (3)
+03       10    225         19     19         121  model.build (13)
+```
+
+Thirty code lines, and `build` is now the most branching function in the project, at 13: two
+`if`s guard optional rules, four loops walk substations, regions and years, and the comprehensions
+filter by substation and region. The model keeps its style (one block per constraint family, each
+named as in the formulation), but `build` is now long enough that the next rule should not simply be
+appended to it. The project lets it grow for one more lesson and then restructures it, when there is
+a measured reason to.
+
+**Practice.** This lesson's project practice starts from the code before this step, the whole
+package (snapshot `steps/02`). It is graded by the tests in the practice's `tests/` folder and by a
+check that `main.py` prints the practice's `expected/report.txt`; the practice's statement gives the
+request `main.py` makes and the format of every line it prints. This step's `main.py` plans a tiny
+fleet of 25 units, drawn from seed 56, over five years, with outages.
+
+<!-- practice 1 -->
+
+## Summary
+
+- **A cost shared by several decisions is a fixed charge, and needs its own variable.** No
+  coefficient on $`x`$ can say "paid once if any unit at the substation is replaced".
+- **The link has two forms that allow the same 0-1 plans:** one aggregated row per substation and
+  year, or one row per unit and year. The project starts with the smaller, aggregated one.
+- **Pricing outages bundled the work** (1.18 to 2.32 units per outage) and brought every year
+  within budget; the region limit then spread the outages.
+- **Two runs differ meaningfully only by more than their gaps.** Within a 2% gap, $283k of
+  difference is noise.
+
+## Reference
+
+| Rule | Row | Code name |
+| --- | --- | --- |
+| no replacement without its outage (aggregated) | $`\sum_{i \in I_s} x_{i,t} \le n_s o_{s,t}`$ | `outage_{s}_{t}` |
+| no replacement without its outage (per unit) | $`x_{i,t} \le o_{s(i),t}`$ | (a later lesson) |
+| region limit | $`\sum_{s \in S_g} o_{s,t} \le O`$ | `coord_{g}_{t}` |
+| budget with outages | $`\sum_i c_i x_{i,t} + F \sum_s o_{s,t} \le B`$ | `budget_{t}` |
+
+**Further reading:** [MathOpt `model.py` (OR-Tools source, v9.15)](https://github.com/google/or-tools/blob/v9.15/ortools/math_opt/python/model.py) (`add_binary_variable` for the outage variables, and `add_linear_constraint` with a variable on both sides, as the outage row writes it); [MathOpt `expressions.py` (OR-Tools source, v9.15)](https://github.com/google/or-tools/blob/v9.15/ortools/math_opt/python/expressions.py) (the note on `fast_sum`: a row built with Python's `sum` over an empty list fails, which is why `build` skips regions with no candidates). Both were read from the copy installed in the course's runner image. Lessons 6.1.2 (implication as a linear row), 6.7.1 (comparing formulations by their LP bound) and 11.3.4 (column generation) are the course's background for this step.
+
+## Challenges
+
+1. Operations says a substation may have at most one planned outage in the whole ten years. Write
+   the row, and predict whether the number of units per outage rises.
+2. The outage cost depends on the substation: $500k where a mobile substation must be hired, $200k
+   elsewhere. Which parameter becomes indexed, and which line of `build` changes?
+3. Write a test that a plan with no replacements at a substation never pays for its outage. Does
+   the model need a row for that, or does the objective take care of it?
+
+## Design Note: The Cost Lives in the Budget Row, Not the Objective
+
+The outage cost could have been subtracted in the objective instead, as a price on $`o_{s,t}`$.
+Operations' request was about money from the same budget, so the cost goes where the money is. In
+the objective it would have traded risk against dollars at an exchange rate nobody had agreed on,
+and the plan could have spent its whole budget on units and still paid for outages on paper.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change.
+
+**bundles.py.** Costs the ten-year plan's outages, solves with the outage cost and then with the
+region limit too, and runs the step's tests before and after the change (*every section*). *Try:*
+Raise the outage cost to $600k. Predict the number of units per outage, then run it.
+
+- Program: [bundles.py](src/bundles.py)
+- Program: [growth.py](src/growth.py)
+- Library: [steps.py](src/steps.py)

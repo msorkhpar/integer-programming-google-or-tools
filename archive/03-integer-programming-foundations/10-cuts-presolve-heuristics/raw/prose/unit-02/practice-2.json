@@ -1,0 +1,141 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "03-integer-programming-foundations",
+    "10-cuts-presolve-heuristics"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Dual fixing",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A vegetation-management model maximizes $`\\sum_j c_j x_j`$ over $`x_j \\in \\{0, 1\\}`$ under rows $`\\sum_j a_{r,j}\\, x_j \\le b_r`$. Some $`c_j`$ are negative: optional overtime shifts cost money and are worth taking only when they let other work in. Write the dual-fixing reduction."
+    },
+    {
+      "type": "para",
+      "text": "Write `dual_fixings(objective, rows)` in `dual.py`. `objective` maps each variable to $`c_j`$; `rows` maps each row name to a pair `(coefs, rhs)`, where `coefs` maps the row's variables to their $`a_{r,j}`$ (a variable in no row has no entry anywhere). Return a dict of the variables to fix:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "x_j = 1 \\;\\text{ if } c_j \\ge 0 \\text{ and } a_{r,j} \\le 0 \\;\\; \\forall r, \\qquad\nx_j = 0 \\;\\text{ if } c_j < 0 \\text{ and } a_{r,j} \\ge 0 \\;\\; \\forall r"
+    },
+    {
+      "type": "para",
+      "text": "where $`r`$ runs over every row that contains $`x_j`$. This is the lesson's rule, $`c_j \\ge 0`$ as in its presolve code: a variable worth exactly 0 whose entries are all $`\\le 0`$ is fixed at 1 (funding it costs nothing and loosens its rows, so some optimal plan includes it), and a variable worth 0 with a positive entry is left free. The reference solution tests `c >= 0` for the first case and `c < 0` for the second. Apply the rule once, to the model as given; don't substitute and repeat."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\n\ndef dual_fixings(objective: dict[str, float],\n                 rows: dict[str, tuple[dict[str, float], float]]) -> dict[str, int]:\n    \"\"\"The variables dual fixing sets, and the value it sets each to (maximization, <= rows).\"\"\"\n    fixed = {}\n    for j, c in objective.items():\n        column = [coefs[j] for coefs, _ in rows.values() if j in coefs]\n        if c >= 0 and all(a <= 0 for a in column):\n            fixed[j] = 1\n        elif c < 0 and all(a >= 0 for a in column):\n            fixed[j] = 0\n    return fixed\n\n\nif __name__ == \"__main__\":\n    print(dual_fixings({\"a\": 5, \"b\": 3, \"c\": 4}, {\"r1\": ({\"a\": 2, \"b\": 3}, 4)}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\n\ndef dual_fixings(objective: dict[str, float],\n                 rows: dict[str, tuple[dict[str, float], float]]) -> dict[str, int]:\n    \"\"\"The variables dual fixing sets, and the value it sets each to (maximization, <= rows).\"\"\"\n    # TODO: for each variable, collect its coefficients over every row that contains it; fix it at 1\n    # when its value is 0 or more and none of them is positive, at 0 when its value is negative and\n    # none of them is negative.\n    return {}\n\n\nif __name__ == \"__main__\":\n    print(dual_fixings({\"a\": 5, \"b\": 3, \"c\": 4}, {\"r1\": ({\"a\": 2, \"b\": 3}, 4)}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "b09640868766c2dd97ef110711bdfea9d47894ba34c85d31675d896c0b56cc9d",
+  "starting_code": "from __future__ import annotations\n\n\ndef dual_fixings(objective: dict[str, float],\n                 rows: dict[str, tuple[dict[str, float], float]]) -> dict[str, int]:\n    \"\"\"The variables dual fixing sets, and the value it sets each to (maximization, <= rows).\"\"\"\n    # TODO: for each variable, collect its coefficients over every row that contains it; fix it at 1\n    # when its value is 0 or more and none of them is positive, at 0 when its value is negative and\n    # none of them is negative.\n    return {}\n\n\nif __name__ == \"__main__\":\n    print(dual_fixings({\"a\": 5, \"b\": 3, \"c\": 4}, {\"r1\": ({\"a\": 2, \"b\": 3}, 4)}))\n",
+  "exercise": {
+    "main_path": "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-02/practice-2/dual.py",
+    "test_path": "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-02/practice-2/test_dual.py",
+    "run_command": [
+      "python3",
+      "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-02/practice-2/dual.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-02/practice-2/target/report.xml",
+      "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-02/practice-2/test_dual.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_valuable_variable_in_no_row_is_fixed_at_one",
+        "kind": "main",
+        "says": "a variable with positive value and no row entries is fixed at 1"
+      },
+      {
+        "id": "test_a_parent_with_only_a_negative_entry_is_fixed_at_one",
+        "kind": "main",
+        "says": "a variable whose only entry is -1 in a precedence row is fixed at 1 when its value is positive"
+      },
+      {
+        "id": "test_a_costly_variable_with_only_positive_entries_is_fixed_at_zero",
+        "kind": "edge",
+        "says": "a variable with negative value and only positive entries is fixed at 0"
+      },
+      {
+        "id": "test_every_row_of_a_variable_counts",
+        "kind": "edge",
+        "says": "one positive entry in any row keeps a valuable variable free, even if another of its entries is negative"
+      },
+      {
+        "id": "test_a_variable_worth_zero_is_fixed_at_one_only_if_no_entry_is_positive",
+        "kind": "edge",
+        "says": "a variable worth exactly 0 is fixed at 1 when none of its entries is positive, and left free otherwise"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "10-cuts-presolve-heuristics/README_3.3.2.md",
+      "section": "A Variable That Only Helps Is Set to Its Best Value"
+    },
+    "concepts": [
+      "a variable whose increase never hurts the objective or any row is set to its upper bound"
+    ]
+  }
+}

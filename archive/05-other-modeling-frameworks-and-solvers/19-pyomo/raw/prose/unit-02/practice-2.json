@@ -1,0 +1,132 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "05-other-modeling-frameworks-and-solvers",
+    "19-pyomo"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "The price of one more megawatt",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "An island grid commits its units each hour: a unit is on or off, and a unit that is on runs between its minimum and maximum output. The market operator publishes the **price of one more megawatt** for each hour, and it wants the price of the plan it actually runs, with the on/off decisions as they are, not of some blend of half-started units."
+    },
+    {
+      "type": "para",
+      "text": "`commit(units, demand)` in `prices.py` already builds the model:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\min \\;& \\sum_{u \\in U} (\\text{fixed}_u\\, \\text{on}_u + \\text{marginal}_u\\, \\text{mw}_u) \\\\\n& \\text{low}_u\\, \\text{on}_u \\le \\text{mw}_u \\le \\text{high}_u\\, \\text{on}_u && \\forall u \\in U && \\text{(low}_u, \\text{high}_u) \\\\\n& \\sum_{u \\in U} \\text{mw}_u = D && && \\text{(demand)} \\\\\n& \\text{on}_u \\in \\{0, 1\\}, \\quad 0 \\le \\text{mw}_u \\le \\text{high}_u && \\forall u \\in U\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Write `price(units, demand)`: return the optimal hourly cost, and the dual value of the `demand` row for the committed plan. A MILP solve gives no duals, so get them from the LP that is left when every `on` is fixed at its optimal value: fix them, relax integrality, declare a `dual` Suffix, and solve again. Use `appsi_highs` with a zero `mip_gap`. About twelve lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pyomo.environ as pyo\n\n\n@dataclass(frozen=True)\nclass Unit:\n    low: float        # MW when on\n    high: float       # MW at most\n    fixed: float      # $ per hour while on\n    marginal: float   # $ per MWh\n\n\ndef commit(units: dict[str, Unit], demand: float, integer: bool = True) -> pyo.ConcreteModel:\n    m = pyo.ConcreteModel()\n    m.U = pyo.Set(initialize=list(units))\n    m.on = pyo.Var(m.U, domain=pyo.Binary if integer else pyo.UnitInterval)\n    m.mw = pyo.Var(m.U, bounds=lambda m, u: (0, units[u].high))\n    m.low = pyo.Constraint(m.U, rule=lambda m, u: m.mw[u] >= units[u].low * m.on[u])\n    m.high = pyo.Constraint(m.U, rule=lambda m, u: m.mw[u] <= units[u].high * m.on[u])\n    m.demand = pyo.Constraint(expr=sum(m.mw[u] for u in m.U) == demand)\n    m.cost = pyo.Objective(expr=sum(units[u].fixed * m.on[u] + units[u].marginal * m.mw[u] for u in m.U))\n    return m\n\n\ndef price(units: dict[str, Unit], demand: float) -> tuple[float, float]:\n    \"\"\"The cheapest hourly cost, and the price of one more MW once the commitment is fixed.\"\"\"\n    solver = pyo.SolverFactory(\"appsi_highs\")\n    solver.config.mip_gap = 0.0\n    m = commit(units, demand)\n    solver.solve(m)\n    cost = pyo.value(m.cost)\n    for u in m.U:\n        m.on[u].fix(round(m.on[u].value))\n    pyo.TransformationFactory(\"core.relax_integer_vars\").apply_to(m)\n    m.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)\n    solver.solve(m)\n    return cost, m.dual[m.demand]\n\n\nif __name__ == \"__main__\":\n    fleet = {\"hydro\": Unit(10, 60, 100, 5), \"gas\": Unit(40, 120, 900, 30), \"peaker\": Unit(5, 50, 300, 80)}\n    print(price(fleet, 150))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pyomo.environ as pyo\n\n\n@dataclass(frozen=True)\nclass Unit:\n    low: float        # MW when on\n    high: float       # MW at most\n    fixed: float      # $ per hour while on\n    marginal: float   # $ per MWh\n\n\ndef commit(units: dict[str, Unit], demand: float, integer: bool = True) -> pyo.ConcreteModel:\n    m = pyo.ConcreteModel()\n    m.U = pyo.Set(initialize=list(units))\n    m.on = pyo.Var(m.U, domain=pyo.Binary if integer else pyo.UnitInterval)\n    m.mw = pyo.Var(m.U, bounds=lambda m, u: (0, units[u].high))\n    m.low = pyo.Constraint(m.U, rule=lambda m, u: m.mw[u] >= units[u].low * m.on[u])\n    m.high = pyo.Constraint(m.U, rule=lambda m, u: m.mw[u] <= units[u].high * m.on[u])\n    m.demand = pyo.Constraint(expr=sum(m.mw[u] for u in m.U) == demand)\n    m.cost = pyo.Objective(expr=sum(units[u].fixed * m.on[u] + units[u].marginal * m.mw[u] for u in m.U))\n    return m\n\n\ndef price(units: dict[str, Unit], demand: float) -> tuple[float, float]:\n    \"\"\"The cheapest hourly cost, and the price of one more MW once the commitment is fixed.\"\"\"\n    # TODO: solve the MILP from commit(); fix each unit's on/off at its value; relax integrality;\n    #       declare a dual Suffix; re-solve; read the demand row's dual.\n    return 0.0, 0.0\n\n\nif __name__ == \"__main__\":\n    fleet = {\"hydro\": Unit(10, 60, 100, 5), \"gas\": Unit(40, 120, 900, 30), \"peaker\": Unit(5, 50, 300, 80)}\n    print(price(fleet, 150))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "75a0f10f3474221ab584e9cb41106e5d08e822bdea9a97b7dd72eb77090ec923",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pyomo.environ as pyo\n\n\n@dataclass(frozen=True)\nclass Unit:\n    low: float        # MW when on\n    high: float       # MW at most\n    fixed: float      # $ per hour while on\n    marginal: float   # $ per MWh\n\n\ndef commit(units: dict[str, Unit], demand: float, integer: bool = True) -> pyo.ConcreteModel:\n    m = pyo.ConcreteModel()\n    m.U = pyo.Set(initialize=list(units))\n    m.on = pyo.Var(m.U, domain=pyo.Binary if integer else pyo.UnitInterval)\n    m.mw = pyo.Var(m.U, bounds=lambda m, u: (0, units[u].high))\n    m.low = pyo.Constraint(m.U, rule=lambda m, u: m.mw[u] >= units[u].low * m.on[u])\n    m.high = pyo.Constraint(m.U, rule=lambda m, u: m.mw[u] <= units[u].high * m.on[u])\n    m.demand = pyo.Constraint(expr=sum(m.mw[u] for u in m.U) == demand)\n    m.cost = pyo.Objective(expr=sum(units[u].fixed * m.on[u] + units[u].marginal * m.mw[u] for u in m.U))\n    return m\n\n\ndef price(units: dict[str, Unit], demand: float) -> tuple[float, float]:\n    \"\"\"The cheapest hourly cost, and the price of one more MW once the commitment is fixed.\"\"\"\n    # TODO: solve the MILP from commit(); fix each unit's on/off at its value; relax integrality;\n    #       declare a dual Suffix; re-solve; read the demand row's dual.\n    return 0.0, 0.0\n\n\nif __name__ == \"__main__\":\n    fleet = {\"hydro\": Unit(10, 60, 100, 5), \"gas\": Unit(40, 120, 900, 30), \"peaker\": Unit(5, 50, 300, 80)}\n    print(price(fleet, 150))\n",
+  "exercise": {
+    "main_path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-02/practice-2/prices.py",
+    "test_path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-02/practice-2/test_prices.py",
+    "run_command": [
+      "python3",
+      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-02/practice-2/prices.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-02/practice-2/target/report.xml",
+      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-02/practice-2/test_prices.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_cheapest_commitment_for_three_demands",
+        "kind": "main",
+        "says": "the hourly cost of the cheapest commitment at three demands"
+      },
+      {
+        "id": "test_a_demand_beyond_hydro_and_gas_starts_the_peaker",
+        "kind": "main",
+        "says": "a demand beyond what hydro and gas can give is met with the peaker on, at the cheapest cost"
+      },
+      {
+        "id": "test_the_price_is_the_committed_plans_not_the_lp_relaxations",
+        "kind": "edge",
+        "says": "the price of one more MW is the committed plan's dual, not the LP relaxation's"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "19-pyomo/README_5.1.2.md",
+      "section": "A MILP Has No Duals; Fix the Integers and Re-Solve the LP"
+    },
+    "concepts": [
+      "prices for a MILP's plan",
+      "the SolverResults object of inherited code"
+    ]
+  }
+}

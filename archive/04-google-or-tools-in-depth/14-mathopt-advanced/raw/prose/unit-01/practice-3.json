@@ -1,0 +1,139 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "14-mathopt-advanced"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 3,
+  "ingested": "2026-11-13",
+  "title": "Try solvers in order and keep each refusal's real reason",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A scheduling team's service accepts models from several modelers and must solve each with the first solver, in a preferred order, that accepts it. When a solver refuses a model, the team wants the refusal's real reason in its log, in the solver's own words."
+    },
+    {
+      "type": "para",
+      "text": "Write `solve_first(model, solvers)`. It tries `mathopt.solve(model, s)` for each solver type `s` in `solvers`, in order, and returns a tuple `(solver, result, reasons)`:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`solver` and `result`: the first solver that solved the model without raising, and its `SolveResult`; both `None` if every solver raised;",
+        "`reasons`: a dict from each refusing solver's name (`s.name`, such as `\"HIGHS\"`) to the reason it gave, as a string. Solvers after the one that succeeded are not tried and not listed."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "In OR-Tools 9.15 a refusal arrives as an `AttributeError` about `canonical_code`; the solver's own message is the exception's `__context__` (lesson 4.3.1). Record that message, and fall back to the exception itself if `__context__` is empty. Either form of the message passes: the hidden error's text, `str(error.__context__)`, which is the message with the status code's name in brackets (what the lesson's `refusal` returns), or its `.message` alone (what lesson 4.2.4 reads). The tests check only that the reason contains the solver's own words, such as \"does not support indicator constraints\". About ten lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef solve_first(model: mathopt.Model, solvers: list[mathopt.SolverType]):\n    \"\"\"(the first solver that accepts the model, its result, {refusing solver name: its reason}).\"\"\"\n    reasons: dict[str, str] = {}\n    for solver in solvers:\n        try:\n            return solver, mathopt.solve(model, solver), reasons\n        except Exception as error:\n            inner = error.__context__ or error.__cause__\n            reasons[solver.name] = str(inner if inner is not None else error)\n    return None, None, reasons\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    z, y = model.add_binary_variable(name=\"z\"), model.add_variable(lb=0, ub=10, name=\"y\")\n    model.add_indicator_constraint(indicator=z, implied_constraint=y <= 3)\n    model.maximize(y + z)\n    print(solve_first(model, [mathopt.SolverType.HIGHS, mathopt.SolverType.GSCIP]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef solve_first(model: mathopt.Model, solvers: list[mathopt.SolverType]):\n    \"\"\"(the first solver that accepts the model, its result, {refusing solver name: its reason}).\"\"\"\n    reasons: dict[str, str] = {}\n    # TODO: try each solver in order; record each refusal's real reason.\n    return None, None, reasons\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    z, y = model.add_binary_variable(name=\"z\"), model.add_variable(lb=0, ub=10, name=\"y\")\n    model.add_indicator_constraint(indicator=z, implied_constraint=y <= 3)\n    model.maximize(y + z)\n    print(solve_first(model, [mathopt.SolverType.HIGHS, mathopt.SolverType.GSCIP]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "a9cb64f32cf4945ed5f33d614ece41f6d073ccffba73ca84d96af6ac29ac9176",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef solve_first(model: mathopt.Model, solvers: list[mathopt.SolverType]):\n    \"\"\"(the first solver that accepts the model, its result, {refusing solver name: its reason}).\"\"\"\n    reasons: dict[str, str] = {}\n    # TODO: try each solver in order; record each refusal's real reason.\n    return None, None, reasons\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    z, y = model.add_binary_variable(name=\"z\"), model.add_variable(lb=0, ub=10, name=\"y\")\n    model.add_indicator_constraint(indicator=z, implied_constraint=y <= 3)\n    model.maximize(y + z)\n    print(solve_first(model, [mathopt.SolverType.HIGHS, mathopt.SolverType.GSCIP]))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-3/fallback.py",
+    "test_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-3/test_fallback.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-3/fallback.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-3/target/report.xml",
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-3/test_fallback.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_an_indicator_model_falls_through_to_scip",
+        "kind": "main",
+        "says": "a model with an indicator constraint is refused by HiGHS and CP-SAT and solved by SCIP, with a reason for each refusal"
+      },
+      {
+        "id": "test_a_plain_model_is_solved_by_the_first_solver",
+        "kind": "main",
+        "says": "a model with no indicator constraint is solved by the first solver in the list, with no reasons recorded"
+      },
+      {
+        "id": "test_a_reason_is_the_solver_s_own_words",
+        "kind": "edge",
+        "says": "each recorded reason is the solver's own message, not the wrapper's AttributeError text"
+      },
+      {
+        "id": "test_no_solver_accepts",
+        "kind": "edge",
+        "says": "when every solver refuses, nothing is returned as the solver or result, and every refusal is recorded"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-3/target/report.xml"
+    },
+    "origin": {
+      "path": "14-mathopt-advanced/README_4.3.1.md",
+      "section": "The Solver Decides Whether It Accepts Indicators, and the Reason Is on `__context__`"
+    },
+    "concepts": [
+      "the real reason a solver refuses a model, read from the exception"
+    ]
+  }
+}

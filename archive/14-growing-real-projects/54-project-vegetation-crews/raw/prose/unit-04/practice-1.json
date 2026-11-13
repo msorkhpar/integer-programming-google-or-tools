@@ -1,0 +1,435 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "14-growing-real-projects",
+    "54-project-vegetation-crews"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Order the work by the risk each circuit carries",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The crew schedule reached GridCap's reliability engineer:"
+    },
+    {
+      "type": "quote",
+      "blocks": [
+        {
+          "type": "para",
+          "text": "Your plan trims C13 in the first five weeks and leaves C12 for weeks 17 to 23. C12 is the one I worry about: its trees are growing into the lines, and every week we wait its risk goes up. A trim in September does not take out a year of risk; it takes out what is left of the year, and the circuit carried the rest. Order the work so that we carry the least risk over the season. And a circuit we skip waits half a year more for next season's crews; count that too."
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "text": "You start from the crew scheduler of the lesson before. Read each circuit's weekly growth of risk, and have the generator draw it. A circuit carries its weekly share of its yearly risk, plus its growth for every week it has waited, until its trim ends; a circuit left for next season carries it until 26 weeks past the season's end. Plan the least risk carried in total, within the budget and the crews, and report it. A trim that fills the whole season still fits."
+    },
+    {
+      "type": "para",
+      "text": "**The report.** Only the status line changes: it ends `risk carried $<risk carried>k`, with a thousands comma, in place of `risk removed $<risk removed>k a year`. `main.py` still sets one worker."
+    },
+    {
+      "type": "para",
+      "text": "Run executes `main.py`, which plans the tiny season (six circuits of GridCap, a fictional utility, drawn by `vegcrew/generate.py` from seed 54) and prints the report; `expected/report.txt` is the report it should print. Submit runs every test in `tests/`, the earlier steps' included, and compares Run's report with the expected one."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "text": "Blueprint"
+    },
+    {
+      "type": "para",
+      "text": "Write each method below. The tests check each one by itself and the whole program end to end, so you may change any other part of the code as you see fit."
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`build` in `vegcrew/planner.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def build(season: Season) -> TrimModel"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** As before, and also: per circuit a literal `t_<cid>` (one crew or none) and an end week, from the circuit's weeks to the horizon when trimmed (start plus weeks on its crew) and horizon + DEFER_WEEKS when it waits for next season; the risk it carries is Circuit.carried(end), looked up in a table indexed by the end week; the objective is the summed risk carried, to minimize. Circuit.carried(end) is round(risk / 52 * end + growth * end * (end - 1) / 2). TrimModel loses its trimmed method and gains three dicts keyed by circuit id: `trimmed` (the literals t), `end` (the end weeks) and `carried` (the risk each carries), declared after `model`, `trimmed` first and `end` and `carried` after `work`. A circuit longer than the season gets no crew options; the reference still writes its end domain as Domain.from_intervals([[weeks, horizon], [horizon + DEFER_WEEKS, horizon + DEFER_WEEKS]]), and from_intervals drops the empty first piece, so the end can only be horizon + DEFER_WEEKS.",
+        "**Modeling idea.** Risk carried is a table indexed by the week a trim ends, and an element constraint reads it.",
+        "**Taught in** [4.5.3 Element, Table and Allowed-Assignment Constraints](../../../../04-google-or-tools-in-depth/16-cpsat-scheduling/units/unit-03/4.5.3-element-table-and-allowed-assignment-constraints.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`make_plan` in `vegcrew/planner.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def make_plan(season: Season) -> Plan"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** As before, and the Plan's risk_carried is the objective value, rounded.",
+        "**Modeling idea.** Once order matters, the objective is a sum over time, and a better plan may take longer to prove.",
+        "**Taught in** [4.5.4 Scheduling Vegetation Crews Across Circuits](../../../../04-google-or-tools-in-depth/16-cpsat-scheduling/units/unit-04/4.5.4-scheduling-vegetation-crews-across-circuits.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`season_from_dict` in `vegcrew/data.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def season_from_dict(raw: dict) -> Season"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** Also reads each circuit's growth ($k a week by which its weekly risk grows).",
+        "**Modeling idea.** Read the columns the model needs now, and only those.",
+        "**Taught in** [14.1.4 Risk Grows While a Circuit Waits: The Objective Changes](../../../../14-growing-real-projects/54-project-vegetation-crews/units/unit-04/14.1.4-risk-grows-while-a-circuit-waits-the-objective-changes.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`scenario` in `vegcrew/generate.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def scenario(size: str = \"small\", seed: int = 54) -> dict"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** Also gives each circuit its growth, round(risk / 52 * u, 2) with u drawn by uniform(0.02, 0.10) from its own stream named 'growth', one draw per circuit in order after the weeks.",
+        "**Modeling idea.** A column drawn from its own stream leaves the values of every earlier column as they were.",
+        "**Taught in** [14.1.4 Risk Grows While a Circuit Waits: The Objective Changes](../../../../14-growing-real-projects/54-project-vegetation-crews/units/unit-04/14.1.4-risk-grows-while-a-circuit-waits-the-objective-changes.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`format_plan` in `vegcrew/report.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def format_plan(season: Season, plan: Plan) -> str"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** The status line ends `risk carried $<risk_carried>k` instead of the risk removed a year.",
+        "**Modeling idea.** The report states the number the plan is chosen by.",
+        "**Taught in** [14.1.4 Risk Grows While a Circuit Waits: The Objective Changes](../../../../14-growing-real-projects/54-project-vegetation-crews/units/unit-04/14.1.4-risk-grows-while-a-circuit-waits-the-objective-changes.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Turn a season into a plan: each trim is one crew's run of consecutive weeks, scheduled by CP-SAT\nto carry the least risk, since a circuit's risk grows every week it waits.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom ortools.sat.python import cp_model\n\nfrom vegcrew.data import DEFER_WEEKS, WEEKS_PER_MONTH, Season\n\nTIME_LIMIT = 10.0                                   # seconds\nWORKERS = 4                                         # parallel search workers\n\n\n@dataclass(frozen=True)\nclass Trim:\n    cid: str\n    crew: str                                       # K1, K2, ...\n    start: int                                      # first week, counted from 0\n    end: int                                        # the week after the last: end - start = weeks\n\n\n@dataclass(frozen=True)\nclass Plan:\n    status: str                                     # OPTIMAL, FEASIBLE, INFEASIBLE, UNKNOWN or MODEL_INVALID\n    trims: dict[str, Trim] = field(default_factory=dict)\n    cost: int = 0                                   # $k spent\n    risk_removed: int = 0                           # $k a year of risk the trims remove\n    risk_carried: int = 0                           # $k of risk carried until each circuit is trimmed\n\n\ndef crew_ids(season: Season) -> list[str]:\n    return [f\"K{k}\" for k in range(1, season.crews + 1)]\n\n\ndef horizon(season: Season) -> int:\n    return season.months * WEEKS_PER_MONTH\n\n\n@dataclass\nclass TrimModel:\n    model: cp_model.CpModel\n    trimmed: dict[str, cp_model.IntVar] = field(default_factory=dict)                 # circuit\n    present: dict[tuple[str, str], cp_model.IntVar] = field(default_factory=dict)    # (circuit, crew)\n    start: dict[tuple[str, str], cp_model.IntVar] = field(default_factory=dict)\n    work: dict[tuple[str, str], cp_model.IntervalVar] = field(default_factory=dict)\n    end: dict[str, cp_model.IntVar] = field(default_factory=dict)                     # circuit\n    carried: dict[str, cp_model.IntVar] = field(default_factory=dict)                 # circuit\n\n\ndef build(season: Season) -> TrimModel:\n    tm = TrimModel(cp_model.CpModel())\n    h = horizon(season)\n    deferred = h + DEFER_WEEKS                      # the end week of a circuit left for next season\n    for c in season.circuits:\n        t = tm.trimmed[c.cid] = tm.model.new_bool_var(f\"t_{c.cid}\")\n        e = tm.end[c.cid] = tm.model.new_int_var_from_domain(\n            cp_model.Domain.from_intervals([[c.weeks, h], [deferred, deferred]]), f\"e_{c.cid}\")\n        options = crew_ids(season) if c.weeks <= h else []          # too long for the season: no options\n        for k in options:\n            p = tm.present[c.cid, k] = tm.model.new_bool_var(f\"p_{c.cid}_{k}\")\n            s = tm.start[c.cid, k] = tm.model.new_int_var(0, h - c.weeks, f\"s_{c.cid}_{k}\")\n            tm.work[c.cid, k] = tm.model.new_optional_fixed_size_interval_var(s, c.weeks, p, f\"w_{c.cid}_{k}\")\n            tm.model.add(e == s + c.weeks).only_enforce_if(p)                        # ends_c,k\n        tm.model.add(sum(tm.present[c.cid, k] for k in options) == t)               # once_c\n        tm.model.add(e == deferred).only_enforce_if(~t)                              # waits_c\n        table = [c.carried(week) for week in range(deferred + 1)]\n        tm.carried[c.cid] = tm.model.new_int_var(0, table[-1], f\"r_{c.cid}\")\n        tm.model.add_element(e, table, tm.carried[c.cid])                            # risk_c\n    for k in crew_ids(season):\n        tm.model.add_no_overlap(w for (_, crew), w in tm.work.items() if crew == k)     # crew_k\n    tm.model.add(sum(c.cost * tm.trimmed[c.cid] for c in season.circuits) <= season.budget)   # budget\n    tm.model.minimize(sum(tm.carried.values()))\n    return tm\n\n\ndef make_plan(season: Season) -> Plan:\n    \"\"\"Choose the circuits to trim, the crew for each and its weeks: the least risk carried through the\n    season and the wait for the next, within the budget, one crew per trim, one trim per crew at a time.\"\"\"\n    tm = build(season)\n    solver = cp_model.CpSolver()\n    solver.parameters.max_time_in_seconds = TIME_LIMIT\n    solver.parameters.num_workers = WORKERS\n    status = solver.status_name(solver.solve(tm.model))\n    if status not in (\"OPTIMAL\", \"FEASIBLE\"):\n        return Plan(status)\n    trims = {}\n    for (cid, k), p in tm.present.items():\n        if solver.boolean_value(p):\n            start = solver.value(tm.start[cid, k])\n            trims[cid] = Trim(cid, k, start, start + season.circuit(cid).weeks)\n    chosen = [season.circuit(cid) for cid in trims]\n    return Plan(status, trims, cost=sum(c.cost for c in chosen), risk_removed=sum(c.risk for c in chosen),\n                risk_carried=round(solver.objective_value))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: main.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run: plan the tiny season and print the vegetation manager's report.\n\nThe season is GridCap tiny, six circuits of a fictional utility, drawn by vegcrew/generate.py from\nseed 54. Nothing is read from the working directory, so the report is the same wherever Run starts.\nThe planner searches with one worker here, as in steps/03, so that Run repeats the same search on\nevery run.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom vegcrew import planner\nfrom vegcrew.__main__ import main\n\nif __name__ == \"__main__\":\n    planner.WORKERS = 1                            # one search worker: the same plan every run\n    main([\"tiny\", \"--seed\", \"54\"])\n"
+        },
+        {
+          "type": "para",
+          "text": "File: vegcrew/__init__.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"GridCap's vegetation crew planner.\n\nGridCap is a fictional utility, and every season this package plans is generated from a seed by\n`vegcrew.generate`. None of it is a real utility's data.\n\"\"\"\n"
+        },
+        {
+          "type": "para",
+          "text": "File: vegcrew/__main__.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"python -m vegcrew [tiny|small|medium] [--seed N]: plan a generated season and print the plan.\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\n\nfrom vegcrew.data import season_from_dict\nfrom vegcrew.generate import SIZES, scenario\nfrom vegcrew.planner import make_plan\nfrom vegcrew.report import format_plan\n\n\ndef main(argv: list[str] | None = None) -> None:\n    parser = argparse.ArgumentParser(prog=\"vegcrew\")\n    parser.add_argument(\"size\", nargs=\"?\", default=\"small\", choices=sorted(SIZES))\n    parser.add_argument(\"--seed\", type=int, default=54)\n    args = parser.parse_args(argv)\n    season = season_from_dict(scenario(args.size, args.seed))\n    print(format_plan(season, make_plan(season)))\n\n\nif __name__ == \"__main__\":\n    main()\n"
+        },
+        {
+          "type": "para",
+          "text": "File: vegcrew/data.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"The season the planner reads: typed, immutable, and only the columns the planner uses.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass\n\nWEEKS_PER_MONTH = 4\nDEFER_WEEKS = 26        # an untrimmed circuit waits this many weeks past the season for the next one\n\n\n@dataclass(frozen=True)\nclass Circuit:\n    cid: str\n    region: str\n    miles: int\n    cost: int           # $k to trim the circuit\n    risk: int           # $k a year of tree-caused outage risk that a trim removes\n    weeks: int          # crew-weeks of work to trim it\n    growth: float       # $k a week by which the weekly risk grows while the circuit waits\n\n    def carried(self, end: int) -> int:\n        \"\"\"$k of risk carried from week 0 until a trim that ends at `end` (weeks 0 to end - 1).\"\"\"\n        weekly = self.risk / 52\n        return round(weekly * end + self.growth * end * (end - 1) / 2)\n\n\n@dataclass(frozen=True)\nclass Season:\n    name: str\n    budget: int         # $k for the year's trimming\n    crews: int          # crews working the season\n    months: int         # months in the season, each WEEKS_PER_MONTH weeks\n    circuits: tuple[Circuit, ...]\n\n    def circuit(self, cid: str) -> Circuit:\n        return next(c for c in self.circuits if c.cid == cid)\n\n\ndef season_from_dict(raw: dict) -> Season:\n    \"\"\"Read the columns the planner uses. Columns it does not use yet are ignored.\"\"\"\n    circuits = tuple(Circuit(c[\"id\"], c[\"region\"], int(c[\"miles\"]), int(c[\"cost\"]), int(c[\"risk\"]),\n                             int(c[\"weeks\"]), float(c[\"growth\"]))\n                     for c in raw[\"circuits\"])\n    return Season(raw.get(\"name\", \"season\"), int(raw[\"budget\"]), int(raw[\"crews\"]), int(raw[\"months\"]),\n                  circuits)\n"
+        },
+        {
+          "type": "para",
+          "text": "File: vegcrew/generate.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"A seeded generator of fictional trimming seasons, in the shape the circuit inventory exports.\n\nEach column is drawn from its own random stream, named after the seed, the size and the column, so\nadding a column later never changes the values of the columns already there.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport math\nimport random\n\nSIZES = {\"tiny\": 6, \"small\": 20, \"medium\": 60}\nCREWS = {\"tiny\": 1, \"small\": 2, \"medium\": 6}\nMONTHS = 6                                                     # April to September\nREGIONS = (\"North\", \"River\", \"Hills\")\n\n\ndef stream(seed: int, size: str, column: str) -> random.Random:\n    return random.Random(f\"{seed}-{size}-{column}\")\n\n\ndef scenario(size: str = \"small\", seed: int = 54) -> dict:\n    \"\"\"One season: a budget and the circuits, as plain JSON-ready values.\"\"\"\n    n = SIZES[size]\n    draw = stream(seed, size, \"circuits\")\n    circuits = []\n    for i in range(1, n + 1):\n        miles = draw.randint(8, 40)\n        circuits.append({\n            \"id\": f\"C{i:02d}\",\n            \"region\": draw.choice(REGIONS),\n            \"miles\": miles,\n            \"cost\": round(miles * draw.uniform(3.0, 6.0)),       # $k to trim the whole circuit\n            \"risk\": round(miles * draw.uniform(2.0, 12.0)),      # $k a year of tree-caused outage risk\n        })\n    work = stream(seed, size, \"weeks\")\n    for c in circuits:\n        c[\"weeks\"] = math.ceil(c[\"miles\"] / work.uniform(4.0, 7.0))     # crew-weeks to trim it\n    growth = stream(seed, size, \"growth\")\n    for c in circuits:\n        c[\"growth\"] = round(c[\"risk\"] / 52 * growth.uniform(0.02, 0.10), 2)   # $k a week, every week\n    budget = round(0.45 * sum(c[\"cost\"] for c in circuits))\n    return {\"name\": f\"{size}-{seed}\", \"budget\": budget, \"crews\": CREWS[size], \"months\": MONTHS,\n            \"circuits\": circuits}\n"
+        },
+        {
+          "type": "para",
+          "text": "File: vegcrew/report.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"The plan as the vegetation manager reads it: one line per crew, one letter per week.\"\"\"\n\nfrom __future__ import annotations\n\nfrom vegcrew.data import Season\nfrom vegcrew.planner import Plan, crew_ids, horizon\n\n\ndef format_plan(season: Season, plan: Plan) -> str:\n    lines = [f\"season {season.name}: {len(season.circuits)} circuits, budget ${season.budget:,}k, \"\n             f\"crews {season.crews}, weeks {horizon(season)}\",\n             f\"status {plan.status}: {len(plan.trims)} trims, cost ${plan.cost:,}k, \"\n             f\"risk carried ${plan.risk_carried:,}k\"]\n    for k in crew_ids(season):\n        trims = sorted((t for t in plan.trims.values() if t.crew == k), key=lambda t: t.start)\n        week = [\".\"] * horizon(season)\n        for t in trims:\n            week[t.start:t.end] = t.cid[-1] * (t.end - t.start)\n        lines.append(f\"  {k} {''.join(week)}  \" + \" \".join(f\"{t.cid}:{t.start}-{t.end - 1}\" for t in trims))\n    return \"\\n\".join(lines)\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Turn a season into a plan: each trim is one crew's run of consecutive weeks, scheduled by CP-SAT.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom ortools.sat.python import cp_model\n\nfrom vegcrew.data import WEEKS_PER_MONTH, Season\n\nTIME_LIMIT = 10.0                                   # seconds\nWORKERS = 4                                         # parallel search workers\n\n\n@dataclass(frozen=True)\nclass Trim:\n    cid: str\n    crew: str                                       # K1, K2, ...\n    start: int                                      # first week, counted from 0\n    end: int                                        # the week after the last: end - start = weeks\n\n\n@dataclass(frozen=True)\nclass Plan:\n    status: str                                     # OPTIMAL, FEASIBLE, INFEASIBLE, UNKNOWN or MODEL_INVALID\n    trims: dict[str, Trim] = field(default_factory=dict)\n    cost: int = 0                                   # $k spent\n    risk_removed: int = 0                           # $k a year of risk the trims remove\n    risk_carried: int = 0                           # stub for lesson 14.1.4\n\n\ndef crew_ids(season: Season) -> list[str]:\n    return [f\"K{k}\" for k in range(1, season.crews + 1)]\n\n\ndef horizon(season: Season) -> int:\n    return season.months * WEEKS_PER_MONTH\n\n\n@dataclass\nclass TrimModel:\n    model: cp_model.CpModel\n    present: dict[tuple[str, str], cp_model.IntVar] = field(default_factory=dict)    # (circuit, crew)\n    start: dict[tuple[str, str], cp_model.IntVar] = field(default_factory=dict)\n    work: dict[tuple[str, str], cp_model.IntervalVar] = field(default_factory=dict)\n\n    def trimmed(self, cid: str) -> cp_model.LinearExprT:\n        return sum(p for (c, _), p in self.present.items() if c == cid)\n\n\ndef build(season: Season) -> TrimModel:\n    tm = TrimModel(cp_model.CpModel())\n    h = horizon(season)\n    for c in season.circuits:\n        if c.weeks > h:\n            continue                                # cannot fit in the season on any crew\n        for k in crew_ids(season):\n            p = tm.present[c.cid, k] = tm.model.new_bool_var(f\"p_{c.cid}_{k}\")\n            s = tm.start[c.cid, k] = tm.model.new_int_var(0, h - c.weeks, f\"s_{c.cid}_{k}\")\n            tm.work[c.cid, k] = tm.model.new_optional_fixed_size_interval_var(s, c.weeks, p, f\"w_{c.cid}_{k}\")\n        tm.model.add_at_most_one(tm.present[c.cid, k] for k in crew_ids(season))         # once_c\n    for k in crew_ids(season):\n        tm.model.add_no_overlap(w for (_, crew), w in tm.work.items() if crew == k)     # crew_k\n    tm.model.add(sum(c.cost * tm.trimmed(c.cid) for c in season.circuits) <= season.budget)   # budget\n    tm.model.maximize(sum(c.risk * tm.trimmed(c.cid) for c in season.circuits))\n    return tm\n\n\ndef make_plan(season: Season) -> Plan:\n    \"\"\"Choose the circuits to trim, the crew for each and its weeks: the most risk removed within the\n    budget, one crew per trim, one trim per crew at a time.\"\"\"\n    tm = build(season)\n    solver = cp_model.CpSolver()\n    solver.parameters.max_time_in_seconds = TIME_LIMIT\n    solver.parameters.num_workers = WORKERS\n    status = solver.status_name(solver.solve(tm.model))\n    if status not in (\"OPTIMAL\", \"FEASIBLE\"):\n        return Plan(status)\n    trims = {}\n    for (cid, k), p in tm.present.items():\n        if solver.boolean_value(p):\n            start = solver.value(tm.start[cid, k])\n            trims[cid] = Trim(cid, k, start, start + season.circuit(cid).weeks)\n    chosen = [season.circuit(cid) for cid in trims]\n    return Plan(status, trims, cost=sum(c.cost for c in chosen), risk_removed=sum(c.risk for c in chosen))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: main.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run: plan the tiny season and print the vegetation manager's report.\n\nThe season is GridCap tiny, six circuits of a fictional utility, drawn by vegcrew/generate.py from\nseed 54. Nothing is read from the working directory, so the report is the same wherever Run starts.\nThe planner searches with one worker here: four workers that race may return another of the tiny\nseason's equally good plans from one run to the next.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom vegcrew import planner\nfrom vegcrew.__main__ import main\n\nif __name__ == \"__main__\":\n    planner.WORKERS = 1                            # one search worker: the same plan every run\n    main([\"tiny\", \"--seed\", \"54\"])\n"
+    },
+    {
+      "type": "para",
+      "text": "File: vegcrew/__init__.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"GridCap's vegetation crew planner.\n\nGridCap is a fictional utility, and every season this package plans is generated from a seed by\n`vegcrew.generate`. None of it is a real utility's data.\n\"\"\"\n"
+    },
+    {
+      "type": "para",
+      "text": "File: vegcrew/__main__.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"python -m vegcrew [tiny|small|medium] [--seed N]: plan a generated season and print the plan.\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\n\nfrom vegcrew.data import season_from_dict\nfrom vegcrew.generate import SIZES, scenario\nfrom vegcrew.planner import make_plan\nfrom vegcrew.report import format_plan\n\n\ndef main(argv: list[str] | None = None) -> None:\n    parser = argparse.ArgumentParser(prog=\"vegcrew\")\n    parser.add_argument(\"size\", nargs=\"?\", default=\"small\", choices=sorted(SIZES))\n    parser.add_argument(\"--seed\", type=int, default=54)\n    args = parser.parse_args(argv)\n    season = season_from_dict(scenario(args.size, args.seed))\n    print(format_plan(season, make_plan(season)))\n\n\nif __name__ == \"__main__\":\n    main()\n"
+    },
+    {
+      "type": "para",
+      "text": "File: vegcrew/data.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"The season the planner reads: typed, immutable, and only the columns the planner uses.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass\n\nWEEKS_PER_MONTH = 4\n\n\n@dataclass(frozen=True)\nclass Circuit:\n    cid: str\n    region: str\n    miles: int\n    cost: int           # $k to trim the circuit\n    risk: int           # $k a year of tree-caused outage risk that a trim removes\n    weeks: int          # crew-weeks of work to trim it\n\n\n@dataclass(frozen=True)\nclass Season:\n    name: str\n    budget: int         # $k for the year's trimming\n    crews: int          # crews working the season\n    months: int         # months in the season, each WEEKS_PER_MONTH weeks\n    circuits: tuple[Circuit, ...]\n\n    def circuit(self, cid: str) -> Circuit:\n        return next(c for c in self.circuits if c.cid == cid)\n\n\ndef season_from_dict(raw: dict) -> Season:\n    \"\"\"Read the columns the planner uses. Columns it does not use yet are ignored.\"\"\"\n    circuits = tuple(Circuit(c[\"id\"], c[\"region\"], int(c[\"miles\"]), int(c[\"cost\"]), int(c[\"risk\"]),\n                             int(c[\"weeks\"]))\n                     for c in raw[\"circuits\"])\n    return Season(raw.get(\"name\", \"season\"), int(raw[\"budget\"]), int(raw[\"crews\"]), int(raw[\"months\"]),\n                  circuits)\n"
+    },
+    {
+      "type": "para",
+      "text": "File: vegcrew/generate.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"A seeded generator of fictional trimming seasons, in the shape the circuit inventory exports.\n\nEach column is drawn from its own random stream, named after the seed, the size and the column, so\nadding a column later never changes the values of the columns already there.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport math\nimport random\n\nSIZES = {\"tiny\": 6, \"small\": 20, \"medium\": 60}\nCREWS = {\"tiny\": 1, \"small\": 2, \"medium\": 6}\nMONTHS = 6                                                     # April to September\nREGIONS = (\"North\", \"River\", \"Hills\")\n\n\ndef stream(seed: int, size: str, column: str) -> random.Random:\n    return random.Random(f\"{seed}-{size}-{column}\")\n\n\ndef scenario(size: str = \"small\", seed: int = 54) -> dict:\n    \"\"\"One season: a budget and the circuits, as plain JSON-ready values.\"\"\"\n    n = SIZES[size]\n    draw = stream(seed, size, \"circuits\")\n    circuits = []\n    for i in range(1, n + 1):\n        miles = draw.randint(8, 40)\n        circuits.append({\n            \"id\": f\"C{i:02d}\",\n            \"region\": draw.choice(REGIONS),\n            \"miles\": miles,\n            \"cost\": round(miles * draw.uniform(3.0, 6.0)),       # $k to trim the whole circuit\n            \"risk\": round(miles * draw.uniform(2.0, 12.0)),      # $k a year of tree-caused outage risk\n        })\n    work = stream(seed, size, \"weeks\")\n    for c in circuits:\n        c[\"weeks\"] = math.ceil(c[\"miles\"] / work.uniform(4.0, 7.0))     # crew-weeks to trim it\n    budget = round(0.45 * sum(c[\"cost\"] for c in circuits))\n    return {\"name\": f\"{size}-{seed}\", \"budget\": budget, \"crews\": CREWS[size], \"months\": MONTHS,\n            \"circuits\": circuits}\n"
+    },
+    {
+      "type": "para",
+      "text": "File: vegcrew/report.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"The plan as the vegetation manager reads it: one line per crew, one letter per week.\"\"\"\n\nfrom __future__ import annotations\n\nfrom vegcrew.data import Season\nfrom vegcrew.planner import Plan, crew_ids, horizon\n\n\ndef format_plan(season: Season, plan: Plan) -> str:\n    lines = [f\"season {season.name}: {len(season.circuits)} circuits, budget ${season.budget:,}k, \"\n             f\"crews {season.crews}, weeks {horizon(season)}\",\n             f\"status {plan.status}: {len(plan.trims)} trims, cost ${plan.cost:,}k, \"\n             f\"risk removed ${plan.risk_removed:,}k a year\"]\n    for k in crew_ids(season):\n        trims = sorted((t for t in plan.trims.values() if t.crew == k), key=lambda t: t.start)\n        week = [\".\"] * horizon(season)\n        for t in trims:\n            week[t.start:t.end] = t.cid[-1] * (t.end - t.start)\n        lines.append(f\"  {k} {''.join(week)}  \" + \" \".join(f\"{t.cid}:{t.start}-{t.end - 1}\" for t in trims))\n    return \"\\n\".join(lines)\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 9,
+    "paras": 11,
+    "code": 12,
+    "tables": 0,
+    "lists": 5,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 1,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "a8fcc14e8887b49bbf7f8feb308b03817c355a619646935fa92749b29641992f",
+  "starting_code": "\"\"\"Turn a season into a plan: each trim is one crew's run of consecutive weeks, scheduled by CP-SAT.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom ortools.sat.python import cp_model\n\nfrom vegcrew.data import WEEKS_PER_MONTH, Season\n\nTIME_LIMIT = 10.0                                   # seconds\nWORKERS = 4                                         # parallel search workers\n\n\n@dataclass(frozen=True)\nclass Trim:\n    cid: str\n    crew: str                                       # K1, K2, ...\n    start: int                                      # first week, counted from 0\n    end: int                                        # the week after the last: end - start = weeks\n\n\n@dataclass(frozen=True)\nclass Plan:\n    status: str                                     # OPTIMAL, FEASIBLE, INFEASIBLE, UNKNOWN or MODEL_INVALID\n    trims: dict[str, Trim] = field(default_factory=dict)\n    cost: int = 0                                   # $k spent\n    risk_removed: int = 0                           # $k a year of risk the trims remove\n    risk_carried: int = 0                           # stub for lesson 14.1.4\n\n\ndef crew_ids(season: Season) -> list[str]:\n    return [f\"K{k}\" for k in range(1, season.crews + 1)]\n\n\ndef horizon(season: Season) -> int:\n    return season.months * WEEKS_PER_MONTH\n\n\n@dataclass\nclass TrimModel:\n    model: cp_model.CpModel\n    present: dict[tuple[str, str], cp_model.IntVar] = field(default_factory=dict)    # (circuit, crew)\n    start: dict[tuple[str, str], cp_model.IntVar] = field(default_factory=dict)\n    work: dict[tuple[str, str], cp_model.IntervalVar] = field(default_factory=dict)\n\n    def trimmed(self, cid: str) -> cp_model.LinearExprT:\n        return sum(p for (c, _), p in self.present.items() if c == cid)\n\n\ndef build(season: Season) -> TrimModel:\n    tm = TrimModel(cp_model.CpModel())\n    h = horizon(season)\n    for c in season.circuits:\n        if c.weeks > h:\n            continue                                # cannot fit in the season on any crew\n        for k in crew_ids(season):\n            p = tm.present[c.cid, k] = tm.model.new_bool_var(f\"p_{c.cid}_{k}\")\n            s = tm.start[c.cid, k] = tm.model.new_int_var(0, h - c.weeks, f\"s_{c.cid}_{k}\")\n            tm.work[c.cid, k] = tm.model.new_optional_fixed_size_interval_var(s, c.weeks, p, f\"w_{c.cid}_{k}\")\n        tm.model.add_at_most_one(tm.present[c.cid, k] for k in crew_ids(season))         # once_c\n    for k in crew_ids(season):\n        tm.model.add_no_overlap(w for (_, crew), w in tm.work.items() if crew == k)     # crew_k\n    tm.model.add(sum(c.cost * tm.trimmed(c.cid) for c in season.circuits) <= season.budget)   # budget\n    tm.model.maximize(sum(c.risk * tm.trimmed(c.cid) for c in season.circuits))\n    return tm\n\n\ndef make_plan(season: Season) -> Plan:\n    \"\"\"Choose the circuits to trim, the crew for each and its weeks: the most risk removed within the\n    budget, one crew per trim, one trim per crew at a time.\"\"\"\n    tm = build(season)\n    solver = cp_model.CpSolver()\n    solver.parameters.max_time_in_seconds = TIME_LIMIT\n    solver.parameters.num_workers = WORKERS\n    status = solver.status_name(solver.solve(tm.model))\n    if status not in (\"OPTIMAL\", \"FEASIBLE\"):\n        return Plan(status)\n    trims = {}\n    for (cid, k), p in tm.present.items():\n        if solver.boolean_value(p):\n            start = solver.value(tm.start[cid, k])\n            trims[cid] = Trim(cid, k, start, start + season.circuit(cid).weeks)\n    chosen = [season.circuit(cid) for cid in trims]\n    return Plan(status, trims, cost=sum(c.cost for c in chosen), risk_removed=sum(c.risk for c in chosen))\n",
+  "exercise": {
+    "main_path": "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-04/practice-1/vegcrew/planner.py",
+    "test_path": "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-04/practice-1/tests/test_expected_output.py",
+    "run_command": [
+      "python3",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-04/practice-1/main.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-04/practice-1/target/report.xml",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-04/practice-1/tests"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "tests/test_data.py::test_the_loader_ignores_columns_it_does_not_use",
+        "kind": "kept",
+        "says": "the loader ignores columns it does not use"
+      },
+      {
+        "id": "tests/test_planner.py::test_the_plan_never_spends_more_than_the_budget",
+        "kind": "kept",
+        "says": "the plan never spends more than the budget"
+      },
+      {
+        "id": "tests/test_planner.py::test_the_plan_matches_every_subset_and_order_of_the_tiny_season",
+        "kind": "main",
+        "says": "the plan carries as little risk as the best subset and order of the tiny season"
+      },
+      {
+        "id": "tests/test_risk.py::test_the_fast_growing_circuit_goes_first",
+        "kind": "main",
+        "says": "the circuit whose risk grows fast is trimmed first"
+      },
+      {
+        "id": "tests/test_risk.py::test_the_risk_carried_is_each_circuits_risk_until_its_trim_ends",
+        "kind": "main",
+        "says": "the risk carried is each circuit's risk until its trim ends, or until next season"
+      },
+      {
+        "id": "tests/test_risk.py::test_waiting_risk_can_change_which_circuit_is_trimmed",
+        "kind": "edge",
+        "says": "with room for one trim that fills the season, the circuit that grows fast is the one trimmed"
+      },
+      {
+        "id": "tests/test_crews.py::test_each_trim_runs_on_one_crew_for_its_weeks",
+        "kind": "kept",
+        "says": "each trim runs on one crew for its weeks"
+      },
+      {
+        "id": "tests/test_crews.py::test_no_crew_works_two_circuits_at_once",
+        "kind": "kept",
+        "says": "no crew works two circuits at once"
+      },
+      {
+        "id": "tests/test_crews.py::test_a_trim_longer_than_a_month_runs_across_two",
+        "kind": "kept",
+        "says": "a trim longer than a month runs across two"
+      },
+      {
+        "id": "tests/test_crews.py::test_two_crews_cannot_share_one_trim",
+        "kind": "kept",
+        "says": "two crews cannot share one trim"
+      },
+      {
+        "id": "tests/test_crews.py::test_crews_can_stop_a_plan_the_budget_allows",
+        "kind": "kept",
+        "says": "crews can stop a plan the budget allows"
+      },
+      {
+        "id": "tests/test_crews.py::test_one_crew_does_two_trims_one_after_the_other",
+        "kind": "kept",
+        "says": "one crew does two trims one after the other"
+      },
+      {
+        "id": "tests/test_data.py::test_the_same_seed_gives_the_same_season",
+        "kind": "kept",
+        "says": "the same seed gives the same season"
+      },
+      {
+        "id": "tests/test_data.py::test_every_size_has_its_number_of_circuits_and_positive_numbers",
+        "kind": "kept",
+        "says": "every size has its number of circuits and positive numbers"
+      },
+      {
+        "id": "tests/test_planner.py::test_the_plan_beats_ranking_by_risk_per_dollar",
+        "kind": "kept",
+        "says": "the plan beats ranking by risk per dollar"
+      },
+      {
+        "id": "tests/test_planner.py::test_a_zero_budget_is_an_answer_with_no_trims",
+        "kind": "kept",
+        "says": "a zero budget is an answer with no trims"
+      },
+      {
+        "id": "tests/test_expected_output.py::test_the_report_matches_the_expected_output",
+        "kind": "main",
+        "says": "Run's report for the tiny season matches the expected report"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-04/practice-1/target/report.xml"
+    },
+    "origin": "54-project-vegetation-crews/README_14.1.4.md",
+    "concepts": [
+      "risk carried as an element table indexed by the end week"
+    ],
+    "files": [
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-04/practice-1/main.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-04/practice-1/vegcrew/__init__.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-04/practice-1/vegcrew/__main__.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-04/practice-1/vegcrew/data.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-04/practice-1/vegcrew/generate.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-04/practice-1/vegcrew/report.py"
+    ],
+    "read_only": [
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-04/practice-1/tests/test_crews.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-04/practice-1/tests/test_data.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-04/practice-1/tests/test_planner.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-04/practice-1/tests/test_risk.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-04/practice-1/expected/report.txt",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-04/practice-1/tests/rules.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-04/practice-1/pytest.ini"
+    ]
+  }
+}

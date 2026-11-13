@@ -1,0 +1,147 @@
+{
+  "project_api": 1,
+  "title": "Keep the planners' business rules",
+  "before": "../../../../55-project-cipt-planner/steps/02",
+  "after": "../../../../55-project-cipt-planner/steps/03",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the demo export matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "cipt/rules.py",
+      "signature": "def once_or_must(built: Built) -> None",
+      "contract": "Adds a row `once_<id>` (the project starts at most once) for each discretionary project, and a row `must_<id>` (it starts exactly once) for each must-do project.",
+      "idea": "A must-do is the at-most-once row turned into an equality: the same sum of start variables, fixed to 1.",
+      "lesson": {
+        "title": "6.5.1 Must-Do vs. Discretionary Planning Groups",
+        "href": "../../../../06-formulation-craft/27-dependencies-and-groups/units/unit-01/6.5.1-must-do-vs-discretionary-planning-groups.unit.html"
+      },
+      "stub": "return None"
+    },
+    {
+      "file": "cipt/rules.py",
+      "signature": "def alternatives(built: Built) -> None",
+      "contract": "Adds a row `alt_<group>` per alternative group: the projects of the group start at most once between them.",
+      "idea": "Mutually exclusive choices are one at-most-one row over their start variables.",
+      "lesson": {
+        "title": "6.5.3 Mutually Exclusive Alternatives (Repair vs. Replace)",
+        "href": "../../../../06-formulation-craft/27-dependencies-and-groups/units/unit-03/6.5.3-mutually-exclusive-alternatives-repair-vs-replace.unit.html"
+      },
+      "stub": "return None"
+    },
+    {
+      "file": "cipt/rules.py",
+      "signature": "def bundles(built: Built) -> None",
+      "contract": "Adds a row `bundle_<first>_<other>` for each further member of a bundle: that member is funded exactly when the bundle's first member, in id order, is.",
+      "idea": "All-or-nothing is an equality between the funded indicators, chained to one member.",
+      "lesson": {
+        "title": "6.5.2 Parent-Child Bundles and All-or-Nothing",
+        "href": "../../../../06-formulation-craft/27-dependencies-and-groups/units/unit-02/6.5.2-parent-child-bundles-and-all-or-nothing.unit.html"
+      },
+      "stub": "return None"
+    },
+    {
+      "file": "cipt/rules.py",
+      "signature": "def parents(built: Built) -> None",
+      "contract": "Adds a row `after_<child>_<t>` for each start year t of a child: the child started by t needs its parent started by t minus the lag.",
+      "idea": "Precedence with a lag compares cumulative starts: started by t on the child, started by t - lag on the parent.",
+      "lesson": {
+        "title": "6.5.4 Precedence with Lags",
+        "href": "../../../../06-formulation-craft/27-dependencies-and-groups/units/unit-04/6.5.4-precedence-with-lags.unit.html"
+      },
+      "stub": "return None"
+    },
+    {
+      "file": "cipt/rules.py",
+      "signature": "def budgets(built: Built) -> None",
+      "contract": "Adds a row `budget_<y>` per plan year: that year's spend, costs spread over the years of work, within that year's budget.",
+      "idea": "The yearly budget of the lesson before is one more rule, written the way the others are.",
+      "lesson": {
+        "title": "6.4.2 Cash-Flow Spreading Across Years",
+        "href": "../../../../06-formulation-craft/26-multi-period-timing/units/unit-02/6.4.2-cash-flow-spreading-across-years.unit.html"
+      },
+      "stub": "return None"
+    },
+    {
+      "file": "cipt/model.py",
+      "signature": "def build(request: Request) -> Built",
+      "contract": "Creates the start variables, keeps the Built that owns them and the named rows, runs every rule of rules.RULES on it in order, and sets the objective. Every row has the name its rule gave it.",
+      "idea": "Each rule is a function that adds rows with the names it owns, so a new rule never changes build.",
+      "lesson": {
+        "title": "14.2.3 Business Rules: Must-Dos, Bundles, Parents and Alternatives",
+        "href": "../../../../14-growing-real-projects/55-project-cipt-planner/units/unit-03/14.2.3-business-rules-must-dos-bundles-parents-and-alternatives.unit.html"
+      }
+    },
+    {
+      "file": "cipt/data.py",
+      "signature": "def load_request(raw: dict) -> Request",
+      "contract": "Also reads must_do, parent, parent_lag, alt_group and bundle for each project, and refuses an export in which a project names a parent the export does not have (ValueError, 'unknown parent').",
+      "idea": "Validate the input before the solve: a rule that points at nothing is an error in the data, not a constraint.",
+      "lesson": {
+        "title": "9.1.2 Validating Inputs Before the Solve",
+        "href": "../../../../09-diagnostics-and-explainability/37-infeasibility/units/unit-02/9.1.2-validating-inputs-before-the-solve.unit.html"
+      }
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_rules.py::test_must_do_is_funded_even_at_low_value",
+      "main",
+      "a must-do project is funded whatever it is worth"
+    ],
+    [
+      "tests/test_rules.py::test_alternatives_fund_at_most_one",
+      "main",
+      "at most one project of an alternative group is funded"
+    ],
+    [
+      "tests/test_rules.py::test_bundle_is_all_or_nothing",
+      "main",
+      "a bundle is funded whole or not at all"
+    ],
+    [
+      "tests/test_rules.py::test_child_starts_a_lag_after_its_parent",
+      "main",
+      "a child starts no earlier than its parent's start plus the lag"
+    ],
+    [
+      "tests/test_rules.py::test_child_is_not_funded_without_its_parent",
+      "main",
+      "a child is not funded without its parent"
+    ],
+    [
+      "tests/test_rules.py::test_must_dos_beyond_the_budget_are_infeasible",
+      "main",
+      "must-do projects that do not fit the budget make the request infeasible"
+    ],
+    [
+      "tests/test_rules.py::test_every_rule_has_a_named_row",
+      "main",
+      "every rule adds rows under the names the planners can read"
+    ],
+    [
+      "tests/test_rules.py::test_refuses_an_unknown_parent",
+      "edge",
+      "an export whose project names a parent it does not have is refused"
+    ]
+  ],
+  "plants": {
+    "tests/test_rules.py::test_refuses_an_unknown_parent": [
+      [
+        "cipt/data.py",
+        "    for p in projects:\n        if p.parent is not None and p.parent not in ids:\n            raise ValueError(f\"{p.project_id} names an unknown parent {p.parent}\")\n",
+        ""
+      ]
+    ]
+  },
+  "cites": {
+    "path": "55-project-cipt-planner/README_14.2.3.md",
+    "section": null
+  }
+}

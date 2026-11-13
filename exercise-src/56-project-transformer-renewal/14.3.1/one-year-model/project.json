@@ -1,0 +1,83 @@
+{
+  "project_api": 1,
+  "title": "Choose this year's replacements with a 0-1 model",
+  "before": "../../../../56-project-transformer-renewal/steps/00",
+  "after": "../../../../56-project-transformer-renewal/steps/01",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the tiny fleet matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "renewal/plan.py",
+      "signature": "def plan(fleet: list[Transformer], request: Request) -> Plan",
+      "contract": "Builds the model, solves it with HiGHS through MathOpt, and returns a Plan: each transformer whose variable is 1 mapped to FIRST_YEAR, the objective value, the dual bound, and the name of the termination reason as the status. With no plan found, a Plan with no replacements and the status alone. Nothing the solver prints may reach standard output, since Run's report is compared line by line.",
+      "idea": "Read the termination first, then the variable values; a binary is 1 when its value is above 0.5.",
+      "lesson": {
+        "title": "4.2.2 Reading `SolveResult`: Termination, Primal and Dual Solutions, Statistics",
+        "href": "../../../../04-google-or-tools-in-depth/13-mathopt-core/units/unit-02/4.2.2-reading-solveresult-termination-primal-and-dual-solutions-statistics.unit.html"
+      }
+    },
+    {
+      "file": "renewal/model.py",
+      "signature": "def build(fleet: list[Transformer], request: Request) -> Built",
+      "contract": "A new module. Returns a Built, a dataclass holding the MathOpt model, the variables `x` keyed by transformer id, and the budget row: one binary variable per transformer named `x_<tid>`, one row named `budget` keeping the summed cost of the replaced units within request.budget, and the summed risk of the replaced units as the objective to maximize.",
+      "idea": "A yes-or-no choice per unit under one budget is a 0-1 knapsack: the best list is a combination, which no ranking finds in general.",
+      "lesson": {
+        "title": "6.3.1 0-1 and Multi-Dimensional Knapsack",
+        "href": "../../../../06-formulation-craft/25-knapsack-and-assignment/units/unit-01/6.3.1-0-1-and-multi-dimensional-knapsack.unit.html"
+      },
+      "stub": "return None"
+    },
+    {
+      "file": "renewal/plan.py",
+      "signature": "def feasible(fleet: list[Transformer], request: Request, replace: dict[str, int]) -> bool",
+      "contract": "Builds the same model, fixes the variable of every listed unit to 1 and of every other unit to 0, solves, and answers whether the solver found a plan.",
+      "idea": "To test a rule, pin a whole plan with variable bounds and ask whether it is feasible; a pair of plans on either side of a limit shows the row is there and in the right place.",
+      "lesson": {
+        "title": "12.3.1 Unit-Testing One Constraint at a Time",
+        "href": "../../../../12-engineering-the-optimization-service/47-testing-optimization-code/units/unit-01/12.3.1-unit-testing-one-constraint-at-a-time.unit.html"
+      }
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_plan.py::test_the_plan_takes_the_riskiest_units_not_the_worst_scored",
+      "main",
+      "the plan takes the units with the most risk, not the worst condition scores"
+    ],
+    [
+      "tests/test_plan.py::test_the_plan_uses_money_a_ranking_leaves_on_the_table",
+      "main",
+      "the plan uses money a ranking leaves unspent when it stops at a unit that does not fit"
+    ],
+    [
+      "tests/test_plan.py::test_the_plan_is_the_best_subset_within_the_budget",
+      "main",
+      "the plan removes as much risk as the best subset within the budget"
+    ],
+    [
+      "tests/test_plan.py::test_the_budget_allows_a_plan_at_the_limit_and_refuses_one_above_it",
+      "edge",
+      "the model allows a list that spends exactly the budget and refuses one just over it"
+    ]
+  ],
+  "plants": {
+    "tests/test_plan.py::test_the_budget_allows_a_plan_at_the_limit_and_refuses_one_above_it": [
+      [
+        "renewal/plan.py",
+        "    for tid, var in built.x.items():\n        var.lower_bound = var.upper_bound = 1 if tid in replace else 0\n",
+        ""
+      ]
+    ]
+  },
+  "cites": {
+    "path": "56-project-transformer-renewal/README_14.3.1.md",
+    "section": null
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "project_api": 1,
+  "title": "Keep a regional share of every year's spend",
+  "before": "../../../../58-project-sdd-openspec/steps/01",
+  "after": "../../../../58-project-sdd-openspec/steps/02",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the tiny portfolio matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "capplan/request.py",
+      "signature": "def check(projects: list[Project], request: Request) -> None",
+      "contract": "A new function. Raises ValueError, with a message, before any model is built, when request.shares names a region with no project in the portfolio, sets a share outside 0 to 100, or sets shares that add up to more than 100. Returns None otherwise.",
+      "idea": "Shares that no plan with any spend could keep are refused with a message, not left to an empty plan.",
+      "lesson": {
+        "title": "14.4.2 A Regional Spend Share: The First Change From Proposal to Archive",
+        "href": "../../../../14-growing-real-projects/58-project-sdd-openspec/units/unit-02/14.4.2-a-regional-spend-share-the-first-change-from-proposal-to-archive.unit.html"
+      }
+    },
+    {
+      "file": "capplan/plan.py",
+      "signature": "def plan(projects: list[Project], request: Request) -> Plan",
+      "contract": "As before, after calling request.check first.",
+      "idea": "Every entry point checks the request before solving.",
+      "lesson": {
+        "title": "14.4.2 A Regional Spend Share: The First Change From Proposal to Archive",
+        "href": "../../../../14-growing-real-projects/58-project-sdd-openspec/units/unit-02/14.4.2-a-regional-spend-share-the-first-change-from-proposal-to-archive.unit.html"
+      }
+    },
+    {
+      "file": "capplan/plan.py",
+      "signature": "def allows(projects: list[Project], request: Request, starts: set[tuple[str, int]]) -> bool",
+      "contract": "As before, after calling request.check first.",
+      "idea": "Every entry point checks the request before solving.",
+      "lesson": {
+        "title": "14.4.2 A Regional Spend Share: The First Change From Proposal to Archive",
+        "href": "../../../../14-growing-real-projects/58-project-sdd-openspec/units/unit-02/14.4.2-a-regional-spend-share-the-first-change-from-proposal-to-archive.unit.html"
+      }
+    },
+    {
+      "file": "capplan/model.py",
+      "signature": "def build(projects: list[Project], request: Request) -> Built",
+      "contract": "As before, and for each region in request.shares with a share above 0, and each plan year, a row `share_<region>_<year>`: 100 times the year's spend on the region's projects is at least the share times the year's whole spend, both counted with `spend`.",
+      "idea": "A share is a ratio of two spends; multiplied out by the year's spend and by 100 it is one linear row with integer coefficients, and a year with no spend reads 0 >= 0.",
+      "lesson": {
+        "title": "14.4.2 A Regional Spend Share: The First Change From Proposal to Archive",
+        "href": "../../../../14-growing-real-projects/58-project-sdd-openspec/units/unit-02/14.4.2-a-regional-spend-share-the-first-change-from-proposal-to-archive.unit.html"
+      }
+    },
+    {
+      "file": "capplan/report.py",
+      "signature": "def share_by_year(projects: list[Project], starts: dict[str, int], region: str) -> dict[int, float]",
+      "contract": "The region's percent of each year's spend, for the years the plan spends anything, counted from the starts.",
+      "idea": "The report counts the share apart from the model, so a test can compare the two.",
+      "lesson": {
+        "title": "14.4.2 A Regional Spend Share: The First Change From Proposal to Archive",
+        "href": "../../../../14-growing-real-projects/58-project-sdd-openspec/units/unit-02/14.4.2-a-regional-spend-share-the-first-change-from-proposal-to-archive.unit.html"
+      }
+    },
+    {
+      "file": "main.py",
+      "signature": "def main() -> None",
+      "contract": "As before, with REQUEST setting a 25% share for plains, and one line for each year the plan spends anything (a year with no spend gets no line at this step): '  <year>: <n> starts, $<spend>k, plains <pct>%  <ids>', where <pct> is the year's share_by_year percent rounded to a whole number, as `f\"{pct:.0f}\"` rounds it.",
+      "idea": "The report shows the rule the plan keeps.",
+      "lesson": {
+        "title": "14.4.2 A Regional Spend Share: The First Change From Proposal to Archive",
+        "href": "../../../../14-growing-real-projects/58-project-sdd-openspec/units/unit-02/14.4.2-a-regional-spend-share-the-first-change-from-proposal-to-archive.unit.html"
+      }
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_capital_plan.py::test_a_share_is_kept_at_its_boundary",
+      "main",
+      "a share is kept at its boundary, and one $k under it is refused"
+    ],
+    [
+      "tests/test_capital_plan.py::test_a_year_with_no_spend_keeps_the_share",
+      "main",
+      "a year with no spend keeps the share"
+    ],
+    [
+      "tests/test_capital_plan.py::test_the_plan_keeps_every_share",
+      "main",
+      "the plan keeps every share"
+    ],
+    [
+      "tests/test_capital_plan.py::test_a_share_outside_0_to_100_is_refused",
+      "main",
+      "a share outside 0 to 100 is refused"
+    ],
+    [
+      "tests/test_capital_plan.py::test_shares_adding_up_to_more_than_100_are_refused",
+      "edge",
+      "shares that are each fine but add up to more than 100 are refused"
+    ],
+    [
+      "tests/test_capital_plan.py::test_a_share_for_a_region_with_no_project_is_refused",
+      "main",
+      "a share for a region with no project is refused"
+    ]
+  ],
+  "plants": {
+    "tests/test_capital_plan.py::test_shares_adding_up_to_more_than_100_are_refused": [
+      [
+        "capplan/request.py",
+        "    if sum(request.shares.values()) > 100:\n        raise ValueError(f\"the shares add up to {sum(request.shares.values())}%, more than 100\")\n",
+        ""
+      ]
+    ]
+  },
+  "cites": {
+    "path": "58-project-sdd-openspec/README_14.4.2.md",
+    "section": null
+  }
+}

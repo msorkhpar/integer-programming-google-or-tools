@@ -1,0 +1,141 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "08-multi-objective-optimization",
+    "36-epsilon-constraint"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "A leak-reduction frontier under a falling cost ceiling",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility trades leak reduction (megaliters a year) against the cost of its pipe-repair program (whole $k). Its model is wrapped as `solve_at(ceiling)`: the plan with the most leak reduction among plans costing at most `ceiling`, returned as `((leak_cut, cost), slack)` with `slack = ceiling - cost`, or `None` when no plan is that cheap. Costs always come in multiples of `step`."
+    },
+    {
+      "type": "para",
+      "text": "This is the lesson's sweep turned upside down: the floored objective is one to keep *low*, so the row is a ceiling, and the sweep starts at the top (`high`) and lowers the ceiling. Write `exact_sweep(solve_at, low, high, step)` in `leaks.py`. It returns every different plan, in the order found. Never ask about a ceiling whose answer the last slack already tells you, never ask again after a ceiling that returned `None`, and ask no ceiling below `low`."
+    },
+    {
+      "type": "para",
+      "text": "Start at `high` even when it is not a multiple of `step`; the reference does, and the tests check it. Every ceiling you ask is then `high` minus whole steps. Because costs are multiples of `step`, a ceiling that falls between two multiples admits exactly the plans the multiple just below it admits, so it returns the same plan, and the slack, measured from the ceiling you asked, still tells you how many whole steps to skip."
+    },
+    {
+      "type": "para",
+      "text": "Work out first, on paper: after a plan with slack `s`, which ceilings would return the same plan, and so which ceiling to ask next. The tests pass a `solve_at` that counts its calls. About six lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport math\n\n\ndef exact_sweep(solve_at, low: int, high: int, step: int = 1) -> list[tuple[float, int]]:\n    \"\"\"Every plan, from the highest cost ceiling down, skipping ceilings the slack covers.\"\"\"\n    plans, ceiling = [], high\n    while ceiling >= low:\n        if (answer := solve_at(ceiling)) is None:\n            break\n        plans.append(answer[0])\n        ceiling -= (1 + math.floor(round(answer[1], 6) / step)) * step\n    return plans\n\n\nif __name__ == \"__main__\":\n    frontier = [(870.0, 100), (900.0, 112), (950.0, 130)]       # (leak cut, cost $k)\n\n    def solve_at(ceiling):\n        within = [p for p in frontier if p[1] <= ceiling]\n        return (max(within), ceiling - max(within)[1]) if within else None\n\n    print(exact_sweep(solve_at, 90, 130))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport math\n\n\ndef exact_sweep(solve_at, low: int, high: int, step: int = 1) -> list[tuple[float, int]]:\n    \"\"\"Every plan, from the highest cost ceiling down, skipping ceilings the slack covers.\"\"\"\n    plans, ceiling = [], high\n    # TODO: ask, keep the plan, jump past the ceilings its slack covers; stop at the first None.\n    return plans\n\n\nif __name__ == \"__main__\":\n    frontier = [(870.0, 100), (900.0, 112), (950.0, 130)]       # (leak cut, cost $k)\n\n    def solve_at(ceiling):\n        within = [p for p in frontier if p[1] <= ceiling]\n        return (max(within), ceiling - max(within)[1]) if within else None\n\n    print(exact_sweep(solve_at, 90, 130))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "291c107d1e9d1ebfa764d6d9a33b3eda5615aac62703c6269b623d12be7c0d1a",
+  "starting_code": "from __future__ import annotations\n\nimport math\n\n\ndef exact_sweep(solve_at, low: int, high: int, step: int = 1) -> list[tuple[float, int]]:\n    \"\"\"Every plan, from the highest cost ceiling down, skipping ceilings the slack covers.\"\"\"\n    plans, ceiling = [], high\n    # TODO: ask, keep the plan, jump past the ceilings its slack covers; stop at the first None.\n    return plans\n\n\nif __name__ == \"__main__\":\n    frontier = [(870.0, 100), (900.0, 112), (950.0, 130)]       # (leak cut, cost $k)\n\n    def solve_at(ceiling):\n        within = [p for p in frontier if p[1] <= ceiling]\n        return (max(within), ceiling - max(within)[1]) if within else None\n\n    print(exact_sweep(solve_at, 90, 130))\n",
+  "exercise": {
+    "main_path": "practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-02/practice-2/leaks.py",
+    "test_path": "practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-02/practice-2/test_leaks.py",
+    "run_command": [
+      "python3",
+      "practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-02/practice-2/leaks.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-02/practice-2/target/report.xml",
+      "practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-02/practice-2/test_leaks.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_every_plan_is_found_in_order",
+        "kind": "main",
+        "says": "every plan of the frontier is returned, highest cost ceiling first"
+      },
+      {
+        "id": "test_one_solve_per_plan_when_the_bottom_is_reached",
+        "kind": "edge",
+        "says": "a sweep whose last ceiling is the lowest cost asks the model once per plan"
+      },
+      {
+        "id": "test_the_first_ceiling_no_plan_meets_ends_the_sweep",
+        "kind": "edge",
+        "says": "a ceiling no plan meets is asked once and ends the sweep"
+      },
+      {
+        "id": "test_the_jump_counts_in_steps",
+        "kind": "edge",
+        "says": "with a step of 5 the jump moves by whole steps and still finds every plan"
+      },
+      {
+        "id": "test_a_top_that_is_not_a_multiple_of_the_step",
+        "kind": "edge",
+        "says": "a top ceiling of 203 with a step of 5: the jump still counts whole steps and misses no plan"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "36-epsilon-constraint/README_8.3.2.md",
+      "section": "Jump Past Floors the Slack Already Covers, and Stop at the First Infeasible One"
+    },
+    "concepts": [
+      "after each solve the floor moves one more step than the slack covers, and a miss ends the sweep",
+      "whole-number coefficients in the floored goal, a step of one, optimal solves and a reward below every gap find every Pareto plan"
+    ]
+  }
+}

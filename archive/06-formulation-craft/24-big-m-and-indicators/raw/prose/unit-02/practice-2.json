@@ -1,0 +1,145 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "24-big-m-and-indicators"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "An audit that reads the plan, not the status",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A port authority plans which ships use its berths. Each berth has a load limit that may be exceeded **only if** a tug is assigned to it, and the planning model writes every such rule as a big-M row, switched by the tug's binary. The authority's operations team does not trust a solver status: after every solve, it wants a list of the berth rules that the returned values break while their tug counts as not assigned."
+    },
+    {
+      "type": "para",
+      "text": "Write `leaks(values, rows, tol)` in `audit.py`. `values` maps each variable's name to the value the solver returned. Each row is a dict: its `name`, its `terms` (variable name to coefficient), its `limit`, and the name of its `switch` variable. Read the rule each row states, \"the sum of the terms stays within the limit unless the switch is on\", the way a planner would: decide whether the switch is on as a planner reads a binary, and allow the sum to exceed the limit by at most `tol`, since the values come from floating-point arithmetic. Return the names of the broken rows, in the order the rows are given."
+    },
+    {
+      "type": "para",
+      "text": "In symbols, for a row $`r`$ with terms $`a_{r,v}`$, limit $`b_r`$ and switch $`z_r`$, and the solver's values $`\\hat x`$:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "r \\text{ is reported} \\iff \\text{?}"
+    },
+    {
+      "type": "para",
+      "text": "Write the condition first, then code it. Which value of the switch should count as \"on\" when the solver returned 0.4?"
+    },
+    {
+      "type": "para",
+      "text": "The tests pass hand-made values and rows and check the list returned. About eight lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\n# A switched rule: sum(coef * value of var) <= limit, unless the switch variable is on.\n# rows = [{\"name\": str, \"terms\": {var name: coef}, \"limit\": float, \"switch\": var name}, ...]\n# values = {var name: value the solver returned}\n\n\ndef leaks(values: dict[str, float], rows: list[dict], tol: float = 1e-6) -> list[str]:\n    \"\"\"Names of the rows broken while their switch counts as off, in the order given.\"\"\"\n    broken = []\n    for row in rows:\n        total = sum(coef * values[var] for var, coef in row[\"terms\"].items())\n        switched_off = values[row[\"switch\"]] < 0.5\n        if switched_off and total > row[\"limit\"] + tol:\n            broken.append(row[\"name\"])\n    return broken\n\n\nif __name__ == \"__main__\":\n    rows = [{\"name\": \"berth_1\", \"terms\": {\"ship_a\": 4, \"ship_b\": 3}, \"limit\": 6, \"switch\": \"tug_1\"}]\n    print(leaks({\"ship_a\": 1, \"ship_b\": 1, \"tug_1\": 7e-7}, rows))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\n# A switched rule: sum(coef * value of var) <= limit, unless the switch variable is on.\n# rows = [{\"name\": str, \"terms\": {var name: coef}, \"limit\": float, \"switch\": var name}, ...]\n# values = {var name: value the solver returned}\n\n\ndef leaks(values: dict[str, float], rows: list[dict], tol: float = 1e-6) -> list[str]:\n    \"\"\"Names of the rows broken while their switch counts as off, in the order given.\"\"\"\n    # TODO\n    return []\n\nif __name__ == \"__main__\":\n    rows = [{\"name\": \"berth_1\", \"terms\": {\"ship_a\": 4, \"ship_b\": 3}, \"limit\": 6, \"switch\": \"tug_1\"}]\n    print(leaks({\"ship_a\": 1, \"ship_b\": 1, \"tug_1\": 7e-7}, rows))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "c2704b7db9f0c4835225f6b826a75c636d98cc3f9bb318f8db5ba386b1a5bfc2",
+  "starting_code": "from __future__ import annotations\n\n# A switched rule: sum(coef * value of var) <= limit, unless the switch variable is on.\n# rows = [{\"name\": str, \"terms\": {var name: coef}, \"limit\": float, \"switch\": var name}, ...]\n# values = {var name: value the solver returned}\n\n\ndef leaks(values: dict[str, float], rows: list[dict], tol: float = 1e-6) -> list[str]:\n    \"\"\"Names of the rows broken while their switch counts as off, in the order given.\"\"\"\n    # TODO\n    return []\n\nif __name__ == \"__main__\":\n    rows = [{\"name\": \"berth_1\", \"terms\": {\"ship_a\": 4, \"ship_b\": 3}, \"limit\": 6, \"switch\": \"tug_1\"}]\n    print(leaks({\"ship_a\": 1, \"ship_b\": 1, \"tug_1\": 7e-7}, rows))\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-02/practice-2/audit.py",
+    "test_path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-02/practice-2/test_audit.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-02/practice-2/audit.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-02/practice-2/target/report.xml",
+      "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-02/practice-2/test_audit.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_row_broken_through_a_tiny_switch_is_reported",
+        "kind": "main",
+        "says": "a row over its limit with a switch of 7e-7 is reported, and the same row with its switch on is not"
+      },
+      {
+        "id": "test_a_switch_below_one_half_counts_as_off",
+        "kind": "edge",
+        "says": "a switch of 0.4 counts as off"
+      },
+      {
+        "id": "test_a_total_within_the_tolerance_is_not_a_leak",
+        "kind": "edge",
+        "says": "a total over the limit by less than the tolerance is not reported"
+      },
+      {
+        "id": "test_every_leak_is_reported_in_order",
+        "kind": "edge",
+        "says": "every broken row is reported, in the order the rows are given"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "24-big-m-and-indicators/README_6.2.2.md",
+      "section": "Check the Plan Against the Rule, Not Against the Solver's Status"
+    },
+    "concepts": [
+      "after a solve, binaries are rounded and every switched rule is recomputed from the values",
+      "a huge M multiplies a switch inside the integrality tolerance into whole units of room"
+    ]
+  }
+}

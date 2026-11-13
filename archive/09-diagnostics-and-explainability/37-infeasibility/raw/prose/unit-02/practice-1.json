@@ -1,0 +1,175 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "09-diagnostics-and-explainability",
+    "37-infeasibility"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Five checks for a hospital's equipment program",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A hospital plans its equipment replacements over a few years. Each item is installed in one year, pays its whole `cost` ($k) in that year and needs `engineer_days` of the biomedical engineers' time in that year. It may be installed in any plan year from its `release` year to its `deadline` year. Items marked `required` must be installed. An item may name another it `excludes` (the two need the same room, so at most one is installed). The finance office gives a `budget` per year and the engineering office `engineers` (days available) per year, both keyed by the plan's years. Each department has a `dept_minimum`: the least the plan must spend on that department in total."
+    },
+    {
+      "type": "para",
+      "text": "Before the hospital's model is ever solved, the planners want the input checked for five known causes of \"no plan\":"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Check",
+        "Subject",
+        "The cause"
+      ],
+      "rows": [
+        [
+          "`\"window\"`",
+          "the item",
+          "a required item has no plan year in its window"
+        ],
+        [
+          "`\"budget\"`",
+          "the item",
+          "a required item costs more than the budget in every year it may use"
+        ],
+        [
+          "`\"engineers\"`",
+          "the item",
+          "a required item needs more engineer-days than are available in every year it may use"
+        ],
+        [
+          "`\"exclusion\"`",
+          "both items' names, sorted, joined by `\"|\"`",
+          "two required items exclude each other"
+        ],
+        [
+          "`\"minimum\"`",
+          "the department",
+          "a department's minimum is more than all its items together cost"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The plan years are the keys of `budget`; `engineers` has the same keys. For the `\"minimum\"` check, \"all its items together\" means every item of the department, required or optional, whatever its window. (Leaving out an item whose window misses every plan year is sound too, and the tests accept either.)"
+    },
+    {
+      "type": "para",
+      "text": "Write `precheck(items, budget, engineers, dept_minimum)` returning the sorted list of `(check, subject)` pairs, each pair once. Every check must be **sound**: it may fire only when no plan can exist, so a program with a plan always gets `[]`. Work out, for each check, which quantity has to be the least possible demand and which the most possible supply. About twenty-five lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\n\ndef allowed_years(item: dict, years: list[int]) -> list[int]:\n    \"\"\"The plan years an item may be installed in: inside its release-deadline window.\"\"\"\n    return [t for t in years if item[\"release\"] <= t <= item[\"deadline\"]]\n\n\ndef precheck(items: dict, budget: dict, engineers: dict, dept_minimum: dict) -> list[tuple[str, str]]:\n    \"\"\"Every (check, subject) that proves the equipment program can have no plan, sorted.\"\"\"\n    years = sorted(budget)\n    found = []\n    for name, item in items.items():\n        if not item[\"required\"]:\n            continue\n        options = allowed_years(item, years)\n        if not options:\n            found.append((\"window\", name))\n            continue\n        if all(item[\"cost\"] > budget[t] for t in options):\n            found.append((\"budget\", name))\n        if all(item[\"engineer_days\"] > engineers[t] for t in options):\n            found.append((\"engineers\", name))\n    for name, item in items.items():\n        other = item[\"excludes\"]\n        if other and item[\"required\"] and items[other][\"required\"]:\n            found.append((\"exclusion\", \"|\".join(sorted((name, other)))))\n    for dept, minimum in dept_minimum.items():\n        supply = sum(item[\"cost\"] for item in items.values() if item[\"dept\"] == dept)\n        if supply < minimum:\n            found.append((\"minimum\", dept))\n    return sorted(set(found))\n\n\nif __name__ == \"__main__\":\n    items = {\"MRI-2\": {\"dept\": \"radiology\", \"cost\": 900, \"release\": 2027, \"deadline\": 2028, \"required\": True,\n                       \"engineer_days\": 30, \"excludes\": None}}\n    print(precheck(items, {2027: 800, 2028: 1000}, {2027: 40, 2028: 40}, {\"radiology\": 500}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\n\ndef allowed_years(item: dict, years: list[int]) -> list[int]:\n    \"\"\"The plan years an item may be installed in: inside its release-deadline window.\"\"\"\n    return [t for t in years if item[\"release\"] <= t <= item[\"deadline\"]]\n\n\ndef precheck(items: dict, budget: dict, engineers: dict, dept_minimum: dict) -> list[tuple[str, str]]:\n    \"\"\"Every (check, subject) that proves the equipment program can have no plan, sorted.\"\"\"\n    # TODO: the five checks. Each must fire only when no plan can exist.\n    return []\n\n\nif __name__ == \"__main__\":\n    items = {\"MRI-2\": {\"dept\": \"radiology\", \"cost\": 900, \"release\": 2027, \"deadline\": 2028, \"required\": True,\n                       \"engineer_days\": 30, \"excludes\": None}}\n    print(precheck(items, {2027: 800, 2028: 1000}, {2027: 40, 2028: 40}, {\"radiology\": 500}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 1,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "6e91128a35b6e4f0f4fc9243d088709836e48c2676ddd710408b07417487d459",
+  "starting_code": "from __future__ import annotations\n\n\ndef allowed_years(item: dict, years: list[int]) -> list[int]:\n    \"\"\"The plan years an item may be installed in: inside its release-deadline window.\"\"\"\n    return [t for t in years if item[\"release\"] <= t <= item[\"deadline\"]]\n\n\ndef precheck(items: dict, budget: dict, engineers: dict, dept_minimum: dict) -> list[tuple[str, str]]:\n    \"\"\"Every (check, subject) that proves the equipment program can have no plan, sorted.\"\"\"\n    # TODO: the five checks. Each must fire only when no plan can exist.\n    return []\n\n\nif __name__ == \"__main__\":\n    items = {\"MRI-2\": {\"dept\": \"radiology\", \"cost\": 900, \"release\": 2027, \"deadline\": 2028, \"required\": True,\n                       \"engineer_days\": 30, \"excludes\": None}}\n    print(precheck(items, {2027: 800, 2028: 1000}, {2027: 40, 2028: 40}, {\"radiology\": 500}))\n",
+  "exercise": {
+    "main_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-02/practice-1/checks.py",
+    "test_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-02/practice-1/test_checks.py",
+    "run_command": [
+      "python3",
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-02/practice-1/checks.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-02/practice-1/target/report.xml",
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-02/practice-1/test_checks.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_clean_data_passes_and_each_planted_cause_is_named",
+        "kind": "main",
+        "says": "clean data passes, and each of the five planted causes is named once"
+      },
+      {
+        "id": "test_a_window_entirely_outside_the_plan_years_is_caught",
+        "kind": "edge",
+        "says": "a window can be in order and still miss every plan year"
+      },
+      {
+        "id": "test_an_item_that_fits_in_only_one_of_its_years_is_not_refused",
+        "kind": "edge",
+        "says": "an item that fits in some year of its window is not a problem"
+      },
+      {
+        "id": "test_an_exclusion_matters_only_when_both_items_are_required",
+        "kind": "edge",
+        "says": "an exclusion between items is a problem only when the plan must fund both"
+      },
+      {
+        "id": "test_a_department_minimum_counts_optional_items_too",
+        "kind": "edge",
+        "says": "a department's minimum can be met with optional items as well as required ones"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "37-infeasibility/README_9.1.2.md",
+      "section": "A Check Must Never Refuse a Scenario That Has a Plan"
+    },
+    "concepts": [
+      "five input checks, each comparing a least demand with a most supply"
+    ]
+  }
+}

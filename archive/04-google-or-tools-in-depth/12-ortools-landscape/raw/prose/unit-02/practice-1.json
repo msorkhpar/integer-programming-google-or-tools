@@ -1,0 +1,139 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "12-ortools-landscape"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Pick the first MIP backend that is really there",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A logistics team (not GridCap) runs its MIP models through OR-Tools' linear solver wrapper, and lets each deployment list its preferred solvers in order, such as `[\"GUROBI\", \"CBC\", \"SCIP\"]`. The same list runs on laptops, on build machines and in containers that have different solvers, so the service must use the first preference that is actually there and can solve a MIP."
+    },
+    {
+      "type": "para",
+      "text": "Write `pick_backend(preferences)` in `backend.py`. It returns the first solver ID in `preferences` for which both hold, or `None` when none does:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`pywraplp.Solver.CreateSolver(id)` returns a solver, not `None`;",
+        "that solver solves MIPs: its `IsMip()` is true. An LP-only solver given an integer variable solves the LP relaxation and still reports `OPTIMAL` (the lesson's last section shows it), so it must never be picked for a MIP."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Never fall back to a solver that is not in the list. The tests run in the course runner's OR-Tools 9.15.6755. About six lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.linear_solver import pywraplp\n\n\ndef pick_backend(preferences: list[str]) -> str | None:\n    \"\"\"The first solver ID in `preferences` that is present and solves MIPs, or None.\"\"\"\n    for solver_id in preferences:\n        solver = pywraplp.Solver.CreateSolver(solver_id)\n        if solver is not None and solver.IsMip():\n            return solver_id\n    return None\n\n\nif __name__ == \"__main__\":\n    print(pick_backend([\"GUROBI\", \"GLOP\", \"SCIP\"]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.linear_solver import pywraplp\n\n\ndef pick_backend(preferences: list[str]) -> str | None:\n    \"\"\"The first solver ID in `preferences` that is present and solves MIPs, or None.\"\"\"\n    # TODO: try each ID in order with CreateSolver; keep the first that exists and is a MIP solver.\n    return \"NONE\"\n\n\nif __name__ == \"__main__\":\n    print(pick_backend([\"GUROBI\", \"GLOP\", \"SCIP\"]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "13fafd4cfb735ffb617b43e6280f15faa2b16dded7ef6a7689555a82611e1996",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.linear_solver import pywraplp\n\n\ndef pick_backend(preferences: list[str]) -> str | None:\n    \"\"\"The first solver ID in `preferences` that is present and solves MIPs, or None.\"\"\"\n    # TODO: try each ID in order with CreateSolver; keep the first that exists and is a MIP solver.\n    return \"NONE\"\n\n\nif __name__ == \"__main__\":\n    print(pick_backend([\"GUROBI\", \"GLOP\", \"SCIP\"]))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/12-ortools-landscape/prose/unit-02/practice-1/backend.py",
+    "test_path": "practice/04-google-or-tools-in-depth/12-ortools-landscape/prose/unit-02/practice-1/test_backend.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/12-ortools-landscape/prose/unit-02/practice-1/backend.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/12-ortools-landscape/prose/unit-02/practice-1/target/report.xml",
+      "practice/04-google-or-tools-in-depth/12-ortools-landscape/prose/unit-02/practice-1/test_backend.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_missing_commercial_solver_is_skipped",
+        "kind": "main",
+        "says": "a commercial solver the machine lacks is passed over for the next preference that is present"
+      },
+      {
+        "id": "test_the_first_present_mip_solver_wins",
+        "kind": "main",
+        "says": "of several present MIP solvers, the earliest in the preference list is chosen"
+      },
+      {
+        "id": "test_an_lp_only_solver_is_skipped",
+        "kind": "edge",
+        "says": "an LP-only solver is passed over even though it is present, since it would drop the integer variables"
+      },
+      {
+        "id": "test_no_present_mip_solver_gives_none",
+        "kind": "edge",
+        "says": "when no preference is a present MIP solver, the answer is None rather than a solver nobody asked for"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/12-ortools-landscape/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "12-ortools-landscape/README_4.1.2.md",
+      "section": "Each API Has Its Own List of Backends, and Only Some Are Compiled In"
+    },
+    "concepts": [
+      "MathOpt and pywraplp each list solvers, and only the compiled ones are accepted"
+    ]
+  }
+}

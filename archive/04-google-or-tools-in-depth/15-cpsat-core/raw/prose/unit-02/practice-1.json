@@ -1,0 +1,157 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "15-cpsat-core"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Release rules for a software team",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A software team (not GridCap) picks which features ship in the next release. The product owner's rules come in four kinds, each a list of tuples of feature names:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`requires`: `(a, b)`, \"feature a needs feature b\";",
+        "`excludes`: `(a, b)`, \"a and b never ship in the same release\";",
+        "`needs_one_of`: `(a, [o1, o2, ...])`, \"a needs at least one of the options\";",
+        "`bundles`: `(a, b)`, \"a and b ship together or not at all\"."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`x[f]` is the Boolean \"feature f ships\". In logic, the four kinds are"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\nx_a &\\Rightarrow x_b && \\forall (a, b) \\in \\text{requires} \\\\\n\\lnot x_a \\lor \\lnot x_b & && \\forall (a, b) \\in \\text{excludes} \\\\\nx_a &\\Rightarrow (x_{o_1} \\lor x_{o_2} \\lor \\dots) && \\forall (a, O) \\in \\text{needs\\_one\\_of} \\\\\nx_a &= x_b && \\forall (a, b) \\in \\text{bundles}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Write `add_rules(model, x, requires, excludes, needs_one_of, bundles)` in `release.py`: one CP-SAT constraint per rule, with no linear algebra and no big-M. The tests fix which features ship and ask CP-SAT whether the rules allow it. About eight lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef add_rules(model: cp_model.CpModel, x: dict, requires: list[tuple[str, str]], excludes: list[tuple[str, str]],\n              needs_one_of: list[tuple[str, list[str]]], bundles: list[tuple[str, str]]) -> None:\n    \"\"\"The release rules, one CP-SAT logic constraint each.\"\"\"\n    for a, b in requires:\n        model.add_implication(x[a], x[b])\n    for a, b in excludes:\n        model.add_at_most_one(x[a], x[b])\n    for a, options in needs_one_of:\n        model.add_bool_or(x[o] for o in options).only_enforce_if(x[a])\n    for a, b in bundles:\n        model.add(x[a] == x[b])\n\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = {f: model.new_bool_var(f) for f in (\"sso\", \"audit\", \"export\")}\n    add_rules(model, x, [(\"audit\", \"sso\")], [], [(\"export\", [\"sso\", \"audit\"])], [])\n    solver = cp_model.CpSolver()\n    print(solver.status_name(solver.solve(model)))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef add_rules(model: cp_model.CpModel, x: dict, requires: list[tuple[str, str]], excludes: list[tuple[str, str]],\n              needs_one_of: list[tuple[str, list[str]]], bundles: list[tuple[str, str]]) -> None:\n    \"\"\"The release rules, one CP-SAT logic constraint each.\"\"\"\n    # TODO: one constraint per rule.\n    return None\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = {f: model.new_bool_var(f) for f in (\"sso\", \"audit\", \"export\")}\n    add_rules(model, x, [(\"audit\", \"sso\")], [], [(\"export\", [\"sso\", \"audit\"])], [])\n    solver = cp_model.CpSolver()\n    print(solver.status_name(solver.solve(model)))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "038cb9cba9c67a421b3d6de1a754e6430d465b6c99e9883f05bf407123482f67",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef add_rules(model: cp_model.CpModel, x: dict, requires: list[tuple[str, str]], excludes: list[tuple[str, str]],\n              needs_one_of: list[tuple[str, list[str]]], bundles: list[tuple[str, str]]) -> None:\n    \"\"\"The release rules, one CP-SAT logic constraint each.\"\"\"\n    # TODO: one constraint per rule.\n    return None\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = {f: model.new_bool_var(f) for f in (\"sso\", \"audit\", \"export\")}\n    add_rules(model, x, [(\"audit\", \"sso\")], [], [(\"export\", [\"sso\", \"audit\"])], [])\n    solver = cp_model.CpSolver()\n    print(solver.status_name(solver.solve(model)))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-1/release.py",
+    "test_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-1/test_release.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-1/release.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-1/target/report.xml",
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-1/test_release.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_required_feature_must_ship_too",
+        "kind": "main",
+        "says": "a feature ships with the feature it requires, and is refused without it"
+      },
+      {
+        "id": "test_excluded_features_never_ship_together",
+        "kind": "main",
+        "says": "one of two excluded features may ship, and both together are refused"
+      },
+      {
+        "id": "test_a_feature_that_needs_one_of_several_gets_one",
+        "kind": "main",
+        "says": "a feature that needs one of several options ships with one, and is refused with none"
+      },
+      {
+        "id": "test_a_bundle_ships_whole",
+        "kind": "main",
+        "says": "a bundle ships with both features, and either one alone is refused"
+      },
+      {
+        "id": "test_a_requirement_works_one_way_only",
+        "kind": "edge",
+        "says": "the required feature may ship on its own"
+      },
+      {
+        "id": "test_more_than_one_of_the_options_is_fine",
+        "kind": "edge",
+        "says": "a feature that needs one of several options may ship with more than one"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "15-cpsat-core/README_4.4.2.md",
+      "section": "GridCap's Rules Become One Constraint Each, With No Big-M"
+    },
+    "concepts": [
+      "requirement, exclusion, needs-one-of and all-or-nothing rules are one logic constraint each",
+      "bool_or, bool_and, implication, at-most-one, exactly-one and equality each allow a fixed truth table"
+    ]
+  }
+}

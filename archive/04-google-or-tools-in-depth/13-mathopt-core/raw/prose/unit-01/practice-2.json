@@ -1,0 +1,154 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "13-mathopt-core"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Print a model's rows for a review",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A transit agency's planners review every new model in a pull request, and they want its rows as text they can read against the formulation. You have the model; MathOpt stores each row as $`\\text{lb} \\le \\sum_j a_j x_j \\le \\text{ub}`$, with an infinite bound on a one-sided row."
+    },
+    {
+      "type": "para",
+      "text": "Write `describe(row)` in `rows.py`: one line for one `mathopt.LinearConstraint`, in this form."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "It starts with the row's name and a colon: `budget: `.",
+        "The terms come next, sorted by variable name. Each is the coefficient, a space and the variable's name (`3 x_bus`), with the coefficient written by Python's `:g` format (`2.5`, `10`, `0.001`). A coefficient of 1 is left out (`x_bus`). After the first term, each term is joined with ` + ` or, when its coefficient is negative, with ` - ` and the coefficient's absolute value (`3 x_a - 2 x_b`). A first term that is negative starts with a minus sign and no space (`-2 x_b`, or `-x_b` for $`-1`$).",
+        "Then the bounds: `terms <= ub` when only the upper bound is finite, `terms >= lb` when only the lower bound is, `terms == lb` when the two bounds are equal, and `lb <= terms <= ub` when both are finite and different, each number written with `:g`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "For example, $`3 x_a + 2 x_b \\le 10`$ named `budget` reads `budget: 3 x_a + 2 x_b <= 10`."
+    },
+    {
+      "type": "para",
+      "text": "Then write `describe_model(model)`: the list of `describe(row)` for every row of the model, in the order the rows were created. Read the row through its handle: its `name`, `lower_bound`, `upper_bound` and `terms()`, each term with a `variable` and a `coefficient`."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef terms_text(row: mathopt.LinearConstraint) -> str:\n    \"\"\"The row's terms, sorted by variable name, as '3 x_a - x_b + 2.5 y'.\"\"\"\n    parts = []\n    for term in sorted(row.terms(), key=lambda t: t.variable.name):\n        size = abs(term.coefficient)\n        body = term.variable.name if size == 1 else f\"{size:g} {term.variable.name}\"\n        if not parts:\n            parts.append((\"-\" if term.coefficient < 0 else \"\") + body)\n        else:\n            parts.append((\" - \" if term.coefficient < 0 else \" + \") + body)\n    return \"\".join(parts)\n\n\ndef describe(row: mathopt.LinearConstraint) -> str:\n    \"\"\"One line for one row: 'name: terms <= ub', '>= lb', '== value' or 'lb <= terms <= ub'.\"\"\"\n    lb, ub = row.lower_bound, row.upper_bound\n    text = terms_text(row)\n    if lb == ub:\n        body = f\"{text} == {lb:g}\"\n    elif math.isinf(lb):\n        body = f\"{text} <= {ub:g}\"\n    elif math.isinf(ub):\n        body = f\"{text} >= {lb:g}\"\n    else:\n        body = f\"{lb:g} <= {text} <= {ub:g}\"\n    return f\"{row.name}: {body}\"\n\n\ndef describe_model(model: mathopt.Model) -> list[str]:\n    \"\"\"Every row of the model, in creation order.\"\"\"\n    return [describe(row) for row in model.linear_constraints()]\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model(name=\"buses\")\n    a, b = model.add_binary_variable(name=\"x_a\"), model.add_binary_variable(name=\"x_b\")\n    model.add_linear_constraint(3 * a + 2 * b <= 10, name=\"budget\")\n    print(\"\\n\".join(describe_model(model)))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef describe(row: mathopt.LinearConstraint) -> str:\n    \"\"\"One line for one row: 'name: terms <= ub', '>= lb', '== value' or 'lb <= terms <= ub'.\"\"\"\n    # TODO: read the row's name, bounds and terms.\n    return \"\"\n\n\ndef describe_model(model: mathopt.Model) -> list[str]:\n    \"\"\"Every row of the model, in creation order.\"\"\"\n    # TODO: one line per row.\n    return []\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model(name=\"buses\")\n    a, b = model.add_binary_variable(name=\"x_a\"), model.add_binary_variable(name=\"x_b\")\n    model.add_linear_constraint(3 * a + 2 * b <= 10, name=\"budget\")\n    print(\"\\n\".join(describe_model(model)))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "501567cc9b5b8510f65708661f9493030ecc59df820e9c416e59412c3e19723e",
+  "starting_code": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef describe(row: mathopt.LinearConstraint) -> str:\n    \"\"\"One line for one row: 'name: terms <= ub', '>= lb', '== value' or 'lb <= terms <= ub'.\"\"\"\n    # TODO: read the row's name, bounds and terms.\n    return \"\"\n\n\ndef describe_model(model: mathopt.Model) -> list[str]:\n    \"\"\"Every row of the model, in creation order.\"\"\"\n    # TODO: one line per row.\n    return []\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model(name=\"buses\")\n    a, b = model.add_binary_variable(name=\"x_a\"), model.add_binary_variable(name=\"x_b\")\n    model.add_linear_constraint(3 * a + 2 * b <= 10, name=\"budget\")\n    print(\"\\n\".join(describe_model(model)))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-01/practice-2/rows.py",
+    "test_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-01/practice-2/test_rows.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-01/practice-2/rows.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-01/practice-2/target/report.xml",
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-01/practice-2/test_rows.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_an_upper_bounded_row_reads_as_less_or_equal",
+        "kind": "main",
+        "says": "a row with only an upper bound reads as 'name: terms <= ub', its terms sorted by variable name"
+      },
+      {
+        "id": "test_every_row_of_a_model_is_described_in_creation_order",
+        "kind": "main",
+        "says": "describe_model returns one line per row, in the order the rows were created"
+      },
+      {
+        "id": "test_a_lower_bounded_row_reads_as_greater_or_equal",
+        "kind": "edge",
+        "says": "a row with only a lower bound reads as 'terms >= lb'"
+      },
+      {
+        "id": "test_an_equality_row_reads_with_two_equals_signs",
+        "kind": "edge",
+        "says": "a row whose bounds are equal reads as 'terms == value'"
+      },
+      {
+        "id": "test_a_ranged_row_shows_both_bounds",
+        "kind": "edge",
+        "says": "a row with two different finite bounds reads as 'lb <= terms <= ub'"
+      },
+      {
+        "id": "test_negative_and_unit_coefficients_read_naturally",
+        "kind": "edge",
+        "says": "a coefficient of 1 is left out, and a negative one is written with a minus sign"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "13-mathopt-core/README_4.2.1.md",
+      "section": "Build From the Formulation One Labelled Row at a Time, and Read the Model Back"
+    },
+    "concepts": [
+      "a built model is read back through its rows' names, bounds and terms"
+    ]
+  }
+}

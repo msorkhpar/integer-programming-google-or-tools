@@ -1,0 +1,674 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "10-numerics-and-determinism",
+    "40-numerics"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Floating point, tolerances, and why 1e-6 matters",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "10.1.1 Floating Point, Tolerances, and Why 1e-6 Matters"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's finance team wants the planning model to work in billions of dollars, \"because that is how the board reads it\". Before switching, an analyst runs the model's standing check: take a plan the planners wrote, fix it in the model, and ask the solver whether the plan is allowed. One test plan overspends the 2027 budget by $500, and the check must refuse it. With the budget row written in $k, it does. With the same row written in $B, both HiGHS and SCIP call the plan allowed."
+    },
+    {
+      "type": "para",
+      "text": "Nothing is wrong with either solver. Each compared the row's two sides in floating-point arithmetic, with a tolerance, and $500 is inside the tolerance once the row is in billions. This lesson explains the pieces: what a float can hold, the tolerances a solver compares with, why a tolerance is worth a different amount of money in different units, and what the integrality tolerance does to a binary variable and to the plan you read from it. GridCap is a fictional utility; its numbers are teaching data."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Float Holds About 16 Significant Digits, So Most Decimals Are Rounded"
+    },
+    {
+      "type": "para",
+      "text": "A Python `float` is a 64-bit binary floating-point number: a sign, an exponent, and a 53-bit binary fraction. A number is stored exactly only if it is a sum of powers of two that fits in those 53 bits. 0.5 and 0.25 fit. 0.1 does not: in binary it is a fraction that repeats forever, like 1/3 in decimal, so Python stores the nearest float instead. Every arithmetic result is rounded to the nearest float too. `floats.py` shows what that means:"
+    },
+    {
+      "type": "example",
+      "id": "floats-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "40-numerics/src/floats.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "40-numerics/src/floats.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "print(f\"0.1 + 0.2 = {0.1 + 0.2!r}   equal to 0.3: {0.1 + 0.2 == 0.3}\")\nprint(f\"machine epsilon: {sys.float_info.epsilon!r}  (2**-52 = {2.0 ** -52!r})\")\nprint(\"gap to the next float (math.ulp):\")\nfor label, value in ((\"1\", 1.0), (\"a budget in $k\", 8_890.0), (\"the same budget in $\", 8_890_000.0),\n                     (\"the same budget in cents\", 889_000_000.0), (\"1e10\", 1e10), (\"1e16\", 1e16)):\n    print(f\"  {label:26} {value:>16,.0f}  ulp {math.ulp(value):.1e}\")\nprint(f\"1e16 + 1 == 1e16: {1e16 + 1 == 1e16}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "0.1 + 0.2 = 0.30000000000000004   equal to 0.3: False\nmachine epsilon: 2.220446049250313e-16  (2**-52 = 2.220446049250313e-16)\ngap to the next float (math.ulp):\n  1                                         1  ulp 2.2e-16\n  a budget in $k                        8,890  ulp 1.8e-12\n  the same budget in $              8,890,000  ulp 1.9e-09\n  the same budget in cents        889,000,000  ulp 1.2e-07\n  1e10                         10,000,000,000  ulp 1.9e-06\n  1e16                       10,000,000,000,000,000  ulp 2.0e+00\n1e16 + 1 == 1e16: True"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Read it line by line:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**0.1 + 0.2 is not 0.3.** Both inputs were already rounded when Python stored them, and the sum was rounded again. The result is the float next to 0.3, not 0.3's own float.",
+        "**Machine epsilon** is the gap between 1 and the next float, $`2^{-52} \\approx 2.2 \\times 10^{-16}`$. Rounding to the nearest float therefore moves a number by at most half that gap, relative to its size: about $`1.1 \\times 10^{-16}`$. That is what \"about 16 significant digits\" means.",
+        "**The gap grows with the number.** `math.ulp(v)` is the gap from `v` to the next float (ulp stands for \"unit in the last place\"). It is always about $`2.2 \\times 10^{-16}`$ times `v`: about $`10^{-12}`$ next to a budget of 8,890, but $`1.9 \\times 10^{-6}`$ next to $`10^{10}`$, and 2 next to $`10^{16}`$.",
+        "**So `1e16 + 1 == 1e16`.** No float lies between $`10^{16}`$ and $`10^{16} + 2`$, and adding 1 rounds back down. A small number added to a large one can vanish entirely."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The order of a sum matters for the same reason: each partial sum is rounded, and a different order rounds different numbers. The program takes every GridCap project's 2027 spend, converts it to dollars, escalates it by 3.1% a year for two years (a typical way such numbers get cents), and adds the ten amounts up three ways:"
+    },
+    {
+      "type": "example",
+      "id": "floats-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "40-numerics/src/floats.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "40-numerics/src/floats.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "forward = 0.0\nfor s in spend:\n    forward += s\nbackward = 0.0\nfor s in reversed(spend):\n    backward += s\ncents = sum(round(s * 100) for s in spend)"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "10 amounts with cents, summed forward:  17198708.98\n10 amounts with cents, summed backward: 17198708.980000004\nmath.fsum: 17198708.98   integer cents: 1719870898 (= $17,198,708.98)"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The two loops disagree in the last digit. `math.fsum` tracks the rounding error of each step and returns the correctly rounded total; adding integer cents is exact, because integers below $`2^{53}`$ are stored exactly. That is why GridCap keeps all its money as whole $k (GridCap's `portfolio.py` says so), and why lesson 1.3.3 compares computed floats with a tolerance and never with `==`. The gaps above are what a tolerance has to cover: rounding noise is about $`10^{-16}`$ of the numbers involved, and it accumulates over a computation's steps."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Solver Accepts a Row Broken by Less Than Its Feasibility Tolerance"
+    },
+    {
+      "type": "para",
+      "text": "A solver does millions of floating-point operations, each rounded. If it demanded that every row hold exactly, it would refuse correct plans over rounding noise. So it accepts a row as satisfied when the row is broken by at most a small number, its **feasibility tolerance**: for a row $`a^\\top x \\le b`$ it accepts $`a^\\top x \\le b + \\varepsilon`$. The OR-Tools page *Advanced LP Solving* says the same of every solver: a solution is called optimal when its infeasibilities are below a tolerance, and typical defaults lie between $`10^{-6}`$ and $`10^{-8}`$."
+    },
+    {
+      "type": "para",
+      "text": "The tolerance can be measured. `tolerance_edge.py` builds a model that no point satisfies, with two rows a distance $`d`$ apart:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& x \\\\\n\\text{s.t. }& x + y \\le 1 && \\text{(cap)} \\\\\n& x + y \\ge 1 + d && \\text{(floor)} \\\\\n& 0 \\le x \\le 1, \\quad 0 \\le y \\le 10 && \\text{(in the MIP runs, } x \\in \\{0, 1\\})\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "For any $`d > 0`$ the model is infeasible: $`x + y`$ cannot be both at most 1 and at least $`1 + d`$. A solver that calls it feasible has accepted a row broken by $`d`$. For each solve, the program measures how far the returned point is outside each row, with `row_violations` from `loan_model.py`:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def row_violations(model: mathopt.Model, values: dict) -> dict[str, float]:\n    \"\"\"How far each row's activity is outside its bounds at `values`, for the rows that are.\"\"\"\n    broken = {}\n    for row in model.linear_constraints():\n        activity = sum(row.get_coefficient(v) * values[v] for v in model.row_nonzeros(row))\n        over = max(row.lower_bound - activity, activity - row.upper_bound)\n        if over > 0:\n            broken[row.name] = over\n    return broken"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "d           5e-08                        5e-07                        5e-06\nHiGHS, LP   OPTIMAL floor off by 5e-08   INFEASIBLE                   INFEASIBLE\nHiGHS, MIP  OPTIMAL floor off by 5e-08   OPTIMAL floor off by 5e-07   INFEASIBLE\nSCIP, MIP   OPTIMAL floor off by 5e-08   OPTIMAL floor off by 5e-07   INFEASIBLE\nGLOP, LP    OPTIMAL cap off by 5e-08     OPTIMAL cap off by 5e-07     INFEASIBLE"
+    },
+    {
+      "type": "para",
+      "text": "Every solver called an infeasible model OPTIMAL when the rows were close enough, and returned a point that breaks one row by exactly $`d`$. Where each one drew the line matches its documented default:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Solver",
+        "Option",
+        "Default",
+        "Accepted here",
+        "Refused here"
+      ],
+      "rows": [
+        [
+          "HiGHS, LP",
+          "`primal_feasibility_tolerance`",
+          "$`10^{-7}`$",
+          "$`5 \\times 10^{-8}`$",
+          "$`5 \\times 10^{-7}`$"
+        ],
+        [
+          "HiGHS, MIP",
+          "`mip_feasibility_tolerance`",
+          "$`10^{-6}`$",
+          "$`5 \\times 10^{-7}`$",
+          "$`5 \\times 10^{-6}`$"
+        ],
+        [
+          "SCIP",
+          "`numerics/feastol`",
+          "$`10^{-6}`$",
+          "$`5 \\times 10^{-7}`$",
+          "$`5 \\times 10^{-6}`$"
+        ],
+        [
+          "GLOP",
+          "`solution_feasibility_tolerance` (relative)",
+          "$`10^{-6}`$",
+          "$`5 \\times 10^{-7}`$",
+          "$`5 \\times 10^{-6}`$"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "HiGHS uses a different tolerance for an LP and a MIP: the same rows that the LP run refused at $`5 \\times 10^{-7}`$ were accepted once $`x`$ was declared integer. GLOP put the error on the other row, `cap`: the tolerance says how much error is allowed, not where it goes."
+    },
+    {
+      "type": "para",
+      "text": "A tolerance is a parameter, and MathOpt passes it in each solver's own parameter block. Its common `SolveParameters` has gap tolerances but no feasibility tolerance:"
+    },
+    {
+      "type": "example",
+      "id": "tolerance_edge-3",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "40-numerics/src/tolerance_edge.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "40-numerics/src/tolerance_edge.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "tight_highs = mathopt.SolveParameters(highs=highs_pb2.HighsOptionsProto(\n    double_options={\"primal_feasibility_tolerance\": 1e-9, \"mip_feasibility_tolerance\": 1e-9}))\ntight_scip = mathopt.SolveParameters(gscip=gscip_pb2.GScipParameters(real_params={\"numerics/feastol\": 1e-9}))\nloose_highs = mathopt.SolveParameters(highs=highs_pb2.HighsOptionsProto(\n    double_options={\"mip_feasibility_tolerance\": 1e-4}))\nglop_primal = mathopt.SolveParameters(glop=glop_pb2.GlopParameters(primal_feasibility_tolerance=1e-9))\nglop_solution = mathopt.SolveParameters(glop=glop_pb2.GlopParameters(solution_feasibility_tolerance=1e-7))"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "GLOP defaults: primal_feasibility_tolerance 1e-08, solution_feasibility_tolerance 1e-06\nwith the tolerance changed:\nHiGHS, MIP, 1e-9    INFEASIBLE                   INFEASIBLE                   INFEASIBLE\nSCIP, MIP, 1e-9     INFEASIBLE                   INFEASIBLE                   INFEASIBLE\nHiGHS, MIP, 1e-4    OPTIMAL floor off by 5e-08   OPTIMAL floor off by 5e-07   OPTIMAL floor off by 5e-06\nGLOP, primal 1e-9   OPTIMAL cap off by 5e-08     OPTIMAL cap off by 5e-07     INFEASIBLE\nGLOP, solution 1e-7 OPTIMAL cap off by 5e-08     INFEASIBLE                   INFEASIBLE"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "GLOP has two feasibility tolerances, and the program printed both defaults: `primal_feasibility_tolerance`, $`10^{-8}`$, which bounds the errors its simplex method allows while it runs, and `solution_feasibility_tolerance`, $`10^{-6}`$, which GLOP's parameters file describes as a relative tolerance for checking the solution GLOP is about to call OPTIMAL (the allowance for crossing a bound is the tolerance times the larger of 1 and the bound's size). The second one drew the line here: tightening the first to $`10^{-9}`$ changed nothing, while tightening the second to $`10^{-7}`$ made GLOP refuse the rows $`5 \\times 10^{-7}`$ apart."
+    },
+    {
+      "type": "para",
+      "text": "The threshold moved with the setting, so the table above was measuring the tolerances. Tightening them is tempting, but a tolerance cannot go below the rounding noise of the numbers in the rows, and Gurobi's numerical guidelines treat tighter tolerances as a way to diagnose trouble, at a cost in solve time, not as a fix. The fix is to make the model's numbers fit the tolerance, which is the rest of this lesson and the next."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Tolerance Is Measured in the Row's Units, So Its Worth in Money Depends on Them"
+    },
+    {
+      "type": "para",
+      "text": "$`10^{-6}`$ is a number, not an amount of money. In a row written in $k it is a thousandth of a dollar; in a row written in $B it is $1,000. `units.py` runs the analyst's check: the planners' plan (the must-do projects, then the highest-NPV projects that fit 2027's budget) is fixed through its variables' bounds, and the budget row is set a little below the plan's spend, so the plan overspends by a known amount. The model has one row:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_{i \\in P} u\\, c_{i,2027}\\, x_i \\;\\le\\; u\\,(S - o) \\qquad \\text{(budget\\_2027)}, \\qquad\nx_i = \\bar x_i \\quad \\forall i \\in P"
+    },
+    {
+      "type": "para",
+      "text": "Here $`c_{i,2027}`$ is project $`i`$'s 2027 spend in $k, $`\\bar x_i \\in \\{0, 1\\}`$ is the planners' plan, $`S = \\sum_i c_{i,2027}\\, \\bar x_i`$ is its spend, $`o`$ is the overrun in $k, and $`u`$ converts $k into the row's unit: 1 for $k, $`10^{-3}`$ for $M, $`10^{-6}`$ for $B. Every choice of $`u`$ is the same rule, and every one must refuse the plan."
+    },
+    {
+      "type": "example",
+      "id": "units-4",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "40-numerics/src/units.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "40-numerics/src/units.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "for p in small.projects:\n    x[p.project_id].lower_bound = x[p.project_id].upper_bound = 1.0 if p in plan else 0.0\nresult, _ = solve(model, solver)\nreturn \"allowed\" if result.has_primal_feasible_solution() else \"refused\""
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "plan: 6 projects spending $8,720k in 2027\nover by:               $0.50     $5.00     $50.00    $500.00   $5,000.00\n$k              HiGHS  refused   refused   refused   refused   refused\n$k              SCIP   allowed   allowed   refused   refused   refused\n$M              HiGHS  allowed   refused   refused   refused   refused\n$M              SCIP   allowed   allowed   refused   refused   refused\n$B              HiGHS  allowed   allowed   allowed   allowed   refused\n$B              SCIP   allowed   allowed   allowed   allowed   refused"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "HiGHS's rows read like the arithmetic: a tolerance of $`10^{-6}`$ is $0.001 in $k, $1 in $M and $1,000 in $B, and it refused every overrun above that amount and allowed every one below. In $B the $500 test plan passes, which is the analyst's surprise."
+    },
+    {
+      "type": "para",
+      "text": "SCIP does not compare rows the same way. Its documentation describes its feasibility checks as comparing the **relative** difference of the two sides with the tolerance. On this row, whose sides are about 8,720 in $k and 8.72 in $M, it allowed $5 and refused $50 in both units: that fits a tolerance of $`10^{-6}`$ of the row's size, $8.72. SCIP's source states the rule exactly: it divides the difference of the two sides by the largest of 1 and the two sides' absolute values, and accepts the row if that is at most `numerics/feastol`. So a row's allowance is the tolerance times the larger of 1 and the row's size, in the row's own units: $`10^{-6} \\times 8{,}720`$ in $k, which is $8.72, and $`10^{-6} \\times 8.72`$ in $M, which is the same $8.72. In $B the sides are below 1, and there it drew the line where HiGHS did, at $1,000. So the money a tolerance allows depends on the row's unit, and also on which solver reads the row."
+    },
+    {
+      "type": "para",
+      "text": "Gurobi's numerical guidelines give the general advice: tolerances are absolute, so choose units with them in mind; keep right-hand sides and bounds at about $`10^6`$ or less; and express dollars in millions, or pounds in tons, when the numbers get too large. There is a limit in the other direction too. A row at $`10^{10}`$ cannot be checked to $`10^{-6}`$ at all: the table of the first section shows that the gap between neighbouring floats there is $`1.9 \\times 10^{-6}`$, larger than the tolerance, so rounding one number is enough to break the row."
+    },
+    {
+      "type": "para",
+      "text": "For GridCap, $k is the unit that fits both sides: budgets of about 9,000, tolerances worth a tenth of a cent. The rest of the module writes money in $k unless it is showing what goes wrong without that."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The last section of this lesson, and the next two lessons, use one model: GridCap's five-year selection model of lesson 3.3.4 (without its alternative groups), with a **bridge loan** per year. A year may overspend its budget by borrowing up to a credit line, a tenth of the year's budget. Arranging a loan in a year costs a fee of $300k, and each $k borrowed costs 5% interest. \"Borrow only if a loan is arranged\" is a switched row with a big-M, as in lesson 6.2.1. The fee, the rate and the credit line are this module's own parameters; GridCap has none."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`P`$ the projects; $`Y = \\{2027, \\dots, 2031\\}`$ the years; $`M \\subseteq P`$ the must-do projects; $`C \\subseteq P`$ the child projects, with parent $`p(c)`$."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`v_i`$ the NPV of project $`i`$ at its earliest start ($k); $`c_{i,y}`$ its spend in year $`y`$ at its earliest start ($k); $`B_y`$ the budget of year $`y`$ ($k); $`L_y = B_y / 10`$ the credit line ($k); $`F = 300`$ the fee ($k); $`\\rho = 0.05`$ the interest per $k borrowed; $`M_y`$ the big-M of year $`y`$'s switch row ($k)."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_i \\in \\{0, 1\\}`$ for $`i \\in P`$: 1 if project $`i`$ is funded; $`\\ell_y \\ge 0`$ for $`y \\in Y`$: the amount borrowed in year $`y`$ ($k), continuous; $`h_y \\in \\{0, 1\\}`$ for $`y \\in Y`$: 1 if a loan is arranged in year $`y`$."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{i \\in P} v_i\\, x_i \\;-\\; \\sum_{y \\in Y} \\left( F\\, h_y + \\rho\\, \\ell_y \\right)"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{i \\in P} c_{i,y}\\, x_i &\\le B_y + \\ell_y && \\forall y \\in Y && \\text{(budget}_y) \\\\\n\\ell_y &\\le L_y && \\forall y \\in Y && \\text{(credit}_y) \\\\\n\\ell_y &\\le M_y\\, h_y && \\forall y \\in Y && \\text{(switch}_y) \\\\\nx_i &= 1 && \\forall i \\in M && \\text{(must}_i) \\\\\nx_c &\\le x_{p(c)} && \\forall c \\in C && \\text{(after}_c)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The credit line $`L_y`$ is the smallest valid $`M_y`$: no allowed plan borrows more, so with $`M_y = L_y`$ the switch row removes no allowed plan. `loan_model.py` builds the model with $`M_y = L_y`$ (the variant called `TIGHT`) or with $`M_y = 10^9`$ (`HUGE_M`). Lesson 10.1.2 adds a third variant, `MIXED`, that writes the same model in other units."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Binary Within the Integrality Tolerance Counts as Whole, and Rounding It Changes the Plan"
+    },
+    {
+      "type": "para",
+      "text": "A MIP solver cannot demand that an integer variable be exactly a whole number either. It accepts a value within its **integrality tolerance** of a whole number as that number: lesson 6.2.2 met it. In HiGHS the option is `mip_feasibility_tolerance`, which its option list calls the \"MIP integrality tolerance\", default $`10^{-6}`$; it is also the tolerance the MIP runs above applied to rows."
+    },
+    {
+      "type": "para",
+      "text": "Lesson 6.2.2 showed that a huge $`M`$ turns that tolerance into room in a switched row. This section looks at the other half of the story: the plan you get, and what reading it as a planner does to it. `rounding.py` solves the loan model twice with HiGHS: with the tight $`M`$, and with $`M = 10^9`$ and presolve off. **Presolve** is the pass a MIP solver makes over the model before the search, simplifying what it can prove (lesson 3.3.2). With presolve on, the default, HiGHS repaired this model; lesson 6.2.2 explains why that cannot be relied on, and lesson 10.1.3 shows the runs side by side."
+    },
+    {
+      "type": "example",
+      "id": "rounding-5",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "40-numerics/src/rounding.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "40-numerics/src/rounding.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "best, _ = solve(build(small, TIGHT).model, params=EXACT)\nlm = build(small, HUGE_M)\nresult, log = solve(lm.model, params=NO_PRESOLVE)\nvalues = result.variable_values()"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "true optimum (tight M):         NPV less loan costs $23,161.5k\nM = 1e9, presolve off: OPTIMAL, NPV less loan costs $23,565.9k\n  2027: take = 8.9e-07  loan = $889.0k  M x take = 889.0  spend $8,630k, budget $8,890k\n  2028: take = 8.1e-07  loan = $812.0k  M x take = 812.0  spend $8,350k, budget $8,120k\n  2030: take = 8.6e-07  loan = $861.0k  M x take = 861.0  spend $9,360k, budget $8,610k\nHiGHS's report: 0 (bound viol.) | 8.89e-07 (int. viol.) | 0 (row viol.)"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "HiGHS reports OPTIMAL at $23,565.9k, $404.4k above the true optimum. In three years it borrowed the whole credit line with $`h_y`$ below $`10^{-6}`$: a switch that counts as \"no loan arranged\", so no $300k fee, yet $`10^9 \\times 8.9 \\times 10^{-7} = 889`$ is exactly enough room for the 2027 loan. Each row holds to the solver's tolerance: the report's last line says so, with no row violation and an integrality violation of $`8.89 \\times 10^{-7}`$, below the $`10^{-6}`$ it allows. The 2027 line shows how far this is from a real optimum: 2027 spends $8,630k against a budget of $8,890k, so its loan is not needed at all, and a solver working exactly would never pay 5% interest on $889k it does not use."
+    },
+    {
+      "type": "para",
+      "text": "A planner does not read $`8.9 \\times 10^{-7}`$ as a loan. They round every binary, and a loan that was not arranged is not there:"
+    },
+    {
+      "type": "example",
+      "id": "rounding-6",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "40-numerics/src/rounding.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "40-numerics/src/rounding.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "rounded = {v: round(values[v]) for v in list(lm.x.values()) + list(lm.take.values())}\nprint(\"rounded plan:\")\nfor y in small.years:\n    spend = mathopt.evaluate_expression(lm.spend[y], rounded)\n    loan = values[lm.loan[y]] if rounded[lm.take[y]] else 0.0\n    if spend > small.budget[y] + loan:"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "rounded plan:\n  2028: spends $8,350k against a budget of $8,120k: over by $230k\n  2030: spends $9,360k against a budget of $8,610k: over by $750k\nkeeping the loans and paying their fees instead: $22,665.9k"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Rounding turned a plan that is feasible within $`10^{-6}`$ into one that overspends two budgets by $980k in all. The only honest repair, arranging the loans and paying their fees, is worth $22,665.9k: less than the true optimum, $23,161.5k. Either way the $23,565.9k the solver reported was never available."
+    },
+    {
+      "type": "para",
+      "text": "This is why $`10^{-6}`$ matters. An integrality tolerance is harmless where a binary multiplies a number of ordinary size: with $`M_y = L_y = 889`$, a switch of $`10^{-6}`$ buys $`0.000889`$ $k, less than one dollar of borrowing. Multiplied by $`10^9`$ it buys the whole credit line. The room a tolerance gives is the tolerance times the coefficient it meets, so keep the coefficients on binaries no larger than the data require, and check the rounded plan against the rules after every solve (lesson 6.2.2, *Check the Plan Against the Rule, Not Against the Solver's Status*)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**A float holds about 16 significant digits, so most decimals are rounded.** 0.1 + 0.2 is not 0.3, the gap between neighbouring floats grows with the number, and the order of a sum changes its last digits. Keep money in whole units, or sum it with `math.fsum`.",
+        "**A solver accepts a row broken by less than its feasibility tolerance.** HiGHS's LP tolerance is $`10^{-7}`$; its MIP tolerance and SCIP's are $`10^{-6}`$; each set through the solver's own parameters in MathOpt.",
+        "**A tolerance is measured in the row's units, so its worth in money depends on them.** In $B, $`10^{-6}`$ is $1,000 and a $500 overspend passes; in $k it is a tenth of a cent. SCIP compares relative differences, so its allowance also grows with the row's size.",
+        "**A binary within the integrality tolerance counts as whole, and rounding it changes the plan.** With $`M = 10^9`$, a switch of $`8.9 \\times 10^{-7}`$ arranged a free $889k loan; rounding it produced a plan $980k over budget."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Solver",
+        "Feasibility tolerance (rows)",
+        "Integrality tolerance",
+        "How to set it in MathOpt"
+      ],
+      "rows": [
+        [
+          "HiGHS, LP",
+          "`primal_feasibility_tolerance`, $`10^{-7}`$",
+          "n/a",
+          "`highs=HighsOptionsProto(double_options={...})`"
+        ],
+        [
+          "HiGHS, MIP",
+          "`mip_feasibility_tolerance`, $`10^{-6}`$",
+          "`mip_feasibility_tolerance`, $`10^{-6}`$",
+          "`highs=HighsOptionsProto(double_options={...})`"
+        ],
+        [
+          "SCIP",
+          "`numerics/feastol`, $`10^{-6}`$, relative",
+          "`numerics/feastol`",
+          "`gscip=GScipParameters(real_params={...})`"
+        ],
+        [
+          "GLOP",
+          "`solution_feasibility_tolerance`, $`10^{-6}`$, relative, checked on the finished solution (`primal_feasibility_tolerance`, $`10^{-8}`$, inside the simplex)",
+          "n/a",
+          "`glop=GlopParameters(...)`"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Fact",
+        "Value"
+      ],
+      "rows": [
+        [
+          "machine epsilon, `sys.float_info.epsilon`",
+          "$`2^{-52} \\approx 2.2 \\times 10^{-16}`$"
+        ],
+        [
+          "gap to the next float at $`v`$, `math.ulp(v)`",
+          "about $`2.2 \\times 10^{-16}\\, \\lvert v \\rvert`$"
+        ],
+        [
+          "largest integer below which every integer is a float",
+          "$`2^{53} \\approx 9 \\times 10^{15}`$"
+        ],
+        [
+          "room a tolerance $`\\varepsilon`$ gives a binary with coefficient $`M`$",
+          "$`\\varepsilon M`$"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Term",
+        "Meaning"
+      ],
+      "rows": [
+        [
+          "feasibility tolerance",
+          "how far a row may be broken and still count as satisfied"
+        ],
+        [
+          "integrality tolerance",
+          "how far from a whole number an integer variable may be and still count as whole"
+        ],
+        [
+          "ulp",
+          "unit in the last place: the gap from a float to the next one"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [Advanced LP Solving (OR-Tools)](https://developers.google.com/optimization/lp/lp_advanced) (what \"solved\" means for a floating-point solver, absolute and relative tolerances, GLOP's tolerance parameters, and why the scale of the data must suit the tolerances); [MathOpt `SolveParameters` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/parameters.py) (the common gap tolerances, and the solver-specific `highs` and `gscip` blocks that carry everything else, which override a common setting); [Goldberg, What Every Computer Scientist Should Know About Floating-Point Arithmetic](https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html) (sections *Relative Error and Ulps* and *Cancellation*: how rounding error is measured, why 0.1 has no exact binary form, and how small terms vanish next to large ones); [HiGHS options](https://ergo-code.github.io/HiGHS/dev/options/definitions/) (`primal_feasibility_tolerance`, `mip_feasibility_tolerance` and their defaults); [SCIP parameters](https://www.scipopt.org/doc/html/PARAMETERS.php) (`numerics/feastol` and `numerics/epsilon`); [SCIP numerics functions](https://scipopt.org/doc-8.0.4/html/scip__numerics_8h_source.php) (`SCIPisFeasLE` and `SCIPisFeasEQ` compare relative differences with the feasibility tolerance); SCIP source, [set.c](https://github.com/scipopt/scip/blob/master/src/scip/set.c) (`SCIPsetIsFeasLE` calls `SCIPrelDiff`) and [misc.c](https://github.com/scipopt/scip/blob/master/src/scip/misc.c) (`SCIPrelDiff` divides by the largest of 1 and the two values' sizes); [GLOP parameters (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/glop/parameters.proto) (`primal_feasibility_tolerance` and `solution_feasibility_tolerance`, their defaults, and the relative rule of the second); [Gurobi: Tolerances and User-Scaling](https://docs.gurobi.com/projects/optimizer/en/current/concepts/numericguide/tolerances_scaling.html) (tolerances are absolute, the recommended sizes of right-hand sides and objectives, and the big-M example that this lesson's loans repeat)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Run `units.py` with the overrun set to $0.002k ($2). Predict each of the six verdicts before running, from the tolerances in the reference table.",
+        "The 2027 loan in `rounding.py` was not needed. Without solving again, compute the objective of the same plan with that loan set to 0, and say whether the solver's result was optimal for its own model.",
+        "A colleague proposes `mip_feasibility_tolerance = 1e-9` to stop the free loans. With $`M = 10^{12}`$, how much could a loan still borrow for free?"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Write Money as Integers in a Unit That Suits the Tolerance"
+    },
+    {
+      "type": "para",
+      "text": "GridCap stores money as whole $k for two reasons this lesson measured. Integers add up exactly, so a plan's cost never depends on the order of a sum. And $k puts GridCap's budgets near $`10^4`$, where the solvers' $`10^{-6}`$ is worth a tenth of a cent and floats have twelve digits to spare. A unit is a modeling decision, like a variable's domain; make it once, in the data layer, and keep conversions to dollars or billions in the report."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**floats.py.** Machine epsilon, the gap to the next float at GridCap sizes, and one sum added in two orders, with `math.fsum` and with integer cents (*A Float Holds About 16 Significant Digits*). *Try:* Escalate by 1.031 three times instead of twice. Predict whether the forward and backward sums still differ."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [floats.py](src/floats.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**tolerance_edge.py.** The squeezed model with its two rows $`d`$ apart, solved by HiGHS, SCIP and GLOP, then with the tolerances changed (*A Solver Accepts a Row Broken by Less Than Its Feasibility Tolerance*). *Try:* Add $`d = 2 \\times 10^{-7}`$ to `GAPS`. Predict each solver's verdict."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [tolerance_edge.py](src/tolerance_edge.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**units.py.** The planners' plan fixed in a one-row model, its budget written in $k, $M and $B, for overruns from $0.50 to $5,000 (*A Tolerance Is Measured in the Row's Units*). *Try:* Add a row unit of cents (`per_k = 1e5`). Predict which overruns SCIP and HiGHS allow."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [units.py](src/units.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**rounding.py.** The loan model with $`M = 10^9`$ and presolve off: the free loans, HiGHS's violation report, and the rounded plan (*A Binary Within the Integrality Tolerance Counts as Whole*). *Try:* Change `HUGE_M` to a model with $`M = 10^7`$ (`Units(objective=1, rows=1, big_m=1e7, name=\"1e7\")`). Predict whether the loans are still free."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [rounding.py](src/rounding.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**loan_model.py.** The loan model in three units and M variants, the quiet solve that keeps the log, and the helpers that measure coefficient ranges and row violations."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [loan_model.py](src/loan_model.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 11,
+    "paras": 41,
+    "code": 6,
+    "tables": 4,
+    "lists": 8,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 6
+  },
+  "content_sha256": "17c4af6b8bbccb1109d17db091b92f832d4a01b1a2ad3db70d988cd99da0df41"
+}

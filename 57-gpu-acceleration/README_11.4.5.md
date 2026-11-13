@@ -1,0 +1,267 @@
+# 11.4.5 MIP on a GPU: What cuOpt Accelerates and Why Branch-and-Bound Stays on the CPU
+
+The LPs of lesson 11.4.3 went faster on a GPU when they were large. GridCap's real product is not an
+LP, though: it is a capital plan, a MILP with yes-or-no decisions, and NVIDIA's cuOpt solves MILPs
+too. This lesson reads cuOpt's own log to see which parts of a MILP solve it runs on the GPU and
+which it leaves on the CPU, solves GridCap medium's capital-planning MILP with HiGHS on one thread
+and with cuOpt, and checks cuOpt's plans instead of trusting them, since lesson 11.4.4 found they
+do not repeat. GridCap is a fictional utility; its numbers are teaching data.
+
+## The Model
+
+GridCap medium's start-year model, the same rows as lesson 11.4.1's LP with the shares made
+yes-or-no, built by `lps.gridcap_timing("medium", integer=True)`:
+
+**Sets.** $`P`$ the 400 projects; $`Y`$ the years 2027 to 2036; $`T_i \subseteq Y`$ the years
+project $`i`$ may start in; $`M \subseteq P`$ the must-do projects; $`\mathcal{G}`$ the
+alternative groups.
+
+**Parameters.** $`\text{npv}_{i,t}`$, the NPV of project $`i`$ started in year $`t`$ ($k);
+$`s_{i,t,y}`$, what project $`i`$ started in $`t`$ spends in year $`y`$ ($k); $`B_y`$, the budget
+of year $`y`$ ($k).
+
+**Variables.** $`x_{i,t} \in \{0, 1\}`$ for every $`i \in P`$, $`t \in T_i`$: project $`i`$
+starts in year $`t`$ (887 variables).
+
+**Objective.**
+
+```math
+\max \; \sum_{i \in P} \sum_{t \in T_i} \text{npv}_{i,t}\, x_{i,t}
+```
+
+**Constraints.**
+
+```math
+\begin{aligned}
+\sum_{t \in T_i} x_{i,t} &\le 1 && \forall i \in P \setminus M && \text{(once}_i) \\
+\sum_{t \in T_i} x_{i,t} &= 1 && \forall i \in M && \text{(must}_i) \\
+\sum_{i \in g} \sum_{t \in T_i} x_{i,t} &\le 1 && \forall g \in \mathcal{G} && \text{(alt}_g) \\
+\sum_{i \in P} \sum_{t \in T_i} s_{i,t,y}\, x_{i,t} &\le B_y && \forall y \in Y && \text{(budget}_y)
+\end{aligned}
+```
+
+428 rows and 2,387 nonzeros. Both solvers stop at a **relative gap** of $`10^{-3}`$: the plan is
+within 0.1% of the best bound the solver has proved (lesson 3.4.1). The target is loose so that the
+lesson's program runs in seconds.
+
+## Branch and Bound Is a Tree of Small, Dependent Steps
+
+A MIP solver's work, from the lessons of section 3, has several parts: **presolve** shrinks the
+model (lesson 3.3.2); the **root LP** solves the relaxation; **cuts** tighten it (lesson 3.3.1);
+**primal heuristics** look for plans (lesson 3.3.3); and **branch and bound** splits the problem
+into a tree of nodes, solving an LP at each, until the bound and the best plan meet (lessons 3.2.1
+to 3.2.3).
+
+A node's LP differs from its parent's by one variable's bound, and the solver re-solves it from the
+parent's basis with dual simplex, a few pivots each (lesson 2.4.3 measured that kind of warm
+re-solve). Each node's LP is small; each pivot depends on the one before; which node comes next
+depends on what the last ones found. That is the opposite of the work lesson 11.4.1 put on a GPU:
+not one large matrix-vector product with thousands of independent rows, but many small sequential
+steps that each wait for the last. Thousands of GPU cores have nothing to do on one pivot.
+
+So the parts of a MIP solve that suit a GPU are the ones made of large, regular, independent work:
+a first-order LP method on a big relaxation, and a heuristic that evaluates many candidate moves at
+once.
+
+## cuOpt's Log Says Which Parts Run on the GPU
+
+`milp_gpu.py` keeps four kinds of lines from cuOpt's log (the worker drops every line that names the
+card, the CPU model or the memory). On the build machine, one run:
+
+<!-- unverified -->
+```text
+cuOpt's log, the lines that say where the work runs:
+  Solving a problem with 428 constraints, 887 variables (887 integers), and 2387 nonzeros
+  Papilo thread budget: 4 presolve + 15 CPUFJ + 1 GPUFJ + 0 structural within 20 threads
+  Solving LP root relaxation in concurrent mode
+  Root relaxation solution found in 153 iterations and 0.00s by Dual Simplex
+```
+
+Read with the full log of the toolchain's cuOpt probe, which shows the rest:
+
+- **Presolve** (Papilo, then cuOpt's own) runs on CPU threads: 4 of them here.
+- **The feasibility-jump heuristic**, a primal heuristic (lesson 3.3.3) that searches for a
+  feasible plan by changing variables' values to shrink how much the rows are broken, runs as 15
+  CPU workers (`CPUFJ`) and **1 GPU worker** (`GPUFJ`). This is the GPU's main MILP job in the log:
+  a search that tries many changes at once is the kind of large, regular work a GPU suits.
+- **The root LP** is solved concurrently: PDLP on the GPU races dual simplex and barrier (lesson
+  11.4.4). Here dual simplex won, in 153 iterations: on an LP this size, the CPU method finished
+  first, as lesson 11.4.3 would predict.
+- **Cuts and branch and bound** run on the CPU, as do the other heuristics. cuOpt's documentation
+  says the same in its own terms: with the GPU and CPU both running, the CPU works on the dual
+  bound (the tree), and its `heuristics_only` setting keeps only the GPU's primal search.
+
+So "MIP on a GPU" means: the GPU helps **find plans** and can solve a large root LP; **proving** a
+plan is good still happens in a branch-and-bound tree on the CPU.
+
+## HiGHS on One Thread Is the Plan of Record
+
+HiGHS has no GPU MIP solver; its branch and bound runs on the CPU, and with one thread it repeats
+bit for bit (lesson 10.2.2). `milp_gpu.py` solves the model twice and checks the result:
+
+```text
+GridCap medium, start-year model: 887 binaries x[i,t], 428 rows; relative gap target 1e-03
+HiGHS, 1 thread: Optimal, objective 226,886, bound 227,074, 1 nodes; second run same bits: True
+  check: violation 8e-15, integrality 8e-15, 8.28e-04 below the best bound: accepted
+```
+
+HiGHS stopped at the root node (`1 nodes`): its presolve, cuts and heuristics found a plan worth
+226,886 and proved a bound of 227,074, within 0.083% of each other, before branching. The second
+run gave the same bits. That is what a plan of record needs: an auditor who reruns it gets the
+same plan, and lesson 11.4.4's manifest can hold it to every bit.
+
+### A MILP in a `HighsLp`: Integer Columns and the Sense
+
+The first practice below builds its model as one `highspy.HighsLp`, the object lesson 11.4.3
+introduced with `highs_lp.py`. The fields are the same as for an LP (`num_col_`, `num_row_`,
+`col_cost_`, `col_lower_` and `col_upper_`, `row_lower_` and `row_upper_` with `highspy.kHighsInf`
+for a missing side, and `a_matrix_` with `format_`, `start_`, `index_` and `value_`). For a row-wise
+matrix, `format_` is `highspy.MatrixFormat.kRowwise` and `start_[r]` is where row $`r`$'s entries
+begin in `index_` (their column numbers) and `value_`. Two more lines make it a maximising MILP:
+
+```python
+    if integer:                                         # leave integrality_ unset for an LP
+        lp.integrality_ = [highspy.HighsVarType.kInteger, highspy.HighsVarType.kContinuous,
+                           highspy.HighsVarType.kContinuous]
+    lp.sense_ = highspy.ObjSense.kMaximize              # kMinimize for a minimisation
+```
+
+A binary variable is a `kInteger` column with bounds 0 and 1. On lesson 11.4.3's toy, the integer
+column gave an objective of 12 and the same model without `integrality_` gave 12.5.
+
+<!-- practice 1 -->
+
+## A cuOpt Plan Is Checked, Not Trusted
+
+cuOpt's plans do not repeat (in lesson 11.4.4, two runs with the same settings returned different
+plans), and its status may not say what a reader expects, so a program never takes its plan on its
+word. `check` tests three things against the model's own lists,
+not against anything cuOpt reported about itself:
+
+```python
+def check(m: dict, run: dict, best_bound: float, gap: float = GAP) -> tuple[bool, str]:
+    """Rows and bounds kept, every value integral, and the objective within `gap` of the best proven bound
+    (a maximization: no plan is worth more than any solver's bound)."""
+    x = run["x"]
+    broken = violation(m, x)
+    integral = max(abs(v - round(v)) for v in x)
+    shortfall = (best_bound - run["objective"]) / abs(best_bound)
+    ok = broken <= 1e-6 and integral <= 1e-5 and shortfall <= gap
+```
+
+- **Feasible:** every row and bound kept, to $`10^{-6}`$.
+- **Integral:** every value within $`10^{-5}`$ of a whole number.
+- **Good enough:** the objective within the gap of the **best bound any solver proved**. For a
+  maximisation each solver's bound is an upper limit on every plan, so the smallest of them is the
+  tightest, and a plan is measured against that, not against the bound of the solver that found it.
+
+On the build machine, cuOpt with the same gap target and a 60-second limit, twice:
+
+<!-- unverified -->
+```text
+HiGHS's two runs took 4.2 s and 4.2 s on one thread
+best bound proved by any solver: 227,045
+cuOpt run 1: FeasibleFound, objective 226,856, its bound 227,046, gap 8.4e-04, 76,961 nodes, 8.5 s
+  check: violation 0e+00, integrality 0e+00, 8.32e-04 below the best bound: accepted
+  starts that differ from HiGHS's plan: 34
+cuOpt run 2: FeasibleFound, objective 226,819, its bound 227,045, gap 1.0e-03, 67,430 nodes, 7.2 s
+  check: violation 0e+00, integrality 0e+00, 9.95e-04 below the best bound: accepted
+  starts that differ from HiGHS's plan: 29
+cuOpt's two plans the same: False, same bits: False
+```
+
+What the run shows:
+
+- **Both plans pass the check.** They keep every row, are integral, and are within 0.1% of the best
+  bound, 227,045, which cuOpt's second run proved (tighter than HiGHS's 227,074).
+- **The two runs found different plans,** worth 226,856 and 226,819, after different trees (76,961
+  and 67,430 nodes) and times. Neither is the plan of record; each differs from HiGHS's in 29 to 34
+  start decisions, and all three are within the gap. This is what "optimal within 0.1%" allows:
+  many plans, none promised. Earlier runs of the same program found plans worth 226,828, 226,830
+  and 226,923.
+- **The status is `FeasibleFound`, not `Optimal`,** although both runs stopped at the gap target
+  well inside the time limit. Code that accepts only `Optimal` would discard both plans; code that
+  accepts any `FeasibleFound` would also accept a plan stopped far from the gap. The check above
+  decides from the numbers, not the label.
+- **The GPU did not make it faster here.** HiGHS reached the same gap at the root node in 4.2
+  seconds; cuOpt took 7.2 to 8.5 seconds and tens of thousands of nodes. On the toolchain's harder 300-binary
+  MILP, cuOpt reached its gap in 14.6 and 30.0 seconds against HiGHS's 44. Measure on
+  your own models (lesson 5.4.2).
+
+The determinism setting `mip_determinism_mode` did not make cuOpt's plans repeat either (lesson
+11.4.4): two 20-second runs on this model explored the same 127 nodes and returned plans worth
+204,983 and 204,849, with a gap of 11%, both stopped by the clock.
+
+So a cuOpt MILP plan has a place: a **starting plan** handed to HiGHS (lesson 11.2.1), or a quick
+plan for a what-if, always checked as above. The plan of record comes from the CPU solver that
+repeats.
+
+<!-- practice 2 -->
+
+## Summary
+
+- **Branch and bound is a tree of small, dependent steps.** Node LPs are warm re-solves of a few
+  pivots each; they do not spread over thousands of cores.
+- **cuOpt's log says which parts run on the GPU.** One GPU feasibility-jump worker and PDLP in the
+  concurrent root LP; presolve, cuts, branch and bound and the other heuristics on the CPU.
+- **HiGHS on one thread is the plan of record.** It reached the 0.1% gap at the root and repeated
+  bit for bit.
+- **A cuOpt plan is checked, not trusted.** Feasible, integral, within the gap of the best bound
+  any solver proved; two runs gave two different plans of the same worth, reported as
+  `FeasibleFound`.
+
+## Reference
+
+| MIP part | Where cuOpt `26.10.0` runs it (its log) |
+| --- | --- |
+| presolve (Papilo, cuOpt's own) | CPU |
+| feasibility-jump heuristic | CPU workers and 1 GPU worker |
+| root LP relaxation | concurrent: PDLP on the GPU, dual simplex and barrier |
+| cuts, branch and bound, other heuristics | CPU |
+
+| Check of a plan from any solver | Test |
+| --- | --- |
+| feasible | `violation(m, x) <= 1e-6` |
+| integral | every $`\lvert x_j - \text{round}(x_j) \rvert \le 10^{-5}`$ |
+| good enough | $`(\min_s \text{bound}_s - z) / \lvert \min_s \text{bound}_s \rvert \le \text{gap}`$ (maximisation) |
+
+**Further reading:** NVIDIA cuOpt,
+[LP and MILP settings](https://docs.nvidia.com/cuopt/user-guide/latest/lp-milp-settings.html)
+(the MILP gap defaults, `heuristics_only`, and the split in which the GPU improves the primal side
+while the CPU works on the dual bound); HiGHS,
+[GPU acceleration](https://ergo-code.github.io/HiGHS/dev/guide/gpu/) (its GPU support is for LP,
+through PDLP); the toolchain's cuOpt probe and its full log (the log lines that
+place each part, the two default runs and the determinism mode).
+
+## Challenges
+
+1. Hand cuOpt's plan to HiGHS as a start (lesson 11.2.1's `solution_hints`, or highspy's
+   `setSolution`) and predict whether HiGHS's work to the 0.1% gap changes.
+2. Set cuOpt's `mip_heuristics_only` to true and predict what happens to its bound and its gap.
+3. Your manager reads "FeasibleFound" in the nightly report and asks whether the plan is good.
+   Answer using the three checks.
+
+## Design Note: The Check Uses Every Bound, From Every Solver
+
+A bound proved by any correct solver limits every plan, whichever solver found it. Taking the
+smallest bound across solvers makes the check stricter than any one solver's own gap, and it costs
+nothing: the bounds are already in the results. It also means a plan from a solver that reports a
+loose bound, or none, is still judged fairly.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson
+shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy
+of the code, so the course's own files never change. Without a GPU, only the HiGHS part runs.
+
+**milp_gpu.py.** GridCap medium's capital-planning MILP by HiGHS on one thread, twice, checked;
+on a GPU, by cuOpt twice and in its determinism mode twice, each checked against the best bound,
+with the log lines that place the work (*cuOpt's Log*, *HiGHS on One Thread*, *A cuOpt Plan Is
+Checked*). *Try:* Change `GAP` to `5e-4` and predict HiGHS's node count.
+
+**highs_lp.py.** Lesson 11.4.3's three-variable toy in a `HighsLp`, with and without its integer
+column (*A MILP in a `HighsLp`*). *Try:* Make $`x_2`$ integer too and predict the plan.
+
+- Program: [milp_gpu.py](src/milp_gpu.py)
+- Program: [highs_lp.py](src/highs_lp.py)
+- Library: [lps.py](src/lps.py)

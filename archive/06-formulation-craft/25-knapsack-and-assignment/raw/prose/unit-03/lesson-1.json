@@ -1,0 +1,514 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "25-knapsack-and-assignment"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Cover inequalities that tighten budget rows",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "6.3.3 Cover Inequalities That Tighten Budget Rows"
+    },
+    {
+      "type": "para",
+      "text": "Lesson 6.3.1 left GridCap small's six-row knapsack with an LP bound of $21,149.21k against a best whole plan of $20,183k. The gap, $966k, is the price of letting projects be funded in part: the LP funds 34% of P024 and 34% of P030 because each budget row only measures money, and money can be split. Branch-and-bound closes that gap by splitting the search (lesson 3.2.2); this lesson closes most of it before any branching, by adding rows that every whole plan already obeys but the fractional LP points do not."
+    },
+    {
+      "type": "para",
+      "text": "The rows come from a simple observation about one budget row: some sets of projects cannot all be funded, because together they cost more than the budget. Saying so as a row, \"at most all but one of these\", is a **cover inequality**. Lesson 3.3.1 introduces cutting planes in general; this lesson works with covers on GridCap's budget rows, from the definition to an automatic loop that closes 90% of the gap."
+    },
+    {
+      "type": "para",
+      "text": "GridCap is a fictional utility's portfolio, generated for this course. None of its numbers describe a real company."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Cover Is a Set of Items That Cannot All Fit"
+    },
+    {
+      "type": "para",
+      "text": "Take one knapsack row with whole-number weights, $`\\sum_{i \\in I} a_i\\, x_i \\le b`$, with every $`x_i \\in \\{0, 1\\}`$ and every $`a_i \\ge 0`$. A set $`C \\subseteq I`$ is a **cover** of the row when its weights add up to more than the capacity:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_{i \\in C} a_i > b"
+    },
+    {
+      "type": "para",
+      "text": "Then no whole plan takes every item of $`C`$: that plan would break the row. So every whole plan takes at most $`|C| - 1`$ of them ($`|C|`$ is the number of items in $`C`$):"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_{i \\in C} x_i \\le |C| - 1 \\qquad \\text{(cover}_C)"
+    },
+    {
+      "type": "para",
+      "text": "This row is a **valid inequality**: every whole plan the model allows also satisfies it, so adding it to the model removes no whole plan and cannot change the MILP's optimum. It is not *implied* by the budget row for fractional points, and that is the whole point, as the next rule shows."
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def is_cover(row: Row, items: list[str]) -> bool:\n    \"\"\"The items cannot all be funded: together they use more than the row allows.\"\"\"\n    return sum(row.weight[i] for i in items) > row.capacity"
+    },
+    {
+      "type": "para",
+      "text": "GridCap tiny is small enough to list them all. Its must-do project is paid for first, as in lesson 3.2.4, which leaves seven projects and $4,660k:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "budget row: 2150 x_P001 + 2470 x_P003 + 3000 x_P004 + 250 x_P005 + 1970 x_P006 + 290 x_P007 + 580 x_P008 <= 4660\n82 covers, 11 of them minimal:\n  {P001, P004} weighs 5,150: at most 1 of them\n  {P003, P004} weighs 5,470: at most 1 of them\n  {P004, P006} weighs 4,970: at most 1 of them\n  {P001, P003, P005} weighs 4,870: at most 2 of them\n  {P001, P003, P006} weighs 6,590: at most 2 of them\n  {P001, P003, P007} weighs 4,910: at most 2 of them\n  {P001, P003, P008} weighs 5,200: at most 2 of them\n  {P001, P006, P008} weighs 4,700: at most 2 of them\n  {P003, P005, P006} weighs 4,690: at most 2 of them\n  {P003, P006, P007} weighs 4,730: at most 2 of them\n  {P003, P006, P008} weighs 5,020: at most 2 of them"
+    },
+    {
+      "type": "para",
+      "text": "Of the $`2^7 = 128`$ sets of projects, 82 are covers. A cover is **minimal** when removing any one item leaves a set that fits; only 11 are. Every other cover contains a minimal one, and its row is weaker, as the third rule shows, so the listing keeps the minimal ones."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Cover Row Cuts Off LP Points the Budget Row Allows"
+    },
+    {
+      "type": "para",
+      "text": "The LP relaxation of tiny's knapsack is the fill of lesson 3.2.4: P007, P004 and 64% of P001. Check the first cover row at that point: $`x_{P001} + x_{P004} = 0.637 + 1 = 1.637`$, more than 1. The budget row allows this point and the cover row does not. A valid inequality that some LP point breaks is a **cut** (or **cutting plane**): it cuts that point off the LP's feasible region and leaves every whole plan in it."
+    },
+    {
+      "type": "para",
+      "text": "The program solves the LP, finds the minimal cover whose row the LP point breaks by the most, adds that row, and solves again, until no minimal cover row is broken:"
+    },
+    {
+      "type": "example",
+      "id": "covers_tiny-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "25-knapsack-and-assignment/src/covers_tiny.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "25-knapsack-and-assignment/src/covers_tiny.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "    model.add_linear_constraint(sum(x[i] for i in c) <= len(c) - 1, name=f\"cover_{added}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "LP bound 3,268.17: P001 0.637, P004 1.000, P007 1.000\n  cut: x_P001 + x_P004 <= 1  (LP point gives 1.637)\nLP bound 3,252.20: P004 1.000, P006 0.695, P007 1.000\n  cut: x_P004 + x_P006 <= 1  (LP point gives 1.695)\nLP bound 3,021.00: P001 1.000, P005 1.000, P006 1.000, P007 1.000\nbest whole plan: 3,021"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Two cuts, and the LP's answer is a whole plan worth 3,021, the optimum lesson 3.2.4's search proved with 9 nodes. No branching was needed. Read the two cuts as rules a planner would recognise: \"P004 (a $3,000k project) cannot share the budget with P001, nor with P006.\" The budget row says the same about whole projects, but it lets the LP take all of P004 and a bit of P001; the cover rows do not."
+    },
+    {
+      "type": "para",
+      "text": "Why can't the budget row say it by itself? A row is a straight cut through the space of plans. The budget row is placed so that it allows every plan whose *cost* fits, including fractional ones. The cover rows are placed using the extra fact that plans are whole. The tightest possible formulation, the **convex hull** of the whole plans (the smallest region with straight sides that contains them all), would give the optimum straight from the LP; covers are one family of rows that carve the LP region toward it. Lesson 6.7.1, later in this section, measures formulations by exactly this distance."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Shrink a Cover to Minimal, Then Extend It With Heavier Items"
+    },
+    {
+      "type": "para",
+      "text": "Two ways to make a cover row stronger, each a few lines of code."
+    },
+    {
+      "type": "para",
+      "text": "**Minimal first.** If $`C`$ is a cover and some $`j \\in C`$ can be dropped with the rest still a cover, drop it. The row for $`C \\setminus \\{j\\}`$ has one item fewer on the left and a right side lower by 1:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_{i \\in C \\setminus \\{j\\}} x_i \\le |C| - 2"
+    },
+    {
+      "type": "para",
+      "text": "Add $`x_j \\le 1`$ to it and you get the row for $`C`$, so the smaller cover's row implies the larger one's, never the other way round. At an LP point it is broken by at least as much: the left side falls by $`x_j^*`$, at most 1, and the right side falls by exactly 1. The code drops items with the smallest LP value first, since they lower the left side the least:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def minimal(row: Row, cover: list[str], xstar: dict[str, float]) -> list[str]:\n    \"\"\"Drop items, lowest LP value first, while what is left is still a cover.\"\"\"\n    kept = list(cover)\n    for i in sorted(cover, key=lambda i: xstar[i]):\n        if is_cover(row, [j for j in kept if j != i]):\n            kept.remove(i)\n    return kept"
+    },
+    {
+      "type": "para",
+      "text": "**Then extend.** Let $`a_{\\max}`$ be the largest weight in a cover $`C`$. Any item $`j`$ outside $`C`$ with $`a_j \\ge a_{\\max}`$ can join the left side with the right side unchanged:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_{i \\in E(C)} x_i \\le |C| - 1, \\qquad E(C) = C \\cup \\{j \\notin C : a_j \\ge a_{\\max}\\}"
+    },
+    {
+      "type": "para",
+      "text": "$`E(C)`$ is the **extended cover**. Why is the row still valid? Take any $`|C|`$ items from $`E(C)`$. Swap each one that is not in $`C`$ for a different item of $`C`$ that is missing: the swap can only lower the weight, because the item swapped out weighs at least $`a_{\\max}`$ and the one swapped in at most $`a_{\\max}`$. After the swaps you hold exactly $`C`$, which is over the capacity, so the $`|C|`$ items you started with were over it too. Hence no whole plan takes $`|C|`$ items of $`E(C)`$."
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def extension(row: Row, cover: list[str]) -> list[str]:\n    \"\"\"Items outside the cover that weigh at least as much as its heaviest item.\"\"\"\n    heaviest = max(row.weight[i] for i in cover)\n    return [i for i in row.weight if i not in cover and row.weight[i] >= heaviest]"
+    },
+    {
+      "type": "para",
+      "text": "An extended row has the same right side and more items on the left, so it is at least as strong as the plain one at every point where the extra items are positive. It is still not the strongest row the cover can give: **lifting** computes a separate coefficient for each extra item (some may get more than 1), at the price of solving a small knapsack per item. Lesson 6.7.2, later in this section, goes further in that direction."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Finding the Most Violated Cover Is a Knapsack of Its Own"
+    },
+    {
+      "type": "para",
+      "text": "Tiny had 11 minimal covers to try. GridCap small's capital row has 36 items and $`2^{36}`$ sets of them, far too many to list. The search for a broken cover, called **separation**, must find one without listing them."
+    },
+    {
+      "type": "para",
+      "text": "Rewrite the cover row as $`\\sum_{i \\in C} (1 - x_i) \\ge 1`$: subtract each side from $`|C|`$. An LP point $`x^*`$ breaks it exactly when $`\\sum_{i \\in C} (1 - x^*_i) < 1`$. So the most broken cover is the set $`C`$ that makes $`\\sum_{i \\in C} (1 - x^*_i)`$ as small as possible while still being a cover. With a binary $`z_i`$ for \"item $`i`$ is in the cover\", that is"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\min \\;& \\sum_{i \\in I} (1 - x^*_i)\\, z_i \\\\\n\\text{s.t. }& \\sum_{i \\in I} a_i\\, z_i \\ge b + 1 && \\text{(is a cover)} \\\\\n& z_i \\in \\{0, 1\\} && \\forall i \\in I\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "a knapsack problem again: pick items whose weights *exceed* the capacity, at least \"cost\". \"$`> b`$\" becomes \"$`\\ge b + 1`$\" because the weights are whole numbers. If the optimum is below 1, its cover is broken; if it is 1 or more, no cover of this row is broken at $`x^*`$. Items with $`x^*_i = 1`$ cost nothing to include, and items at 0 cost a full unit, so the cheapest covers are built from the items the LP likes."
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def separate(row: Row, xstar: dict[str, float]) -> tuple[list[str], float]:\n    \"\"\"The cover whose row the LP point breaks by the most: itself a small knapsack, solved by HiGHS.\n\n    The cover row sum_C x_i <= |C| - 1 reads sum_C (1 - x_i) >= 1, so the most broken cover is the one\n    with the least sum of (1 - x*_i). Returns the cover and that sum; the row is broken when it is below 1.\n    \"\"\"\n    model = mathopt.Model(name=f\"separate_{row.name}\")\n    z = {i: model.add_binary_variable(name=f\"z_{i}\") for i in row.weight}       # z_i = 1: i is in the cover\n    model.add_linear_constraint(sum(w * z[i] for i, w in row.weight.items()) >= row.capacity + 1,\n                                name=\"is_a_cover\")\n    model.minimize(sum((1 - xstar[i]) * z[i] for i in row.weight))\n    result = solve_highs(model, EXACT)\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return [], float(\"inf\")                       # the items together fit: the row has no cover\n    return [i for i in row.weight if result.variable_values(z[i]) > 0.5], result.objective_value()"
+    },
+    {
+      "type": "para",
+      "text": "Solving a MILP to find each cut is affordable here because each separation knapsack is small; with thousands of rows, a greedy fill by $`(1 - x^*_i) / a_i`$ would find good covers faster, without the guarantee of finding the most broken one. Applied to every row of GridCap small's six-row LP point from lesson 6.3.1, then shrunk to minimal and extended:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "LP bound 21,149.21\ncapital: cover of 20, minimal 19: P002 P005 P008 P009 P011 P014 P015 P019 P021 P022 P023 P025 P026 P028 P030 P031 P034 P035 P038\n  LP point gives 18.339 > 18; extension adds -\nbudget_2027: cover of 8, minimal 5: P025 P031 P034 P036 P038\n  LP point gives 4.088 > 4; extension adds P032\nbudget_2028: cover of 7, minimal 7: P001 P014 P019 P021 P022 P024 P026\n  LP point gives 6.341 > 6; extension adds P036 P040\nbudget_2029: cover of 9, minimal 7: P001 P005 P011 P022 P023 P026 P030\n  LP point gives 6.339 > 6; extension adds -\nbudget_2030: cover of 3, minimal 2: P028 P030\n  LP point gives 1.339 > 1; extension adds -\nbudget_2031: no cover at all, every project on the row fits at once"
+    },
+    {
+      "type": "para",
+      "text": "Five of the six rows give a broken cover. The 2030 one is the easiest to read: P028 starts in 2030 and P030 is in its second year then, together they spend more than 2030 has left, and the LP had all of P028 and a third of P030. In 2031 the projects that spend anything together spend less than what is left, so that row can never be tight for whole plans and has no cover."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Rounds of Cover Cuts Close Most of the Gap and Remove No Whole Plan"
+    },
+    {
+      "type": "para",
+      "text": "Put the pieces in a loop: solve the LP, separate one cover per row, shrink it, optionally extend it, add every row the LP point breaks, and repeat until a round adds nothing."
+    },
+    {
+      "type": "example",
+      "id": "cover_rounds-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "25-knapsack-and-assignment/src/cover_rounds.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "25-knapsack-and-assignment/src/cover_rounds.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "        for row in rows:\n            cover, slack = separate(row, xstar)\n            if slack >= 1 - 1e-9:\n                continue\n            cover = minimal(row, cover, xstar)\n            left = cover + (extension(row, cover) if extend else [])\n            if sum(xstar[i] for i in left) > len(cover) - 1 + 1e-6:\n                new.append((left, len(cover) - 1))"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "best whole plan $20,183k\nplain covers: 9 rounds, 27 cuts\n  bound by round: 21,149 20,454 20,350 20,345 20,339 20,321 20,320 20,297 20,280 20,278\n  root gap 966.21 -> 94.99: 90.2% of it closed\n  MILP with these cuts: $20,183k\nextended covers: 7 rounds, 22 cuts\n  bound by round: 21,149 20,438 20,334 20,313 20,291 20,272 20,254 20,245\n  root gap 966.21 -> 62.03: 93.6% of it closed\n  MILP with these cuts: $20,183k"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Four things to read in it."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**The first round does most of the work.** Five cuts take the bound from 21,149 to 20,454, 72% of the gap. Later rounds add one to four cuts each and gain less and less.",
+        "**Extended covers close more with fewer cuts:** 93.6% of the gap with 22 cuts, against 90.2% with 27. The extra items on the left make each row bite harder.",
+        "**The loop stops short of the optimum.** When no cover of any single row is broken, the remaining $95k (or $62k) of gap comes from the rows *together*, and no cover of one row sees it. Branch-and-bound finishes the job from a much tighter start.",
+        "**No whole plan is lost.** The MILP with every cut added still has the optimum $20,183k, as a valid inequality guarantees. The check is cheap and catches a wrong cut, which would show up as a lower optimum, not as an error."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Lesson 3.3.1 shows that MILP solvers add cuts of their own before branching, and lesson 3.3.4 shows where a log reports them. Writing covers into the model yourself is worth it when you know a structure the solver cannot see, or when you want a tighter LP for its own sake, for example to report a better bound."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "GridCap small's six-row knapsack of lesson 6.3.1 with the cover rows added. The rows marked are this lesson's; they change the LP relaxation and leave the whole plans unchanged."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`P`$, the discretionary projects (36); $`R`$, the capacity rows (capital, 2027 to 2031); $`\\mathcal{C}`$, the covers added, each a pair $`(C, E)`$ of a minimal cover $`C`$ of some row $`r`$ and its left side $`E`$, with $`C \\subseteq E \\subseteq P`$ ($`E = C`$ for a plain cover, $`E = E(C)`$ for an extended one)."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`v_i`$, the NPV of project $`i`$ ($k); $`a_{r,i} \\ge 0`$, what project $`i`$ uses of row $`r`$ ($k); $`b_r`$, what is left of row $`r`$ after the must-do projects ($k)."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "x_i \\in \\{0, 1\\} \\quad \\forall i \\in P \\qquad \\text{(1 if project } i \\text{ is funded)}"
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{i \\in P} v_i\\, x_i"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{i \\in P} a_{r,i}\\, x_i &\\le b_r && \\forall r \\in R && \\text{(capital, budget}_y) \\\\\n\\sum_{i \\in E} x_i &\\le |C| - 1 && \\forall (C, E) \\in \\mathcal{C} && \\text{(cover}_k) \\quad \\leftarrow \\text{this lesson}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The programs name the cover rows `cover_0`, `cover_1`, and so on, in the order they were added."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**A cover is a set of items that cannot all fit.** If $`\\sum_{i \\in C} a_i > b`$, every whole plan obeys $`\\sum_{i \\in C} x_i \\le |C| - 1`$: a valid inequality.",
+        "**A cover row cuts off LP points the budget row allows.** On GridCap tiny two cover cuts turned the LP bound 3,268.17 into the optimum 3,021 with no branching.",
+        "**Shrink a cover to minimal, then extend it with heavier items.** A minimal cover's row implies the larger cover's; items at least as heavy as the cover's heaviest join the left side for free.",
+        "**Finding the most violated cover is a knapsack of its own:** minimize $`\\sum (1 - x^*_i) z_i`$ over covers; a value below 1 means a broken cover.",
+        "**Rounds of cover cuts close most of the gap and remove no whole plan:** 90.2% of GridCap small's gap with plain covers, 93.6% with extended ones, and the same $20,183k optimum."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Term",
+        "Meaning"
+      ],
+      "rows": [
+        [
+          "cover $`C`$ of $`\\sum a_i x_i \\le b`$",
+          "$`\\sum_{i \\in C} a_i > b`$"
+        ],
+        [
+          "cover inequality",
+          "$`\\sum_{i \\in C} x_i \\le \\lvert C \\rvert - 1`$"
+        ],
+        [
+          "minimal cover",
+          "dropping any item leaves a set that fits"
+        ],
+        [
+          "extended cover $`E(C)`$",
+          "$`C`$ plus every item at least as heavy as $`C`$'s heaviest; same right side"
+        ],
+        [
+          "valid inequality",
+          "every whole plan satisfies it"
+        ],
+        [
+          "cut",
+          "a valid inequality some LP point breaks"
+        ],
+        [
+          "separation",
+          "finding a cut for a given LP point, or proving there is none in a family"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Separation of covers",
+        ""
+      ],
+      "rows": [
+        [
+          "variables",
+          "$`z_i \\in \\{0,1\\}`$: item $`i`$ in the cover"
+        ],
+        [
+          "row",
+          "$`\\sum a_i z_i \\ge b + 1`$ (whole-number weights)"
+        ],
+        [
+          "objective",
+          "$`\\min \\sum (1 - x^*_i) z_i`$; broken cover when below 1"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [Mixed-Integer Programming (OR-Tools)](https://developers.google.com/optimization/mip) (OR-Tools' MIP solvers are branch-and-bound solvers, the search whose LP bound the cover rows tighten, and when CP-SAT may suit a mostly Boolean model better); [MathOpt `SolveParameters` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/parameters.py) (`cuts` and the `Emphasis` levels: a solver's own cutting planes are a setting, the ones of this lesson are rows you add); [Integer Programming, Chapter 9 of Applied Mathematical Programming (MIT 15.053)](https://web.mit.edu/15.053/www/AMP-Chapter-09.pdf) (section 9.8: cutting planes, valid inequalities that cut off the current LP point and no integer point); [Vielma, Mixed Integer Linear Programming Formulation Techniques](https://juan-pablo-vielma.github.io/publications/Mixed-Integer-Linear-Programming-Formulation-Techniques.pdf) (section 2.2: why the strength of a formulation's LP relaxation matters to an LP-based solver)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "On tiny, add the cover row for $`\\{P001, P003, P005\\}`$ by hand before solving the LP. Predict whether the LP bound moves.",
+        "In `cover_rounds.py`, keep only the capital row's covers. Predict whether the bound gets below 21,000.",
+        "The row $`5x_1 + 5x_2 + 5x_3 + 3x_4 \\le 12`$ has the minimal cover $`\\{1, 2, 3\\}`$. Write its cover row. The extension rule does not add $`x_4`$, since 3 is less than 5. Is $`x_1 + x_2 + x_3 + x_4 \\le 2`$ valid anyway? Check every whole plan with three of the four."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Test a Cut on the Whole Plans"
+    },
+    {
+      "type": "para",
+      "text": "A wrong cut does not crash anything. It removes a whole plan the model should allow, and the solver reports a worse optimum as if it were the truth. So every cut generator in this lesson is checked two ways: by brute force on tiny, where all 128 plans can be tried against each row, and by the MILP with all cuts added having the same optimum as without. Keep both checks next to any cut code you write; the second one costs one more solve."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**covers_tiny.py.** Lists every minimal cover of GridCap tiny's budget row and cuts the LP with them until it is whole (*A Cover Is a Set of Items That Cannot All Fit* and *A Cover Row Cuts Off LP Points the Budget Row Allows*). *Try:* Add the least broken cover instead of the most broken one. Predict how many cuts it takes."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [covers_tiny.py](src/covers_tiny.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**separation.py.** Separates one cover per row of GridCap small's six-row LP point, then shrinks and extends it (*Finding the Most Violated Cover Is a Knapsack of Its Own*). *Try:* Skip the call to `minimal`. Predict whether the 2027 row's cover is still broken."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [separation.py](src/separation.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**cover_rounds.py.** The cutting loop with plain and extended covers, and the MILP with every cut (*Rounds of Cover Cuts Close Most of the Gap*). *Try:* Stop after one round. Predict the share of the gap closed."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [cover_rounds.py](src/cover_rounds.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**covers.py.** `is_cover`, `minimal`, `extension` and `separate`, the cover tools every program of this lesson shares. It prints nothing."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [covers.py](src/covers.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 12,
+    "paras": 40,
+    "code": 14,
+    "tables": 2,
+    "lists": 7,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 2
+  },
+  "content_sha256": "c16f66be301cd33c8286d7a20745b8874879c2d7ec47ba90a5f5dbd158d82542"
+}

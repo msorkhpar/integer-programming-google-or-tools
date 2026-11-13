@@ -1,0 +1,680 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "02-linear-programming",
+    "06-duality-and-sensitivity"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Shadow prices, reduced costs and ranging from a solver",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "2.3.3 Shadow Prices, Reduced Costs and Ranging From a Solver"
+    },
+    {
+      "type": "para",
+      "text": "The rate case is being negotiated, and GridCap's finance team will be asked, on short notice, what a different 2028 budget would do to the plan's value. They also want to know why vegetation work gets only what the floor forces, and what it would take for it to get more. Lessons 2.3.1 and 2.3.2 built the dual by hand to understand it. In practice you read the numbers from the solver after one solve. This lesson reads them from MathOpt, checks what each one means by re-solving, and finds how far each one holds, in four rules. (GridCap is fictional; its numbers come from the course's generator.)"
+    },
+    {
+      "type": "para",
+      "text": "The model is the GridCap budget LP of lesson 2.3.2, unchanged: spend $`s_{g,y} \\ge 0`$ per program and year, carry $`r_y \\ge 0`$ out of 2027 and 2028, rows $`\\text{cash}_y`$, $`\\text{crew}_{g,y}`$ and $`\\text{veg\\_floor}`$, maximizing discounted NPV. Its full formulation is the \"The Model\" section of lesson 2.3.2; the reference table at the end of this lesson repeats it."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "MathOpt Reports Shadow Prices as `dual_values` and Reduced Costs as `reduced_costs`"
+    },
+    {
+      "type": "para",
+      "text": "After an LP solve that ends `OPTIMAL`, the result holds a price for every row and a reduced cost for every variable:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`result.dual_values(row)` is the row's **shadow price**: the change in the optimal objective per unit increase of the row's right-hand side (its bound).",
+        "`result.reduced_costs(var)` is the variable's **reduced cost**: its objective coefficient minus the prices of the rows it uses, $`d_j = c_j - \\sum_i a_{ij} y_i`$ (lesson 2.3.2). For a variable sitting at its bound, it is the change in the optimal objective per unit increase of that bound."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Both are read the same way as variable values. Here they are for the budget LP, from GLOP and from HiGHS:"
+    },
+    {
+      "type": "example",
+      "id": "read_duals-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "06-duality-and-sensitivity/src/read_duals.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "06-duality-and-sensitivity/src/read_duals.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "glop = mathopt.solve(lp.model, mathopt.SolverType.GLOP)\nhighs = mathopt.solve(lp.model, mathopt.SolverType.HIGHS)\nfor result in (glop, highs):\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        raise RuntimeError(result.termination.reason.name)"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "example",
+      "id": "read_duals-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "06-duality-and-sensitivity/src/read_duals.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "06-duality-and-sensitivity/src/read_duals.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "print(f\"{row.name:24} {clean(glop.dual_values(row)):>8} {clean(highs.dual_values(row)):>8}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "row                          GLOP    HiGHS\ncash_2027                    0.43     0.43\ncrew_distribution_2027       0.23     0.23\ncrew_vegetation_2027          0.0      0.0\ncash_2028                  0.4019   0.4019\ncrew_distribution_2028      0.215    0.215\ncrew_vegetation_2028       0.0079   0.0079\ncash_2029                  0.3756   0.3756\ncrew_distribution_2029     0.2009   0.2009\ncrew_vegetation_2029       0.0152   0.0152\nveg_floor                   -0.12    -0.12\n\nvariable                    value  reduced cost\nspend_vegetation_2027       220.0           0.0\nspend_transmission_2028     300.0           0.0\ncarry_2027                    0.0       -0.0281\ncarry_2028                    0.0       -0.0263"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The two solvers agree, and the numbers are the ones lesson 2.3.2 derived by complementary slackness. Check the status first: a solve that is not `OPTIMAL` has no prices to read, and on a MILP MathOpt has none at all (lesson 2.3.4). `clean` rounds for printing and turns the `-0.0` a solver sometimes returns into `0.0`."
+    },
+    {
+      "type": "para",
+      "text": "**Units.** A price is in units of the objective per unit of the row. The cash rows are in $k of budget and the objective in $k of NPV, so 0.4019 means $0.4019k of NPV per $1k of 2028 budget. The crew rows are written in $k of crew capacity, so their prices are per $k of capacity, not per crew-month; lesson 2.3.4 converts them."
+    },
+    {
+      "type": "para",
+      "text": "**Signs.** MathOpt's price is the derivative of the objective *as you wrote it*. The same LP written as minimizing the negative value gives the same numbers with the opposite sign:"
+    },
+    {
+      "type": "example",
+      "id": "read_duals-3",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "06-duality-and-sensitivity/src/read_duals.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "06-duality-and-sensitivity/src/read_duals.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "as_min.model.minimize(-as_min.model.objective.as_linear_expression())"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "min -value: objective -4,109.6, cash_2027 price -0.43, veg_floor price 0.12"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "So read a price as \"the objective goes up by this much per unit of right-hand side\", and know which way your objective points. Both OR-Tools interfaces, MathOpt and `pywraplp`, follow this convention (lesson 2.3.1 printed both), but it is a convention: a text whose theory is written for a minimization, as MO-book's standard form and the HiGHS documentation are, states its prices for the minimization. That is a reason to check one price by re-solving the first time you use a new tool, as the next rules do."
+    },
+    {
+      "type": "para",
+      "text": "OR-Tools' MathOpt sample `advanced_linear_programming.py` reads these two arrays after a GLOP solve, and one more thing: the **basis** (lesson 2.2.2). Before reading anything it asks the result whether it holds a dual solution and a basis at all, because MathOpt does not require a solver to return them; most LP solvers, GLOP among them, do. Adapted here, on the sample's own LP (the one lesson 2.1.1 solved):"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& 10x_0 + 6x_1 + 4x_2 \\\\\n\\text{s.t. }& 10x_0 + 4x_1 + 5x_2 \\le 600 && \\text{(c1)} \\\\\n& 2x_0 + 2x_1 + 6x_2 \\le 300 && \\text{(c2)} \\\\\n& x_0 + x_1 + x_2 \\le 100 && \\text{(c3)} \\\\\n& x_0,\\ x_1,\\ x_2 \\ge 0\n\\end{aligned}"
+    },
+    {
+      "type": "example",
+      "id": "or_tools_duals-4",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "06-duality-and-sensitivity/src/or_tools_duals.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "06-duality-and-sensitivity/src/or_tools_duals.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "result = mathopt.solve(model, mathopt.SolverType.GLOP)\nif result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n    raise RuntimeError(f\"model failed to solve to optimality: {result.termination}\")\nif not result.has_dual_feasible_solution() or not result.has_basis():\n    raise RuntimeError(\"no dual solution or no basis was returned on optimal\")\nprint(f\"objective {result.objective_value():.4f}\")\nfor row in rows:\n    print(f\"  row {row.name}  price {clean(result.dual_values(row)):7.4f}  status {result.constraint_status(row).name}\")\nfor var in x:\n    print(f\"  var {var.name}  value {result.variable_values(var):8.4f}  reduced cost {clean(result.reduced_costs(var)):7.4f}\"\n          f\"  status {result.variable_status(var).name}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "objective 733.3333\n  row c1  price  0.6667  status AT_UPPER_BOUND\n  row c2  price  0.0000  status BASIC\n  row c3  price  3.3333  status AT_UPPER_BOUND\n  var x0  value  33.3333  reduced cost  0.0000  status BASIC\n  var x1  value  66.6667  reduced cost  0.0000  status BASIC\n  var x2  value   0.0000  reduced cost -2.6667  status AT_LOWER_BOUND"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The statuses are lesson 2.2.2's basis, as the solver reports it. A row whose status is `BASIC` has its slack in the basis: c2 has room, and its price is 0. The rows `AT_UPPER_BOUND` are the tight ones, c1 and c3, and they carry the prices. The basic variables, $`x_0`$ and $`x_1`$, have reduced cost 0, and $`x_2`$ sits `AT_LOWER_BOUND` with reduced cost $`4 - (5 \\cdot 0.6667 + 6 \\cdot 0 + 1 \\cdot 3.3333) = -2.6667`$. Three basic entries (two variables and one slack) for three rows, as at every vertex."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Reduced Cost Is the Price of Forcing an Idle Variable Into the Plan"
+    },
+    {
+      "type": "para",
+      "text": "Drop the vegetation floor, and vegetation gets nothing: at $0.31k per $k in 2027, it loses to every other use of the money. Its reduced cost says by how much. The program forces some vegetation work into the plan by raising the variable's lower bound, then raises its value per $k instead:"
+    },
+    {
+      "type": "example",
+      "id": "reduced_costs-5",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "06-duality-and-sensitivity/src/reduced_costs.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "06-duality-and-sensitivity/src/reduced_costs.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "lp = build(tiny, floor=None)                  # no vegetation floor: vegetation is left idle\nresult = solve_glop(lp.model)"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "example",
+      "id": "reduced_costs-6",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "06-duality-and-sensitivity/src/reduced_costs.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "06-duality-and-sensitivity/src/reduced_costs.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "lp.spend[veg].lower_bound = forced"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "example",
+      "id": "reduced_costs-7",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "06-duality-and-sensitivity/src/reduced_costs.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "06-duality-and-sensitivity/src/reduced_costs.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "lp.model.objective.set_linear_coefficient(lp.spend[veg], coefficient + raise_by)"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "no floor: value 4,209.77; spend_vegetation_2027 = 0.0, reduced cost -0.12\nforce   1: value 4,209.65, change -0.12\nforce 100: value 4,197.77, change -12.00\nobjective coefficient 0.3100\ncoefficient + 0.11: spend_vegetation_2027 = 0.0\ncoefficient + 0.13: spend_vegetation_2027 = 680.0"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Two readings of the same number, $`-0.12`$:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**The cost of forcing it.** Each $k of vegetation forced into 2027 lowers the value by $0.12k, because it displaces transmission work worth 0.43 (the 2027 cash price) to earn 0.31.",
+        "**The improvement it needs.** Vegetation's value per $k would have to rise by more than 0.12, to above $`0.31 + 0.12 = 0.43`$, before the plan uses it. At $`+0.11`$ it stays at 0; at $`+0.13`$ it is worth more than transmission and takes all its crews can do, $680k."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "So for an idle variable in a maximization, the reduced cost is $`\\le 0`$, and $`c_j - d_j`$ is the coefficient at which it starts to pay. (In a minimization the signs flip: an idle variable's reduced cost is $`\\ge 0`$, and it starts to pay when its cost falls below $`c_j - d_j`$. The formula is the same.) A variable the plan uses has reduced cost 0, by complementary slackness. This is how a planner answers \"what would it take for this project type to make the cut?\" from one solve."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Shadow Price Holds Only Over a Range"
+    },
+    {
+      "type": "para",
+      "text": "The 2028 cash price is 0.4019. That is a slope: the value rises by 0.4019 per $k *for small changes*. Re-solving at several 2028 budgets shows how small:"
+    },
+    {
+      "type": "example",
+      "id": "budget_sweep-8",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "06-duality-and-sensitivity/src/budget_sweep.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "06-duality-and-sensitivity/src/budget_sweep.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "for b in (2750, 2979, 2980, 3280, 5000, 8140, 8500, 9750):\n    lp = build(tiny, budget={**tiny.budget, 2028: b})\n    result = solve_glop(lp.model)"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "2028 budget     value   price  transm. 2028 carry 2028\n      2,750   3,894.8  0.4097           0.0        0.0\n      2,979   3,988.6  0.4097           0.0        0.0\n      2,980   3,989.0  0.4019           0.0        0.0\n      3,280   4,109.6  0.4019         300.0        0.0\n      5,000   4,800.8  0.4019        2020.0        0.0\n      8,140   6,062.7  0.3756        5160.0        0.0\n      8,500   6,197.9  0.3756        5160.0      360.0\n      9,750   6,626.1     0.0        5160.0     1500.0"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The price stays at 0.4019 from a 2028 budget of 2,980 up to 8,140, and changes at each end. Each change has a reason you can read off the plan:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Between 2,980 and 8,140** the marginal $k of 2028 money goes to 2028 transmission, worth $`0.43\\,\\delta_{2028} = 0.4019`$. Distribution (2,640) and vegetation (340) are at their crew limits.",
+        "**Below 2,980** there is no 2028 transmission left to cut ($`2640 + 340 = 2980`$). A cut now comes out of 2028 vegetation, whose floor share must move to 2027, where it displaces transmission. Each $k cut loses the vegetation's 0.2897 plus the floor's 0.12: the price is 0.4097.",
+        "**Above 8,140** 2028 transmission is at its crew limit ($`2640 + 340 + 5160 = 8140`$). The next $k is carried into 2029 and spent on 2029 transmission, so its price is the 2029 cash price, 0.3756. The carry variable is now in use, and complementary slackness says its reduced cost is 0: the 2028 and 2029 cash prices are equal.",
+        "**At 9,750** 2029 is full too: it carries 1,500, all the room its crews have above its own budget. Money beyond that has no use, the cash row has slack, and its price is 0."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "So the optimal value, as a function of one right-hand side, is a chain of straight segments. Each segment's slope is a shadow price, and the points where the slope changes are **breakpoints**. In a maximization the slopes only fall as the right-hand side grows (each extra $k goes to the best use still open; lesson 2.3.4 proves it), so the value has diminishing returns. A shadow price, then, comes with a **range**: the interval of the right-hand side over which it holds, all other data unchanged."
+    },
+    {
+      "type": "para",
+      "text": "Look at 2,979 and 2,980. At exactly 2,980 the value has two slopes, 0.4097 to the left and 0.4019 to the right, and the solver returned one of them. At a breakpoint the optimal plan is degenerate (a basic variable, here 2028 transmission, sits at 0), and more than one price system is optimal. Do not read the price at a breakpoint as \"the\" slope; look a little to each side."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "HiGHS Reports the Ranges Directly"
+    },
+    {
+      "type": "para",
+      "text": "Sweeping is slow and only finds breakpoints near the points you try. An LP solver can compute each range exactly from its final simplex basis, in one step after the solve. This is **ranging** (or *sensitivity analysis*). MathOpt does not expose it, but HiGHS does through its own Python package, `highspy`, which is in the course image. `to_highs` hands the same model to HiGHS, row by row:"
+    },
+    {
+      "type": "example",
+      "id": "highs_ranging-9",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "06-duality-and-sensitivity/src/highs_ranging.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "06-duality-and-sensitivity/src/highs_ranging.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "def to_highs(model: mathopt.Model) -> highspy.Highs:\n    \"\"\"The same LP, handed to HiGHS through its own Python API (MathOpt has no ranging call).\"\"\"\n    h = highspy.Highs()\n    h.setOptionValue(\"output_flag\", False)\n    inf = highspy.kHighsInf\n    column = {}\n    for var in model.variables():                                  # columns in MathOpt's order\n        column[var] = h.addVariable(lb=max(var.lower_bound, -inf), ub=min(var.upper_bound, inf), name=var.name)\n    for row in model.linear_constraints():                         # rows in MathOpt's order\n        terms = list(row.terms())\n        h.addRow(max(row.lower_bound, -inf), min(row.upper_bound, inf), len(terms),\n                 [column[t.variable].index for t in terms], [t.coefficient for t in terms])\n    objective = sum(t.coefficient * column[t.variable] for t in model.objective.linear_terms())\n    if model.objective.is_maximize:\n        h.maximize(objective)                                      # sets the objective and solves\n    else:\n        h.minimize(objective)\n    return h"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "example",
+      "id": "highs_ranging-10",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "06-duality-and-sensitivity/src/highs_ranging.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "06-duality-and-sensitivity/src/highs_ranging.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "status, ranging = h.getRanging()"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`getRanging()` returns a status and a record with one entry per column and per row, in the order they were added (here, MathOpt's order). The program reads two parts of it: `ranging.row_bound_dn.value_[i]` and `ranging.row_bound_up.value_[i]`, the lowest and highest right-hand side for row `i` at which its price still holds, and `ranging.col_cost_dn.value_[j]` and `ranging.col_cost_up.value_[j]`, the lowest and highest objective coefficient for column `j` at which the current plan stays optimal. It prints the binding rows only, and three spend variables:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "HiGHS kOptimal value 4,109.6\nbinding row       rhs   price  price holds from     to\ncash_2027       2,300    0.43             1,100  2,820\ncash_2028       3,280  0.4019             2,980  8,140\ncash_2029       2,310  0.3756             1,660  3,810\nveg_floor         900   -0.12               680  1,360\nvariable                 coefficient  plan holds from      to\nspend_transmission_2028       0.4019           0.3756  0.4097\nspend_vegetation_2027         0.3100             -inf  0.3179\nspend_vegetation_2029         0.2708           0.2556     inf"
+    },
+    {
+      "type": "para",
+      "text": "The 2028 range, 2,980 to 8,140, is the one the sweep found. The program checks it the same way, by re-solving 10 below and 10 above each end:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "re-solve, 2028 budget 2,970: price 0.4097\nre-solve, 2028 budget 2,990: price 0.4019\nre-solve, 2028 budget 8,130: price 0.4019\nre-solve, 2028 budget 8,150: price 0.3756"
+    },
+    {
+      "type": "para",
+      "text": "Read the other lines with the same care:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**The floor holds its price, $`-0.12`$, from 680 to 1,360.** Below 680 the 2028 and 2029 vegetation crews ($`340 + 340`$) can meet the floor alone, and it stops displacing 2027 transmission. Above 1,360 no plan meets it (lesson 2.3.2's infeasible case).",
+        "**A cost range keeps the plan, not just the prices.** While 2028 transmission's value per $k stays between 0.3756 and 0.4097, the same plan stays optimal, though its value changes. Below 0.3756 it pays to carry the money into 2029 transmission instead. An infinite end means no change in that direction alters the plan: making 2029 vegetation more valuable only confirms that the plan uses all of it."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**2027 vegetation is in use, at 220, yet its range starts at $`-\\infty`$.** The floor pins it. The 2028 and 2029 vegetation crews can do at most 340 each, and the plan uses both in full, so the floor's 900 leaves exactly 220 that only 2027 can supply. No allowed plan has less 2027 vegetation, so making it worth less, even negative, cannot move the plan: the loss lands on the floor's price instead. The program checks this by re-solving with the coefficient lowered:"
+    },
+    {
+      "type": "example",
+      "id": "highs_ranging-11",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "06-duality-and-sensitivity/src/highs_ranging.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "06-duality-and-sensitivity/src/highs_ranging.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "    lp_low.model.objective.set_linear_coefficient(lp_low.spend[\"vegetation\", 2027], coefficient)"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "vegetation crew limits: 2027 680, 2028 340, 2029 340; floor 900 - 340 - 340 = 220 must come from 2027\nvegetation 2027 worth    0.31: vegetation spend 2027 220.0, 2028 340.0, 2029 340.0; floor price -0.12\nvegetation 2027 worth   -1.00: vegetation spend 2027 220.0, 2028 340.0, 2029 340.0; floor price -1.43\nvegetation 2027 worth -100.00: vegetation spend 2027 220.0, 2028 340.0, 2029 340.0; floor price -100.43"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The plan is the same at every value; only the floor's price moves, to the coefficient minus 0.43, the 2027 cash price that each forced $k of vegetation takes from transmission."
+    },
+    {
+      "type": "para",
+      "text": "Two limits apply to every range. A range is for **one change at a time**: the cash_2028 range assumes every other budget, crew and value is fixed, and two changes together can cross a breakpoint that neither crosses alone. And a range is about the **LP**: lesson 2.3.4 shows that a model with yes/no decisions has no such slopes."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**MathOpt reports shadow prices as `dual_values` and reduced costs as `reduced_costs`.** Each is the change in the objective as written, per unit increase in a row's bound or a variable's bound, in the objective's units per the row's units.",
+        "**A reduced cost is the price of forcing an idle variable into the plan.** It is also how much the variable's objective coefficient must improve before the plan uses it: the threshold is $`c_j - d_j`$.",
+        "**A shadow price holds only over a range.** The optimal value is piecewise linear in a right-hand side, prices fall as a limit grows (in a maximization), and at a breakpoint more than one price is optimal.",
+        "**HiGHS reports the ranges directly.** `getRanging()` gives, from one solve, each binding row's right-hand side range and each variable's cost range; a re-solve on each side checks them."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Call",
+        "Meaning (objective as written)"
+      ],
+      "rows": [
+        [
+          "`result.dual_values(row)`",
+          "shadow price: change in the optimal objective per unit increase of the row's bound"
+        ],
+        [
+          "`result.reduced_costs(var)`",
+          "$`c_j - \\sum_i a_{ij} y_i`$: change per unit increase of the variable's bound, 0 if the variable is in use"
+        ],
+        [
+          "`result.termination.reason`",
+          "read first: prices exist only for an `OPTIMAL` LP"
+        ],
+        [
+          "`result.has_dual_feasible_solution()`, `result.has_basis()`",
+          "whether the result holds prices, and a basis, to read"
+        ],
+        [
+          "`result.constraint_status(row)`, `result.variable_status(var)`",
+          "`BASIC`, `AT_UPPER_BOUND`, `AT_LOWER_BOUND`, ...: the basis"
+        ],
+        [
+          "`h.getRanging()` (highspy)",
+          "`row_bound_dn/up.value_[i]`: range of a row's bound; `col_cost_dn/up.value_[j]`: range of a coefficient"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The budget LP, as a reminder (lesson 2.3.2):"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& \\textstyle\\sum_{g,y} v_g\\, \\delta_y\\, s_{g,y} \\\\\n\\text{s.t. } & \\textstyle\\sum_{g} s_{g,y} + r_y - r_{y-1} \\le B_y && \\forall y && \\text{(cash}_y) \\\\\n& s_{g,y} \\le k_g\\, C_{g,y} && \\forall g, y && \\text{(crew}_{g,y}) \\\\\n& \\textstyle\\sum_{y} s_{\\text{veg},y} \\ge F && && \\text{(veg\\_floor)} \\\\\n& s_{g,y} \\ge 0, \\quad r_y \\ge 0 \\ (y \\ne \\hat y)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [MathOpt sample advanced_linear_programming.py](https://github.com/google/or-tools/blob/stable/ortools/math_opt/samples/python/advanced_linear_programming.py) (the example adapted above: dual values, reduced costs and basis statuses read after checking that the result has them); [MathOpt `solution.py`](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/solution.py) (MathOpt's sign convention for `dual_values` and `reduced_costs`, stated for a minimization); [Advanced LP Solving (OR-Tools)](https://developers.google.com/optimization/lp/lp_advanced) (why simplex answers are vertices, the kind of answer with a basis to report); [HiGHS, Feasibility and optimality](https://ergo-code.github.io/HiGHS/dev/guide/kkt/) (what HiGHS calls row and column dual values, and the conditions they meet at an optimum); [HiGHS, Solvers](https://ergo-code.github.io/HiGHS/dev/solvers/) (HiGHS's interior point solver returns a basic solution, the kind ranging is computed from, only by running crossover, and its PDLP never returns one); [Vanderbei, *Linear Programming: Foundations and Extensions*](https://vanderbei.princeton.edu/LPbook/) (the textbook's page, with the book's own simplex and interior point codes in Python and C)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "The 2027 cash price, 0.43, holds from 1,100 to 2,820. What absorbs a 2027 budget change inside that range, and what happens at 2,820? Check against the crew capacities in lesson 2.3.2.",
+        "Distribution in 2029 has a cost range whose upper end is infinite. Predict its lower end before you add it to the program's output, and say what plan change happens below it.",
+        "A colleague changes the 2028 and 2029 budgets by +3,000 each and multiplies each by its price. Why might that be wrong even though +3,000 is inside the 2028 range?"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Ranging Without a Ranging API"
+    },
+    {
+      "type": "para",
+      "text": "Not every solver interface reports ranges; MathOpt does not. The fallback is the re-solve of the sweep: solve at the right-hand side plus and minus a step, compare the prices, and narrow down the breakpoint by bisection. It costs a few solves per row, so it suits the handful of rows a decision depends on (the budgets, a floor), not a report on every row. When a solver does report ranges, check one by re-solving before trusting the rest, as the program does: it is the cheapest test that you are reading the right array in the right order."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**read_duals.py.** The budget LP's shadow prices and reduced costs from GLOP and HiGHS, and the same LP as a minimization (*MathOpt Reports Shadow Prices as `dual_values` and Reduced Costs as `reduced_costs`*). *Try:* Build it with `floor=None` and predict the vegetation crew prices."
+    },
+    {
+      "type": "para",
+      "text": "**or_tools_duals.py.** Adapted from the OR-Tools MathOpt sample `advanced_linear_programming.py`: prices, reduced costs and basis statuses after one GLOP solve (*MathOpt Reports Shadow Prices*). *Try:* Raise c2's limit to 400 and predict which statuses and prices change."
+    },
+    {
+      "type": "para",
+      "text": "**reduced_costs.py.** Forces vegetation into the plan, then raises its value until it enters (*A Reduced Cost Is the Price of Forcing an Idle Variable Into the Plan*). *Try:* Do the same for `(\"vegetation\", 2029)`. Predict its reduced cost from the cash prices before you run it."
+    },
+    {
+      "type": "para",
+      "text": "**budget_sweep.py.** Re-solves at eight 2028 budgets (*A Shadow Price Holds Only Over a Range*). *Try:* Sweep the 2027 budget instead and predict where its breakpoints fall."
+    },
+    {
+      "type": "para",
+      "text": "**highs_ranging.py.** Hands the model to HiGHS, reads its ranges, and checks the 2028 range by re-solving (*HiGHS Reports the Ranges Directly*). *Try:* Print the cost range of `spend_distribution_2028` and explain its lower end."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [read_duals.py](src/read_duals.py)",
+        "Program: [or_tools_duals.py](src/or_tools_duals.py)",
+        "Program: [reduced_costs.py](src/reduced_costs.py)",
+        "Program: [budget_sweep.py](src/budget_sweep.py)",
+        "Program: [highs_ranging.py](src/highs_ranging.py)",
+        "Library: [budget_lp.py](src/budget_lp.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 10,
+    "paras": 33,
+    "code": 4,
+    "tables": 1,
+    "lists": 7,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 11
+  },
+  "content_sha256": "a514e7f4874e37dddf1c6f1bf8f95564daa34dc18ec20d9653d294a13f1b768e"
+}

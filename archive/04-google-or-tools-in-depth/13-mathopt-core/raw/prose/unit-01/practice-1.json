@@ -1,0 +1,164 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "13-mathopt-core"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Station storm crews at depots",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility's storm desk stations repair crews at its depots before a storm. Each depot can be opened or left closed; an open depot hosts up to its capacity in crews, each crew costs a day rate, and opening a depot has a fixed cost. Across all depots, the desk wants at least `low` and at most `high` crews on standby."
+    },
+    {
+      "type": "para",
+      "text": "The model, with $`D`$ the depots:"
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`\\text{cap}_d`$, the most crews depot $`d`$ can host; $`\\text{rate}_d`$, the cost of one crew at $`d`$ ($k); $`\\text{fixed}_d`$, the cost of opening $`d`$ ($k); $`L`$ and $`U`$, the lowest and highest total number of crews."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`\\text{open}_d \\in \\{0, 1\\}`$ and $`\\text{crews}_d \\in \\{0, 1, \\dots, \\text{cap}_d\\}`$ for every $`d \\in D`$."
+    },
+    {
+      "type": "para",
+      "text": "**Objective and constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\min \\;& \\sum_{d \\in D} \\left(\\text{rate}_d\\, \\text{crews}_d + \\text{fixed}_d\\, \\text{open}_d\\right) \\\\\n\\text{s.t. }& \\text{crews}_d \\le \\text{cap}_d\\, \\text{open}_d && \\forall d \\in D && \\text{(link}_d) \\\\\n& L \\le \\sum_{d \\in D} \\text{crews}_d \\le U && && \\text{(total)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Write `build(depots, low, high)` in `crews.py`. It already creates one `open` and one `crews` variable per depot, but with MathOpt's default bounds; give each its domain, then add the rows and the objective. Return the model and the two dicts of variables, keyed by depot name."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix a plan by setting each variable's bounds to its value and ask HiGHS whether the model accepts it, so any correct formulation passes. The `total` row can be one ranged row; both bounds belong to it."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Depot:\n    name: str\n    cap: int        # the most crews it can host\n    rate: float     # cost of one crew, $k\n    fixed: float    # cost of opening it, $k\n\n\ndef build(depots: list[Depot], low: int, high: int) -> tuple[mathopt.Model, dict, dict]:\n    \"\"\"The crew-staffing model: open[d] binary, crews[d] in {0..cap}, a link row per depot, a band on the total.\"\"\"\n    model = mathopt.Model(name=\"storm-crews\")\n    open_ = {d.name: model.add_binary_variable(name=f\"open_{d.name}\") for d in depots}\n    crews = {}\n    for d in depots:\n        crews[d.name] = model.add_variable(lb=0, ub=d.cap, is_integer=True, name=f\"crews_{d.name}\")\n    for d in depots:\n        model.add_linear_constraint(crews[d.name] <= d.cap * open_[d.name], name=f\"link_{d.name}\")\n    model.add_linear_constraint((low <= mathopt.fast_sum(crews.values())) <= high, name=\"total\")\n    model.minimize(mathopt.fast_sum(d.rate * crews[d.name] + d.fixed * open_[d.name] for d in depots))\n    return model, open_, crews\n\n\nif __name__ == \"__main__\":\n    depots = [Depot(\"North\", 4, 3.0, 10.0), Depot(\"South\", 3, 2.0, 12.0)]\n    model, open_, crews = build(depots, 3, 5)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    print(result.termination.reason.name, result.objective_value())\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Depot:\n    name: str\n    cap: int        # the most crews it can host\n    rate: float     # cost of one crew, $k\n    fixed: float    # cost of opening it, $k\n\n\ndef build(depots: list[Depot], low: int, high: int) -> tuple[mathopt.Model, dict, dict]:\n    \"\"\"The crew-staffing model: open[d] binary, crews[d] in {0..cap}, a link row per depot, a band on the total.\"\"\"\n    model = mathopt.Model(name=\"storm-crews\")\n    # TODO: give each variable its domain (these have MathOpt's default bounds: -inf to +inf, continuous).\n    open_ = {d.name: model.add_variable(name=f\"open_{d.name}\") for d in depots}\n    crews = {d.name: model.add_variable(name=f\"crews_{d.name}\") for d in depots}\n    # TODO: the link rows, the total row and the objective.\n    return model, open_, crews\n\n\nif __name__ == \"__main__\":\n    depots = [Depot(\"North\", 4, 3.0, 10.0), Depot(\"South\", 3, 2.0, 12.0)]\n    model, open_, crews = build(depots, 3, 5)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    print(result.termination.reason.name)\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 7,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "df17a9e6c5e0e0a2a5410384eadcfef903af75e7893f118359001658a15f252a",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Depot:\n    name: str\n    cap: int        # the most crews it can host\n    rate: float     # cost of one crew, $k\n    fixed: float    # cost of opening it, $k\n\n\ndef build(depots: list[Depot], low: int, high: int) -> tuple[mathopt.Model, dict, dict]:\n    \"\"\"The crew-staffing model: open[d] binary, crews[d] in {0..cap}, a link row per depot, a band on the total.\"\"\"\n    model = mathopt.Model(name=\"storm-crews\")\n    # TODO: give each variable its domain (these have MathOpt's default bounds: -inf to +inf, continuous).\n    open_ = {d.name: model.add_variable(name=f\"open_{d.name}\") for d in depots}\n    crews = {d.name: model.add_variable(name=f\"crews_{d.name}\") for d in depots}\n    # TODO: the link rows, the total row and the objective.\n    return model, open_, crews\n\n\nif __name__ == \"__main__\":\n    depots = [Depot(\"North\", 4, 3.0, 10.0), Depot(\"South\", 3, 2.0, 12.0)]\n    model, open_, crews = build(depots, 3, 5)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    print(result.termination.reason.name)\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-01/practice-1/crews.py",
+    "test_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-01/practice-1/test_crews.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-01/practice-1/crews.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-01/practice-1/target/report.xml",
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-01/practice-1/test_crews.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_each_variable_has_its_domain",
+        "kind": "main",
+        "says": "each open variable runs from 0 to 1 and each crew variable from 0 to its depot's capacity"
+      },
+      {
+        "id": "test_a_plan_inside_the_band_is_allowed_and_one_above_it_refused",
+        "kind": "main",
+        "says": "a plan whose total crews are inside the band is allowed, and one above the band is refused"
+      },
+      {
+        "id": "test_too_few_crews_are_refused",
+        "kind": "edge",
+        "says": "a plan with fewer crews than the band's lower end is refused"
+      },
+      {
+        "id": "test_a_closed_depot_hosts_no_crews",
+        "kind": "edge",
+        "says": "a plan that stations crews at a closed depot is refused"
+      },
+      {
+        "id": "test_a_fractional_crew_is_refused",
+        "kind": "edge",
+        "says": "a plan with half a crew at a depot is refused"
+      },
+      {
+        "id": "test_the_cheapest_plan_is_found",
+        "kind": "edge",
+        "says": "solving the model returns the cheapest plan, not the dearest"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "13-mathopt-core/README_4.2.1.md",
+      "section": "The Objective Is Set by maximize or minimize, and a Second Call Replaces the First"
+    },
+    "concepts": [
+      "a row is stored as lb <= expression <= ub, and a ranged row is one row written with parentheses",
+      "maximize and minimize set the expression and the sense, and a later call replaces an earlier one",
+      "a variable's domain is its bounds and integer flag, and add_variable without bounds is free in both directions"
+    ]
+  }
+}

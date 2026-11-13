@@ -1,0 +1,157 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "05-other-modeling-frameworks-and-solvers",
+    "21-gurobipy"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "A mask for solver messages before they reach a log",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A warehouse-planning service forwards solver messages to a shared log. Some messages name the machine's user and host, or carry an e-mail address or an access key, and none of that may reach the log. Write `mask_line(line)`, which returns the line with:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "In the line",
+        "Replaced by"
+      ],
+      "rows": [
+        [
+          "`user ` followed by any characters up to the next `,` or `)` (possibly none)",
+          "`user <user>`"
+        ],
+        [
+          "`host ` followed by any characters up to the next `,` or `)` (possibly none)",
+          "`host <host>`"
+        ],
+        [
+          "an e-mail address: name characters (letters, digits, `.`, `_`, `+`, `-`), `@`, then a domain with at least one dot",
+          "`<email>`"
+        ],
+        [
+          "a key shaped like a UUID: 8, 4, 4, 4 and 12 hexadecimal digits joined by `-`",
+          "`<key>`"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Everything else stays as it was, so the message still says what went wrong. \"user\" and \"host\" count only as whole words (`hostid` is not `host`). Python's `re` module does all of it. No Gurobi license is needed. About ten lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport re\n\nRULES = [\n    (re.compile(r\"\\buser [^,)]*\"), \"user <user>\"),\n    (re.compile(r\"\\bhost [^,)]*\"), \"host <host>\"),\n    (re.compile(r\"[\\w.+-]+@[\\w-]+(\\.[\\w-]+)+\"), \"<email>\"),\n    (re.compile(r\"\\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\b\"), \"<key>\"),\n]\n\n\ndef mask_line(line: str) -> str:\n    \"\"\"The line with users, hosts, e-mail addresses and UUID-shaped keys replaced by placeholders.\"\"\"\n    for pattern, placeholder in RULES:\n        line = pattern.sub(placeholder, line)\n    return line\n\n\nif __name__ == \"__main__\":\n    print(mask_line(\"No license found (user dock, host rack-9) for ops@example.com\"))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport re\n\n\ndef mask_line(line: str) -> str:\n    \"\"\"The line with users, hosts, e-mail addresses and UUID-shaped keys replaced by placeholders.\"\"\"\n    # TODO: one re.sub per row of the statement's table.\n    return line.upper()\n\n\nif __name__ == \"__main__\":\n    print(mask_line(\"No license found (user dock, host rack-9) for ops@example.com\"))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 2,
+    "code": 1,
+    "tables": 1,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "8ecbce7e68b0957b4dc9d5bc7f08bbab089a4d3b466db5ffc93f62e07ce2a42d",
+  "starting_code": "from __future__ import annotations\n\nimport re\n\n\ndef mask_line(line: str) -> str:\n    \"\"\"The line with users, hosts, e-mail addresses and UUID-shaped keys replaced by placeholders.\"\"\"\n    # TODO: one re.sub per row of the statement's table.\n    return line.upper()\n\n\nif __name__ == \"__main__\":\n    print(mask_line(\"No license found (user dock, host rack-9) for ops@example.com\"))\n",
+  "exercise": {
+    "main_path": "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-04/practice-2/masking.py",
+    "test_path": "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-04/practice-2/test_masking.py",
+    "run_command": [
+      "python3",
+      "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-04/practice-2/masking.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-04/practice-2/target/report.xml",
+      "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-04/practice-2/test_masking.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_user_and_host_are_replaced",
+        "kind": "main",
+        "says": "the values after 'user ' and 'host ' become <user> and <host>, the rest of the line kept"
+      },
+      {
+        "id": "test_a_line_with_nothing_personal_is_unchanged",
+        "kind": "main",
+        "says": "a line with no user, host, address or key comes back as it was"
+      },
+      {
+        "id": "test_an_empty_user_is_still_masked",
+        "kind": "edge",
+        "says": "'user , host box1' masks the empty user and the host"
+      },
+      {
+        "id": "test_email_addresses_are_replaced",
+        "kind": "edge",
+        "says": "an e-mail address anywhere in the line becomes <email>"
+      },
+      {
+        "id": "test_access_keys_are_replaced",
+        "kind": "edge",
+        "says": "a UUID-shaped key such as a WLS access id becomes <key>"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-04/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "21-gurobipy/README_5.3.4.md",
+      "section": "Gurobi's Messages Can Name You; Mask Them"
+    },
+    "concepts": [
+      "solver messages cleaned of users, hosts, addresses and keys"
+    ]
+  }
+}

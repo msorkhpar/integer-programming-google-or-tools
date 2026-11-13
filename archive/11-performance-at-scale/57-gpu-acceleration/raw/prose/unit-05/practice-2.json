@@ -1,0 +1,152 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "11-performance-at-scale",
+    "57-gpu-acceleration"
+  ],
+  "variant": "prose",
+  "unit": 5,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Check a GPU solver's selection before using it",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The maintenance crew's planners (jobs worth $`v_j`$, crew-weeks $`h_{j,q}`$ per quarter, capacity $`C_q`$, and pairs $`(a, b)`$ meaning job $`b`$ only with job $`a`$) now get a quick selection from a GPU MILP solver each night, to hand to their CPU solver as a start. The GPU solver's plans change from run to run, and its status line says `FeasibleFound` whether or not the plan is any good, so nothing it reports is taken on trust."
+    },
+    {
+      "type": "para",
+      "text": "Write `accept(x, reported, bounds, values, hours, capacity, requires, gap)` in `check.py`, returning `(accepted, reason)`. `x` is the solver's vector of values, `reported` the objective it reported, and `bounds` the upper bounds on the best possible worth proved by every solver that ran (this is a maximisation). Check, in this order, and return the first failure:"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "every value within $`10^{-5}`$ of a whole number, else `\"not integral\"`;",
+        "round `x` once it passes that check, and judge the rounded plan from here on: values a hair off a whole number count as that whole number;",
+        "each quarter's crew-weeks, from the rounded plan, within $`C_q`$ (to $`10^{-6}`$), else `\"over capacity in quarter <q>\"`, with quarters numbered from 1;",
+        "each dependency kept by the rounded plan, else `\"job <b> without job <a>\"`;",
+        "the rounded plan's own worth, computed from the plan (not `reported`), within `gap` of the tightest bound, relatively (divided by the bound), else `\"outside the gap\"`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Otherwise return `(True, \"accepted\")`. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\n\ndef accept(x: list[float], reported: float, bounds: list[float], values: list[float], hours: list[list[float]],\n           capacity: list[float], requires: list[tuple[int, int]], gap: float) -> tuple[bool, str]:\n    \"\"\"Check a selection from an untrusted MILP solver (maximise value); return (accepted, reason).\"\"\"\n    if any(abs(v - round(v)) > 1e-5 for v in x):\n        return False, \"not integral\"\n    plan = [round(v) for v in x]\n    for q, limit in enumerate(capacity):\n        if sum(hours[j][q] * plan[j] for j in range(len(plan))) > limit + 1e-6:\n            return False, f\"over capacity in quarter {q + 1}\"\n    for a, b in requires:\n        if plan[b] > plan[a]:\n            return False, f\"job {b} without job {a}\"\n    worth = sum(v * p for v, p in zip(values, plan))          # recomputed: the report is not evidence\n    best = min(bounds)                                        # the tightest bound any solver proved\n    if (best - worth) / abs(best) > gap:\n        return False, \"outside the gap\"\n    return True, \"accepted\"\n\n\nif __name__ == \"__main__\":\n    print(accept([1, 0], 5.0, [5.0], [5.0, 4.0], [[2, 0], [1, 1]], [2.0, 1.0], [(0, 1)], 1e-3))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\n\ndef accept(x: list[float], reported: float, bounds: list[float], values: list[float], hours: list[list[float]],\n           capacity: list[float], requires: list[tuple[int, int]], gap: float) -> tuple[bool, str]:\n    \"\"\"Check a selection from an untrusted MILP solver (maximise value); return (accepted, reason).\"\"\"\n    # TODO: integral, within each quarter's crew-weeks, dependencies kept, and its own worth within the gap.\n    return True, \"accepted\"\n\n\nif __name__ == \"__main__\":\n    print(accept([1, 0], 5.0, [5.0], [5.0, 4.0], [[2, 0], [1, 1]], [2.0, 1.0], [(0, 1)], 1e-3))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "b11b254ca3eee7b4adcdc78947d12b727d264e8c9c2dd99d83486f59aeaf53b0",
+  "starting_code": "from __future__ import annotations\n\n\ndef accept(x: list[float], reported: float, bounds: list[float], values: list[float], hours: list[list[float]],\n           capacity: list[float], requires: list[tuple[int, int]], gap: float) -> tuple[bool, str]:\n    \"\"\"Check a selection from an untrusted MILP solver (maximise value); return (accepted, reason).\"\"\"\n    # TODO: integral, within each quarter's crew-weeks, dependencies kept, and its own worth within the gap.\n    return True, \"accepted\"\n\n\nif __name__ == \"__main__\":\n    print(accept([1, 0], 5.0, [5.0], [5.0, 4.0], [[2, 0], [1, 1]], [2.0, 1.0], [(0, 1)], 1e-3))\n",
+  "exercise": {
+    "main_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-05/practice-2/check.py",
+    "test_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-05/practice-2/test_check.py",
+    "run_command": [
+      "python3",
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-05/practice-2/check.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-05/practice-2/target/report.xml",
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-05/practice-2/test_check.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_good_plan_is_accepted_and_one_over_capacity_is_refused",
+        "kind": "main",
+        "says": "a good plan is accepted and one over a quarter's capacity is refused"
+      },
+      {
+        "id": "test_a_plan_short_of_the_gap_is_refused",
+        "kind": "main",
+        "says": "a plan worth less than the gap allows is refused"
+      },
+      {
+        "id": "test_values_a_hair_from_whole_numbers_count_and_a_half_does_not",
+        "kind": "edge",
+        "says": "values within 1e-5 of whole numbers count, a half does not"
+      },
+      {
+        "id": "test_a_dependency_is_checked",
+        "kind": "edge",
+        "says": "a job done without the job it depends on is refused"
+      },
+      {
+        "id": "test_the_plan_is_worth_what_it_selects_not_what_was_reported",
+        "kind": "edge",
+        "says": "the plan's worth is recomputed, not taken from the report"
+      },
+      {
+        "id": "test_the_tightest_bound_from_any_solver_is_the_yardstick",
+        "kind": "edge",
+        "says": "the gap is measured against the tightest bound any solver proved"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-05/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "57-gpu-acceleration/README_11.4.5.md",
+      "section": "A cuOpt Plan Is Checked, Not Trusted"
+    },
+    "concepts": [
+      "a plan from a solver that does not repeat is checked for rows, integrality and its own worth against the tightest bound"
+    ]
+  }
+}

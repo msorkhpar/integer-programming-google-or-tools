@@ -1,0 +1,425 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "27-dependencies-and-groups"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Precedence with lags",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "6.5.4 Precedence with Lags"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's small portfolio has two dependent pairs. P016, a Coast transmission replacement, needs the vegetation clearing P015 along its route. P023, a Valley distribution replacement, needs the transmission repair P022, at least one year later. The data stores each pair as a parent, a child and a **lag** in years. Three planners read the same lag three ways: \"one year after the parent starts\", \"one year after the parent finishes\", and, from the crews, \"and no more than one year after it, or the crew is gone\". Each reading is a different model with a different plan. This lesson fixes what a lag measures, writes minimum and maximum lags as rows on the start variables, and removes the start years a lag rules out before the solve, in four rules."
+    },
+    {
+      "type": "para",
+      "text": "GridCap is a fictional utility's portfolio, generated for this course. Its lags are start-to-start; the other readings and the maximum lag are invented for the lesson."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Lag Is Measured Between Two Events; Convert Every Lag to Start-to-Start"
+    },
+    {
+      "type": "para",
+      "text": "A precedence rule names two events and a distance between them. The common kinds:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Start-to-start (SS), lag $`L`$**: the child starts at least $`L`$ years after the parent *starts*. GridCap's `parent_lag` is this kind.",
+        "**Finish-to-start (FS), lag $`L`$**: the child starts at least $`L`$ years after the parent *finishes*. A parent that starts in year $`s`$ and works $`d_p`$ years (its duration) is finished at the end of year $`s + d_p - 1`$, so the child may start in year $`s + d_p + L`$ at the earliest."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "With one start variable per project and year, the model only knows starts. So turn every lag into a start-to-start lag before writing a row: finish-to-start with lag $`L`$ is start-to-start with lag $`d_p + L`$. (Finish-to-finish and start-to-finish convert the same way, using both durations.) The row is then the cumulative one of lesson 6.4.3, for every year $`t`$ the child may start in:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\text{started\\_by}(c, t) \\le \\text{started\\_by}(p, t - L_{SS}) \\qquad \\forall t \\in T_c \\qquad \\text{(after}_{c,t})"
+    },
+    {
+      "type": "para",
+      "text": "\"The child can have started by $`t`$ only if the parent had started by $`t - L_{SS}`$.\""
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def start_to_start(parent, child) -> int:\n    return child.parent_lag                         # child starts >= parent starts + lag\n\n\ndef finish_to_start(parent, child) -> int:\n    return parent.duration + child.parent_lag       # child starts >= parent finishes + lag"
+    },
+    {
+      "type": "para",
+      "text": "`lag_types.py` reads GridCap's lags both ways. For each pair it lists the child's start years that some parent year can serve, then solves the model with each reading:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "P016 after P015: lag 0, P015 works 1 year(s) and may start [2029, 2030]; P016 may start [2030]\n  start-to-start  start-to-start lag 0: P016 can use [2030]\n  finish-to-start start-to-start lag 1: P016 can use [2030]\nP023 after P022: lag 1, P022 works 3 year(s) and may start [2027, 2028, 2029]; P023 may start [2029]\n  start-to-start  start-to-start lag 1: P023 can use [2029]\n  finish-to-start start-to-start lag 4: P023 can use []\nstart-to-start  NPV $24,260k  {'P015': 2029, 'P016': 2030, 'P022': 2027, 'P023': 2029}\nfinish-to-start NPV $24,107k  {'P015': 2029, 'P016': '-', 'P022': 2029, 'P023': '-'}"
+    },
+    {
+      "type": "para",
+      "text": "P022 works for three years. Read as finish-to-start, its one-year lag becomes four years from start to start, and 2027 + 4 = 2031 is after P023's only start year, 2029: P023 can never be funded. The solver does not say so; it returns `OPTIMAL`, drops P023, and rearranges the rest of the plan around the gap (P022 moves to 2029 and P016 leaves the plan), for $153k less NPV. P016 is still possible under either reading: P015 works one year, so its finish-to-start lag of 0 is a start-to-start lag of 1, and P015 in 2029 serves P016 in 2030."
+    },
+    {
+      "type": "para",
+      "text": "The two readings of the same data differ by a project and $153k. A lag in a data file must say which events it is measured between; when it does not, ask."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Maximum Lag Bounds the Child From Below"
+    },
+    {
+      "type": "para",
+      "text": "A minimum lag says \"not too soon\". A **maximum lag** $`K`$ says \"not too late\": if both projects are funded, the child starts at most $`K`$ years after the parent. In \"by year $`t`$\" terms, if the parent had started by $`t - K`$, the child must have started by $`t`$. That bounds the child's running total from below, so the row points the other way. It must also switch off when the child is not funded, since an unfunded child has no start at all:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\text{started\\_by}(c, t) \\ge \\text{started\\_by}(p, t - K) + \\text{started}(c) - 1 \\qquad \\forall t \\in Y \\qquad \\text{(within}_{c,t})"
+    },
+    {
+      "type": "para",
+      "text": "Read it in the three cases. If the child is not funded, $`\\text{started}(c) = 0`$ and the right side is at most 0, so the row always holds. If the child is funded and the parent had started by $`t - K`$, the right side is 1 and the child must have started by $`t`$. If the parent had not started by then, the right side is 0 and the row says nothing. The row is written for every year of the plan, not only the child's window, because the parent's start decides which years matter."
+    },
+    {
+      "type": "example",
+      "id": "max_lag-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "27-dependencies-and-groups/src/max_lag.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "27-dependencies-and-groups/src/max_lag.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "def max_lag_rows(plan, k: int):\n    \"\"\"If the child is funded, it has started by year t whenever the parent had started by t - k.\"\"\"\n    for t in small.years:\n        plan.model.add_linear_constraint(\n            plan.started_by(CHILD, t) >= plan.started_by(PARENT, t - k) + plan.started(CHILD) - 1,\n            name=f\"within_{CHILD}_{t}\")"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`max_lag.py` keeps GridCap's minimum lag of 1 for P023 and adds maximum lags of 2, 1 and 0 years:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "P022 may start [2027, 2028, 2029], NPV {2027: 1496, 2028: 1287, 2029: 1102}\nP023 may start [2029], NPV {2029: 811}\nmin lag 1 only  NPV $24,260k  P022 2027  P023 2029\nmax lag 2       NPV $24,260k  P022 2027  P023 2029\nmax lag 1       NPV $24,107k  P022 2029  P023 -\nmax lag 0       NPV $24,107k  P022 2029  P023 -"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Max lag 2** costs nothing: the best plan has P022 in 2027 and P023 in 2029, two years apart.",
+        "**Max lag 1**, with the minimum of 1, means *exactly* one year: P023 in 2029 needs P022 in 2028. P022 in 2028 is worth $209k less than in 2027, and the solver finds it better to drop P023 instead, for $153k in all.",
+        "**Max lag 0** is smaller than the minimum lag of 1. No pair of years satisfies both, so P023 can never be funded, and the plan is the same as for max lag 1. Again the solver reports `OPTIMAL`; a minimum larger than a maximum is a data error that only a check finds."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "A maximum lag with an *unconditional* right side, $`\\text{started\\_by}(c, t) \\ge \\text{started\\_by}(p, t - K)`$, is a different rule: \"once the parent starts, the child must follow within $`K`$ years\". It forces the child into the plan: funding the parent makes the child a must-do. Rows exist only for the years of the plan, so a parent that starts in year $`s`$ with $`s + K`$ after the plan's last year is not forced to have its child inside the plan at all. Say which of the two rules the business means, and what should happen at the end of the plan."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Minimum and a Maximum Lag Make a Window Between Two Projects"
+    },
+    {
+      "type": "para",
+      "text": "Together, the two lags say that the child's start minus the parent's start lies between $`L`$ and $`K`$. The minimum-lag rows bound the child's running total from above, and the maximum-lag rows from below. Two consequences follow, and both showed up above:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**$`L = K`$ fixes the distance.** The child starts exactly $`L`$ years after the parent. It is the same as a same-year bundle (lesson 6.5.2) shifted by $`L`$ years.",
+        "**$`L > K`$ admits no pair of years.** The child can never be funded."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The same reasoning applies to the parent's window: with $`L \\le t - s \\le K`$, a start year of either project that has no partner year in the other's window can be used only if the other project is not funded."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lags Shrink Windows Before the Solve"
+    },
+    {
+      "type": "para",
+      "text": "A child start year that no parent start year can serve is a variable that can never be 1 in a plan that funds the child, and since the child cannot be funded without its parent, it can never be 1 at all. Remove it before the model is built, as lesson 6.4.1 removed the years outside each window. The parent's years are different: a parent may be funded without its child, so a parent year with no partner year can be removed only when the child must be funded (a must-do child, or a bundle)."
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def usable_years(parent_starts, child_starts, low: int, high: int | None) -> tuple[list[int], list[int]]:\n    \"\"\"Start years of each project that some start year of the other can pair with.\"\"\"\n    def fits(s, t):\n        return t - s >= low and (high is None or t - s <= high)\n    child = [t for t in child_starts if any(fits(s, t) for s in parent_starts)]\n    parent = [s for s in parent_starts if any(fits(s, t) for t in child_starts)]\n    return parent, child"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "P016 after P015 (finish-to-start, lag 0): P016 [2030] -> [2030], P015 [2029, 2030] -> [2029] (if P016 is funded)\nP023 after P022 (start-to-start, lag 1 to 1): P023 [2029] -> [2029], P022 [2027, 2028, 2029] -> [2028] (if P023 is funded)\nP023 after P022 (finish-to-start, lag 0): P023 [2029] -> [], P022 [2027, 2028, 2029] -> [] (if P023 is funded)"
+    },
+    {
+      "type": "para",
+      "text": "The third line is the finish-to-start case of the first section, found without a solve: P023 has no usable year, so its variable goes and the plan cannot fund it. The check reports that to the planner, which is the point; the smaller model is a bonus. The second line is the exact one-year lag: if P023 is funded, P022 must start in 2028."
+    },
+    {
+      "type": "para",
+      "text": "A variable you never create is one less the model has to carry (lesson 6.4.1 measured that), and the check, unlike the solver, tells the planner why a project can never be funded."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The planning model with this lesson's rows marked. Every lag is converted to start-to-start first."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`P`$ the projects; $`Y`$ the plan's years; $`T_i \\subseteq Y`$ the start years of project $`i`$, with the years no partner can serve already removed; $`M \\subseteq P`$ the must-do projects; $`\\mathcal{G}`$ the alternative groups; $`C \\subseteq P`$ the child projects, with parent $`p(c)`$; $`C^{\\max} \\subseteq C`$ the children with a maximum lag."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`\\text{npv}_{i,t}`$ ($k); $`c_{i,k}`$, what project $`i`$ spends in its $`k`$-th year of work ($k); $`B_y`$, the budget of year $`y`$ ($k); $`d_i`$, project $`i`$'s duration in years; $`L_c`$, child $`c`$'s minimum lag, start-to-start (for a finish-to-start lag $`\\ell`$, $`L_c = d_{p(c)} + \\ell`$); $`K_c \\ge L_c`$, its maximum lag, start-to-start."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_{i,t} \\in \\{0, 1\\}`$ for every $`i \\in P`$ and $`t \\in T_i`$; we write $`\\text{started}(i) = \\sum_{t \\in T_i} x_{i,t}`$ and $`\\text{started\\_by}(i, t) = \\sum_{u \\in T_i,\\, u \\le t} x_{i,u}`$."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{i \\in P} \\sum_{t \\in T_i} \\text{npv}_{i,t}\\, x_{i,t}"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\text{started}(i) &\\le 1 && \\forall i \\in P \\setminus M && \\text{(once}_i) \\\\\n\\text{started}(i) &= 1 && \\forall i \\in M && \\text{(must}_i) \\\\\n\\textstyle\\sum_{i \\in g} \\text{started}(i) &\\le 1 && \\forall g \\in \\mathcal{G} && \\text{(alt}_g) \\\\\n\\text{started\\_by}(c, t) &\\le \\text{started\\_by}(p(c), t - L_c) && \\forall c \\in C,\\ t \\in T_c && \\text{(after}_{c,t}) \\quad \\leftarrow \\text{this lesson: } L_c \\text{ start-to-start} \\\\\n\\text{started\\_by}(c, t) &\\ge \\text{started\\_by}(p(c), t - K_c) + \\text{started}(c) - 1 && \\forall c \\in C^{\\max},\\ t \\in Y && \\text{(within}_{c,t}) \\quad \\leftarrow \\text{this lesson} \\\\\n\\textstyle\\sum_{i \\in P} \\sum_{t \\in T_i,\\, t \\le y} c_{i,\\,y-t}\\, x_{i,t} &\\le B_y && \\forall y \\in Y && \\text{(budget}_y)\n\\end{aligned}"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Label",
+        "Row name in the code"
+      ],
+      "rows": [
+        [
+          "after$`_{c,t}`$",
+          "`after_P023_2029`"
+        ],
+        [
+          "within$`_{c,t}`$",
+          "`within_P023_2030`"
+        ]
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**A lag is measured between two events; convert every lag to start-to-start.** Finish-to-start with lag $`L`$ is start-to-start with lag $`d_p + L`$; read that way, GridCap's P023 could never start.",
+        "**A maximum lag bounds the child from below.** One row per plan year, switched off when the child is unfunded; without the switch it forces the child into the plan.",
+        "**A minimum and a maximum lag make a window between two projects.** Equal lags fix the distance; a minimum above the maximum rules the child out.",
+        "**Lags shrink windows before the solve.** Remove child years no parent year can serve; remove parent years only when the child must be funded."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Lag kind",
+        "As a start-to-start lag"
+      ],
+      "rows": [
+        [
+          "start-to-start $`L`$",
+          "$`L`$"
+        ],
+        [
+          "finish-to-start $`L`$",
+          "$`d_p + L`$"
+        ],
+        [
+          "start-to-finish $`L`$ (child finishes $`L`$ after parent starts)",
+          "$`L - d_c + 1`$"
+        ],
+        [
+          "finish-to-finish $`L`$",
+          "$`d_p + L - d_c`$"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Rule in words",
+        "Row, for each year $`t`$"
+      ],
+      "rows": [
+        [
+          "child at least $`L`$ after parent",
+          "$`\\text{started\\_by}(c, t) \\le \\text{started\\_by}(p, t - L)`$, $`t \\in T_c`$"
+        ],
+        [
+          "if both funded, child at most $`K`$ after parent",
+          "$`\\text{started\\_by}(c, t) \\ge \\text{started\\_by}(p, t - K) + \\text{started}(c) - 1`$, $`t \\in Y`$"
+        ],
+        [
+          "parent forces child within $`K`$",
+          "$`\\text{started\\_by}(c, t) \\ge \\text{started\\_by}(p, t - K)`$, $`t \\in Y`$"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [MathOpt sample time_indexed_scheduling.py (OR-Tools)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/samples/python/time_indexed_scheduling.py) (models release times by fixing early start variables to 0 through their bounds); [MO-book 3.11, Maintenance planning](https://mobook.github.io/MO-book/notebooks/03/11-maintenance-planning.html) (start-day binaries with a row for every window of consecutive days, at most one start per window: a spacing rule written over windows)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Read P016's lag as finish-to-finish with lag 0. Convert it to start-to-start using both durations, and predict whether P016 can still start in 2030.",
+        "In `max_lag.py`, write the unconditional rule \"once P022 starts, P023 must follow within 2 years\". Predict the plan.",
+        "Extend `usable_years` to a child with two parents (needs all). When can a child year be removed?"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Store the Lag With Its Kind"
+    },
+    {
+      "type": "para",
+      "text": "A lag column that holds only a number is a modeling decision left to whoever reads it. Store the kind with it (`SS`, `FS`, `SF`, `FF`), and the minimum and maximum, and convert to start-to-start in one function with a test for each kind (lesson 12.3.1). The model builder then sees one kind of lag, and the conversion, which is where the mistakes happen, is checked once."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**lag_types.py.** Reads GridCap's lags as start-to-start and as finish-to-start and solves both (*A Lag Is Measured Between Two Events*). *Try:* Set every lag to 0 and read them as finish-to-start. Predict whether P023 can start."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [lag_types.py](src/lag_types.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**max_lag.py.** Adds maximum lags of 2, 1 and 0 years to P023 (*A Maximum Lag Bounds the Child From Below*). *Try:* Remove GridCap's minimum lag and keep a maximum of 0. Predict P022's start."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [max_lag.py](src/max_lag.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**window_shrink.py.** Lists the start years each lag leaves usable (*Lags Shrink Windows Before the Solve*). *Try:* Give P016 a maximum lag of 0, start-to-start. Predict P015's usable years."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [window_shrink.py](src/window_shrink.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**planning_model.py.** The model builder the programs import; `add_after` writes the minimum-lag rows."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [planning_model.py](src/planning_model.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 11,
+    "paras": 30,
+    "code": 9,
+    "tables": 3,
+    "lists": 9,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 1
+  },
+  "content_sha256": "d58f965f120c4e2e7b6f489576947b230215f5b3694b7b7d42c14858e5e9dfc4"
+}

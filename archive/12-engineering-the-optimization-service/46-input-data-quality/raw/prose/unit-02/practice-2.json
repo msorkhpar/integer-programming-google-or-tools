@@ -1,0 +1,205 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "46-input-data-quality"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Reject a snapshot with six planted defects",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility's planning tool exports a main-replacement snapshot each cycle, and this cycle's export has six defects planted in it. Your gate must reject it, and find all six."
+    },
+    {
+      "type": "para",
+      "text": "Each job $`j`$ has a cost profile $`c_{j,0}, c_{j,1}, \\dots`$ (one entry per year of work, $k), a window $`e_j \\le t \\le l_j`$ of start years, a `required` flag, and possibly a prerequisite $`a(j)`$ with a lag $`L_j`$: job $`j`$ may start in year $`t`$ only if $`a(j)`$ started in a year $`s \\le t - L_j`$. Each year $`y`$ of the horizon $`H`$ has a budget $`B_y`$. The model has $`x_{j,t} \\in \\{0, 1\\}`$ for each start year $`t \\in T_j`$, where $`T_j`$ holds the window's years whose whole work falls inside the horizon: the snapshot's `horizon` is a list of consecutive years, and $`t`$ is in $`T_j`$ when $`e_j \\le t \\le l_j`$, $`t`$ is at least the horizon's first year, and $`t + |c_j| - 1`$ (the job's last year of work) is at most the horizon's last year. The rows are"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{t \\in T_j} x_{j,t} &= 1 && \\forall j \\text{ required} && \\text{(required}_j) \\\\\n\\sum_{t \\in T_j} x_{j,t} &\\le 1 && \\forall j \\text{ optional} && \\text{(once}_j) \\\\\n\\sum_{u \\in T_j,\\, u \\le t} x_{j,u} &\\le \\sum_{s \\in T_{a(j)},\\, s \\le t - L_j} x_{a(j),s} && \\forall j \\text{ with } a(j),\\ t \\in T_j && \\text{(after}_{j,t}) \\\\\n\\sum_{j} \\sum_{t \\in T_j,\\, 0 \\le y - t < |c_j|} c_{j,\\,y-t}\\, x_{j,t} &\\le B_y && \\forall y \\in H && \\text{(budget}_y)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "In `review.py`, write `starts` (the set $`T_j`$) and the five rules, and `review(snapshot, previous)`, which returns every finding as `(severity, rule, subject)`, sorted. `rejected` is written."
+    },
+    {
+      "type": "table",
+      "headers": [
+        "rule",
+        "subject",
+        "fires when",
+        "severity"
+      ],
+      "rows": [
+        [
+          "`prerequisite-cycle`",
+          "the jobs on the cycle, sorted, joined with `+`",
+          "following prerequisites from a job leads back to it",
+          "error"
+        ],
+        [
+          "`prerequisite-too-late`",
+          "the job",
+          "no start of its prerequisite plus the lag reaches any of its own starts",
+          "error or warning, below"
+        ],
+        [
+          "`no-start-in-horizon`",
+          "the job",
+          "a required job has no start year",
+          "error"
+        ],
+        [
+          "`required-over-budget`",
+          "`plan`",
+          "what every plan must pay for costs more than all budgets together",
+          "error"
+        ],
+        [
+          "`budget-drift`",
+          "the year, as text",
+          "a year's budget is more than 3 times, or less than a third of, its amount in `previous`",
+          "warning"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Give `prerequisite-too-late` the severity the lesson's rule calls for: an error when the finding proves no plan exists, a warning otherwise. The finding proves it when the job must be done in every plan: the job is required, or it is the prerequisite (directly or through a chain of `after`) of a required job. A job that is optional and needed by no required job can simply be left out, so its finding is a warning. The same set of must-do jobs is what `required-over-budget` adds up. With no `previous`, there is no drift."
+    },
+    {
+      "type": "para",
+      "text": "The six planted defects are one of each: a prerequisite cycle, a too-late prerequisite on a job every plan must do, a too-late prerequisite on an optional job, a required job with no start year, required spending above all budgets together, and a budget that drifted from `previous`. The main test checks that `review` finds each of them. About forty lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nFinding = tuple[str, str, str]                  # (severity, rule, subject)\n\n\ndef starts(job: dict, horizon: list[int]) -> list[int]:\n    \"\"\"The start years in the job's window whose whole work falls inside the horizon.\"\"\"\n    return [t for t in range(job[\"earliest\"], job[\"latest\"] + 1)\n            if t >= horizon[0] and t + len(job[\"cost\"]) - 1 <= horizon[-1]]\n\n\ndef cycles(snapshot: dict) -> list[Finding]:\n    after = {j[\"id\"]: j[\"after\"] for j in snapshot[\"jobs\"]}\n    found = set()\n    for first in after:\n        seen, jid = [], first\n        while jid is not None and jid not in seen:\n            seen.append(jid)\n            jid = after[jid]\n        if jid is not None:\n            found.add((\"error\", \"prerequisite-cycle\", \"+\".join(sorted(seen[seen.index(jid):]))))\n    return sorted(found)\n\n\ndef needed(snapshot: dict) -> set[str]:\n    \"\"\"Jobs every plan must do: the required ones and, through `after`, all their prerequisites.\"\"\"\n    by_id = {j[\"id\"]: j for j in snapshot[\"jobs\"]}\n    need, todo = set(), [j[\"id\"] for j in snapshot[\"jobs\"] if j[\"required\"]]\n    while todo:\n        jid = todo.pop()\n        if jid not in need:\n            need.add(jid)\n            if by_id[jid][\"after\"] is not None:\n                todo.append(by_id[jid][\"after\"])\n    return need\n\n\ndef too_late(snapshot: dict) -> list[Finding]:\n    by_id = {j[\"id\"]: j for j in snapshot[\"jobs\"]}\n    need = needed(snapshot)\n    found = []\n    for job in snapshot[\"jobs\"]:\n        if job[\"after\"] is None:\n            continue\n        mine, theirs = starts(job, snapshot[\"horizon\"]), starts(by_id[job[\"after\"]], snapshot[\"horizon\"])\n        if not any(s + job[\"lag\"] <= t for s in theirs for t in mine):\n            found.append((\"error\" if job[\"id\"] in need else \"warning\", \"prerequisite-too-late\", job[\"id\"]))\n    return found\n\n\ndef no_start(snapshot: dict) -> list[Finding]:\n    return [(\"error\", \"no-start-in-horizon\", j[\"id\"]) for j in snapshot[\"jobs\"]\n            if j[\"required\"] and not starts(j, snapshot[\"horizon\"])]\n\n\ndef over_budget(snapshot: dict) -> list[Finding]:\n    by_id = {j[\"id\"]: j for j in snapshot[\"jobs\"]}\n    need = needed(snapshot)\n    if sum(sum(by_id[jid][\"cost\"]) for jid in need) > sum(snapshot[\"budgets\"].values()):\n        return [(\"error\", \"required-over-budget\", \"plan\")]\n    return []\n\n\ndef drift(snapshot: dict, previous: dict | None, factor: float = 3.0) -> list[Finding]:\n    if previous is None:\n        return []\n    found = []\n    for year, amount in snapshot[\"budgets\"].items():\n        old = previous[\"budgets\"].get(year)\n        if old and (amount > factor * old or amount * factor < old):\n            found.append((\"warning\", \"budget-drift\", str(year)))\n    return found\n\n\ndef review(snapshot: dict, previous: dict | None = None) -> list[Finding]:\n    \"\"\"Every finding of every rule, sorted: errors first.\"\"\"\n    return sorted(cycles(snapshot) + too_late(snapshot) + no_start(snapshot) + over_budget(snapshot)\n                  + drift(snapshot, previous))\n\n\ndef rejected(findings: list[Finding]) -> bool:\n    return any(severity == \"error\" for severity, _, _ in findings)\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"horizon\": [2027, 2028], \"budgets\": {2027: 500, 2028: 500},\n                \"jobs\": [{\"id\": \"M1\", \"cost\": [900], \"earliest\": 2027, \"latest\": 2028, \"required\": True,\n                          \"after\": None, \"lag\": 0}]}\n    print(review(snapshot))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nFinding = tuple[str, str, str]                  # (severity, rule, subject)\n\n\ndef starts(job: dict, horizon: list[int]) -> list[int]:\n    \"\"\"The start years in the job's window whose whole work falls inside the horizon.\"\"\"\n    # TODO\n    return []\n\n\ndef cycles(snapshot: dict) -> list[Finding]:\n    # TODO: one finding per cycle of prerequisites, its jobs sorted and joined with \"+\".\n    return []\n\n\ndef too_late(snapshot: dict) -> list[Finding]:\n    # TODO: a job whose prerequisite cannot start early enough for any of its own start years.\n    return []\n\n\ndef no_start(snapshot: dict) -> list[Finding]:\n    # TODO: a required job with no start year.\n    return []\n\n\ndef over_budget(snapshot: dict) -> list[Finding]:\n    # TODO: what every plan must pay for, against all the budgets together.\n    return []\n\n\ndef drift(snapshot: dict, previous: dict | None, factor: float = 3.0) -> list[Finding]:\n    # TODO: a year's budget more than `factor` times larger or smaller than in `previous`.\n    return []\n\n\ndef review(snapshot: dict, previous: dict | None = None) -> list[Finding]:\n    \"\"\"Every finding of every rule, sorted: errors first.\"\"\"\n    # TODO: run every rule.\n    return [(\"?\", \"not reviewed\", \"\")]\n\n\ndef rejected(findings: list[Finding]) -> bool:\n    return any(severity == \"error\" for severity, _, _ in findings)\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"horizon\": [2027, 2028], \"budgets\": {2027: 500, 2028: 500},\n                \"jobs\": [{\"id\": \"M1\", \"cost\": [900], \"earliest\": 2027, \"latest\": 2028, \"required\": True,\n                          \"after\": None, \"lag\": 0}]}\n    print(review(snapshot))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 1,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "23e040ece1ffeecc0be30072953acf2b7bca418c7f2012c9f14b0af3434a1bf2",
+  "starting_code": "from __future__ import annotations\n\nFinding = tuple[str, str, str]                  # (severity, rule, subject)\n\n\ndef starts(job: dict, horizon: list[int]) -> list[int]:\n    \"\"\"The start years in the job's window whose whole work falls inside the horizon.\"\"\"\n    # TODO\n    return []\n\n\ndef cycles(snapshot: dict) -> list[Finding]:\n    # TODO: one finding per cycle of prerequisites, its jobs sorted and joined with \"+\".\n    return []\n\n\ndef too_late(snapshot: dict) -> list[Finding]:\n    # TODO: a job whose prerequisite cannot start early enough for any of its own start years.\n    return []\n\n\ndef no_start(snapshot: dict) -> list[Finding]:\n    # TODO: a required job with no start year.\n    return []\n\n\ndef over_budget(snapshot: dict) -> list[Finding]:\n    # TODO: what every plan must pay for, against all the budgets together.\n    return []\n\n\ndef drift(snapshot: dict, previous: dict | None, factor: float = 3.0) -> list[Finding]:\n    # TODO: a year's budget more than `factor` times larger or smaller than in `previous`.\n    return []\n\n\ndef review(snapshot: dict, previous: dict | None = None) -> list[Finding]:\n    \"\"\"Every finding of every rule, sorted: errors first.\"\"\"\n    # TODO: run every rule.\n    return [(\"?\", \"not reviewed\", \"\")]\n\n\ndef rejected(findings: list[Finding]) -> bool:\n    return any(severity == \"error\" for severity, _, _ in findings)\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"horizon\": [2027, 2028], \"budgets\": {2027: 500, 2028: 500},\n                \"jobs\": [{\"id\": \"M1\", \"cost\": [900], \"earliest\": 2027, \"latest\": 2028, \"required\": True,\n                          \"after\": None, \"lag\": 0}]}\n    print(review(snapshot))\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-2/review.py",
+    "test_path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-2/test_review.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-2/review.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-2/target/report.xml",
+      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-2/test_review.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_clean_snapshot_passes_and_the_six_defects_are_all_found",
+        "kind": "main",
+        "says": "a clean snapshot gets no finding, and the export with six planted defects is rejected with all six found"
+      },
+      {
+        "id": "test_a_cycle_is_reported_once",
+        "kind": "edge",
+        "says": "a cycle of prerequisites is one finding, not one per job on it"
+      },
+      {
+        "id": "test_a_required_job_whose_prerequisite_is_too_late_is_an_error",
+        "kind": "edge",
+        "says": "a required job whose prerequisite cannot start early enough proves there is no plan"
+      },
+      {
+        "id": "test_an_optional_job_whose_prerequisite_is_too_late_is_a_warning",
+        "kind": "edge",
+        "says": "the same problem on an optional job leaves a plan, so it only warns"
+      },
+      {
+        "id": "test_a_prerequisite_of_a_required_job_is_held_to_the_error_rule",
+        "kind": "edge",
+        "says": "a job not flagged required but needed by a required job must be done, so its too-late prerequisite is an error"
+      },
+      {
+        "id": "test_a_start_needs_room_for_every_year_of_work",
+        "kind": "edge",
+        "says": "a start year counts only if every year of the job's work falls inside the horizon"
+      },
+      {
+        "id": "test_a_prerequisite_of_a_required_job_counts_toward_required_spend",
+        "kind": "edge",
+        "says": "a prerequisite of a required job must be paid for too"
+      },
+      {
+        "id": "test_drift_is_flagged_both_ways_but_not_for_an_ordinary_cut",
+        "kind": "edge",
+        "says": "a budget that grew or shrank by more than the factor is flagged; a 30% cut is not"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "46-input-data-quality/README_12.2.2.md",
+      "section": "Severity Follows What a Finding Proves: Errors Block, Warnings Report"
+    },
+    "concepts": [
+      "a gate that runs every rule on a snapshot, compares it with the last accepted one, and gives each finding the severity of what it proves"
+    ]
+  }
+}

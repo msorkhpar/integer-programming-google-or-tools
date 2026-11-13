@@ -1,0 +1,144 @@
+{
+  "project_api": 1,
+  "title": "Value each start, and the risk it removes",
+  "before": "../../../../55-project-cipt-planner/steps/03",
+  "after": "../../../../55-project-cipt-planner/steps/04",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the demo export matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "cipt/value.py",
+      "signature": "def annual_pof(beta: float, eta: float, age: float) -> float",
+      "contract": "Returns the chance that an asset of this age fails within the next year, given that it has not failed yet, on a Weibull curve with shape beta and scale eta.",
+      "idea": "The conditional one-year PoF is 1 - exp(H(age) - H(age + 1)), with the cumulative hazard H(a) = (a / eta) ** beta.",
+      "lesson": {
+        "title": "7.3.1 Probability of Failure and Hazard Curves (Weibull)",
+        "href": "../../../../07-the-capital-planning-domain/32-asset-risk/units/unit-01/7.3.1-probability-of-failure-and-hazard-curves-weibull.unit.html"
+      }
+    },
+    {
+      "file": "cipt/value.py",
+      "signature": "def annual_risk(request: Request, project: Project, year: int) -> float",
+      "contract": "Returns the expected failure cost, in $k, of the project's asset in a calendar year if nothing is done: the consequence of failure times the PoF at the asset's age in that year. The export's age is the asset's age in the plan's first year, so in year y the age is age + y - first year.",
+      "idea": "Risk is PoF times CoF, and the age grows by one each year from the plan's first year.",
+      "lesson": {
+        "title": "7.3.3 Consequence of Failure and Risk = PoF × CoF",
+        "href": "../../../../07-the-capital-planning-domain/32-asset-risk/units/unit-03/7.3.3-consequence-of-failure-and-risk-pof-cof.unit.html"
+      },
+      "stub": "return 0.0"
+    },
+    {
+      "file": "cipt/value.py",
+      "signature": "def risk_reduction(request: Request, project: Project, start: int) -> float",
+      "contract": "Returns the risk removed by a start in a given year: the asset's annual risk summed over every year after the work ends, to the plan's last year.",
+      "idea": "Work removes the risk of the years after it is done; a later start removes fewer years.",
+      "lesson": {
+        "title": "7.3.4 Risk Reduction From an Intervention, Year by Year",
+        "href": "../../../../07-the-capital-planning-domain/32-asset-risk/units/unit-04/7.3.4-risk-reduction-from-an-intervention-year-by-year.unit.html"
+      }
+    },
+    {
+      "file": "cipt/value.py",
+      "signature": "def coefficients(request: Request) -> dict[tuple[str, int], tuple[int, float]]",
+      "contract": "Returns, for every project and start year the model has a variable for, the pair (NPV of that start, risk reduction of that start).",
+      "idea": "Price each start before the model is built, so each variable gets its own coefficient.",
+      "lesson": {
+        "title": "7.2.4 Precomputing NPV Coefficients by Start Year",
+        "href": "../../../../07-the-capital-planning-domain/31-financial-evaluation/units/unit-04/7.2.4-precomputing-npv-coefficients-by-start-year.unit.html"
+      },
+      "stub": "return {}"
+    },
+    {
+      "file": "cipt/model.py",
+      "signature": "def build(request: Request) -> Built",
+      "contract": "Keeps the plan's NPV and its risk removed as two expressions on the Built, and maximizes the one the request's objective names ('npv' or 'risk').",
+      "idea": "Two measures over the same variables are two linear expressions; the objective picks one.",
+      "lesson": {
+        "title": "14.2.4 Value: NPV by Start Year and Risk Reduction",
+        "href": "../../../../14-growing-real-projects/55-project-cipt-planner/units/unit-04/14.2.4-value-npv-by-start-year-and-risk-reduction.unit.html"
+      }
+    },
+    {
+      "file": "cipt/solve.py",
+      "signature": "def read_plan(built: Built, result: mathopt.SolveResult) -> Plan",
+      "contract": "Also returns the plan's NPV and risk removed, evaluated from the two expressions at the solution.",
+      "idea": "The plan reports both measures whichever one was maximized.",
+      "lesson": {
+        "title": "4.2.2 Reading `SolveResult`: Termination, Primal and Dual Solutions, Statistics",
+        "href": "../../../../04-google-or-tools-in-depth/13-mathopt-core/units/unit-02/4.2.2-reading-solveresult-termination-primal-and-dual-solutions-statistics.unit.html"
+      }
+    },
+    {
+      "file": "cipt/data.py",
+      "signature": "def load_request(raw: dict) -> Request",
+      "contract": "Also reads each project's NPV for every start year and its asset (id, age, Weibull shape and scale, consequence of failure), and the request's objective, 'npv' by default; refuses any other objective.",
+      "idea": "The export already carries NPV by start year and asset health; read them where they are.",
+      "lesson": {
+        "title": "7.2.4 Precomputing NPV Coefficients by Start Year",
+        "href": "../../../../07-the-capital-planning-domain/31-financial-evaluation/units/unit-04/7.2.4-precomputing-npv-coefficients-by-start-year.unit.html"
+      }
+    },
+    {
+      "file": "cipt/report.py",
+      "signature": "def render(request: Request, plan: Plan) -> str",
+      "contract": "Changes the report in three ways. The funded line's `value $<value>k` is now the plan's objective, what the model maximized (the NPV of the actual starts when the objective is 'npv'). After it comes the line `NPV $<npv>k, risk reduced $<risk>k (maximized: <objective>)`, NPV in whole $k and risk with one decimal, both with thousands commas. Each funded project's line shows `npv` and the NPV of the year the project starts, right-aligned in 6 characters, where it showed `value` and the earliest-start value.",
+      "idea": "A report shows the measure that was not maximized as well as the one that was.",
+      "lesson": {
+        "title": "14.2.4 Value: NPV by Start Year and Risk Reduction",
+        "href": "../../../../14-growing-real-projects/55-project-cipt-planner/units/unit-04/14.2.4-value-npv-by-start-year-and-risk-reduction.unit.html"
+      }
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_value.py::test_npv_depends_on_the_start_year",
+      "main",
+      "a start is worth the NPV finance quotes for that start year"
+    ],
+    [
+      "tests/test_value.py::test_failure_probability_rises_with_age",
+      "main",
+      "an older asset is more likely to fail within the year"
+    ],
+    [
+      "tests/test_value.py::test_annual_pof_follows_the_weibull_curve",
+      "main",
+      "the one-year failure probability follows the Weibull curve"
+    ],
+    [
+      "tests/test_value.py::test_risk_reduction_counts_the_years_after_the_work",
+      "main",
+      "risk removed counts the years after the work ends"
+    ],
+    [
+      "tests/test_value.py::test_risk_objective_funds_the_riskier_asset",
+      "edge",
+      "with the risk objective the plan funds the riskier asset"
+    ],
+    [
+      "tests/test_value.py::test_report_shows_npv_and_risk",
+      "main",
+      "the report shows the plan's NPV and the risk it removes"
+    ]
+  ],
+  "plants": {
+    "tests/test_value.py::test_risk_objective_funds_the_riskier_asset": [
+      [
+        "cipt/model.py",
+        "    model.maximize(built.npv if request.objective == \"npv\" else built.risk)",
+        "    model.maximize(built.npv)"
+      ]
+    ]
+  },
+  "cites": {
+    "path": "55-project-cipt-planner/README_14.2.4.md",
+    "section": null
+  }
+}

@@ -1,0 +1,166 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "15-cpsat-core"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Say what the solver found before reading a plan",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A dispatch team (not GridCap) runs CP-SAT models of many shapes from one service, and the service has to tell its callers what came back. Last week it returned \"plan: []\" for a model the solver had refused, and the caller read that as \"load nothing\"."
+    },
+    {
+      "type": "para",
+      "text": "Write `report(model, x, solver=None)` in `report.py`. `x` maps names to the model's Boolean variables; `solver` is a `CpSolver` the caller may have configured (make a new one when it is `None`). Solve the model once and return a dict with five keys:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Key",
+        "Value"
+      ],
+      "rows": [
+        [
+          "`\"status\"`",
+          "the status's name, such as `\"OPTIMAL\"`"
+        ],
+        [
+          "`\"plan\"`",
+          "the sorted names whose Boolean is true, when the status carries a solution; else `None`"
+        ],
+        [
+          "`\"objective\"`",
+          "the objective value rounded to an `int`, when there is a solution *and* the model has an objective; else `None`"
+        ],
+        [
+          "`\"proven\"`",
+          "`True` only when the solution was proved best"
+        ],
+        [
+          "`\"reason\"`",
+          "for an invalid model, the solver's explanation of what is wrong; else `\"\"`"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Use the lesson's table of the five statuses to decide which ones carry a solution. `model.has_objective()` says whether an objective was set. The tests build small models of each kind, including a search the caller stops at its first plan. About twelve lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef report(model: cp_model.CpModel, x: dict, solver: cp_model.CpSolver | None = None) -> dict:\n    \"\"\"Solve and say what came back: status, plan, objective, whether it is proven best, and why not valid.\"\"\"\n    solver = solver or cp_model.CpSolver()\n    status = solver.solve(model)\n    answer = {\"status\": solver.status_name(status), \"plan\": None, \"objective\": None, \"proven\": False, \"reason\": \"\"}\n    if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):\n        answer[\"plan\"] = sorted(name for name, var in x.items() if solver.boolean_value(var))\n        if model.has_objective():\n            answer[\"objective\"] = round(solver.objective_value)\n        answer[\"proven\"] = status == cp_model.OPTIMAL\n    elif status == cp_model.MODEL_INVALID:\n        answer[\"reason\"] = model.validate()\n    return answer\n\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = {name: model.new_bool_var(name) for name in (\"a\", \"b\", \"c\")}\n    model.add(2 * x[\"a\"] + 3 * x[\"b\"] + 4 * x[\"c\"] <= 5)\n    model.maximize(3 * x[\"a\"] + 4 * x[\"b\"] + 5 * x[\"c\"])\n    print(report(model, x))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef report(model: cp_model.CpModel, x: dict, solver: cp_model.CpSolver | None = None) -> dict:\n    \"\"\"Solve and say what came back: status, plan, objective, whether it is proven best, and why not valid.\"\"\"\n    # TODO: solve, then fill in what the status allows you to read.\n    return {\"status\": \"\", \"plan\": None, \"objective\": None, \"proven\": False, \"reason\": \"\"}\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = {name: model.new_bool_var(name) for name in (\"a\", \"b\", \"c\")}\n    model.add(2 * x[\"a\"] + 3 * x[\"b\"] + 4 * x[\"c\"] <= 5)\n    model.maximize(3 * x[\"a\"] + 4 * x[\"b\"] + 5 * x[\"c\"])\n    print(report(model, x))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 1,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "ff84a5da0cd4a16305c0919620e7828c3041646643b0a7a4c37e6836509d6e4c",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef report(model: cp_model.CpModel, x: dict, solver: cp_model.CpSolver | None = None) -> dict:\n    \"\"\"Solve and say what came back: status, plan, objective, whether it is proven best, and why not valid.\"\"\"\n    # TODO: solve, then fill in what the status allows you to read.\n    return {\"status\": \"\", \"plan\": None, \"objective\": None, \"proven\": False, \"reason\": \"\"}\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = {name: model.new_bool_var(name) for name in (\"a\", \"b\", \"c\")}\n    model.add(2 * x[\"a\"] + 3 * x[\"b\"] + 4 * x[\"c\"] <= 5)\n    model.maximize(3 * x[\"a\"] + 4 * x[\"b\"] + 5 * x[\"c\"])\n    print(report(model, x))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-2/report.py",
+    "test_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-2/test_report.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-2/report.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-2/target/report.xml",
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-2/test_report.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_an_optimal_plan_is_read_and_marked_proven",
+        "kind": "main",
+        "says": "a proven optimum gives its status, its plan, its objective and proven = True"
+      },
+      {
+        "id": "test_an_infeasible_model_has_no_plan",
+        "kind": "main",
+        "says": "an infeasible model gives its status and no plan and no objective"
+      },
+      {
+        "id": "test_a_plan_from_a_stopped_search_is_read_but_not_proven",
+        "kind": "edge",
+        "says": "a search stopped at its first plan still gives that plan, marked not proven"
+      },
+      {
+        "id": "test_an_invalid_model_says_why",
+        "kind": "edge",
+        "says": "an invalid model gives no plan and the solver's own reason"
+      },
+      {
+        "id": "test_a_model_without_an_objective_has_no_objective_value",
+        "kind": "edge",
+        "says": "a model with no objective gives a plan and no objective value"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "15-cpsat-core/README_4.4.1.md",
+      "section": "Read the Status Before You Read a Value"
+    },
+    "concepts": [
+      "a CP-SAT program builds a CpModel, solves it with a CpSolver and checks the status before reading values",
+      "only OPTIMAL and FEASIBLE carry a solution, and only OPTIMAL proves it best"
+    ]
+  }
+}

@@ -1,0 +1,153 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "26-multi-period-timing"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Read the start years, and refuse what is not a schedule",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A gas utility's planners run the main-replacement model every month and hand its answer to a reporting job. The job needs two things from each solve: every project's start year, and which funded projects were pushed past the first year they could start. It also must not report a schedule that is not one: last month a run stopped early and handed over values like 0.5, and the report rounded them into a plan nobody had approved."
+    },
+    {
+      "type": "para",
+      "text": "Write two functions in `starts.py`:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`read_starts(values, projects, tol=1e-6)` takes the values the solver returned, `values[(pid, year)]`, one for each start variable, and returns every project's start year, or `None` for a project that is not funded. It raises `ScheduleError` when the values are not a schedule.",
+        "`deferrals(starts, projects)` returns, for each funded project that starts after its earliest allowed year, how many years later it starts."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "In the lesson's notation, the solver returns a value $`\\hat x_{i,t}`$ for each $`i \\in P`$ and $`t \\in T_i`$, and a solver only promises those values to within a tolerance $`\\varepsilon`$ of the domain $`\\{0, 1\\}`$. Before you code, write down in that notation which values are a schedule (when is $`\\hat x_{i,t}`$ read as 1, as 0, or as neither, and how many years of one project may read as 1), and what a project's start year $`s_i`$ and its deferral are in terms of $`\\hat x_{i,t}`$ and $`\\min T_i`$."
+    },
+    {
+      "type": "para",
+      "text": "The tests hand your functions values directly, so no solver runs. About fifteen lines in total."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]          # the years it may start in, earliest first\n\n\nclass ScheduleError(ValueError):\n    \"\"\"The values are not a schedule: a value is not whole, or a project starts twice.\"\"\"\n\n\ndef read_starts(values: dict[tuple[str, int], float], projects: list[Project],\n                tol: float = 1e-6) -> dict[str, int | None]:\n    \"\"\"Each project's start year, or None if it is not funded.\"\"\"\n    starts: dict[str, int | None] = {}\n    for p in projects:\n        chosen = []\n        for t in p.starts:\n            v = values[p.pid, t]\n            if abs(v - 1) <= tol:\n                chosen.append(t)\n            elif abs(v) > tol:\n                raise ScheduleError(f\"x[{p.pid},{t}] = {v} is not a whole number\")\n        if len(chosen) > 1:\n            raise ScheduleError(f\"{p.pid} starts in {chosen}\")\n        starts[p.pid] = chosen[0] if chosen else None\n    return starts\n\n\ndef deferrals(starts: dict[str, int | None], projects: list[Project]) -> dict[str, int]:\n    \"\"\"Years each funded project starts after its earliest allowed year; on-time projects are left out.\"\"\"\n    late = {}\n    for p in projects:\n        year = starts.get(p.pid)\n        if year is not None and year > min(p.starts):\n            late[p.pid] = year - min(p.starts)\n    return late\n\n\nif __name__ == \"__main__\":\n    demo = [Project(\"W1\", (2027, 2028)), Project(\"W2\", (2028,))]\n    values = {(\"W1\", 2027): 0.0, (\"W1\", 2028): 1.0, (\"W2\", 2028): 0.0}\n    found = read_starts(values, demo)\n    print(found, deferrals(found, demo))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]          # the years it may start in, earliest first\n\n\nclass ScheduleError(ValueError):\n    \"\"\"The values are not a schedule: a value is not whole, or a project starts twice.\"\"\"\n\n\ndef read_starts(values: dict[tuple[str, int], float], projects: list[Project],\n                tol: float = 1e-6) -> dict[str, int | None]:\n    \"\"\"Each project's start year, or None if it is not funded.\"\"\"\n    # TODO: read each project's start from its values, and refuse values that are not a schedule.\n    return {}\n\n\ndef deferrals(starts: dict[str, int | None], projects: list[Project]) -> dict[str, int]:\n    \"\"\"Years each funded project starts after its earliest allowed year; on-time projects are left out.\"\"\"\n    # TODO: compare each funded project's start with its earliest allowed year.\n    return {}\n\n\nif __name__ == \"__main__\":\n    demo = [Project(\"W1\", (2027, 2028)), Project(\"W2\", (2028,))]\n    values = {(\"W1\", 2027): 0.0, (\"W1\", 2028): 1.0, (\"W2\", 2028): 0.0}\n    found = read_starts(values, demo)\n    print(found, deferrals(found, demo))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "6874926e7e41eaf78b58a7406781cdfb14bd8e8d480823550bbe467ace091a96",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]          # the years it may start in, earliest first\n\n\nclass ScheduleError(ValueError):\n    \"\"\"The values are not a schedule: a value is not whole, or a project starts twice.\"\"\"\n\n\ndef read_starts(values: dict[tuple[str, int], float], projects: list[Project],\n                tol: float = 1e-6) -> dict[str, int | None]:\n    \"\"\"Each project's start year, or None if it is not funded.\"\"\"\n    # TODO: read each project's start from its values, and refuse values that are not a schedule.\n    return {}\n\n\ndef deferrals(starts: dict[str, int | None], projects: list[Project]) -> dict[str, int]:\n    \"\"\"Years each funded project starts after its earliest allowed year; on-time projects are left out.\"\"\"\n    # TODO: compare each funded project's start with its earliest allowed year.\n    return {}\n\n\nif __name__ == \"__main__\":\n    demo = [Project(\"W1\", (2027, 2028)), Project(\"W2\", (2028,))]\n    values = {(\"W1\", 2027): 0.0, (\"W1\", 2028): 1.0, (\"W2\", 2028): 0.0}\n    found = read_starts(values, demo)\n    print(found, deferrals(found, demo))\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-2/starts.py",
+    "test_path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-2/test_starts.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-2/starts.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-2/target/report.xml",
+      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-2/test_starts.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_each_project_gets_its_start_year_or_none",
+        "kind": "main",
+        "says": "every project is reported, with its start year if funded and None if not"
+      },
+      {
+        "id": "test_deferrals_count_years_after_the_earliest_start",
+        "kind": "main",
+        "says": "a deferral is the number of years a funded project starts after its earliest allowed year"
+      },
+      {
+        "id": "test_values_within_tolerance_of_whole_numbers_are_read",
+        "kind": "edge",
+        "says": "a value a tolerance away from 0 or 1 is read as that whole number"
+      },
+      {
+        "id": "test_a_fractional_value_is_refused",
+        "kind": "edge",
+        "says": "a value that is neither near 0 nor near 1 is refused rather than rounded"
+      },
+      {
+        "id": "test_a_project_started_twice_is_refused",
+        "kind": "edge",
+        "says": "a project with two start variables at 1 is refused rather than given either year"
+      },
+      {
+        "id": "test_a_project_started_on_time_is_not_a_deferral",
+        "kind": "edge",
+        "says": "a project that starts in its earliest year is not reported as deferred"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "26-multi-period-timing/README_6.4.1.md",
+      "section": "The Schedule Is Read Off the Variables That Are 1"
+    },
+    "concepts": [
+      "the schedule is read from the start variables whose values are 1 within the solver's tolerance"
+    ]
+  }
+}

@@ -1,0 +1,136 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "11-performance-at-scale",
+    "44-decomposition-and-heuristics"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A cut from a pumping LP",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water district chooses which booster stations to build; that is the master's decision, $`x_j \\in \\{0,1\\}`$. Once the stations are fixed, it pumps the cheapest way it can: station $`j`$ delivers up to its capacity $`u_j`$ at an energy cost $`e_j`$ per megalitre, and water bought from the neighboring district costs $`p`$ per megalitre, at most $`L`$ megalitres. The district must deliver its demand $`D`$, and every station built also needs $`r_j`$ megalitres to fill its own tank. Pumping and buying are continuous: this is the subproblem."
+    },
+    {
+      "type": "para",
+      "text": "Write the subproblem for a fixed plan $`\\hat x`$ first: its variables with their bounds, its objective, and each row with a label, with every row's right-hand side written as a function of $`\\hat x`$. Then write the optimality cut it gives: the expression in the master's $`x`$ that equals the pumping cost at $`\\hat x`$ and is at most the pumping cost at every other plan."
+    },
+    {
+      "type": "para",
+      "text": "Then write `pumping_cut(stations, demand, limit, price, plan, x)` to build and solve the subproblem with GLOP for `plan` (a dict from station name to 0 or 1) and return `(cost, cut)`: the optimal pumping cost and the cut, as a MathOpt linear expression in the master variables `x` (a dict from station name to variable). `stations[j]` holds `\"capacity\"`, `\"energy\"` and `\"refill\"`. The tests only call plans for which the subproblem is feasible."
+    },
+    {
+      "type": "para",
+      "text": "About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef pumping_cut(stations: dict, demand: float, limit: float, price: float, plan: dict[str, int], x: dict):\n    \"\"\"The pumping cost of a fixed plan, and the optimality cut its LP gives, in the master's x.\"\"\"\n    sub = mathopt.Model(name=\"pumping\")\n    flow = {j: sub.add_variable(lb=0, name=f\"flow_{j}\") for j in stations}\n    buy = sub.add_variable(lb=0, name=\"buy\")\n    need = sub.add_linear_constraint(\n        sum(flow.values()) + buy >= demand + sum(s[\"refill\"] * plan[j] for j, s in stations.items()), name=\"need\")\n    caps = {j: sub.add_linear_constraint(flow[j] <= s[\"capacity\"] * plan[j], name=f\"cap_{j}\")\n            for j, s in stations.items()}\n    most = sub.add_linear_constraint(buy <= limit, name=\"limit\")\n    sub.minimize(sum(s[\"energy\"] * flow[j] for j, s in stations.items()) + price * buy)\n    result = mathopt.solve(sub, mathopt.SolverType.GLOP)\n    cut = result.dual_values(need) * (demand + sum(s[\"refill\"] * x[j] for j, s in stations.items()))\n    cut += sum(result.dual_values(caps[j]) * s[\"capacity\"] * x[j] for j, s in stations.items())\n    cut += result.dual_values(most) * limit\n    return result.objective_value(), cut\n\n\nif __name__ == \"__main__\":\n    master = mathopt.Model()\n    x = {\"A\": master.add_binary_variable(name=\"A\")}\n    print(pumping_cut({\"A\": {\"capacity\": 60, \"energy\": 2.0, \"refill\": 5}}, 100, 500, 6.0, {\"A\": 1}, x))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef pumping_cut(stations: dict, demand: float, limit: float, price: float, plan: dict[str, int], x: dict):\n    \"\"\"The pumping cost of a fixed plan, and the optimality cut its LP gives, in the master's x.\"\"\"\n    # TODO: write the subproblem and its cut first, then build, solve and return them.\n    return 0.0, mathopt.LinearExpression()\n\n\nif __name__ == \"__main__\":\n    master = mathopt.Model()\n    x = {\"A\": master.add_binary_variable(name=\"A\")}\n    print(pumping_cut({\"A\": {\"capacity\": 60, \"energy\": 2.0, \"refill\": 5}}, 100, 500, 6.0, {\"A\": 1}, x))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "c246b51b0046990a1f2a78770ec553cc0aba51272e20b4663ae3a54f56dcf5e2",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef pumping_cut(stations: dict, demand: float, limit: float, price: float, plan: dict[str, int], x: dict):\n    \"\"\"The pumping cost of a fixed plan, and the optimality cut its LP gives, in the master's x.\"\"\"\n    # TODO: write the subproblem and its cut first, then build, solve and return them.\n    return 0.0, mathopt.LinearExpression()\n\n\nif __name__ == \"__main__\":\n    master = mathopt.Model()\n    x = {\"A\": master.add_binary_variable(name=\"A\")}\n    print(pumping_cut({\"A\": {\"capacity\": 60, \"energy\": 2.0, \"refill\": 5}}, 100, 500, 6.0, {\"A\": 1}, x))\n",
+  "exercise": {
+    "main_path": "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-02/practice-1/pump_cut.py",
+    "test_path": "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-02/practice-1/test_pump_cut.py",
+    "run_command": [
+      "python3",
+      "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-02/practice-1/pump_cut.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-02/practice-1/target/report.xml",
+      "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-02/practice-1/test_pump_cut.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_with_nothing_built_the_district_buys_all_its_water",
+        "kind": "main",
+        "says": "with no station built, all the water is bought from the neighbor, and the cut at that plan equals that cost"
+      },
+      {
+        "id": "test_the_cut_is_exact_at_the_plan_it_came_from",
+        "kind": "edge",
+        "says": "with stations built, the cut evaluated at the plan that produced it equals the pumping cost, refills included"
+      },
+      {
+        "id": "test_the_cut_never_claims_more_than_another_plan_costs",
+        "kind": "edge",
+        "says": "at every other plan the cut is at most that plan's pumping cost"
+      },
+      {
+        "id": "test_a_binding_purchase_limit_counts_in_the_cut",
+        "kind": "edge",
+        "says": "when the purchase limit binds, its row's price is part of the cut"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "44-decomposition-and-heuristics/README_11.3.2.md",
+      "section": "The Year's Duals Price Its Right-Hand Sides, and the Same Prices Bound Every Other Plan"
+    },
+    "concepts": [
+      "with the integer plan fixed, the continuous decisions form an LP whose right-hand sides depend on the plan",
+      "the subproblem's duals times its right-hand sides, written in the master's variables, give a cut exact at the plan and valid for all others"
+    ]
+  }
+}

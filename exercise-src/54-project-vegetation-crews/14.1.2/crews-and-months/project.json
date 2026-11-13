@@ -1,0 +1,113 @@
+{
+  "project_api": 1,
+  "title": "Fit each month's work to the crews",
+  "before": "../../../../54-project-vegetation-crews/steps/01",
+  "after": "../../../../54-project-vegetation-crews/steps/02",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the tiny season matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "vegcrew/planner.py",
+      "signature": "def build(season: Season) -> tuple[mathopt.Model, dict[tuple[str, int], mathopt.Variable]]",
+      "contract": "Takes a Season. Returns a MathOpt model and one binary x[(cid, m)] per circuit and month m from 1 to season.months (named `x_<cid>_<m>`): a row `once_<cid>` per circuit (trimmed in at most one month), a row `crews_<m>` per month (the crew-weeks of the circuits trimmed that month within crews times WEEKS_PER_MONTH), a row budget, and the summed risk of the trimmed circuits as the objective to maximize. The expected report comes from this build order: the variables circuit by circuit in the season's order, months 1 to season.months within each circuit; then the once rows in circuit order, the crews rows in month order, the budget row, and the objective. The objective does not name the month, so another order can give other months that are just as good; the tests accept them, the report check does not.",
+      "idea": "A start-month binary per circuit and month carries the when; each month's crews are one more capacity row, and the once row keeps a circuit from being counted twice.",
+      "lesson": {
+        "title": "6.4.1 Start-Time Variables x[i,t] and Timing Windows",
+        "href": "../../../../06-formulation-craft/26-multi-period-timing/units/unit-01/6.4.1-start-time-variables-x-i-t-and-timing-windows.unit.html"
+      }
+    },
+    {
+      "file": "vegcrew/planner.py",
+      "signature": "def solve_quietly(model: mathopt.Model) -> mathopt.SolveResult",
+      "contract": "Solves the model with HiGHS at a relative gap of zero and returns the SolveResult, with nothing HiGHS writes at the C level reaching the program's standard output.",
+      "idea": "The HiGHS bundled with OR-Tools can print a stray debug line on some MIP solves; the report a manager reads must not carry it.",
+      "lesson": {
+        "title": "14.1.2 Crews and Months: Capacity Over Time",
+        "href": "../../../../14-growing-real-projects/54-project-vegetation-crews/units/unit-02/14.1.2-crews-and-months-capacity-over-time.unit.html"
+      },
+      "stub": "return None"
+    },
+    {
+      "file": "vegcrew/planner.py",
+      "signature": "def make_plan(season: Season) -> Plan",
+      "contract": "Builds and quietly solves the model, and returns a Plan with one Trim(cid, month) per variable above 0.5, and the trimmed circuits' summed cost and risk removed.",
+      "idea": "The schedule is read off the variables that are 1; the key of each variable says the month.",
+      "lesson": {
+        "title": "6.4.1 Start-Time Variables x[i,t] and Timing Windows",
+        "href": "../../../../06-formulation-craft/26-multi-period-timing/units/unit-01/6.4.1-start-time-variables-x-i-t-and-timing-windows.unit.html"
+      }
+    },
+    {
+      "file": "vegcrew/data.py",
+      "signature": "def season_from_dict(raw: dict) -> Season",
+      "contract": "Also reads each circuit's weeks (crew-weeks to trim it) and the season's crews and months; columns the planner does not use are still ignored.",
+      "idea": "Read the columns the model needs now, and only those.",
+      "lesson": {
+        "title": "14.1.2 Crews and Months: Capacity Over Time",
+        "href": "../../../../14-growing-real-projects/54-project-vegetation-crews/units/unit-02/14.1.2-crews-and-months-capacity-over-time.unit.html"
+      }
+    },
+    {
+      "file": "vegcrew/generate.py",
+      "signature": "def scenario(size: str = \"small\", seed: int = 54) -> dict",
+      "contract": "Also gives each circuit its weeks, ceil(miles / u) with u drawn by uniform(4.0, 7.0) from its own stream named 'weeks', one draw per circuit in order after every circuit is drawn, and the season crews (CREWS by size: tiny 1, small 2, medium 6) and months (6).",
+      "idea": "A column drawn from its own stream leaves the values of every earlier column as they were.",
+      "lesson": {
+        "title": "14.1.2 Crews and Months: Capacity Over Time",
+        "href": "../../../../14-growing-real-projects/54-project-vegetation-crews/units/unit-02/14.1.2-crews-and-months-capacity-over-time.unit.html"
+      }
+    },
+    {
+      "file": "vegcrew/report.py",
+      "signature": "def format_plan(season: Season, plan: Plan) -> str",
+      "contract": "The first line gains `, crews <crews>, months <months>`. After the status line comes one line per month m from 1 to season.months, an empty month included: two spaces, `month <m>: `, the crew-weeks booked that month right-aligned in two characters, `/<capacity> crew-weeks`, and then, only when the month has trims, two spaces and its trims sorted by circuit id, each as `<cid>(<weeks>)`, separated by single spaces. An empty month's line ends at `crew-weeks`; no line ends in a space.",
+      "idea": "A capacity is only trusted when the report shows each month's use against it.",
+      "lesson": {
+        "title": "14.1.2 Crews and Months: Capacity Over Time",
+        "href": "../../../../14-growing-real-projects/54-project-vegetation-crews/units/unit-02/14.1.2-crews-and-months-capacity-over-time.unit.html"
+      }
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_data.py::test_the_loader_ignores_columns_it_does_not_use",
+      "kept",
+      "the loader ignores columns it does not use"
+    ],
+    [
+      "tests/test_months.py::test_no_month_has_more_work_than_its_crews_can_do",
+      "main",
+      "no month of the small season books more crew-weeks than its crews can do"
+    ],
+    [
+      "tests/test_months.py::test_a_second_month_takes_the_trim_the_first_cannot",
+      "main",
+      "a second month takes the trim the first month has no room for"
+    ],
+    [
+      "tests/test_months.py::test_crews_can_stop_a_plan_the_budget_allows",
+      "edge",
+      "in a one-month season, the crews stop a trim the budget would allow"
+    ]
+  ],
+  "plants": {
+    "tests/test_months.py::test_crews_can_stop_a_plan_the_budget_allows": [
+      [
+        "vegcrew/data.py",
+        "int(raw[\"months\"]),",
+        "max(2, int(raw[\"months\"])),"
+      ]
+    ]
+  },
+  "cites": {
+    "path": "54-project-vegetation-crews/README_14.1.2.md",
+    "section": null
+  }
+}

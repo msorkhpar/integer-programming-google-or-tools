@@ -1,0 +1,169 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "05-other-modeling-frameworks-and-solvers",
+    "21-gurobipy"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Reduced costs from prices, and the optimality check they give",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A furniture workshop's LP has been solved, and the team has its row prices (`Pi`) but wants to check the reduced costs and whether the basis is optimal, by hand. For an LP with objective coefficients $`c_j`$, row coefficients $`a_{ij}`$ and row prices $`\\pi_i`$, the reduced cost of column $`j`$ is"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\text{RC}_j = c_j - \\sum_i a_{ij}\\, \\pi_i"
+    },
+    {
+      "type": "para",
+      "text": "Write two functions."
+    },
+    {
+      "type": "para",
+      "text": "**`reduced_costs(c, A, pi)`**: `c` is a list of objective coefficients, `A` a list of rows (each a list with one coefficient per column), `pi` a list of row prices. Return the list of reduced costs, one per column."
+    },
+    {
+      "type": "para",
+      "text": "**`wrong_signs(rc, where, maximize, tol=1e-9)`**: `where[j]` says where variable $`j`$ sits: `\"basic\"`, `\"lower\"` (at its lower bound) or `\"upper\"` (at its upper bound). At an optimal basis:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "`where[j]`",
+        "maximize",
+        "minimize"
+      ],
+      "rows": [
+        [
+          "`\"basic\"`",
+          "$`\\lvert\\text{RC}_j\\rvert \\le`$ tol",
+          "$`\\lvert\\text{RC}_j\\rvert \\le`$ tol"
+        ],
+        [
+          "`\"lower\"`",
+          "$`\\text{RC}_j \\le`$ tol",
+          "$`\\text{RC}_j \\ge -`$tol"
+        ],
+        [
+          "`\"upper\"`",
+          "$`\\text{RC}_j \\ge -`$tol",
+          "$`\\text{RC}_j \\le`$ tol"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Return the sorted indices $`j`$ that break their rule (an empty list means the basis passes). No Gurobi license is needed. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\n\ndef reduced_costs(c: list[float], A: list[list[float]], pi: list[float]) -> list[float]:\n    \"\"\"RC_j = c_j - sum_i A[i][j] * pi[i], one per column.\"\"\"\n    return [c[j] - sum(row[j] * p for row, p in zip(A, pi)) for j in range(len(c))]\n\n\ndef wrong_signs(rc: list[float], where: list[str], maximize: bool, tol: float = 1e-9) -> list[int]:\n    \"\"\"Indices of the variables whose reduced cost breaks the sign rule for where they sit.\"\"\"\n    bad = []\n    for j, (r, w) in enumerate(zip(rc, where)):\n        signed = r if maximize else -r          # a minimization's rules are the maximization's, negated\n        if w == \"basic\" and abs(r) > tol:\n            bad.append(j)\n        elif w == \"lower\" and signed > tol:\n            bad.append(j)\n        elif w == \"upper\" and signed < -tol:\n            bad.append(j)\n    return sorted(bad)\n\n\nif __name__ == \"__main__\":\n    rc = reduced_costs([3.0, 5.0], [[1.0, 0.0], [0.0, 2.0], [3.0, 2.0]], [0.0, 1.5, 1.0])\n    print(rc, wrong_signs(rc, [\"basic\", \"basic\"], maximize=True))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\n\ndef reduced_costs(c: list[float], A: list[list[float]], pi: list[float]) -> list[float]:\n    \"\"\"RC_j = c_j - sum_i A[i][j] * pi[i], one per column.\"\"\"\n    # TODO: one sum per column, over every row.\n    return [0.0 for _ in c]\n\n\ndef wrong_signs(rc: list[float], where: list[str], maximize: bool, tol: float = 1e-9) -> list[int]:\n    \"\"\"Indices of the variables whose reduced cost breaks the sign rule for where they sit.\"\"\"\n    # TODO: a basic variable needs RC = 0; at a bound, the sign depends on the bound and the sense.\n    return [-1]\n\n\nif __name__ == \"__main__\":\n    rc = reduced_costs([3.0, 5.0], [[1.0, 0.0], [0.0, 2.0], [3.0, 2.0]], [0.0, 1.5, 1.0])\n    print(rc, wrong_signs(rc, [\"basic\", \"basic\"], maximize=True))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 1,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "ff18c96a3aa0d021f33fb803b9342b580fe072d664dc01678c78b04ffb81ec8a",
+  "starting_code": "from __future__ import annotations\n\n\ndef reduced_costs(c: list[float], A: list[list[float]], pi: list[float]) -> list[float]:\n    \"\"\"RC_j = c_j - sum_i A[i][j] * pi[i], one per column.\"\"\"\n    # TODO: one sum per column, over every row.\n    return [0.0 for _ in c]\n\n\ndef wrong_signs(rc: list[float], where: list[str], maximize: bool, tol: float = 1e-9) -> list[int]:\n    \"\"\"Indices of the variables whose reduced cost breaks the sign rule for where they sit.\"\"\"\n    # TODO: a basic variable needs RC = 0; at a bound, the sign depends on the bound and the sense.\n    return [-1]\n\n\nif __name__ == \"__main__\":\n    rc = reduced_costs([3.0, 5.0], [[1.0, 0.0], [0.0, 2.0], [3.0, 2.0]], [0.0, 1.5, 1.0])\n    print(rc, wrong_signs(rc, [\"basic\", \"basic\"], maximize=True))\n",
+  "exercise": {
+    "main_path": "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-02/practice-1/pricing.py",
+    "test_path": "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-02/practice-1/test_pricing.py",
+    "run_command": [
+      "python3",
+      "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-02/practice-1/pricing.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-02/practice-1/target/report.xml",
+      "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-02/practice-1/test_pricing.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_reduced_costs_charge_every_row_at_its_price",
+        "kind": "main",
+        "says": "each reduced cost is the objective coefficient less the column's coefficients times the row prices"
+      },
+      {
+        "id": "test_an_optimal_maximization_has_no_wrong_signs",
+        "kind": "main",
+        "says": "at an optimal maximization no variable breaks its sign rule"
+      },
+      {
+        "id": "test_a_minimization_flips_the_sign_rules",
+        "kind": "edge",
+        "says": "in a minimization a variable at its lower bound with a negative reduced cost is flagged"
+      },
+      {
+        "id": "test_a_basic_variable_needs_a_zero_reduced_cost",
+        "kind": "edge",
+        "says": "a basic variable whose reduced cost is not zero is flagged"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "21-gurobipy/README_5.3.2.md",
+      "section": "The Sign of Pi Follows the Model's Sense"
+    },
+    "concepts": [
+      "reduced costs from row prices, and the sign check at an optimal basis"
+    ]
+  }
+}

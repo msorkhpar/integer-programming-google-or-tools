@@ -1,0 +1,143 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "05-other-modeling-frameworks-and-solvers",
+    "21-gurobipy"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Which license a container job will use, decided before Gurobi starts",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A logistics company runs Gurobi jobs in containers. Before a job starts Gurobi, it must decide which license it will use and log that decision, without logging any secret. Write `license_plan(environ, exists)`: `environ` is a dict of the job's environment variables, and `exists(path)` returns whether a file is there (passed in, so the tests need no files). Return a pair `(kind, detail)`, following these rules in order:"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "If all three of `WLSACCESSID`, `WLSSECRET` and `LICENSEID` are set (non-empty), return `(\"wls\", {\"WLSACCESSID\": ..., \"WLSSECRET\": ..., \"LICENSEID\": <int>})`: Gurobi's `LICENSEID` parameter is a number.",
+        "If one or two of them are set, return `(\"error\", \"incomplete WLS key: <missing names> not set\")`, naming the missing variables in the order above, joined by `\", \"`. Never put a value in the message.",
+        "If `GRB_LICENSE_FILE` is set, return `(\"file\", <that path>)` if the file exists, otherwise `(\"error\", \"license file not found: <that path>\")`. Gurobi does not look elsewhere when the variable names a missing file, so neither does this function.",
+        "Otherwise try Gurobi's default places on Linux, in this order: `/opt/gurobi/gurobi.lic`, then `<HOME>/gurobi.lic` with `HOME` from `environ` (skip it if `HOME` is not set). Return `(\"file\", path)` for the first that exists.",
+        "If none does, return `(\"error\", \"no license\")`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "No Gurobi license is needed. About twenty lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom typing import Callable\n\nWLS = (\"WLSACCESSID\", \"WLSSECRET\", \"LICENSEID\")\n\n\ndef license_plan(environ: dict[str, str], exists: Callable[[str], bool]) -> tuple[str, object]:\n    \"\"\"('wls', params), ('file', path) or ('error', message), by the rules of the statement.\"\"\"\n    present = [name for name in WLS if environ.get(name)]\n    if len(present) == len(WLS):\n        return (\"wls\", {\"WLSACCESSID\": environ[\"WLSACCESSID\"], \"WLSSECRET\": environ[\"WLSSECRET\"],\n                        \"LICENSEID\": int(environ[\"LICENSEID\"])})\n    if present:\n        missing = \", \".join(name for name in WLS if name not in present)\n        return (\"error\", f\"incomplete WLS key: {missing} not set\")\n    if environ.get(\"GRB_LICENSE_FILE\"):\n        path = environ[\"GRB_LICENSE_FILE\"]\n        return (\"file\", path) if exists(path) else (\"error\", f\"license file not found: {path}\")\n    places = [\"/opt/gurobi/gurobi.lic\"]\n    if environ.get(\"HOME\"):\n        places.append(environ[\"HOME\"].rstrip(\"/\") + \"/gurobi.lic\")\n    for path in places:\n        if exists(path):\n            return (\"file\", path)\n    return (\"error\", \"no license\")\n\n\nif __name__ == \"__main__\":\n    print(license_plan({\"GRB_LICENSE_FILE\": \"/licenses/gurobi.lic\"}, lambda path: True))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom typing import Callable\n\nWLS = (\"WLSACCESSID\", \"WLSSECRET\", \"LICENSEID\")\n\n\ndef license_plan(environ: dict[str, str], exists: Callable[[str], bool]) -> tuple[str, object]:\n    \"\"\"('wls', params), ('file', path) or ('error', message), by the rules of the statement.\"\"\"\n    # TODO: the WLS key first (whole or partial), then GRB_LICENSE_FILE, then the default places.\n    return (\"error\", \"no license\")\n\n\nif __name__ == \"__main__\":\n    print(license_plan({\"GRB_LICENSE_FILE\": \"/licenses/gurobi.lic\"}, lambda path: True))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 2,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "acfde224de0fad459c76936bee1835dcc039493f3e73cf991f177891da24169a",
+  "starting_code": "from __future__ import annotations\n\nfrom typing import Callable\n\nWLS = (\"WLSACCESSID\", \"WLSSECRET\", \"LICENSEID\")\n\n\ndef license_plan(environ: dict[str, str], exists: Callable[[str], bool]) -> tuple[str, object]:\n    \"\"\"('wls', params), ('file', path) or ('error', message), by the rules of the statement.\"\"\"\n    # TODO: the WLS key first (whole or partial), then GRB_LICENSE_FILE, then the default places.\n    return (\"error\", \"no license\")\n\n\nif __name__ == \"__main__\":\n    print(license_plan({\"GRB_LICENSE_FILE\": \"/licenses/gurobi.lic\"}, lambda path: True))\n",
+  "exercise": {
+    "main_path": "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-04/practice-1/license_plan.py",
+    "test_path": "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-04/practice-1/test_license_plan.py",
+    "run_command": [
+      "python3",
+      "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-04/practice-1/license_plan.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-04/practice-1/target/report.xml",
+      "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-04/practice-1/test_license_plan.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_complete_wls_key_is_used",
+        "kind": "main",
+        "says": "all three WLS variables give ('wls', params) with the license id as an int"
+      },
+      {
+        "id": "test_a_named_license_file_is_used",
+        "kind": "main",
+        "says": "GRB_LICENSE_FILE naming an existing file gives ('file', that path)"
+      },
+      {
+        "id": "test_a_missing_named_file_is_not_replaced_by_a_default",
+        "kind": "edge",
+        "says": "GRB_LICENSE_FILE naming a missing file gives an error even when a default file exists"
+      },
+      {
+        "id": "test_the_default_places_are_searched_in_order",
+        "kind": "edge",
+        "says": "without the variable, /opt/gurobi/gurobi.lic is chosen before the home directory's file"
+      },
+      {
+        "id": "test_half_a_wls_key_is_an_error_naming_what_is_missing",
+        "kind": "edge",
+        "says": "one or two WLS variables give an error that names the missing ones and no value"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-04/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "21-gurobipy/README_5.3.4.md",
+      "section": "A Container Gets Its License at Run Time, Never in the Image"
+    },
+    "concepts": [
+      "the license a job will use, from its environment variables and the default places"
+    ]
+  }
+}

@@ -1,0 +1,136 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "15-mock-interviews",
+    "53-mock-interviews"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "The cheapest repair",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "This is the mock's whiteboard, coded. A transit agency's must-do projects no longer fit its yearly budgets, and finance can cover an overspend in any year at a price per $k that differs by year. `elastic.py` already has a binary `x[pid]` per project and the hard rows that fund every must-do; each project spends its whole `cost` in its `year`."
+    },
+    {
+      "type": "para",
+      "text": "Write `add_elastic_budgets(model, x, projects, budgets, penalty)` so that solving the model gives the cheapest overspend: each year's spend may exceed `budgets[year]`, the excess costs `penalty[year]` per $k, and the model minimizes the total. Finance covers any amount, so a year's overspend is a continuous variable, at least 0, with no upper bound: it may exceed the year's own budget. Solved with a plan fixed, the same model must give that plan's overspend cost. Write the formulation first: the new variables with their domains, the elastic rows with labels, and the objective."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix plans or leave them free and compare the optimal penalty with the arithmetic, so any correct formulation passes. About six lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    year: int\n    cost: int            # $k, all spent in its year\n    must_do: bool = False\n\n\ndef select_variables(model: mathopt.Model, projects: list[Project]) -> dict[str, mathopt.Variable]:\n    \"\"\"Given: x[pid] = 1 when the project is funded, and every must-do funded.\"\"\"\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    for p in projects:\n        if p.must_do:\n            model.add_linear_constraint(x[p.pid] == 1, name=f\"must_{p.pid}\")\n    return x\n\n\ndef add_elastic_budgets(model: mathopt.Model, x: dict, projects: list[Project],\n                        budgets: dict[int, int], penalty: dict[int, float]) -> None:\n    \"\"\"Each year's budget may be overspent, at penalty[year] per $k; minimize the total penalty.\"\"\"\n    over = {y: model.add_variable(lb=0, name=f\"over_{y}\") for y in budgets}\n    for y, cap in budgets.items():\n        spend = sum(p.cost * x[p.pid] for p in projects if p.year == y)\n        model.add_linear_constraint(spend - over[y] <= cap, name=f\"budget_{y}\")\n    model.minimize(sum(penalty[y] * over[y] for y in budgets))\n\n\ndef build(projects: list[Project], budgets: dict[int, int], penalty: dict[int, float]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"elastic-budgets\")\n    x = select_variables(model, projects)\n    add_elastic_budgets(model, x, projects, budgets, penalty)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Project(\"M1\", 2027, 80, True)], {2027: 50}, {2027: 1.0})\n    print(mathopt.solve(model, mathopt.SolverType.HIGHS).objective_value())\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    year: int\n    cost: int            # $k, all spent in its year\n    must_do: bool = False\n\n\ndef select_variables(model: mathopt.Model, projects: list[Project]) -> dict[str, mathopt.Variable]:\n    \"\"\"Given: x[pid] = 1 when the project is funded, and every must-do funded.\"\"\"\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    for p in projects:\n        if p.must_do:\n            model.add_linear_constraint(x[p.pid] == 1, name=f\"must_{p.pid}\")\n    return x\n\n\ndef add_elastic_budgets(model: mathopt.Model, x: dict, projects: list[Project],\n                        budgets: dict[int, int], penalty: dict[int, float]) -> None:\n    \"\"\"Each year's budget may be overspent, at penalty[year] per $k; minimize the total penalty.\"\"\"\n    # TODO: the overspend variables, the elastic budget rows and the objective.\n    return None\n\n\ndef build(projects: list[Project], budgets: dict[int, int], penalty: dict[int, float]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"elastic-budgets\")\n    x = select_variables(model, projects)\n    add_elastic_budgets(model, x, projects, budgets, penalty)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Project(\"M1\", 2027, 80, True)], {2027: 50}, {2027: 1.0})\n    print(mathopt.solve(model, mathopt.SolverType.HIGHS).objective_value())\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "f79a0c34d4736cb0ebc0bc02a663c35997d0e016b7eb95c3e6fb245bba311822",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    year: int\n    cost: int            # $k, all spent in its year\n    must_do: bool = False\n\n\ndef select_variables(model: mathopt.Model, projects: list[Project]) -> dict[str, mathopt.Variable]:\n    \"\"\"Given: x[pid] = 1 when the project is funded, and every must-do funded.\"\"\"\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    for p in projects:\n        if p.must_do:\n            model.add_linear_constraint(x[p.pid] == 1, name=f\"must_{p.pid}\")\n    return x\n\n\ndef add_elastic_budgets(model: mathopt.Model, x: dict, projects: list[Project],\n                        budgets: dict[int, int], penalty: dict[int, float]) -> None:\n    \"\"\"Each year's budget may be overspent, at penalty[year] per $k; minimize the total penalty.\"\"\"\n    # TODO: the overspend variables, the elastic budget rows and the objective.\n    return None\n\n\ndef build(projects: list[Project], budgets: dict[int, int], penalty: dict[int, float]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"elastic-budgets\")\n    x = select_variables(model, projects)\n    add_elastic_budgets(model, x, projects, budgets, penalty)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Project(\"M1\", 2027, 80, True)], {2027: 50}, {2027: 1.0})\n    print(mathopt.solve(model, mathopt.SolverType.HIGHS).objective_value())\n",
+  "exercise": {
+    "main_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-04/practice-2/elastic.py",
+    "test_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-04/practice-2/test_elastic.py",
+    "run_command": [
+      "python3",
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-04/practice-2/elastic.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/15-mock-interviews/53-mock-interviews/prose/unit-04/practice-2/target/report.xml",
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-04/practice-2/test_elastic.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_plan_within_budgets_needs_no_repair_and_an_overspend_is_priced",
+        "kind": "main",
+        "says": "a plan within every budget costs nothing, and a plan over one budget costs its overspend"
+      },
+      {
+        "id": "test_an_over_committed_scenario_still_has_a_cheapest_repair",
+        "kind": "main",
+        "says": "a scenario whose must-dos exceed the budgets still solves, to its cheapest overspend"
+      },
+      {
+        "id": "test_an_underspent_year_earns_no_credit",
+        "kind": "edge",
+        "says": "money left in one year does not pay for another year's overspend"
+      },
+      {
+        "id": "test_each_year_has_its_own_price",
+        "kind": "edge",
+        "says": "each year's overspend is charged at that year's price"
+      },
+      {
+        "id": "test_an_overspend_larger_than_the_budget_is_still_priced",
+        "kind": "edge",
+        "says": "an overspend larger than the year's own budget is still allowed and priced"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-04/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "53-mock-interviews/README_15.1.4.md",
+      "section": "Whiteboard: The Cheapest Repair of an Over-Committed Scenario"
+    },
+    "concepts": [
+      "make each year's budget elastic, price its overspend, and keep the must-dos hard"
+    ]
+  }
+}

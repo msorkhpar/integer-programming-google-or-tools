@@ -1,0 +1,152 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "11-performance-at-scale",
+    "44-decomposition-and-heuristics"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "A Benders loop checked against every plan",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The water district of the previous practice now wants Benders to choose its stations. Building station $`j`$ costs $`F_j`$ (`\"build\"`), and the whole question is"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\min_{x \\in \\{0,1\\}} \\; \\sum_j F_j\\, x_j + Q(x)"
+    },
+    {
+      "type": "para",
+      "text": "where $`Q(x)`$ is the pumping subproblem's cost. `pumping_cut` is given, with the same signature as in practice 1 but a simpler inside, so that it does not give practice 1 away. It finds $`Q(\\hat x)`$ without an LP, by filling the need from the cheapest source up (built stations by energy cost, then the neighbor's water), and it returns the plain cut that works for any 0/1 plan when $`Q \\ge 0`$:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\theta \\;\\ge\\; Q(\\hat x)\\Bigl(1 - \\sum_{j:\\ \\hat x_j = 1} (1 - x_j) - \\sum_{j:\\ \\hat x_j = 0} x_j\\Bigr)"
+    },
+    {
+      "type": "para",
+      "text": "At $`\\hat x`$ the bracket is 1, so the cut says $`\\theta \\ge Q(\\hat x)`$; at every other 0/1 plan the bracket is 0 or less, so the cut asks nothing that $`\\theta \\ge 0`$ does not already. It is valid, but weaker than practice 1's dual cut, which also bounds the plans it did not come from. Your loop must work with either: once your practice 1 passes, you may paste your own `pumping_cut` in its place."
+    },
+    {
+      "type": "para",
+      "text": "Every plan has a pumping solution in this district, and in the tests: the purchase limit covers the demand on its own, and each station's capacity covers its own refill. So no master plan ever needs a feasibility cut, and `pumping_cut` is never called on an infeasible plan."
+    },
+    {
+      "type": "para",
+      "text": "Write the master first: its variables with domains (the build decisions and one continuous variable standing in for the pumping cost, with its bound), its objective, and the cut rows it collects. Say which number is a lower bound on the optimum and which is an upper bound, and when the loop may stop."
+    },
+    {
+      "type": "para",
+      "text": "Then write `benders(stations, demand, limit, price, max_iterations)` to run the loop and return `(best_cost, best_plan, history)`: the cheapest total cost found, its plan (station name to 0 or 1), and one `(master_value, best_cost_so_far)` pair per iteration. Solve the master with HiGHS through MathOpt. The tests compare your answer with every plan tried by brute force, so any correct loop passes."
+    },
+    {
+      "type": "para",
+      "text": "About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"A pumping cost and a valid cut are given (a simpler one than practice 1's); write the loop.\"\"\"\n\nfrom __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef pumping_cut(stations: dict, demand: float, limit: float, price: float, plan: dict[str, int], x: dict):\n    \"\"\"The pumping cost of a fixed plan, and a cut that is exact at that plan, in the master's x.\n\n    Not practice 1's answer: the cost comes from filling the need from the cheapest source up, with no\n    LP, and the cut is the plain 0/1 one: the cost itself at `plan`, at most 0 at every other plan.\n    \"\"\"\n    need = demand + sum(s[\"refill\"] for j, s in stations.items() if plan[j])\n    sources = sorted([(s[\"energy\"], s[\"capacity\"]) for j, s in stations.items() if plan[j]] + [(price, limit)])\n    cost = 0.0\n    for unit, most in sources:\n        take = min(most, need)\n        cost, need = cost + unit * take, need - take\n    differ = sum(1 - x[j] if plan[j] else x[j] for j in stations)     # 0 at `plan`, at least 1 elsewhere\n    return cost, cost * (1 - differ)\n\n\ndef benders(stations: dict, demand: float, limit: float, price: float, max_iterations: int = 50):\n    \"\"\"Choose stations by Benders: returns (best total cost, its plan, [(master value, best cost)] per iteration).\"\"\"\n    model = mathopt.Model(name=\"stations\")\n    x = {j: model.add_binary_variable(name=f\"build_{j}\") for j in stations}\n    theta = model.add_variable(lb=0, name=\"pumping\")\n    model.minimize(sum(s[\"build\"] * x[j] for j, s in stations.items()) + theta)\n    best_cost, best_plan, history = float(\"inf\"), None, []\n    for _ in range(max_iterations):\n        master = mathopt.solve(model, mathopt.SolverType.HIGHS)\n        plan = {j: round(master.variable_values(x[j])) for j in stations}\n        pumping, cut = pumping_cut(stations, demand, limit, price, plan, x)\n        cost = sum(s[\"build\"] * plan[j] for j, s in stations.items()) + pumping\n        if cost < best_cost:\n            best_cost, best_plan = cost, plan\n        history.append((master.objective_value(), best_cost))\n        if master.variable_values(theta) >= pumping - 1e-6:\n            break\n        model.add_linear_constraint(theta >= cut)\n    return best_cost, best_plan, history\n\n\nif __name__ == \"__main__\":\n    stations = {\"hill\": {\"build\": 90, \"capacity\": 60, \"energy\": 2.0, \"refill\": 5},\n                \"lake\": {\"build\": 150, \"capacity\": 80, \"energy\": 1.5, \"refill\": 8}}\n    print(benders(stations, 100, 500, 6.0))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"A pumping cost and a valid cut are given (a simpler one than practice 1's); write the loop.\"\"\"\n\nfrom __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef pumping_cut(stations: dict, demand: float, limit: float, price: float, plan: dict[str, int], x: dict):\n    \"\"\"The pumping cost of a fixed plan, and a cut that is exact at that plan, in the master's x.\n\n    Not practice 1's answer: the cost comes from filling the need from the cheapest source up, with no\n    LP, and the cut is the plain 0/1 one: the cost itself at `plan`, at most 0 at every other plan.\n    \"\"\"\n    need = demand + sum(s[\"refill\"] for j, s in stations.items() if plan[j])\n    sources = sorted([(s[\"energy\"], s[\"capacity\"]) for j, s in stations.items() if plan[j]] + [(price, limit)])\n    cost = 0.0\n    for unit, most in sources:\n        take = min(most, need)\n        cost, need = cost + unit * take, need - take\n    differ = sum(1 - x[j] if plan[j] else x[j] for j in stations)     # 0 at `plan`, at least 1 elsewhere\n    return cost, cost * (1 - differ)\n\n\ndef benders(stations: dict, demand: float, limit: float, price: float, max_iterations: int = 50):\n    \"\"\"Choose stations by Benders: returns (best total cost, its plan, [(master value, best cost)] per iteration).\"\"\"\n    # TODO: build the master, then loop: solve it, price its plan with pumping_cut, add the cut.\n    return 0.0, {}, []\n\n\nif __name__ == \"__main__\":\n    stations = {\"hill\": {\"build\": 90, \"capacity\": 60, \"energy\": 2.0, \"refill\": 5},\n                \"lake\": {\"build\": 150, \"capacity\": 80, \"energy\": 1.5, \"refill\": 8}}\n    print(benders(stations, 100, 500, 6.0))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 7,
+    "code": 3,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "99cd1b4b1b358ff5376a5bbb08c75af70e92d38e4450360425c7f06dc5f32f06",
+  "starting_code": "\"\"\"A pumping cost and a valid cut are given (a simpler one than practice 1's); write the loop.\"\"\"\n\nfrom __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef pumping_cut(stations: dict, demand: float, limit: float, price: float, plan: dict[str, int], x: dict):\n    \"\"\"The pumping cost of a fixed plan, and a cut that is exact at that plan, in the master's x.\n\n    Not practice 1's answer: the cost comes from filling the need from the cheapest source up, with no\n    LP, and the cut is the plain 0/1 one: the cost itself at `plan`, at most 0 at every other plan.\n    \"\"\"\n    need = demand + sum(s[\"refill\"] for j, s in stations.items() if plan[j])\n    sources = sorted([(s[\"energy\"], s[\"capacity\"]) for j, s in stations.items() if plan[j]] + [(price, limit)])\n    cost = 0.0\n    for unit, most in sources:\n        take = min(most, need)\n        cost, need = cost + unit * take, need - take\n    differ = sum(1 - x[j] if plan[j] else x[j] for j in stations)     # 0 at `plan`, at least 1 elsewhere\n    return cost, cost * (1 - differ)\n\n\ndef benders(stations: dict, demand: float, limit: float, price: float, max_iterations: int = 50):\n    \"\"\"Choose stations by Benders: returns (best total cost, its plan, [(master value, best cost)] per iteration).\"\"\"\n    # TODO: build the master, then loop: solve it, price its plan with pumping_cut, add the cut.\n    return 0.0, {}, []\n\n\nif __name__ == \"__main__\":\n    stations = {\"hill\": {\"build\": 90, \"capacity\": 60, \"energy\": 2.0, \"refill\": 5},\n                \"lake\": {\"build\": 150, \"capacity\": 80, \"energy\": 1.5, \"refill\": 8}}\n    print(benders(stations, 100, 500, 6.0))\n",
+  "exercise": {
+    "main_path": "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-02/practice-2/station_benders.py",
+    "test_path": "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-02/practice-2/test_station_benders.py",
+    "run_command": [
+      "python3",
+      "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-02/practice-2/station_benders.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-02/practice-2/target/report.xml",
+      "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-02/practice-2/test_station_benders.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_district_where_building_never_pays",
+        "kind": "main",
+        "says": "when no station saves more than it costs to build, the loop ends with nothing built and the cost of buying all the water"
+      },
+      {
+        "id": "test_the_loop_reaches_the_cheapest_plan_of_all",
+        "kind": "edge",
+        "says": "the loop keeps adding cuts until the master's value meets the best plan's cost, and returns the cheapest of all plans"
+      },
+      {
+        "id": "test_the_best_cost_never_rises",
+        "kind": "edge",
+        "says": "the cost reported in each iteration is the best plan found so far, so it never rises"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "44-decomposition-and-heuristics/README_11.3.2.md",
+      "section": "The Master Is an Upper Bound, Each Plan's True Value a Lower Bound; Stop When They Meet"
+    },
+    "concepts": [
+      "the master's value and the best plan's true cost bound the optimum, and the loop stops when they meet"
+    ]
+  }
+}

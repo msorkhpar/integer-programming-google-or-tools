@@ -1,0 +1,346 @@
+# 9.2.2 Fixed-Integer LP Duals, and When They Mean Something
+
+Lesson 9.2.1 told GridCap's finance partner that the selection MILP has no dual values. The partner
+has heard of a workaround: "Fix the projects you chose, solve what is left as an LP, and read its
+prices." Lesson 5.3.2 did exactly that with gurobipy's `Model.fixed()` and got a budget price of
+0 in every year. With every variable fixed, nothing was left for money to buy. This lesson gives
+the plan something continuous to buy, a routine line-clearance program, and works out what the
+fixed-integer prices then say, and what they do not. GridCap is fictional, and so are the
+clearance program's numbers: they are this module's assumptions.
+
+## The Model
+
+The selection model of lesson 9.2.1, with one change, marked: the budget can also buy routine
+line clearance, in any amount up to what the crews can deliver.
+
+**Sets.** $`P`$ the projects; $`M \subseteq P`$ the must-do projects; $`C \subseteq P`$ the child
+projects, each with parent $`p(c)`$; $`\mathcal{G}`$ the alternative groups.
+
+**Parameters.** $`v_i`$, project $`i`$'s NPV ($k); $`c_i`$, its cost ($k); $`B`$, the capital
+budget ($k); $`r = 0.25`$, the NPV one $k of clearance returns; $`U = 800`$, the most clearance
+the crews can deliver ($k).
+
+**Variables.** $`x_i \in \{0, 1\}`$ for every $`i \in P`$: project $`i`$ is funded; and
+$`y \ge 0`$, continuous: the $k spent on line clearance.
+
+**Objective.**
+
+```math
+\max \; \sum_{i \in P} v_i\, x_i + r\, y \qquad \leftarrow \text{this lesson adds } r\,y
+```
+
+**Constraints.**
+
+```math
+\begin{aligned}
+\sum_{i \in P} c_i\, x_i + y &\le B && && \text{(budget)} \quad \leftarrow \text{this lesson adds } y \\
+y &\le U && && \text{(clearance\_cap)} \quad \leftarrow \text{this lesson} \\
+x_i &= 1 && \forall i \in M && \text{(must}_i) \\
+x_c &\le x_{p(c)} && \forall c \in C && \text{(parent}_c) \\
+\sum_{i \in g} x_i &\le 1 && \forall g \in \mathcal{G} && \text{(alt}_g)
+\end{aligned}
+```
+
+In `selection.py` it is `build(portfolio, budget, clearance=True)`, with `y` named `clearance`.
+
+The **fixed-integer LP** of a solved MILP is the same model with every integer variable fixed at
+its value in the MILP's plan, $`x_i = \hat x_i`$, and treated as continuous. Only $`y`$ is left to
+decide. It is an LP, so it has dual values.
+
+## Fix Every Integer at Its Value, Make It Continuous, and Re-Solve
+
+MathOpt has no `fixed()` method, so the program does it by hand. Each variable's
+`lower_bound`, `upper_bound` and `integer` can be set after the model is built:
+
+```python
+def fix_integers(sel, result) -> None:
+    """Fix every integer variable at its value in `result`, and make it continuous."""
+    for v in sel.x.values():
+        value = round(result.variable_values(v))
+        v.integer = False
+        v.lower_bound = value
+        v.upper_bound = value
+```
+
+```python
+def fixed_lp(budget: int):
+    """Solve the MILP at `budget`, then fix its plan and re-solve the LP that is left (GLOP)."""
+    sel = build(small, budget, clearance=True)
+    milp = solve_highs(sel.model)
+    fix_integers(sel, milp)
+    return sel, milp, mathopt.solve(sel.model, mathopt.SolverType.GLOP)
+```
+
+`round` is a guard: a solver accepts an integer value within its integrality tolerance (see
+section 10), so a binary may come back a hair away from 0 or 1, and fixing it there would leave a
+sliver of a project in the LP.
+
+```text
+MILP at 38,390: value 25,336.0, 20 projects, clearance 0
+fixed LP: OPTIMAL, value 25,336.0, duals: True
+  budget         slack    0.0  dual 0.25
+  clearance_cap  slack  800.0  dual 0.0
+  must_P003      slack    0.0  dual 0.0
+  x_P003 = 1  reduced cost   72.0  (value 107 - 0.25 x capex 140 = 72)
+  x_P034 = 1  reduced cost 1590.5  (value 2123 - 0.25 x capex 2130 = 1590.5)
+  x_P006 = 0  reduced cost  -60.0  (value 60 - 0.25 x capex 480 = -60)
+  x_P001 = 0  reduced cost  741.0  (value 1401 - 0.25 x capex 2640 = 741)
+```
+
+The fixed LP has the MILP's value, 25,336.0, because it allows exactly the MILP's plan and the
+best clearance for it. At this budget the best plan spends the whole $38,390k on projects and buys
+no clearance. And the LP has dual values.
+
+## The Fixed LP Prices Only What Stayed Free
+
+The budget's price is 0.25, the clearance rate $`r`$. That follows from the model: with the
+projects fixed, one more $k of budget can only go to clearance, and clearance returns $0.25k. The
+fixed-integer price is the price of the continuous part of the plan, and nothing else. In lesson
+5.3.2's model nothing was continuous, so every price was 0.
+
+The reduced costs say the same thing from the variables' side. A fixed $`x_i`$ is held by its
+bounds, so its reduced cost is its objective coefficient less the price of what it uses:
+$`v_i - 0.25\,c_i`$, the NPV of project $`i`$ against the clearance the same money would buy. The
+printed formula beside each one checks it. Read them with care:
+
+- P034's reduced cost, 1,590.5, says the project beats spending its $2,130k on clearance by
+  $1,590.5k, at this one budget.
+- P001 is not funded, yet its reduced cost, 741, is positive. With the plan fixed, every other row
+  is priced at 0, so the reduced cost ignores what keeps P001 out: it is in alternative group G001
+  with P002, which is funded, and its $2,640k would have to come from other projects, not from
+  clearance (there is none to give up). A fixed-integer reduced cost is not a reason why a project
+  was left out. Lesson 9.3.2 answers that question by forcing the project in and re-solving.
+
+## Binding Means Zero Slack; a Binding Row Can Still Have a Zero Price
+
+A row **binds** at a plan when its **slack** is zero: its two sides are equal, so it holds the
+plan where it is. The tempting shortcut is to call a row binding when its price is nonzero. The
+two are not the same, and the fixed LP shows why. The program's `slack` function measures how far
+the row's left side sits from its nearest bound:
+
+```python
+def slack(constraint: mathopt.LinearConstraint, result: mathopt.SolveResult) -> float:
+    """How far the row's activity sits from its nearest finite bound: 0 means the row binds."""
+    activity = sum(t.coefficient * result.variable_values(t.variable) for t in constraint.terms())
+    return min(constraint.upper_bound - activity, activity - constraint.lower_bound)
+```
+
+In the output above, `must_P003` has slack 0 and price 0. The row $`x_{P003} = 1`$ binds: it
+holds with equality. But the fixed bounds $`1 \le x_{P003} \le 1`$ hold the variable at exactly the
+same place, so the row is one of two things saying the same thing. The LP can put the whole price
+on either. GLOP put it on the bound, as the reduced cost of 72, and gave the row 0. Such an LP is
+**degenerate** (lesson 2.3.2): more things bind at the optimum than are needed to pin it down, and
+the split of prices among them is not unique.
+
+The budget row binds with a price; `must_P003` binds without one; `clearance_cap` has slack 800
+and price 0. A binding-constraints report (lesson 9.3.1) must test the slack, report the price
+beside it, and never infer one from the other.
+
+<!-- practice 1 -->
+
+## The Price Holds Only With the Plan Fixed and Inside Its Range
+
+The finance partner reads "price 0.25" as "+$1,000k of budget gives +$250k". The program tests
+that sentence. For each change $`d`$ it re-solves twice: the fixed LP with budget $`B + d`$ (the
+plan held fixed), and the full MILP with budget $`B + d`$ (the plan free to change):
+
+```python
+price = lp.dual_values(sel.budget)
+print(f"\nbudget {B:,}, clearance {y:,.0f} of 800: with the plan fixed the price holds for d in [{-y + 0.0:,.0f}, {800 - y:,.0f}]")
+print(f"{'d':>6} {'price x d':>9} {'fixed plan':>10} {'MILP':>8}")
+for d in (-100, -10, 10, 100, 500, 800, 1000):
+    sel.budget.upper_bound = B + d
+    again = mathopt.solve(sel.model, mathopt.SolverType.GLOP)
+```
+
+```text
+budget 38,390, clearance 0 of 800: with the plan fixed the price holds for d in [0, 800]
+     d price x d fixed plan     MILP
+  -100     -25.0 infeasible    -30.5
+   -10      -2.5 infeasible     -4.0
+   +10       2.5        2.5      2.5
+  +100      25.0       25.0     98.0
+  +500     125.0      125.0    329.5
+  +800     200.0      200.0    524.0
+ +1000     250.0      200.0    648.5
+```
+
+Three things happen, and each one follows from the model.
+
+1. **With the plan fixed, the price holds over a range.** Extra money buys clearance at 0.25 until
+   the cap: $`y`$ can grow from 0 to 800, so the fixed plan gains exactly price × $`d`$ for
+   $`d \in [0, 800]`$. At +1,000 it gains only 200, because the last $200k has nothing to buy.
+   This is the range of lesson 2.3.3, for the fixed LP.
+2. **Here the range is one-sided.** The plan spends every dollar on projects and buys no
+   clearance, so a smaller budget cannot be met by buying less clearance: with $10k less the fixed
+   plan is infeasible. The price says nothing about cuts. The MILP has to drop or swap a project,
+   and loses 4.0 for the first $10k, not 2.5.
+3. **Inside the range the price is a floor on the MILP's gain, not its value.** The fixed plan
+   plus more clearance is still a feasible plan of the MILP, so the MILP gains at least price ×
+   $`d`$. It usually gains more, because it may choose a different plan: +$100k is worth $98.0k to
+   the MILP, almost four times the price's $25k.
+
+Fixed-integer prices also change with the plan that was fixed. Two more budgets show the other
+cases:
+
+```text
+budget 38,000: clearance 60, budget slack 0.0, budget dual 0.25, cap dual 0.0
+  MILP gain for d = -100, +10, +100, +1000: [-95.0, 2.5, 25.0, 543.0]
+budget 66,000: clearance 800, budget slack 210.0, budget dual 0.0, cap dual 0.25
+  MILP gain for d = -100, +10, +100, +1000: [0.0, 0.0, 17.5, 205.0]
+```
+
+At $38,000k the best plan buys $60k of clearance, so the price 0.25 holds both ways, for
+$`d \in [-60, 740]`$. A cut of $100k is outside that range: the MILP loses $95.0k, nearly four
+times price × 100. At $66,000k the clearance program is full and $210k of budget is unspent: the
+budget price is 0, and the 0.25 has moved to the cap row. Yet $100k more budget is worth $17.5k
+to the MILP, and $1,000k is worth $205.0k, because a new plan can use it.
+
+So a fixed-integer price is a sentence with two conditions in it: "with this selection of projects
+held fixed, and for budget changes between $`-y`$ and $`U - y`$, each $1k is worth $0.25k". Without
+the conditions it is wrong in both directions.
+
+A report that tests a price this way is usually handed a row's *name*, such as `"budget"`, not the
+row object. MathOpt's `Model` in OR-Tools 9.15 has no lookup by name: `get_linear_constraint` takes
+the row's integer id. So this module's `selection.row(model, name)` walks the rows and returns the
+first with that name, `next(c for c in model.linear_constraints() if c.name == name)`:
+
+```python
+    print("\nModel has get_linear_constraint_by_name:", hasattr(mathopt.Model, "get_linear_constraint_by_name"))
+    budget_row = row(sel.model, "budget")
+    print(f"row(model, 'budget'): {budget_row.name}, id {budget_row.id}; "
+          f"get_linear_constraint({budget_row.id}): {sel.model.get_linear_constraint(budget_row.id).name}")
+```
+
+```text
+Model has get_linear_constraint_by_name: False
+row(model, 'budget'): budget, id 9; get_linear_constraint(9): budget
+```
+
+<!-- practice 2 -->
+
+## Pyomo's Dual Suffix Does Not Run the Re-Solve for You
+
+Lesson 5.1.2 showed Pyomo's way of asking for duals: a `Suffix` named `dual`, which the solver
+interface fills, if the solver supplies duals (the Pyomo suffix documentation states that
+condition). It is easy to assume that Pyomo, asked for duals of a MILP, fixes the integers and
+re-solves. It does not. `pyomo_fixed.py` writes the same model in Pyomo and solves it with HiGHS
+through Pyomo's `appsi_highs` interface:
+
+```python
+m = build(B)
+m.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
+try:
+    highs().solve(m)
+except RuntimeError as error:
+    print("MILP with a dual Suffix:", error)
+```
+
+```text
+MILP with a dual Suffix: Solver does not currently have valid duals. Please check the termination condition.
+```
+
+The re-solve is yours to write, and it has two steps. Fixing the variables (`v.fix(...)`) is not
+enough, because they are still declared `Binary`, so the model is still a MILP. Pyomo's
+`core.relax_integer_vars` transformation turns integrality off:
+
+```python
+for v in m.x.values():
+    v.fix(round(v.value))
+m.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)
+try:
+    highs(presolve).solve(m)
+except RuntimeError as error:
+    print("  fixed, still Binary:", error)
+pyo.TransformationFactory("core.relax_integer_vars").apply_to(m)
+highs(presolve).solve(m)
+```
+
+The program runs this twice, once with HiGHS's presolve on (its default) and once with it off:
+
+```text
+presolve on : MILP reported optimal, NPV 25,173.0, clearance 800
+  fixed, still Binary: Solver does not currently have valid duals. Please check the termination condition.
+  fixed and relaxed: NPV 25,173.0, budget dual 0, cap dual 0.25
+presolve off: MILP reported optimal, NPV 25,336.0, clearance 0
+  fixed, still Binary: Solver does not currently have valid duals. Please check the termination condition.
+  fixed and relaxed: NPV 25,336.0, budget dual 0.25, cap dual 0
+```
+
+With presolve off, Pyomo finds the plan MathOpt found (25,336.0, no clearance) and the same
+prices. With presolve on, the HiGHS that Pyomo calls (the standalone `highspy` package, a different
+build from the HiGHS inside OR-Tools) reported a plan worth 25,173.0 as optimal, although the
+presolve-off run found a feasible plan worth 25,336.0. A plan $163k better exists, so the first
+answer is not optimal, whatever its status says. Its fixed-integer prices differ too: clearance is
+full there, so the budget price is 0 and the cap carries 0.25.
+
+That run teaches the lesson's point twice. A fixed-integer price belongs to the plan that was
+fixed; fix a different plan and the price changes. And before you explain a plan's prices, check
+the plan: here, a second solver configuration was enough to show that the first answer was wrong.
+
+## Summary
+
+- **Fix every integer at its value, make it continuous, and re-solve.** In MathOpt set each
+  integer variable's bounds to its rounded value and `integer = False`; GLOP then reports duals.
+- **The fixed LP prices only what stayed free.** Its budget price is the rate of the continuous
+  part of the plan (here, clearance at 0.25). A fixed binary's reduced cost is its value against
+  that rate, not a reason it was funded or deferred.
+- **Binding means zero slack; a binding row can still have a zero price.** `must_P003` binds with
+  price 0, because its fixed bounds carry the price instead. Test slack and price separately.
+- **The price holds only with the plan fixed and inside its range.** Inside the range it is a floor
+  on the MILP's gain; outside, or for a cut when nothing continuous can shrink, it says nothing.
+- **Pyomo's dual Suffix does not run the re-solve for you.** Fix, relax integrality, then solve;
+  and check the plan before pricing it.
+
+## Reference
+
+| Step | MathOpt | Pyomo | gurobipy (lesson 5.3.2) |
+| --- | --- | --- | --- |
+| fix each integer at its plan value | `v.lower_bound = v.upper_bound = round(value)` | `v.fix(round(v.value))` | `m.fixed()` does all three |
+| make it continuous | `v.integer = False` | `TransformationFactory("core.relax_integer_vars")` | |
+| read prices | `result.dual_values(row)` after GLOP | `m.dual = Suffix(direction=IMPORT)` before the solve | `f.getConstrByName(...).Pi` |
+
+| A fixed-integer price at budget $`B`$ | What it is |
+| --- | --- |
+| budget price $`r`$ with $`0 < y < U`$ | each $1k between $`B - y`$ and $`B + U - y`$, plan fixed |
+| budget price $`r`$ with $`y = 0`$ | valid for increases only, up to $`U`$ |
+| budget price 0 with $`y = U`$ | the fixed plan has no use for money; the MILP may |
+| inside the range | a floor on the MILP's gain |
+| outside the range | nothing; re-solve the MILP |
+
+**Further reading:** [MathOpt `variables.py` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/variables.py) (a `Variable`'s `lower_bound`, `upper_bound` and `integer` all have setters, the three this lesson changes); [MathOpt `result.py` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/result.py) (`dual_values` and `reduced_costs` of the fixed LP); [Gurobi Python API, `Model`](https://docs.gurobi.com/projects/optimizer/en/current/reference/python/model.html) (`Model.fixed()` builds a continuous model with each integer variable fixed at its value in the current solution or MIP start); [Pyomo, Suffixes](https://pyomo.readthedocs.io/en/latest/explanation/modeling/math_programming/suffixes.html) (an import `dual` suffix collects constraint duals only when the solver supplies them; the page says nothing about integer variables); [Güzelsoy and Ralphs, Duality for Mixed Integer Linear Programs](https://coral.ise.lehigh.edu/%7Eted/files/papers/MILPD06.pdf) (section 2, Example 1: near a given right side the value function's slope is set by the objective coefficients of the continuous variables, and the integer variables set where the pieces break, the pattern this lesson's clearance price follows).
+
+## Challenges
+
+1. Raise the clearance rate to 0.6. Predict what happens to the budget price at $38,390k, and
+   whether the MILP's plan changes.
+2. At $66,000k the budget price is 0. Write the one sentence you would give finance about the
+   next $1,000k, using only the output above.
+3. Lesson 5.3.2's fixed model had every budget price 0. Which single variable would you add to
+   that model to make its budget prices mean something?
+
+## Design Note: Name the Plan Beside the Price
+
+A fixed-integer price is meaningless without the plan it was computed for, so store them together:
+the funded set (or its hash) and the solver run beside every price. When a re-run finds a
+different optimal plan (an alternative optimum, or, as above, a better plan), the old prices are
+not "updated"; they belonged to another plan.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson
+shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy
+of the code, so the course's own files never change.
+
+**fixed_duals.py.** Solves the selection with clearance, fixes the plan, reads the fixed LP's
+prices, slacks and reduced costs, and compares price × change with the fixed plan's and the MILP's
+real gains at three budgets, then looks up a row by name (*the first four sections*). *Try:* Change the clearance cap in
+`selection.py` from 800 to 300. Predict the new range at $38,000k.
+
+**pyomo_fixed.py.** The same model in Pyomo: the dual Suffix on the MILP, fixing alone, fixing and
+relaxing, with HiGHS's presolve on and off (*Pyomo's Dual Suffix Does Not Run the Re-Solve for
+You*). *Try:* Solve at $38,000k instead. Predict whether the two presolve settings agree there.
+
+- Program: [fixed_duals.py](src/fixed_duals.py)
+- Program: [pyomo_fixed.py](src/pyomo_fixed.py)
+- Library: [selection.py](src/selection.py)

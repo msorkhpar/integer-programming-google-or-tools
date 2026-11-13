@@ -1,0 +1,534 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "23-binary-logic"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Binary selection and counting constraints",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "6.1.1 Binary Selection and Counting Constraints"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's planning team has the small portfolio's best plan in hand: 20 of 40 projects, worth $25,336k, spending the whole $38,390k capital budget (lessons 1.1.1 and 3.1.1 built that model). Two new requests arrive in the same week. The (fictional) system operator will approve only a limited number of transmission outages for the whole plan, so the plan may fund at most that many transmission projects. And the vegetation contractor bills a $90k mobilization for every batch of up to three vegetation projects, which comes out of the same capital budget. Neither request mentions money per project or value per project. Both are about *how many* projects of a kind the plan funds. This lesson shows that a count of yes/no decisions is a linear expression, and turns both requests into rows, in four rules."
+    },
+    {
+      "type": "para",
+      "text": "GridCap is a fictional utility's portfolio, generated for this course. None of its numbers describe a real company, and the operator, the contractor and their limits are invented for the lessons of this module."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Binary Is a Yes/No Decision, and the Plan Is the Set of Projects at 1"
+    },
+    {
+      "type": "para",
+      "text": "Lesson 3.1.1 introduced the **binary variable**: a decision variable whose domain (the set of values it may take) is $`\\{0, 1\\}`$. In the selection model there is one per project:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "x_i = \\begin{cases} 1 & \\text{project } i \\text{ is funded} \\\\ 0 & \\text{otherwise} \\end{cases}\n\\qquad x_i \\in \\{0, 1\\} \\quad \\forall i \\in P"
+    },
+    {
+      "type": "para",
+      "text": "$`P`$ is the **set** of candidate projects, and $`\\forall i \\in P`$ (\"for all $`i`$ in $`P`$\") says there is one such variable for every project. A **plan** is one value for every $`x_i`$, and it is easiest to read as the set of projects whose variable is 1. The solver returns floating-point numbers, so \"1\" may come back as 0.9999999; reading a variable as funded when its value is above 0.5 absorbs that (section 10 treats these tolerances):"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def funded(sel: Selection, result: mathopt.SolveResult) -> list[str]:\n    \"\"\"The projects a solution funds, in portfolio order.\"\"\"\n    return [pid for pid, v in sel.x.items() if result.variable_values(v) > 0.5]"
+    },
+    {
+      "type": "para",
+      "text": "`sel.x` is a dictionary from project id to its MathOpt variable, built by the module's `selection_model.build` with `add_variable(lb=0, ub=1, is_integer=True)`, the binary of lesson 3.1.1. Every program of this module starts from that model, which is written out in full in *The Model* below: maximize NPV, subject to the capital budget and the must-do, parent and alternative rules."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Sum of Binaries Counts, and a Weighted Sum Totals"
+    },
+    {
+      "type": "para",
+      "text": "Here is the property this whole module is built on. Take any group of projects $`S \\subseteq P`$ (read \"$`S`$ is a subset of $`P`$\": every project in $`S`$ is also in $`P`$), for example the transmission projects. Each $`x_i`$ is 1 for a funded project and 0 for one left out, so adding them up adds one for each funded project and nothing for the rest:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\text{count}(S) = \\sum_{i \\in S} x_i = \\text{the number of funded projects in } S"
+    },
+    {
+      "type": "para",
+      "text": "Multiply each $`x_i`$ by a number first and the sum totals that number over the funded projects only. With $`\\text{capex}_i`$ the cost of project $`i`$, $`\\sum_{i \\in P} \\text{capex}_i\\,x_i`$ is the plan's spend; with $`\\text{crew}_i`$ its crew-months, $`\\sum_{i \\in P} \\text{crew}_i\\,x_i`$ is the crew-months the plan uses. A sum like these, numbers times variables added together, is a **linear expression**, and a linear expression is exactly what a MILP may put in a row or in its objective. Counting is the special case where every number is 1."
+    },
+    {
+      "type": "para",
+      "text": "In code, each of these is a Python `sum` over MathOpt variables, which builds an expression object rather than a number. `mathopt.evaluate_expression` then evaluates an expression at a solution's values:"
+    },
+    {
+      "type": "example",
+      "id": "count_plan-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "23-binary-logic/src/count_plan.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "23-binary-logic/src/count_plan.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "x = sel.x\ncount_program = {g: sum(x[i] for i in ids(small, program=g)) for g in PROGRAMS}\ncount_region = {r: sum(x[i] for i in ids(small, region=r)) for r in REGIONS}\ncapex = sum(p.capex * x[p.project_id] for p in small.projects)\ncrew = sum(p.crew_months * x[p.project_id] for p in small.projects)"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`ids(small, program=g)` lists the projects of one program. On the best plan for GridCap small:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "GridCap small: the best plan funds 20 of 40 projects, NPV $25,336k\ncount by program: transmission 8, distribution 5, vegetation 7\ncount by region:  Ridge 3, Valley 7, Coast 7, Plains 3\ncapex $38,390k of $38,390k; crew-months 100\ncandidates by program: transmission 14, distribution 14, vegetation 12"
+    },
+    {
+      "type": "para",
+      "text": "The plan funds 8 of the 14 transmission candidates. Nothing in the model so far says anything about that 8, which is the planner's first problem."
+    },
+    {
+      "type": "para",
+      "text": "Notice what the counts are *not*: they are not decision variables. A count is an expression built from the $`x_i`$; once the $`x_i`$ are chosen, the count is fixed. There is nothing for the solver to decide about it separately, so you write it as an expression, give it a Python name, and use it wherever a rule needs it."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Counting Row Caps How Many Projects of One Kind Are Funded"
+    },
+    {
+      "type": "para",
+      "text": "A **row** is one constraint of the model, so called because it is one row of the constraint matrix of lesson 1.2.1. The operator's request, \"at most $`K`$ transmission projects\", is a row on a count:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_{i \\in P_{\\text{trans}}} x_i \\le K \\qquad \\text{(outages)}"
+    },
+    {
+      "type": "para",
+      "text": "with $`P_{\\text{trans}}`$ the transmission projects. It is linear, so the MILP accepts it as it is:"
+    },
+    {
+      "type": "example",
+      "id": "transmission_cap-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "23-binary-logic/src/transmission_cap.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "23-binary-logic/src/transmission_cap.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "sel.model.add_linear_constraint(sum(sel.x[i] for i in transmission) <= cap, name=\"outages\")"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The program solves GridCap small with no cap and with caps from 6 down to 3:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "14 transmission candidates; the uncapped plan funds 8, NPV $25,336k\ncap 6: NPV $25,159k (-177), 22 projects, transmission ['P017', 'P022', 'P025', 'P028', 'P030', 'P032']\ncap 5: NPV $24,845k (-491), 21 projects, transmission ['P017', 'P022', 'P028', 'P030', 'P032']\ncap 4: NPV $23,927k (-1,409), 22 projects, transmission ['P017', 'P028', 'P030', 'P032']\ncap 3: NPV $21,932k (-3,404), 26 projects, transmission ['P017', 'P028', 'P030']"
+    },
+    {
+      "type": "para",
+      "text": "Three things are worth reading in that table."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**The cost of the cap grows faster than the cap shrinks.** Going from 6 to 5 costs $314k more; from 4 to 3, $1,995k more. Each tighter cap forces out one more transmission project, and the ones left are those whose NPV is hardest to replace: under a cap of 3, only the must-do P017 and the two projects worth over $4,000k each, P028 and P030.",
+        "**A tight cap funds *more* projects.** Transmission projects are the expensive ones; dropping one frees money for several cheaper distribution and vegetation projects, which is why 26 projects are funded under a cap of 3, against 20 with no cap.",
+        "**P017 survives every cap.** It is a must-do project ($`x_{P017} = 1`$), so it always uses one of the $`K`$ allowed outages. If the operator allowed zero outages, the cap row and the must-do row together would allow no plan at all: the model would be **infeasible**. Lesson 6.1.3 shows how to check a count against what the plan must and can fund before you solve."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The same shape gives every \"at most this many of a kind\" rule: per program, per region, per asset type, per crew. Only the set $`S`$ and the number $`K`$ change."
+    },
+    {
+      "type": "para",
+      "text": "The OR-Tools guide *Assignment with Teams of Workers* has a rule of exactly this shape, outside GridCap. Six workers in two teams of three share four tasks. Each worker takes at most one task, each task gets exactly one worker, and each team may take at most two tasks. There is one binary $`x_{w,t}`$ per worker and task, so the tasks a team takes are a count: the sum of $`x_{w,t}`$ over the team's workers and every task. `teams.py` is the guide's example written in MathOpt (the guide uses the older `pywraplp` wrapper), solved without and with the team rule:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "tasks_of = {team: sum(x[w, t] for w in members for t in tasks) for team, members in TEAMS.items()}\nif team_max is not None:\n    for team, count in tasks_of.items():\n        model.add_linear_constraint(count <= team_max, name=f\"cap_{team.replace(' ', '')}\")"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "no team rule      cost 235  tasks per team {'team 1': 1, 'team 2': 3}  (worker, task) [(0, 3), (1, 2), (3, 0), (5, 1)]\neach team <= 2    cost 250  tasks per team {'team 1': 2, 'team 2': 2}  (worker, task) [(0, 3), (1, 0), (4, 2), (5, 1)]"
+    },
+    {
+      "type": "para",
+      "text": "Without the rule, the cheapest assignment gives team 2 three of the four tasks for a cost of 235. The two count rows move one task to team 1, and the cost rises by 15 to 250, the minimum the guide reports. As with the GridCap cap, the count is an expression (`tasks_of`), and the row compares it with a number."
+    },
+    {
+      "type": "para",
+      "text": "A count can also be compared with another count. \"No region may get more than 40% of the funded projects\" compares a region's count with the plan's count. A share of an expression is not linear as written ($`\\text{count}(S) / \\text{count}(P) \\le 0.4`$ divides by a variable), but the plan's count is never negative, so you may multiply both sides by it, as lesson 2.1.1 did with a ratio of amounts:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_{i \\in S} x_i \\le 0.4 \\sum_{i \\in P} x_i"
+    },
+    {
+      "type": "para",
+      "text": "The right-hand side is the count of the *funded* projects, an expression, and not the number of candidates, a constant. With 40 candidates, $`0.4 \\times 40 = 16`$ would let one region take 16 projects of a 20-project plan, 80% of it. And when the plan funds nothing, both sides are 0 and the row holds, which is the right answer for an empty plan but worth knowing when you test one."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Count Rounded Up to Whole Batches Needs an Integer Variable"
+    },
+    {
+      "type": "para",
+      "text": "The contractor's request is different. A mobilization covers up to three vegetation projects and costs $90k, so a plan that funds 4 vegetation projects needs 2 mobilizations, and one that funds 7 needs 3. The number of mobilizations is the count divided by 3, **rounded up**, written $`\\lceil \\text{count} / 3 \\rceil`$. Rounding is not linear, so it cannot appear in a row directly."
+    },
+    {
+      "type": "para",
+      "text": "The fix is a new decision variable $`m`$, the number of mobilizations the plan pays for, with an integer domain, and a row saying the mobilizations must cover the projects:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "m \\in \\{0, 1, 2, \\dots\\}, \\qquad 3\\,m \\ge \\sum_{i \\in P_{\\text{veg}}} x_i \\quad \\text{(batches)}"
+    },
+    {
+      "type": "para",
+      "text": "The budget row then charges $90k for each one: $`\\sum_i \\text{capex}_i\\,x_i + 90\\,m \\le B`$."
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "m = sel.model.add_variable(lb=0, is_integer=integer, name=\"mobilizations\")\nsel.model.add_linear_constraint(BATCH * m >= sum(sel.x[i] for i in vegetation), name=\"batches\")\nsel.budget.set_coefficient(m, FEE)          # the budget row now reads capex + 90 m <= B"
+    },
+    {
+      "type": "para",
+      "text": "`add_variable(lb=0, is_integer=True)` is how MathOpt makes an integer variable; the program passes a flag, `integer`, so that it can build the model both ways below. MathOpt also has a shorthand, `model.add_integer_variable(lb=0, ub=..., name=...)`, which calls `add_variable` with `is_integer=True`. Its default lower bound is $`-\\infty`$, not 0, so pass `lb=0` for a count. (For a 0/1 variable there is `add_binary_variable(name=...)`.)"
+    },
+    {
+      "type": "para",
+      "text": "`set_coefficient` changes one coefficient of a row that already exists, here the budget row of the base model, so the code does not need to rebuild it."
+    },
+    {
+      "type": "para",
+      "text": "Why does this give the rounded-up number? The row allows any whole $`m`$ with $`3m`$ at least the count. For 7 projects that is $`m \\ge 7/3 = 2.33`$, and the smallest whole number that satisfies it is 3. The row allows 4 or 5 too, but every extra mobilization costs $90k of budget and buys nothing, so a plan that pays for one too many is never better than the same plan without it. The row is a lower bound, and the cost of $`m`$ keeps it from rising above what is needed."
+    },
+    {
+      "type": "para",
+      "text": "The integer domain is the whole point. The program solves the model twice, once with $`m`$ integer and once with $`m`$ continuous:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "m integer: NPV $25,228k, 8 vegetation projects, m = 3, spend $38,380k\n  vegetation funded: ['P003', 'P008', 'P010', 'P011', 'P014', 'P015', 'P018', 'P035']\nm continuous: NPV $25,238k, 4 vegetation projects, m = 1.333, spend $38,390k\n  vegetation funded: ['P003', 'P010', 'P011', 'P035']\n  the contractor bills 2 whole mobilizations: spend $38,450k, $60k over budget"
+    },
+    {
+      "type": "para",
+      "text": "With $`m`$ continuous, the model pays for 1.333 mobilizations, $120k, for 4 projects. The contractor bills whole mobilizations, so the real bill is 2, $180k, and the plan that \"fits the budget\" overspends it by $60k. The continuous model also reports a value $10k higher than the integer one, because it is allowed to buy a third of a mobilization."
+    },
+    {
+      "type": "para",
+      "text": "With $`m`$ integer the model makes a different choice altogether: it pays for 3 mobilizations and funds 8 vegetation projects, twice as many as the continuous model. A mobilization costs $90k whether it carries one project or three, so once the plan pays for a third one, the projects that ride on it cost only their own capex. Rounding the continuous answer up afterwards could never find that plan, because it starts from the continuous model's 4 vegetation projects."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The selection model of lesson 1.1.1 on GridCap small, with this lesson's two rows marked. The programs add the outage cap and the mobilizations one at a time; together they make this model."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`P`$ the candidate projects (40 on GridCap small); $`P_{\\text{trans}}, P_{\\text{veg}} \\subseteq P`$ the transmission and the vegetation projects; $`M \\subseteq P`$ the must-do projects; $`C \\subseteq P`$ the child projects, each with parent $`p(c)`$; $`\\mathcal{G}`$ the alternative groups, each a set of projects."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`\\text{capex}_i`$, the cost of project $`i`$ ($k); $`\\text{npv}_i`$, its NPV if it starts as early as it can ($k); $`B`$, the capital budget ($38,390k); $`K`$, the most transmission projects the operator approves; $`f = 90`$, the cost of one mobilization ($k); $`b = 3`$, the vegetation projects one mobilization covers."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& x_i \\in \\{0, 1\\} && \\forall i \\in P && \\text{(1 if project } i \\text{ is funded)} \\\\\n& m \\in \\mathbb{Z},\\ m \\ge 0 && && \\text{(mobilizations paid for)} \\quad \\leftarrow \\text{this lesson}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "$`\\mathbb{Z}`$ is the set of whole numbers, so $`m`$ may be 0, 1, 2 and so on."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{i \\in P} \\text{npv}_i\\, x_i"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{i \\in P} \\text{capex}_i\\, x_i + f\\,m &\\le B && && \\text{(budget)} \\quad \\leftarrow f\\,m \\text{ this lesson} \\\\\nx_i &= 1 && \\forall i \\in M && \\text{(must}_i) \\\\\nx_c &\\le x_{p(c)} && \\forall c \\in C && \\text{(parent}_c) \\\\\n\\sum_{i \\in g} x_i &\\le 1 && \\forall g \\in \\mathcal{G} && \\text{(alt}_g) \\\\\n\\sum_{i \\in P_{\\text{trans}}} x_i &\\le K && && \\text{(outages)} \\quad \\leftarrow \\text{this lesson} \\\\\nb\\,m &\\ge \\sum_{i \\in P_{\\text{veg}}} x_i && && \\text{(batches)} \\quad \\leftarrow \\text{this lesson}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The code names the rows `budget`, `must_<id>`, `parent_<id>`, `alt_<group>`, `outages` and `batches`."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**A binary is a yes/no decision, and the plan is the set of projects at 1.** Read a solution with a tolerance (`> 0.5`), never with `== 1`.",
+        "**A sum of binaries counts, and a weighted sum totals.** Counts, spend and crew-months are linear expressions of the $`x_i`$, not new variables.",
+        "**A counting row caps how many projects of one kind are funded.** $`\\sum_{i \\in S} x_i \\le K`$; a share of the plan is multiplied out into $`\\sum_{i \\in S} x_i \\le s \\sum_{i \\in P} x_i`$.",
+        "**A count rounded up to whole batches needs an integer variable.** $`b\\,m \\ge \\text{count}`$ with $`m`$ integer; a continuous $`m`$ buys fractions of a batch that nobody sells."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Quantity",
+        "Linear expression"
+      ],
+      "rows": [
+        [
+          "projects funded in $`S`$",
+          "$`\\sum_{i \\in S} x_i`$"
+        ],
+        [
+          "spend of the plan",
+          "$`\\sum_{i \\in P} \\text{capex}_i\\, x_i`$"
+        ],
+        [
+          "crew-months of the plan",
+          "$`\\sum_{i \\in P} \\text{crew}_i\\, x_i`$"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Rule in words",
+        "Row"
+      ],
+      "rows": [
+        [
+          "at most $`K`$ projects of kind $`S`$",
+          "$`\\sum_{i \\in S} x_i \\le K`$"
+        ],
+        [
+          "kind $`S`$ is at most a share $`s`$ of the plan",
+          "$`\\sum_{i \\in S} x_i \\le s \\sum_{i \\in P} x_i`$"
+        ],
+        [
+          "batches of up to $`b`$, each costing $`f`$",
+          "$`m \\in \\mathbb{Z}_{\\ge 0}`$, $`b\\,m \\ge \\sum_{i \\in S} x_i`$, $`f\\,m`$ added to the budget row"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "MathOpt",
+        "What it does"
+      ],
+      "rows": [
+        [
+          "`sum(x[i] for i in S)`",
+          "builds a linear expression, not a number"
+        ],
+        [
+          "`mathopt.evaluate_expression(e, values)`",
+          "the expression's value at a solution"
+        ],
+        [
+          "`row.set_coefficient(var, c)`",
+          "sets one coefficient of an existing row"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [Assignment with Teams of Workers (OR-Tools)](https://developers.google.com/optimization/assignment/assignment_teams) (the example adapted in `teams.py`: a rule on how many tasks a team takes, written as a sum of the team's binaries, solved with both the MIP solver and CP-SAT); [MathOpt (OR-Tools)](https://developers.google.com/optimization/math_opt) (the modeling layer of these programs: integer variables, linear constraints, and a solver chosen by an enum); [MathOpt `model.py` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/model.py) (`add_integer_variable` and `add_binary_variable`, shorthands for `add_variable` with `is_integer=True`, the first with default bounds $`-\\infty`$ to $`\\infty`$); [Integer Programming, Chapter 9 of Applied Mathematical Programming (MIT 15.053)](https://web.mit.edu/15.053/www/AMP-Chapter-09.pdf) (section 9.1 states capital budgeting as go/no-go binaries under resource rows, and calls a sum of binaries at most 1, one row over conflicting projects, a multiple-choice constraint; section 9.2 writes a quantity that is either 0 or $`B`$ as $`B`$ times a binary, which the mobilizations extend to $`B`$ times an integer variable)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "The operator changes its mind: at most 5 transmission projects, *and* at most 2 in the Valley region. Write the second row. Is the first still needed?",
+        "A mobilization now covers four projects. Predict how many mobilizations the integer model buys, then change `BATCH` in `mobilizations.py` and run it.",
+        "Write the row \"the plan funds at least as many distribution projects as transmission projects\" as one linear row."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Count With Expressions, Decide With Variables"
+    },
+    {
+      "type": "para",
+      "text": "It is tempting to give every count its own variable, $`n_S = \\sum_{i \\in S} x_i`$, \"to make the model readable\". In MathOpt that costs one variable and one equality row per count and changes no answer, because $`n_S`$ is fully decided by the $`x_i`$. Keep counts as Python expressions with names, as the programs above do, and add a variable only when the quantity is a real decision that the $`x_i`$ do not settle on their own, like the mobilizations, where the model chooses how many to pay for and a row only bounds it from below."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**count_plan.py.** Solves GridCap small's selection model and evaluates counts, spend and crew-months on the best plan (*A Sum of Binaries Counts*). *Try:* Add a count of the plan's must-do projects. Predict the number before you run it."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [count_plan.py](src/count_plan.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**transmission_cap.py.** Solves the model under transmission caps from 6 to 3 (*A Counting Row Caps How Many Projects of One Kind Are Funded*). *Try:* Set the cap to 0. Predict what the solver reports, and why."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [transmission_cap.py](src/transmission_cap.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**mobilizations.py.** Adds the vegetation mobilizations with $`m`$ integer and continuous (*A Count Rounded Up to Whole Batches Needs an Integer Variable*). *Try:* Raise `FEE` to 300. Predict whether the integer model still funds 8 vegetation projects."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [mobilizations.py](src/mobilizations.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**teams.py.** The OR-Tools assignment-with-teams example in MathOpt, solved without and with the rule that each team takes at most two tasks (*A Counting Row Caps How Many Projects of One Kind Are Funded*). *Try:* Set `TEAM_MAX = 1`. Predict what HiGHS reports, from the number of tasks and teams."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [teams.py](src/teams.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**selection_model.py.** The selection model builder and the helpers every program of this module shares: `build`, `ids`, `funded`, `solve_highs` and `allowed_values`. It runs nothing itself."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [selection_model.py](src/selection_model.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 11,
+    "paras": 45,
+    "code": 15,
+    "tables": 3,
+    "lists": 8,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 2
+  },
+  "content_sha256": "d05174473f6d9782de37298e59c1e8b7ba1152d5ade6cc6f1077cd2aa9a9801f"
+}

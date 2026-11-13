@@ -1,0 +1,50 @@
+{
+ "title": "Schemas for model inputs",
+ "questions": [
+  {
+   "id": "q-layers",
+   "heading": "One Schema Validates the Whole Snapshot and Reports Every Problem in One Pass",
+   "stem": "A snapshot arrives with a negative cost on one project and a parent id that names no project. The schema bounds each field and checks references in a model validator on the whole snapshot (mode=\"after\"). What does the first validation report?",
+   "options": [
+    {"id": "a", "text": "Both problems, since pydantic collects every error before it raises", "correct": false,
+     "says": "Field errors are collected together, but the snapshot's after-validator runs only once every field is valid, so the reference problem is not reported yet."},
+    {"id": "b", "text": "Only the cost, since the reference rule runs once every field is valid", "correct": true,
+     "says": "Right: field problems come first; the reference rule runs on a snapshot whose fields all passed."},
+    {"id": "c", "text": "Only the parent, since rules across records run before any field rule", "correct": false,
+     "says": "The order is the other way round: an after-validator sees the validated fields, so it runs after them."},
+    {"id": "d", "text": "Neither problem, since validation stops at the first record that fails", "correct": false,
+     "says": "Pydantic does not stop at the first bad field; the lesson's run reported four field problems in one pass."}
+   ]
+  },
+  {
+   "id": "q-defaults",
+   "heading": "At a Machine Boundary, Forbid Unknown Keys and Turn Off Guessing",
+   "stem": "An exporter renames the key parent_lag to lag in every project. The schema declares parent_lag: NonNegativeInt = 0 and leaves pydantic's extra setting at its default. What happens to the document?",
+   "options": [
+    {"id": "a", "text": "It is refused, since a field the schema needs is missing everywhere", "correct": false,
+     "says": "parent_lag has a default, so its absence is not an error; the default fills it."},
+    {"id": "b", "text": "It is refused, since every key it sends must match a declared field", "correct": false,
+     "says": "That is extra=\"forbid\". The default is \"ignore\", which drops unknown keys."},
+    {"id": "c", "text": "It is accepted, and lag is kept as an extra field on each project", "correct": false,
+     "says": "Keeping unknown keys is extra=\"allow\"; the default drops them."},
+    {"id": "d", "text": "It is accepted, and every project's lag silently becomes zero", "correct": true,
+     "says": "Right: lag is ignored, parent_lag is missing, and its default 0 fills the gap with no error."}
+   ]
+  },
+  {
+   "id": "q-versions",
+   "heading": "The Schema Is a Versioned Contract, Published as JSON Schema",
+   "stem": "An older depot system still sends documents in which one column has its old name. The service's schema is strict, forbids unknown keys and requires schema_version 3. What should the service do with those documents?",
+   "options": [
+    {"id": "a", "text": "Upgrade each with an explicit rename step, then validate it as version 3", "correct": true,
+     "says": "Right: an upgrade step that knows what the old name meant brings the document forward, and the schema stays strict."},
+    {"id": "b", "text": "Validate each with extra=\"ignore\", so the old column drops and the rest is used", "correct": false,
+     "says": "Dropping the old column lets a default stand in for its value: the quiet failure the lesson showed with lag."},
+    {"id": "c", "text": "Validate each with strict=False, so the old column converts to the new one", "correct": false,
+     "says": "Strict mode is about value types, not key names; lax mode renames nothing."},
+    {"id": "d", "text": "Accept any version number, so documents from every exporter can pass", "correct": false,
+     "says": "Then an old document is read as if it were new, which is what the version field exists to stop."}
+   ]
+  }
+ ]
+}

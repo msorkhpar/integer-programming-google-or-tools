@@ -1,0 +1,35 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from ortools.math_opt.python import mathopt
+
+
+@dataclass(frozen=True)
+class Project:
+    pid: str
+    starts: tuple[int, ...]
+
+
+def add_testing_rules(model: mathopt.Model, x: dict, projects: list[Project], years: tuple[int, ...],
+                      testing: dict[str, tuple[str, int]]) -> None:
+    """Testing never before its station, and started within k years of it inside the plan."""
+    # TODO: the "not before" rows and the deadline rows.
+    return None
+
+
+def build(projects: list[Project], years: tuple[int, ...],
+          testing: dict[str, tuple[str, int]]) -> tuple[mathopt.Model, dict]:
+    model = mathopt.Model(name="testing")
+    x = {(p.pid, t): model.add_binary_variable(name=f"x_{p.pid}_{t}") for p in projects for t in p.starts}
+    for p in projects:
+        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f"once_{p.pid}")
+    add_testing_rules(model, x, projects, years, testing)
+    return model, x
+
+
+if __name__ == "__main__":
+    years = (2027, 2028, 2029)
+    projects = [Project("SUB", years), Project("TEST", years)]
+    model, x = build(projects, years, {"TEST": ("SUB", 1)})
+    print(model.get_num_linear_constraints(), "rows")

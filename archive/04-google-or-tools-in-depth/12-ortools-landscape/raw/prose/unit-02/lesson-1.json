@@ -1,0 +1,674 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "12-ortools-landscape"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Versions and the backends that ship with it",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "4.1.2 Versions and the Backends That Ship With It"
+    },
+    {
+      "type": "para",
+      "text": "A GridCap engineer pastes a snippet from an old blog post into the planning service: `pywraplp.Solver.CreateSolver(\"GUROBI\")`. Another copies `mathopt.SolverType.GLPK` from the `SolverType` list. Both look like valid OR-Tools code, both pass a code review, and neither runs in the service's container. Which solvers you can actually call depends on three things the code does not show: the OR-Tools version you installed, which solvers that build was compiled with, and which outside libraries and licenses the machine has."
+    },
+    {
+      "type": "para",
+      "text": "This lesson measures all three in the course runner, the offline container every program of this course runs in, which pins OR-Tools 9.15.6755. It asks each API which solvers it accepts, tries Gurobi both ways, and then makes each API refuse something, to show where each one puts its \"no\". That last part matters more than it looks: MathOpt, CP-SAT, the linear solver wrapper, the graph solvers and routing each report a refusal in a different place, and code that looks in the wrong place carries on with a wrong answer. GridCap is a fictional portfolio; this lesson needs none of its data."
+    },
+    {
+      "type": "para",
+      "text": "A **backend** here is the solver an API hands your model to: HiGHS, SCIP and GLOP are backends of MathOpt and of the linear solver wrapper. A **refusal** is the solver declining a request (a model type it cannot solve, a solver that is not there), as opposed to an answer such as \"infeasible\"."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The refusal tests use a one-continuous model, small enough to read at a glance. Lesson 4.2.3, later in this section, solves it with every MathOpt solver."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`a \\in [0, 10]`$, continuous; $`b \\in \\{0, 1, \\dots, 10\\}`$, integer."
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& 1.01\\,a + 2.9\\,b \\\\\n\\text{s.t. } & 0.37\\,a + 1.13\\,b \\le 7.71 && \\text{(cap)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Its optimum, measured in lesson 4.2.3 later in this section, is $`a = 8.6216`$, $`b = 4`$, value 20.3078. Any answer with a fractional $`b`$ is therefore not an answer to this model: it tells you the solver ignored the integrality. The backend survey solves an empty model, with no variables and no rows, which every solver that is present can solve."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "One Version Number Covers the Whole Package, and Each Solver Inside Has Its Own"
+    },
+    {
+      "type": "para",
+      "text": "OR-Tools is versioned as one package, and every solver in it ships at whatever version that release bundled. The program prints the package's version, what pip installs with it, and the version each solver reports:"
+    },
+    {
+      "type": "example",
+      "id": "version_check-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "12-ortools-landscape/src/version_check.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "12-ortools-landscape/src/version_check.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "print(\"Python      \", platform.python_version())\nprint(\"ortools      \", ortools.__version__)\nprint(\"OrToolsVersion\", init.OrToolsVersion.version_string())\nprint(\"pip requires:\", \"; \".join(importlib.metadata.requires(\"ortools\")))\n\nprint(\"\\nsolver versions, as the linear solver wrapper reports them:\")\nfor solver_id in (\"GLOP\", \"PDLP\", \"CLP\", \"CBC\", \"SCIP\", \"CP_SAT\", \"HIGHS\"):\n    solver = pywraplp.Solver.CreateSolver(solver_id)\n    print(f\"  {solver_id:<7} {solver.SolverVersion()}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "Python       3.14.7\nortools       9.15.6755\nOrToolsVersion 9.15.6755\npip requires: absl-py>=2.0.0; numpy>=2.0.2; pandas>=2.0.0; protobuf<6.34,>=6.33.1; typing-extensions>=4.12; immutabledict>=3.0.0\n\nsolver versions, as the linear solver wrapper reports them:\n  GLOP    Glop solver v9.15.6755\n  PDLP    PDLP Solver\n  CLP     Clp 1.17.10\n  CBC     Cbc 2.10.12\n  SCIP    SCIP 10.0.0 [LP solver: SoPlex 8.0.0]\n  CP_SAT  CP-SAT solver v9.15.6755\n  HIGHS   PDLP Solver\n\nwhat HiGHS itself prints when it runs:\n  Running HiGHS 1.12.0"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Read it from the top:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**The version is 9.15.6755**, from both `ortools.__version__` and the C++ side (`init.OrToolsVersion`). Pin the whole string (`ortools==9.15.6755`), as the course runner does.",
+        "**pip brings six libraries with it**, and one has a narrow range: `protobuf<6.34,>=6.33.1`. Any other package that needs a protobuf outside that range cannot share an environment with this OR-Tools. Check that line before you add OR-Tools to a service with other dependencies.",
+        "**Google's own solvers carry the OR-Tools version** (GLOP, CP-SAT); the open-source solvers it bundles carry their own: SCIP 10.0.0 (with SoPlex 8.0.0 as its LP solver), CBC 2.10.12, CLP 1.17.10. The OR-Tools v9.15 release notes list the same SCIP, and HiGHS v1.12.0, among the release's dependencies.",
+        "**The wrapper's version string for HiGHS is wrong.** It says \"PDLP Solver\". The program then ran a one-variable MIP through `CreateSolver(\"HIGHS\")`, catching what the solver writes to the terminal, and HiGHS's own first line says `Running HiGHS 1.12.0` (the rest of that line, a git hash and a copyright notice, is cut). In the last section the same ID solves a MIP to a whole-number answer, which PDLP, an LP solver, cannot. The backend is HiGHS; only its label is wrong, so never decide which solver ran from `SolverVersion()` alone."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The release notes are where version-specific behavior is written down, and 9.15's are worth reading before you upgrade or downgrade: they add Python 3.14 and drop 3.8, add HiGHS solution hints to MathOpt, and list known issues, one of which you will meet below (CP-SAT's `status_name()`)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Each API Has Its Own List of Backends, and Only Some Are Compiled In"
+    },
+    {
+      "type": "para",
+      "text": "The two APIs that take a model and a choice of solver each have a list of solver names. A name on the list is not a promise that the solver is there. The program asks each API about every name:"
+    },
+    {
+      "type": "example",
+      "id": "backend_grid-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "12-ortools-landscape/src/backend_grid.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "12-ortools-landscape/src/backend_grid.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "print(\"MathOpt: mathopt.solve(model, SolverType.X)\")\nfor solver in mathopt.SolverType:\n    try:\n        mathopt.solve(mathopt.Model(), solver)\n        verdict = \"solves\"\n    except Exception as error:\n        hidden = error.__context__\n        reason = hidden.message if hidden is not None else str(error)\n        verdict = f\"refused: {type(error).__name__}, {reason}\"\n    print(f\"  {solver.name:<9} {verdict}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "MathOpt: mathopt.solve(model, SolverType.X)\n  GSCIP     solves\n  GUROBI    refused: RuntimeError, bad_function_call\n  GLOP      solves\n  CP_SAT    solves\n  PDLP      solves\n  GLPK      refused: AttributeError, solver type SOLVER_TYPE_GLPK is not registered, support for this solver has not been compiled\n  OSQP      refused: AttributeError, solver type SOLVER_TYPE_OSQP is not registered, support for this solver has not been compiled\n  ECOS      refused: AttributeError, solver type SOLVER_TYPE_ECOS is not registered, support for this solver has not been compiled\n  SCS       refused: AttributeError, solver type SOLVER_TYPE_SCS is not registered, support for this solver has not been compiled\n  HIGHS     solves\n  SANTORINI refused: AttributeError, solver type SOLVER_TYPE_SANTORINI is not registered, support for this solver has not been compiled"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`SolverType` has eleven members, and five solve: **SCIP (`GSCIP`), GLOP, CP-SAT, PDLP and HiGHS**. Five more have a name but no code behind it in this build: they are \"not registered\", and \"support for this solver has not been compiled\". Gurobi is the odd one, with its own section below. The `AttributeError` is a bug in OR-Tools 9.15's Python wrapper, which lesson 4.2.4, later in this section, takes apart: MathOpt meant to raise a `ValueError`, and the reason survives only on the exception's `__context__`, the earlier exception Python keeps attached to the one it raised. The MathOpt page of the OR-Tools documentation also lists FICO Xpress, and the 9.15 release notes say MathOpt supports it; the Python `SolverType` of this build has no member for it at all."
+    },
+    {
+      "type": "para",
+      "text": "The linear solver wrapper picks its solver by a string ID at creation:"
+    },
+    {
+      "type": "example",
+      "id": "backend_grid-3",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "12-ortools-landscape/src/backend_grid.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "12-ortools-landscape/src/backend_grid.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "print(\"\\nlinear solver wrapper: pywraplp.Solver.CreateSolver(id)\")\nfor solver_id in (\"GLOP\", \"PDLP\", \"CLP\", \"HIGHS\", \"CBC\", \"SCIP\", \"CP_SAT\", \"BOP\",\n                  \"GUROBI\", \"XPRESS\", \"CPLEX\", \"GLPK\"):\n    solver = pywraplp.Solver.CreateSolver(solver_id)\n    if solver is None:\n        print(f\"  {solver_id:<7} None\")\n    else:\n        print(f\"  {solver_id:<7} a solver, {'MIP' if solver.IsMip() else 'LP only'}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "linear solver wrapper: pywraplp.Solver.CreateSolver(id)\n  GLOP    a solver, LP only\n  PDLP    a solver, LP only\n  CLP     a solver, LP only\n  HIGHS   a solver, MIP\n  CBC     a solver, MIP\n  SCIP    a solver, MIP\n  CP_SAT  a solver, MIP\n  BOP     a solver, MIP\n  GUROBI  None\n  XPRESS  None\n  CPLEX   None\n  GLPK    None"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Eight IDs give a solver. Three are LP solvers (`IsMip()` is false): GLOP, PDLP and CLP. Five solve MIPs: HiGHS, CBC, SCIP, CP-SAT and BOP. CLP and CBC are COIN-OR's open-source LP and MIP solvers; BOP is a Google solver for integer models, which refuses continuous variables (the last section shows it). The four commercial or external IDs give `None`. So the wrapper has three solvers that MathOpt lacks here (CLP, CBC and BOP), and MathOpt's HiGHS, SCIP, GLOP, PDLP and CP-SAT are all in the wrapper too."
+    },
+    {
+      "type": "para",
+      "text": "The wheel holds a third LP/MILP API, `model_builder` (`ortools.linear_solver.python`), which the course does not use; asked the same question, it accepts five:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "model_builder: model_builder.Solver(name).solver_is_supported()\n  glop True, pdlp True, highs True, scip True, sat True, cbc False, clp False, gurobi False, xpress False"
+    },
+    {
+      "type": "para",
+      "text": "The rest of the package has no list to ask. CP-SAT *is* its solver. The graph solvers, the knapsack solver and routing each run their own algorithm. The knapsack solver does let you pick among its algorithms by a `SolverType` (lesson 4.1.1 used the multidimensional branch-and-bound one), but every one of them is part of the wheel."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Gurobi Is on Every List, and Loads Through Neither API in the Course Runner"
+    },
+    {
+      "type": "para",
+      "text": "Gurobi is a commercial solver whose code is not in OR-Tools at all. Both MathOpt and the wrapper load Gurobi's own shared library at run time, if they can find it, and Gurobi then wants a license. The runner has no Gurobi installation, but it does have the `gurobipy` package (section 5 uses it), and that wheel ships a Gurobi library. The program asks both APIs for Gurobi, then points each of them at that library in a child process, because a library OR-Tools rejects stops the whole process:"
+    },
+    {
+      "type": "example",
+      "id": "gurobi_check-4",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "12-ortools-landscape/src/gurobi_check.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "12-ortools-landscape/src/gurobi_check.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "model = mathopt.Model(name=\"tiny\")\nmodel.maximize(model.add_binary_variable(name=\"x\"))\ntry:\n    mathopt.solve(model, mathopt.SolverType.GUROBI)\nexcept Exception as error:\n    print(\"MathOpt, SolverType.GUROBI:\", type(error).__name__, error)\nprint(\"pywraplp, CreateSolver('GUROBI'):\", pywraplp.Solver.CreateSolver(\"GUROBI\"))"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Then each API is pointed at gurobipy's library in a child process of its own (`attempts` holds the one line of code each child runs), and only the line that names the cause is printed:"
+    },
+    {
+      "type": "example",
+      "id": "gurobi_check-5",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "12-ortools-landscape/src/gurobi_check.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "12-ortools-landscape/src/gurobi_check.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "for api, code in attempts.items():\n    child = subprocess.run([sys.executable, \"-c\", code], capture_output=True, text=True,\n                           env={**os.environ, \"GUROBI_HOME\": home})\n    cause = next(line for line in child.stderr.splitlines() if \"could not find function\" in line)\n    print(f\"  {api} exit code {child.returncode}: {cause.split('Error: ')[1].split(' in ')[0]}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "MathOpt, SolverType.GUROBI: RuntimeError bad_function_call\npywraplp, CreateSolver('GUROBI'): None\n\ngurobipy 13.0.3 ships libgurobi130.so; pointing OR-Tools at it:\n  MathOpt  exit code -6: could not find function GRBcopyparams\n  pywraplp exit code -6: could not find function GRBcopyparams"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "With nothing to load, MathOpt fails with a C++ `bad_function_call` that names no cause, and the wrapper returns `None`. Pointed at the library (MathOpt through `init.CppBridge.load_gurobi_shared_library`, the wrapper through a `GUROBI_HOME` folder, which is where it looks), both stop with the same check: OR-Tools 9.15 needs a function, `GRBcopyparams`, that the `libgurobi130.so` inside the gurobipy 13.0.3 wheel does not have, and the process aborts (exit code $`-6`$ is the abort signal). The 9.15 release notes list Gurobi 13.0.0 as supported by the linear solver; that support does not reach the library this wheel ships."
+    },
+    {
+      "type": "para",
+      "text": "**So in this course Gurobi is used through `gurobipy` directly** (section 5, from lesson 5.3.1), never through MathOpt or the wrapper, and no program needs a license to reach this point: every attempt above fails before a license is looked for. On a machine with a full Gurobi installation that OR-Tools supports, plus a license, the same `SolverType.GUROBI` call is all it takes (lesson 4.2.3). Never put a license file in a repository or an image; mount it at run time (lesson 5.3.4, in section 5)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Each API Reports a Refusal in Its Own Place"
+    },
+    {
+      "type": "para",
+      "text": "A refused request has to come back to you somehow, and each family uses its own mix of three channels: an exception, a `None` where an object was expected, and a status. The program provokes one refusal (or more) in each. MathOpt first, with GLOP handed the model's integer $`b`$:"
+    },
+    {
+      "type": "example",
+      "id": "refusals-6",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "12-ortools-landscape/src/refusals.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "12-ortools-landscape/src/refusals.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "try:\n    mathopt.solve(model, mathopt.SolverType.GLOP)\nexcept Exception as error:\n    print(f\"  GLOP, integer b: {type(error).__name__}; __context__.message = {error.__context__.message!r}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "MathOpt: an exception from mathopt.solve\n  GLOP, integer b: AttributeError; __context__.message = 'Glop does not support integer variables'"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**MathOpt raises.** A refusal never comes back as a result; `mathopt.solve` raises before solving, and in 9.15 the reason is on `__context__` (lesson 4.2.4 shows how to turn it back into the `ValueError` MathOpt meant). The wrapper, given the same model:"
+    },
+    {
+      "type": "example",
+      "id": "refusals-7",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "12-ortools-landscape/src/refusals.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "12-ortools-landscape/src/refusals.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "for solver_id in (\"GLOP\", \"HIGHS\", \"BOP\"):\n    solver = pywraplp.Solver.CreateSolver(solver_id)\n    pa, pb = solver.NumVar(0, 10, \"a\"), solver.IntVar(0, 10, \"b\")\n    solver.Add(0.37 * pa + 1.13 * pb <= 7.71, \"cap\")\n    solver.Maximize(1.01 * pa + 2.9 * pb)\n    log: list[str] = []\n    with muted(), captured(log, fd=2):                      # the reason, if any, goes to the log\n        status = solver.Solve()"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "pywraplp: None from CreateSolver, or a status from Solve\n  CreateSolver('CPLEX') returns None\n  GLOP  integer b: Solve() = OPTIMAL, b = 3.5487\n  HIGHS integer b: Solve() = OPTIMAL, b = 4.0000\n  BOP   integer b: Solve() = ABNORMAL, b = 0.0000\n        log: Variable c0 is continuous. This is not supported by BOP."
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**The wrapper returns `None` from `CreateSolver`, or a status from `Solve`, and sometimes does not refuse at all.** A missing solver is `None`, with no exception: code that skips the `if not solver` check of the OR-Tools samples fails later, at its first method call on `None`. Then the dangerous line: GLOP, an LP solver, took a model with an integer variable, said `OPTIMAL`, and returned $`b = 3.5487`$, the LP relaxation's answer. Where MathOpt's GLOP refused, the wrapper's GLOP silently dropped the integrality. HiGHS solved the real MIP ($`b = 4`$). BOP, which needs all-0/1 variables, returned `ABNORMAL`, and the reason went only to the log (standard error), naming the variable by its column (`c0`) rather than its name. When you press Run you will also see the wrapper's other log lines there, such as the warning that CPLEX is not linked in."
+    },
+    {
+      "type": "para",
+      "text": "CP-SAT refuses in two places, depending on when it can tell:"
+    },
+    {
+      "type": "example",
+      "id": "refusals-8",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "12-ortools-landscape/src/refusals.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "12-ortools-landscape/src/refusals.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "cp = cp_model.CpModel()\nn = cp.new_int_var(0, 10, \"n\")\ntry:\n    cp.add(0.37 * n <= 7)\nexcept TypeError as error:\n    print(\"  a 0.37 coefficient:\", str(error).split(\":\")[0])\nbad = cp_model.CpModel()\nbad.new_int_var(5, 3, \"m\")                                  # lower bound above upper bound\nsolver = cp_model.CpSolver()\nstatus = solver.solve(bad)\nprint(f\"  domain [5, 3]: solve() = {solver.status_name(status)}; validate() = {bad.validate()!r}\")\ntry:\n    solver.status_name()\nexcept TypeError as error:\n    print(\"  status_name() with no argument:\", type(error).__name__)"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "CP-SAT: a TypeError while building, or MODEL_INVALID from solve\n  a 0.37 coefficient: Linear constraints only accept integer values and coefficients\n  domain [5, 3]: solve() = MODEL_INVALID; validate() = 'var #0 has no domain(): name: \"m\"'\n  status_name() with no argument: TypeError"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**CP-SAT raises a `TypeError` while you build, or returns `MODEL_INVALID` from `solve`.** A fractional coefficient is caught at once, at `add`. A model that only turns out wrong as a whole (here, a variable whose range is empty) is solved and comes back with the status `MODEL_INVALID`, and `model.validate()` says why (lesson 4.4.1, later in this section, uses it). The last line is a 9.15 bug, listed among the release's known issues: `solver.status_name()` with no argument, meant to name the last solve's status, raises `TypeError` instead. Pass the status, as above."
+    },
+    {
+      "type": "para",
+      "text": "The special-purpose solvers and routing:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "special-purpose solvers: a TypeError for a fractional number\n  assignment, cost 2.5: add_arc_with_cost(): incompatible function arguments\n  knapsack, value 1.5: init(): incompatible function arguments\ngraph: a status from solve()\n  ship 5 over an arc of capacity 3: INFEASIBLE\n  supply 5, demand 4: UNBALANCED\n  with a second arc: OPTIMAL | status == flow.OPTIMAL: True | cost 12\n  statuses: BAD_COST_RANGE, BAD_CAPACITY_RANGE, BAD_RESULT, FEASIBLE, INFEASIBLE, NOT_SOLVED, OPTIMAL, UNBALANCED\nrouting: None from SolveWithParameters, and the reason in status()\n  stops needing 4 units, a van carrying 3: None ROUTING_FAIL"
+    },
+    {
+      "type": "para",
+      "text": "**The graph and knapsack solvers raise a `TypeError` for a fractional number**, at the call that receives it: they take whole numbers only, so scale money to whole $k or cents first. **The flow solvers return a status from `solve()`**: `INFEASIBLE` when the arcs cannot carry the supply, `UNBALANCED` when supplies and demands do not sum to zero. Nothing is raised, so the status check is yours to write. It is a comparison with the solver's own `OPTIMAL`, done before any cost is read:"
+    },
+    {
+      "type": "example",
+      "id": "refusals-9",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "12-ortools-landscape/src/refusals.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "12-ortools-landscape/src/refusals.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "flow.add_arc_with_capacity_and_unit_cost(0, 1, 2, 3)        # a second arc beside it, 2 more units\nflow.set_node_supply(1, -5)\nstatus = flow.solve()\nprint(\"  with a second arc:\", status.name, \"| status == flow.OPTIMAL:\", status == flow.OPTIMAL,\n      \"| cost\", flow.optimal_cost())"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "With a second arc of capacity 2 the 5 units fit, the status is `OPTIMAL`, and only then is `optimal_cost()` a cost: 3 units at 2 and 2 units at 3, 12. `status.name` gives the status as text, and the last line lists every status the min-cost flow solver has. **Routing returns `None` from `SolveWithParameters`** when it finds no route (here a van that carries 3 units sent to stops that need 4 in total), and `routing.status()` says which kind of failure: `ROUTING_FAIL`, no solution found."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**One version number covers the package; each bundled solver has its own.** The runner pins OR-Tools 9.15.6755: SCIP 10.0.0, HiGHS 1.12.0, CBC 2.10.12, CLP 1.17.10. The wrapper mislabels HiGHS as \"PDLP Solver\"; the solver's own banner is right.",
+        "**Each API has its own list of backends.** MathOpt solves with SCIP, GLOP, CP-SAT, PDLP and HiGHS; the wrapper adds CLP, CBC and BOP. Names on a list that are not compiled in are refused.",
+        "**Gurobi loads through neither API in the course runner**: the gurobipy 13 library lacks `GRBcopyparams`, and loading it aborts the process. Gurobi is used through `gurobipy`.",
+        "**Each API reports a refusal in its own place**: MathOpt raises; the wrapper returns `None` or a status, and its LP solvers drop integrality silently; CP-SAT raises while building or returns `MODEL_INVALID`; the graph and knapsack solvers raise on fractions and flows return a status; routing returns `None` and keeps the reason in `status()`."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "API",
+        "Backends in the runner (OR-Tools 9.15.6755)",
+        "Listed but absent"
+      ],
+      "rows": [
+        [
+          "MathOpt `SolverType`",
+          "`GSCIP`, `GLOP`, `CP_SAT`, `PDLP`, `HIGHS`",
+          "`GUROBI` (no library), `GLPK`, `OSQP`, `ECOS`, `SCS`, `SANTORINI` (not compiled)"
+        ],
+        [
+          "`pywraplp.Solver.CreateSolver`",
+          "LP: `GLOP`, `PDLP`, `CLP`; MIP: `HIGHS`, `CBC`, `SCIP`, `CP_SAT`, `BOP`",
+          "`GUROBI`, `XPRESS`, `CPLEX`, `GLPK`"
+        ],
+        [
+          "`model_builder.Solver`",
+          "`glop`, `pdlp`, `highs`, `scip`, `sat`",
+          "`cbc`, `clp`, `gurobi`, `xpress`"
+        ],
+        [
+          "CP-SAT, graph, knapsack, routing",
+          "their own algorithms",
+          "none"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "API",
+        "A refusal arrives as",
+        "Read the reason from"
+      ],
+      "rows": [
+        [
+          "MathOpt",
+          "an exception from `mathopt.solve` (in 9.15 an `AttributeError`)",
+          "`error.__context__.message` (lesson 4.2.4)"
+        ],
+        [
+          "linear solver wrapper",
+          "`None` from `CreateSolver`; a status such as `ABNORMAL` from `Solve`",
+          "the log on standard error"
+        ],
+        [
+          "CP-SAT",
+          "a `TypeError` while building; `MODEL_INVALID` from `solve`",
+          "the message; `model.validate()`"
+        ],
+        [
+          "graph, knapsack",
+          "a `TypeError` on a fractional number; a status from `solve()` for flows and assignment",
+          "the status name"
+        ],
+        [
+          "routing",
+          "`None` from `SolveWithParameters`",
+          "`routing.status()`"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Wrapper surprise",
+        "What happens"
+      ],
+      "rows": [
+        [
+          "an LP solver (`GLOP`, `PDLP`, `CLP`) given an integer variable",
+          "solves the LP relaxation and reports `OPTIMAL`"
+        ],
+        [
+          "`CreateSolver(\"HIGHS\").SolverVersion()`",
+          "`\"PDLP Solver\"`, though HiGHS runs"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [OR-Tools v9.15 release notes](https://github.com/google/or-tools/releases/tag/v9.15) (the bundled HiGHS v1.12.0 and SCIP v10.0.0, Python 3.14 support, Gurobi versions in the linear solver, Xpress in MathOpt, and the known `status_name()` issue); [Install OR-Tools for Python](https://developers.google.com/optimization/install/python) (pip as the recommended install, and third-party solvers needing a build from source); [OR-Tools overview](https://developers.google.com/optimization) (the commercial and open-source solvers OR-Tools can call); [MathOpt](https://developers.google.com/optimization/math_opt) (the solvers MathOpt lists, with Gurobi and Xpress marked as needing a license); [Get Started with the linear solver: an LP example](https://developers.google.com/optimization/lp/lp_example) (`CreateSolver` and the `if not solver` check); [CP-SAT Solver](https://developers.google.com/optimization/cp/cp_solver) (CP-SAT's statuses, `MODEL_INVALID` and model validation); [Solving an Assignment Problem with the Linear Sum Assignment Solver](https://developers.google.com/optimization/assignment/linear_assignment) (integer costs only, and the `OPTIMAL`, `INFEASIBLE` and `POSSIBLE_OVERFLOW` statuses); [Maximum Flows](https://developers.google.com/optimization/flow/maxflow) (checking `solve`'s status against `OPTIMAL`); [Minimum Cost Flows](https://developers.google.com/optimization/flow/mincostflow) (the status compared with the solver's own `OPTIMAL` before the cost is read); [Traveling Salesperson Problem](https://developers.google.com/optimization/routing/tsp) (printing a route only when `SolveWithParameters` returned one)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Add `\"KNAPSACK\"` to the wrapper's list in `backend_grid.py`. Predict what `CreateSolver` returns, then check the log line it writes.",
+        "In `refusals.py`, give the wrapper `\"CLP\"` and `\"PDLP\"` the integer model too. Predict each status and each value of $`b`$.",
+        "Write a function that takes a `pywraplp` solver ID and says whether it is present and whether it solves MIPs, printing nothing that identifies the machine."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Make the Environment a Test, Not an Assumption"
+    },
+    {
+      "type": "para",
+      "text": "Every finding in this lesson is a fact about one build of OR-Tools, and it can change with the next one: a solver gets compiled in, a label gets fixed, a refusal becomes a different exception. So a service that depends on a backend should check it the way `backend_grid.py` does, once at start-up or in its test suite: create the solver, solve an empty or tiny model, and fail loudly if the answer is not what it expects. Pin the exact OR-Tools version alongside that test, and read the release notes before moving the pin."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**version_check.py.** The package version, its pip dependencies, each solver's own version, and the banner HiGHS prints when it runs (*One Version Number Covers the Whole Package*). *Try:* Add `\"BOP\"` to the list. Predict its version string."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [version_check.py](src/version_check.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**backend_grid.py.** Every solver name of MathOpt, the linear solver wrapper and `model_builder`, tried in turn (*Each API Has Its Own List of Backends*). *Try:* Ask the wrapper for `\"SAT\"` and `\"scip\"`. Predict whether either ID is accepted."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [backend_grid.py](src/backend_grid.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**gurobi_check.py.** Gurobi through both APIs, then pointed at the library inside gurobipy, in child processes (*Gurobi Is on Every List*). *Try:* Run it on a machine with a full Gurobi installation. Predict which line changes first."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [gurobi_check.py](src/gurobi_check.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**refusals.py.** One refusal or more from each API, and where each reports it (*Each API Reports a Refusal in Its Own Place*). *Try:* Give the second arc a capacity of 1. Predict the status and what `optimal_cost()` returns."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [refusals.py](src/refusals.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 11,
+    "paras": 34,
+    "code": 3,
+    "tables": 3,
+    "lists": 7,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 9
+  },
+  "content_sha256": "8b477ccdbe20d1c8655754bce9d431e292d96864de5f10fb66ab862df495183c"
+}

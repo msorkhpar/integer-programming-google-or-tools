@@ -1,0 +1,495 @@
+# 3.3.2 Presolve: What the Solver Removes First
+
+GridCap's five-year capital plan for the medium portfolio is a selection model with 400 projects and
+80 rows. Its HiGHS log says the solver searched a model with 17 rows and 172 columns. A planner who
+sees that asks two fair questions: what happened to the other 228 projects, and how do we know the
+solver did not throw away the best plan with them? The answer is **presolve**, the first thing a MIP
+solver does, and this lesson rebuilds its main rules in a few dozen lines of Python, runs them on the
+same model, and checks the answer. GridCap is a fictional utility; its numbers are teaching data.
+
+## The Model
+
+The **five-year selection model**, `selection.five_year`. Each project is funded or not, and if funded
+it starts at its earliest start year and spends its cost profile from there. The board approves
+budgets five years ahead, so only the first five years of the plan have a budget row; spend after
+them is not capped in this model.
+
+**Sets.** $`P`$ the projects; $`Y = \{2027, \dots, 2031\}`$ the five plan years; $`M \subseteq P`$
+the must-do projects; $`C \subseteq P`$ the child projects, each with a parent $`p(c)`$;
+$`\mathcal{G}`$ the alternative groups, each a set of projects of which at most one may be funded.
+
+**Parameters.** $`v_i`$, the NPV of project $`i`$ at its earliest start ($k); $`c_{i,y}`$, what
+project $`i`$ spends in year $`y`$ if it starts at its earliest start ($k, 0 in a year it is not
+worked); $`B_y`$, the budget of year $`y`$ ($k).
+
+**Variables.** $`x_i \in \{0, 1\}`$ for every $`i \in P`$: 1 if project $`i`$ is funded.
+
+**Objective and constraints.**
+
+```math
+\begin{aligned}
+\max \;& \sum_{i \in P} v_i\, x_i \\
+\text{s.t. }& \sum_{i \in P} c_{i,y}\, x_i \le B_y && \forall y \in Y && \text{(budget}_y) \\
+& x_i = 1 && \forall i \in M && \text{(must}_i) \\
+& x_c \le x_{p(c)} && \forall c \in C && \text{(after}_c) \\
+& \sum_{i \in g} x_i \le 1 && \forall g \in \mathcal{G} && \text{(alt}_g) \\
+& x_i \in \{0, 1\} && \forall i \in P
+\end{aligned}
+```
+
+| Label | Row name in `selection.py` |
+| --- | --- |
+| budget$`_y`$ | `budget_2029` |
+| must$`_i`$ | `must_P002` |
+| after$`_c`$ | `after_P023` |
+| alt$`_g`$ | `alt_G006` |
+
+The after$`_c`$ row is the parent rule that lessons 3.1.2 to 3.2.4 label parent$`_c`$: the same row,
+$`x_c \le x_{p(c)}`$, under another name.
+
+```python
+def five_year(portfolio: Portfolio, *, integer: bool = True) -> Selection:
+    """The five-year selection model (the running MILP of lessons 3.3.1 to 3.3.4)."""
+    model = mathopt.Model(name="selection")
+    x = {p.project_id: model.add_variable(lb=0, ub=1, is_integer=integer, name=f"x_{p.project_id}")
+         for p in portfolio.projects}
+    model.maximize(sum(p.value * x[p.project_id] for p in portfolio.projects))
+    rows = {}
+    for y in plan_years(portfolio):
+        rows[f"budget_{y}"] = model.add_linear_constraint(
+            sum(c * x[i] for i, c in spend(portfolio, y).items()) <= portfolio.budget[y], name=f"budget_{y}")
+    for p in portfolio.projects:
+        if p.must_do:
+            rows[f"must_{p.project_id}"] = model.add_linear_constraint(
+                x[p.project_id] == 1, name=f"must_{p.project_id}")
+        if p.parent:
+            rows[f"after_{p.project_id}"] = model.add_linear_constraint(
+                x[p.project_id] <= x[p.parent], name=f"after_{p.project_id}")
+    groups: dict[str, list[str]] = {}
+    for p in portfolio.projects:
+        if p.alt_group:
+            groups.setdefault(p.alt_group, []).append(p.project_id)
+    for g, ids in sorted(groups.items()):
+        rows[f"alt_{g}"] = model.add_linear_constraint(sum(x[i] for i in ids) <= 1, name=f"alt_{g}")
+    return Selection(model, x, rows)
+```
+
+On GridCap medium that is 400 variables and 80 rows:
+
+```text
+original: 80 rows, 400 cols, 443 nonzeros
+  rows by kind: budget 5, after 18, must 39, alt 18
+```
+
+The must-do rows are written as constraints, not as bounds on purpose: a planner can then list them,
+name them and switch one off, and presolve turns them into bounds anyway, as this lesson shows.
+
+## Presolve Rewrites the Model Into a Smaller One With the Same Optimal Value
+
+**Presolve** is a set of **reductions**, each a rule that rewrites the model into a smaller or
+tighter one, applied again and again until none applies. A reduction may fix a variable, delete a
+row, or change a coefficient. Each must keep at least one optimal plan of the original model, so the
+optimal value never changes. After the solver has solved the smaller model, **postsolve** undoes the
+reductions in reverse, turning the answer into a plan for the model you wrote.
+
+HiGHS prints its presolve in the log (lesson 2.4.2 read the same lines for an LP):
+
+```text
+Presolving model
+37 rows, 172 cols, 273 nonzeros  <t>s
+17 rows, 172 cols, 271 nonzeros  <t>s
+Presolve reductions: rows 17(-63); columns 172(-228); nonzeros 271(-172)
+Objective function is integral with scale 1
+Solving MIP model with:
+   17 rows
+   172 cols (172 binary, 0 integer, 0 implied int., 0 continuous, 0 domain fixed)
+   271 nonzeros
+```
+
+Each of the first two lines is the size after a round of reductions; `rows 17(-63)` reads "17 rows
+left, 63 removed"; `<t>` stands for a time, masked because it changes on every run. The last block is
+what the search actually works on. Lesson 3.3.4 reads the rest of this log, including the line about
+the integral objective.
+
+HiGHS does not say which rule removed what. To see that, `presolve.py` implements four reductions on
+a plain 0-1 model: a `BinaryModel` holds the objective, the rows (each $`\sum_j a_j x_j \le b`$ or
+$`= b`$) and each variable's bounds `lo` and `hi`. `from_selection` reads the MathOpt model into one.
+Run until nothing changes, it prints each pass:
+
+```text
+pass 1: 39 rows, 201 cols, 311 nonzeros  (singleton row to bound 39, dual fixing 160, redundant row 2)
+pass 2: 35 rows, 199 cols, 307 nonzeros  (dual fixing 2, redundant row 4)
+pass 3: 35 rows, 199 cols, 307 nonzeros  ()
+  rows left by kind: budget 4, after 13, alt 18
+  budget_2027 removed: the most it can hold is 41,990, the budget 42,810
+```
+
+Four rules take the model from 80 rows and 400 columns to 35 and 199. HiGHS's documentation names
+the first two kinds in its description of one of its presolve modes for LPs, the "initial sweep":
+fixed variables, empty rows and columns, rows with a single coefficient, and rows that the bounds of
+their variables already satisfy. HiGHS gets further, to 17 and 172, with more reductions than these
+four; the sections below explain the four, one per heading, and
+the last section of the lesson compares the two.
+
+## A Row With One Variable Is a Bound, and a Fixed Variable Is a Number
+
+`must_P002` reads $`x_{P002} = 1`$. A row with a single variable is not a constraint between
+decisions; it is a bound on one variable, and here both bounds are 1. So presolve sets
+$`lo = hi = 1`$ and deletes the row. The same goes for a one-variable $`\le`$ row:
+$`a\, x_j \le b`$ with $`a > 0`$ and $`b / a < 1`$ leaves only $`x_j = 0`$ for a binary; with
+$`b / a \ge 1`$ it says nothing and goes.
+
+```python
+        for name, row in list(m.rows.items()):
+            if len(row.coefs) == 1:
+                (j, a), = row.coefs.items()
+                bound = row.rhs / a
+                if row.sense == "==":
+                    fix(j, round(bound), "singleton row to bound")
+                elif a > 0 and bound < 1:          # x_j <= bound < 1 leaves only x_j = 0
+                    fix(j, 0, "singleton row to bound")
+                elif a < 0 and bound > 0:          # x_j >= bound > 0 leaves only x_j = 1
+                    fix(j, 1, "singleton row to bound")
+                else:
+                    counts["redundant row"] += 1
+                del m.rows[name]
+                changed = True
+```
+
+A variable whose bounds are equal is no longer a decision. Presolve **substitutes** it: in every row
+it appears in, its term moves to the right-hand side, and its objective term becomes a constant.
+Once a must-do's $`x_i = 1`$ is substituted, each budget row it spends in no longer mentions it, and
+that row's right-hand side is smaller by what the project spends that year.
+
+```python
+        for j in [j for j in m.objective if m.lo[j] == m.hi[j]]:
+            fixed[j] = m.lo[j]
+            for row in m.rows.values():
+                if j in row.coefs:
+                    row.rhs -= row.coefs.pop(j) * fixed[j]
+            del m.objective[j], m.lo[j], m.hi[j]
+```
+
+That is where the 39 singleton rows of pass 1 went, and with them 39 columns. Substitution can make
+new singleton rows: an `after` row $`x_c - x_{p(c)} \le 0`$ whose parent is fixed at 1 becomes
+$`x_c \le 1`$, which says nothing, and goes in the next pass. Reductions feed each other, which is
+why presolve runs in passes.
+
+## Activity Bounds Prove a Row Redundant or Fix a Variable
+
+The **activity** of a row is its left-hand side, $`\sum_j a_j x_j`$. Over the variables' bounds it
+has a least and a most value: each positive coefficient contributes least at the variable's lower
+bound and most at its upper bound, and a negative coefficient the other way round.
+
+```math
+\underline{L} = \sum_{a_j > 0} a_j\, lo_j + \sum_{a_j < 0} a_j\, hi_j, \qquad
+\overline{L} = \sum_{a_j > 0} a_j\, hi_j + \sum_{a_j < 0} a_j\, lo_j
+```
+
+```python
+def activity(row: Row, lo: dict[str, int], hi: dict[str, int]) -> tuple[float, float]:
+    """The least and the most  sum_j a_j x_j  can be, over the variables' bounds."""
+    least = sum(a * (lo[j] if a > 0 else hi[j]) for j, a in row.coefs.items())
+    most = sum(a * (hi[j] if a > 0 else lo[j]) for j, a in row.coefs.items())
+    return least, most
+```
+
+Three conclusions follow for a row $`\sum_j a_j x_j \le b`$:
+
+- If $`\overline{L} \le b`$, no choice of the variables can break the row. It is **redundant**: delete
+  it. That is what happened to `budget_2027`: every project that spends in 2027 adds up to $41,990k,
+  under the $42,810k budget, so funding all of them still fits.
+- If $`\underline{L} > b`$, no choice satisfies the row: the model is **infeasible**, and presolve
+  can say so before any search. `presolve` raises an error then.
+- If setting one variable to its upper bound pushes even the least activity over $`b`$, that
+  variable can only take its lower bound. For a binary with $`a_j > 0`$ and $`lo_j = 0`$: if
+  $`\underline{L} + a_j > b`$, then $`x_j = 0`$. With $`a_j < 0`$ the same argument fixes
+  $`x_j = 1`$.
+
+The third rule never fires on the five-year model, so here it is on a three-project row where it
+does. PA is a must-do:
+
+```text
+budget row 6 PA + 4 PB + 3 PC <= 8: least activity 0, most 13
+  0 rows, 0 cols, 0 nonzeros  (singleton row to bound 1, fixed by a row's activity 2, redundant row 1)
+  0 rows, 0 cols, 0 nonzeros  ()
+  fixed: {'PA': 1, 'PB': 0, 'PC': 0}
+```
+
+The must row fixes PA at 1. Now the least activity of the budget row is 6, and adding PB (4) or PC
+(3) would make it 10 or 9, over 8. Both are fixed at 0; the budget row then has nothing left in it
+and goes. Presolve solved this model on its own: only one plan is feasible.
+
+The in-loop code is the third rule as written above:
+
+```python
+            for j, a in row.coefs.items():
+                if m.lo[j] == m.hi[j]:
+                    continue
+                if a > 0 and least + a > row.rhs + 1e-9:
+                    fix(j, 0, "fixed by a row's activity")
+                    least, _ = activity(row, m.lo, m.hi)
+                    changed = True
+                elif a < 0 and least - a > row.rhs + 1e-9:
+                    fix(j, 1, "fixed by a row's activity")
+                    least, _ = activity(row, m.lo, m.hi)
+                    changed = True
+```
+
+The $`10^{-9}`$ is a tolerance: a solver compares floating-point numbers, and a reduction that
+fires on rounding noise could remove a real plan.
+
+<!-- practice 1 -->
+
+## A Variable That Only Helps Is Set to Its Best Value
+
+Look at a project that spends nothing in the five plan years, and is in no `after` or `alt` row.
+Its column has no entries at all, and its objective coefficient is positive. Funding it adds value
+and touches no row, so a plan without it is never better than the same plan with it. Presolve sets
+it to 1.
+
+The general rule is **dual fixing** (it reasons about the objective, the "dual" side, rather than
+about the rows alone). For a maximization with $`\le`$ rows: if $`v_j \ge 0`$ and every coefficient
+of $`x_j`$ in the rows is $`\le 0`$, raising $`x_j`$ never hurts the objective and never tightens a
+row, so $`x_j = hi_j`$. A parent appears in its child's `after` row with coefficient $`-1`$, so a
+parent with no other entries qualifies too.
+
+```python
+        for j, c in m.objective.items():
+            if m.lo[j] == m.hi[j]:
+                continue
+            column = [row.coefs[j] for row in m.rows.values() if j in row.coefs]
+            uses = [row for row in m.rows.values() if j in row.coefs]
+            if c >= 0 and all(r.sense == "<=" for r in uses) and all(a <= 0 for a in column):
+                fix(j, 1, "dual fixing")
+                changed = True
+```
+
+On the five-year model, this is the reduction that removes most columns:
+
+```text
+projects that spend nothing in 2027-2031: 171; of them 16 must-do, 6 children, 9 in an alternative group
+fixed without a must-do row: 162, of which 142 spend nothing in those years
+```
+
+Of the 162 variables fixed without a must-do row, 142 belong to projects that start too late to
+spend in the plan years. The other 20 spend in the plan years, but by the rule they can only have
+had coefficients $`\le 0`$ in the rows still present: they spend only in `budget_2027`, which
+presolve had already deleted, or they appear only as a parent. A project that spends nothing but
+sits in an alternative group is not fixed: its coefficient in the `alt` row is $`+1`$, and funding it
+would block its alternatives.
+
+Dual fixing keeps at least one optimal plan, but not necessarily all of them. If two plans have the
+same best value and one leaves a free project out, presolve's version keeps it in. For a model that
+must list every optimal plan, this matters; for one that needs a single best plan, it does not.
+
+<!-- practice 2 -->
+
+## Coefficient Tightening Makes the LP Bound Tighter Without Changing Any Plan
+
+Some reductions remove nothing and still help: they make the LP relaxation (lesson 3.3.1) tighter,
+so its bound is closer to the best plan. **Coefficient tightening** is the classic one. Take a row
+$`\sum_j a_j x_j \le b`$ over binaries and a variable $`x_k`$ with $`a_k > 0`$. Without $`x_k`$,
+the row's most activity is $`\overline{L} - a_k`$. If that is below $`b`$ by $`d > 0`$,
+
+```math
+d = b - (\overline{L} - a_k) > 0
+```
+
+then the row cannot bind when $`x_k = 0`$, and lowering both $`a_k`$ and $`b`$ by $`d`$ keeps every
+0-1 point's verdict:
+
+- with $`x_k = 1`$, the row reads $`(a_k - d) + \text{rest} \le b - d`$, which is the original row
+  with $`d`$ subtracted from both sides;
+- with $`x_k = 0`$, the new row reads $`\text{rest} \le b - d = \overline{L} - a_k`$, and the rest
+  can never exceed its own most activity, so this holds for every point, as the original row did.
+
+Fractional points are another matter. The row $`5 P_A + 2 P_B + 2 P_C \le 6`$ has most activity 4
+without $`P_A`$, so $`d = 6 - 4 = 2`$:
+
+```text
+row 5 PA + 2 PB + 2 PC <= 6: most activity without PA is 4, so PA's 5 can drop by 6 - 4 = 2
+  PA: 5 -> 3
+  tightened row: 3 PA + 2 PB + 2 PC <= 4
+objective max 5 PA + 3 PB + 3 PC; the best 0-1 plan is PB and PC, value 6
+  LP bound, original row:  8.0 at PA = 0.4, PB = 1, PC = 1
+  LP bound, tightened row: 6.5 at PA = 1, PB = 0.5, PC = 0
+```
+
+Same 0-1 plans, and the LP bound drops from 8 to 6.5 against a best plan of 6. The point
+$`(0.4, 1, 1)`$ satisfies the old row ($`2 + 2 + 2 = 6`$) but not the new one
+($`1.2 + 2 + 2 = 5.2 > 4`$): the tightened row works like a cut that presolve found for free.
+
+```python
+def tighten(row: Row, lo: dict[str, int], hi: dict[str, int]) -> list[tuple[str, float, float]]:
+    """Coefficient tightening on a <= row over binaries, in place. Returns (variable, old a_j, new a_j).
+
+    If the row cannot bind when x_j = 0 (its most activity without j is d below the rhs), then
+    lowering a_j and the rhs by d keeps every 0-1 point's verdict and cuts fractional points off.
+    """
+    changes = []
+    for j, a in sorted(row.coefs.items()):
+        if a <= 0 or lo[j] == hi[j]:
+            continue
+        _, most = activity(row, lo, hi)
+        d = row.rhs - (most - a)
+        if d > 1e-9:
+            row.coefs[j] = a - d
+            row.rhs -= d
+            changes.append((j, a, a - d))
+    return changes
+```
+
+The most activity is recomputed for every variable, because each change lowers it. It applies only
+to rows that one large coefficient dominates. GridCap's budget rows hold dozens of projects of
+similar size, and there it finds nothing:
+
+```text
+coefficient tightening changes 0 coefficients of the rows left
+```
+
+<!-- practice 3 -->
+
+## Postsolve Puts the Plan Back Together
+
+The presolved model is a model of its own, over the 199 variables left, with the value of the fixed
+ones as a constant. Solve it, put the fixed values back, and check the result against the model you
+wrote:
+
+```text
+fixed 201 variables: 201 to 1, 0 to 0; their value 152,414 is a constant now
+presolved model: 122,585 + constant 152,414 = 274,999
+the plan, put back together, breaks 0 rows of the original model
+full model solved directly: 274,999
+```
+
+Both solves use `relative_gap_tolerance=0.0`, which makes HiGHS prove the optimum exactly rather
+than stop within 0.01% of it (lesson 3.3.4 shows the difference). The presolved model's value plus
+the constant equals the full model's: no plan was lost. In a real solver, postsolve is more involved:
+a reduction such as coefficient tightening changes a row, and postsolve must also map the dual values
+and the bases back. For a 0-1 model's plan, putting the fixed values back is all of it.
+
+## Turning Presolve Off Changes the Work, Not the Answer
+
+MathOpt's common `presolve` parameter switches HiGHS's presolve off:
+
+```python
+    result, log = solve_with_log(model, mathopt.SolveParameters(presolve=presolve))
+```
+
+```text
+--- presolve off
+Solving MIP model with:
+   80 rows
+   400 cols (361 binary, 0 integer, 0 implied int., 0 continuous, 39 domain fixed)
+   443 nonzeros
+status OPTIMAL, value 274,979, nodes 41
+```
+
+The search now works on all 80 rows and 400 columns. HiGHS still counts 39 columns as "domain
+fixed", the number of must-do projects, each fixed at 1 by its one-variable row, but keeps them in
+the model. With presolve on, the same run
+ended with the same value after 79 nodes:
+
+```text
+status OPTIMAL, value 274,979, nodes 79
+```
+
+So on this model, presolve made the search smaller in rows and columns, and the search took more
+nodes, not fewer. That is not a contradiction: what happens after presolve (the cuts found, the
+heuristics' luck, the restarts lesson 3.3.4 shows) depends on the model the search starts from, and
+a node count is not a time. Presolve's guarantee is the one this lesson proved, a smaller model with
+the same optimal value, and whether it speeds up a given model is something to measure, never to
+assume. (The value is 274,979 here rather than 274,999 because these runs keep HiGHS's default gap
+tolerance of 0.01%, the option `mip_rel_gap`; lesson 3.3.4 explains it.) HiGHS's documentation
+says the same in general: presolve is on by default because it usually saves far more time than it
+costs, and the option exists for the models where it does not.
+
+## Summary
+
+- **Presolve rewrites the model into a smaller one with the same optimal value**, and postsolve maps
+  the answer back. HiGHS's log shows the sizes; on the five-year model, 80 rows and 400 columns
+  become 17 and 172.
+- **A row with one variable is a bound, and a fixed variable is a number:** it is substituted into
+  every row and the objective.
+- **Activity bounds prove a row redundant or fix a variable:** $`\overline{L} \le b`$ deletes the
+  row, $`\underline{L} > b`$ proves infeasibility, $`\underline{L} + a_j > b`$ fixes $`x_j = 0`$.
+- **A variable that only helps is set to its best value** (dual fixing); on the five-year model it
+  removes 162 columns.
+- **Coefficient tightening makes the LP bound tighter without changing any plan**, when one
+  coefficient dominates a row.
+- **Turning presolve off changes the work, not the answer.** Measure before deciding it helps.
+
+## Reference
+
+| Term | Meaning |
+| --- | --- |
+| presolve | reductions applied before the search, until none applies |
+| postsolve | undoing the reductions to map the answer back to the original model |
+| singleton row | a row with one variable: a bound |
+| substitution | a fixed variable's terms move to the right-hand sides and the objective constant |
+| activity | a row's left-hand side $`\sum_j a_j x_j`$ |
+| least / most activity | $`\underline{L}`$ / $`\overline{L}`$ over the variables' bounds |
+| redundant row | $`\overline{L} \le b`$: it can never bind |
+| fixing by activity | $`a_j > 0`$ and $`\underline{L} + a_j > b`$ (with $`lo_j = 0`$) gives $`x_j = 0`$ |
+| dual fixing | $`v_j \ge 0`$ and every row coefficient $`\le 0`$ (max, $`\le`$ rows) gives $`x_j = hi_j`$ |
+| coefficient tightening | $`d = b - (\overline{L} - a_k) > 0`$: replace $`a_k`$ by $`a_k - d`$ and $`b`$ by $`b - d`$ |
+
+| HiGHS log line | Meaning |
+| --- | --- |
+| `37 rows, 172 cols, 273 nonzeros` | size after one round of reductions |
+| `Presolve reductions: rows 17(-63)` | rows left, and how many were removed |
+| `Solving MIP model with:` | the model the search works on |
+| `domain fixed` | columns HiGHS found fixed: here the 39 must-do projects, with presolve off |
+
+**Further reading:** [MathOpt `SolveParameters` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/parameters.py) (the common `presolve` parameter, an effort level for simplifying the model before the main algorithm); [HiGHS: Presolve](https://ergo-code.github.io/HiGHS/dev/guide/further/) (presolve and postsolve in HiGHS, its presolve modes, and when to switch presolve off); [HiGHS option definitions](https://ergo-code.github.io/HiGHS/dev/options/definitions/) (`presolve`, `presolve_mode`, `mip_rel_gap` and its default); [Vielma, Mixed Integer Linear Programming Formulation Techniques](https://juan-pablo-vielma.github.io/publications/Mixed-Integer-Linear-Programming-Formulation-Techniques.pdf) (section 2.2: the size and the strength of the LP relaxation, the two things presolve and coefficient tightening act on); [MO-book 3.6, Facility location](https://mobook.github.io/MO-book/notebooks/03/06-facility-location.html) (a weak and a strong formulation timed with HiGHS's presolve on and off).
+
+## Challenges
+
+1. On tiny, which rows of the five-year model would presolve delete? Write down your guess, then run
+   `presolve` on `five_year(generate("tiny"))` to check.
+2. Change one budget row of the toy model so that presolve proves it infeasible. What is the
+   smallest change?
+3. Dual fixing on a minimization with $`\ge`$ rows: state the rule.
+
+## Design Note: Write the Model Plainly and Let Presolve Simplify It
+
+It is tempting to do presolve's work by hand: leave the must-do projects out of the model, drop the
+budget row that never binds. Don't. A must-do row you wrote is a rule a planner can read, test and
+switch off; a must-do you removed by hand is a silent assumption, and next year's data may break
+it. `budget_2027` is redundant this year because the projects fit; next year it may bind. Presolve
+redoes these reductions on every solve, for free, on the data of that solve. Write the model as the
+business states it, and read the presolve lines of the log to see what the data made redundant.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson
+shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of
+the code, so the course's own files never change.
+
+**my_presolve.py.** Runs this lesson's presolve on the five-year model pass by pass, explains what
+it fixed, then solves the presolved model and puts the plan back together (*Presolve Rewrites the
+Model*, *A Variable That Only Helps*, *Postsolve*). *Try:* Make a copy of the portfolio with
+`dataclasses.replace` and a 2027 budget of 40,000. Predict whether `budget_2027` is still removed.
+
+- Program: [my_presolve.py](src/my_presolve.py)
+
+**activity_rules.py.** The activity rules and coefficient tightening on two three-project rows
+(*Activity Bounds*, *Coefficient Tightening*). *Try:* Change the budget of the first row to 10.
+Predict which projects are still fixed.
+
+- Program: [activity_rules.py](src/activity_rules.py)
+
+**highs_presolve.py.** The presolve lines of HiGHS's log with presolve on and off (*Presolve
+Rewrites the Model*, *Turning Presolve Off*). *Try:* Run the tiny portfolio instead. Predict how
+many rows HiGHS leaves.
+
+- Program: [highs_presolve.py](src/highs_presolve.py)
+
+**presolve.py.** The `BinaryModel`, the four reductions, `to_mathopt` and `tighten`.
+
+- Library: [presolve.py](src/presolve.py)
+
+**selection.py.** The five-year model and the quiet solve helpers.
+
+- Library: [selection.py](src/selection.py)

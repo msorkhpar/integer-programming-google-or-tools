@@ -1,0 +1,167 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "28-piecewise-linear"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "A bulk fuel price curve with an audit above a volume",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A school district orders diesel for its buses once a season. The supplier bills an order of `v` litres on a volume-discount curve, given as breakpoints `xs` (litres, starting at 0) and `ys` (the total bill in $), with straight lines in between:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Litres",
+        "0",
+        "20,000",
+        "50,000",
+        "80,000"
+      ],
+      "rows": [
+        [
+          "Bill ($)",
+          "0",
+          "30,000",
+          "63,000",
+          "87,000"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Each extra litre is cheaper than the last band's, so the bill is concave, and the district's model pushes it down. The district's own rule adds one more thing: **any order above `audit_above` litres (here 30,000) must be audited** by the finance office. An order of exactly 30,000 litres, or less, needs no audit. No order may exceed the last breakpoint."
+    },
+    {
+      "type": "para",
+      "text": "The model in `fuel_order.py` has a continuous `volume >= 0`, a continuous `bill` (free) and a binary `audit`. Write `add_order_rules(model, volume, bill, audit, xs, ys, audit_above)` so that the model allows exactly the triples `(volume, bill, audit)` where the bill is the curve's value at the volume, and every order above `audit_above` is audited. An audit on a small order is allowed (the office may audit anything). Add whatever variables you need. The tests use other curves and audit volumes too."
+    },
+    {
+      "type": "para",
+      "text": "With $`(X_j, F_j)`$ the breakpoints and $`V`$ the audit volume, the model so far is"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& v \\ge 0, \\quad b \\in \\mathbb{R}, \\quad a \\in \\{0, 1\\} && && \\text{(litres, bill, audit)} \\\\\n& \\text{?} && && \\text{(your variables and rows)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The audit volume is not one of the curve's breakpoints. Think about what that means for the binaries that say which band an order is in, and what you can do about it without changing the bill."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix the volume, the bill and the audit and ask the solver whether the model accepts the order, so any correct formulation passes. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_order_rules(model: mathopt.Model, volume: mathopt.Variable, bill: mathopt.Variable,\n                    audit: mathopt.Variable, xs: tuple[float, ...], ys: tuple[float, ...],\n                    audit_above: float) -> None:\n    \"\"\"The bill on the price curve, and an audit for every order above `audit_above` litres.\"\"\"\n    def price(v: float) -> float:\n        for k in range(len(xs) - 1):\n            if xs[k] <= v <= xs[k + 1]:\n                return ys[k] + (ys[k + 1] - ys[k]) * (v - xs[k]) / (xs[k + 1] - xs[k])\n        raise ValueError(v)\n\n    points = sorted(set(xs) | {audit_above})          # the audit volume becomes a breakpoint\n    weight = {}\n    for j, at in enumerate(points):\n        weight[j] = model.add_variable(lb=0, ub=1, name=f\"w_{j}\")\n    band = {k: model.add_binary_variable(name=f\"band_{k}\") for k in range(len(points) - 1)}\n    model.add_linear_constraint(sum(weight.values()) == 1, name=\"weights\")\n    model.add_linear_constraint(sum(band.values()) == 1, name=\"one_band\")\n    for j in weight:\n        near = [band[k] for k in band if k in (j - 1, j)]\n        model.add_linear_constraint(weight[j] <= sum(near), name=f\"near_{j}\")\n    model.add_linear_constraint(volume == sum(at * weight[j] for j, at in enumerate(points)), name=\"volume\")\n    model.add_linear_constraint(bill == sum(price(at) * weight[j] for j, at in enumerate(points)), name=\"bill\")\n    for k, start in enumerate(points[:-1]):\n        if start >= audit_above:\n            model.add_linear_constraint(audit >= band[k], name=f\"audit_{k}\")\n\n\ndef build(xs, ys, audit_above) -> tuple[mathopt.Model, mathopt.Variable, mathopt.Variable, mathopt.Variable]:\n    model = mathopt.Model(name=\"fuel order\")\n    volume = model.add_variable(lb=0, name=\"volume\")\n    bill = model.add_variable(lb=-1e9, ub=1e9, name=\"bill\")\n    audit = model.add_binary_variable(name=\"audit\")\n    add_order_rules(model, volume, bill, audit, xs, ys, audit_above)\n    return model, volume, bill, audit\n\n\nif __name__ == \"__main__\":\n    model, *_ = build((0, 20_000, 50_000, 80_000), (0, 30_000, 63_000, 87_000), 30_000)\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_order_rules(model: mathopt.Model, volume: mathopt.Variable, bill: mathopt.Variable,\n                    audit: mathopt.Variable, xs: tuple[float, ...], ys: tuple[float, ...],\n                    audit_above: float) -> None:\n    \"\"\"The bill on the price curve, and an audit for every order above `audit_above` litres.\"\"\"\n    # TODO: the bill as the curve's value at the volume, and the audit rule.\n    return None\n\n\ndef build(xs, ys, audit_above) -> tuple[mathopt.Model, mathopt.Variable, mathopt.Variable, mathopt.Variable]:\n    model = mathopt.Model(name=\"fuel order\")\n    volume = model.add_variable(lb=0, name=\"volume\")\n    bill = model.add_variable(lb=-1e9, ub=1e9, name=\"bill\")\n    audit = model.add_binary_variable(name=\"audit\")\n    add_order_rules(model, volume, bill, audit, xs, ys, audit_above)\n    return model, volume, bill, audit\n\n\nif __name__ == \"__main__\":\n    model, *_ = build((0, 20_000, 50_000, 80_000), (0, 30_000, 63_000, 87_000), 30_000)\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 6,
+    "code": 2,
+    "tables": 1,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "2061bd7082ef9f7f8bce920a165f8d3134e11738535529bf9c3ad6ecbe6d5c7d",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_order_rules(model: mathopt.Model, volume: mathopt.Variable, bill: mathopt.Variable,\n                    audit: mathopt.Variable, xs: tuple[float, ...], ys: tuple[float, ...],\n                    audit_above: float) -> None:\n    \"\"\"The bill on the price curve, and an audit for every order above `audit_above` litres.\"\"\"\n    # TODO: the bill as the curve's value at the volume, and the audit rule.\n    return None\n\n\ndef build(xs, ys, audit_above) -> tuple[mathopt.Model, mathopt.Variable, mathopt.Variable, mathopt.Variable]:\n    model = mathopt.Model(name=\"fuel order\")\n    volume = model.add_variable(lb=0, name=\"volume\")\n    bill = model.add_variable(lb=-1e9, ub=1e9, name=\"bill\")\n    audit = model.add_binary_variable(name=\"audit\")\n    add_order_rules(model, volume, bill, audit, xs, ys, audit_above)\n    return model, volume, bill, audit\n\n\nif __name__ == \"__main__\":\n    model, *_ = build((0, 20_000, 50_000, 80_000), (0, 30_000, 63_000, 87_000), 30_000)\n    print(model.get_num_linear_constraints(), \"rows\")\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-2/fuel_order.py",
+    "test_path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-2/test_fuel_order.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-2/fuel_order.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-2/target/report.xml",
+      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-2/test_fuel_order.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_bill_follows_the_price_curve",
+        "kind": "main",
+        "says": "an order billed on the price curve is allowed, and one billed at a discount the curve does not give is refused"
+      },
+      {
+        "id": "test_a_large_order_needs_an_audit",
+        "kind": "main",
+        "says": "an order above the audit volume is allowed with an audit and refused without one"
+      },
+      {
+        "id": "test_an_order_below_the_audit_volume_needs_no_audit",
+        "kind": "edge",
+        "says": "an order between the price band's start and the audit volume is allowed without an audit"
+      },
+      {
+        "id": "test_an_order_of_exactly_the_audit_volume_needs_no_audit",
+        "kind": "edge",
+        "says": "an order of exactly the audit volume is allowed without an audit"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "28-piecewise-linear/README_6.6.2.md",
+      "section": "The Segment Binaries Are Decisions Other Rules Can Use"
+    },
+    "concepts": [
+      "a segment binary used by another business rule, with a threshold that needs its own breakpoint"
+    ]
+  }
+}

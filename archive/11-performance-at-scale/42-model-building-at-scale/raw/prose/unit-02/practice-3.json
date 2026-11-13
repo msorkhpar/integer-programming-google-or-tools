@@ -1,0 +1,151 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "11-performance-at-scale",
+    "42-model-building-at-scale"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 3,
+  "ingested": "2026-11-13",
+  "title": "Same model, up to rounding",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's finance team rewrote the NPV calculation behind the objective. The new code discounts each year's benefit in a different order of multiplications, so a few coefficients now differ from the old builder's in the last binary digit, and it also creates variables in a different order. An exported-proto comparison calls every such pair of models different. The team wants a check that calls them the same model and still catches every real change."
+    },
+    {
+      "type": "para",
+      "text": "Write `same_model(a, b, rel_tol=1e-9)` in `compare_models.py`. It compares two MathOpt models by name, so the order variables and rows were added in does not matter, and returns `True` when they state the same model:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "the same variable names, each with the same bounds and the same integer flag;",
+        "the same row names, each with the same bounds and the same set of variables in its terms;",
+        "the same objective sense (maximize or minimize) and the same set of variables in the objective;",
+        "every coefficient, and the objective's offset, equal within a relative tolerance: use `math.isclose(x, y, rel_tol=rel_tol, abs_tol=0.0)`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Names, bounds, integrality and sense are compared exactly: none of them comes from arithmetic that rounds. A variable that appears in one model's row and not in the other's is a difference, even if the other model would have given it a coefficient near 0. Read a model with `model.variables()`, `model.linear_constraints()` and `row.terms()`, and `model.objective` with its `is_maximize`, `offset` and `linear_terms()` (lesson 4.2.1). Run the file to see why exact comparison fails: `0.1 * 3 == 0.3` is `False` in floating point. About twenty lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef close(x: float, y: float, rel_tol: float) -> bool:\n    return math.isclose(x, y, rel_tol=rel_tol, abs_tol=0.0)\n\n\ndef coefficients_match(left: dict, right: dict, rel_tol: float) -> bool:\n    if left.keys() != right.keys():\n        return False\n    return all(close(left[name], right[name], rel_tol) for name in left)\n\n\ndef by_name(model: mathopt.Model) -> tuple[dict, dict, dict]:\n    variables, rows, objective = {}, {}, {}\n    for v in model.variables():\n        variables[v.name] = (v.lower_bound, v.upper_bound, v.integer)\n    for row in model.linear_constraints():\n        terms = {}\n        for term in row.terms():\n            terms[term.variable.name] = term.coefficient\n        rows[row.name] = (row.lower_bound, row.upper_bound, terms)\n    for term in model.objective.linear_terms():\n        objective[term.variable.name] = term.coefficient\n    return variables, rows, objective\n\n\ndef same_model(a: mathopt.Model, b: mathopt.Model, rel_tol: float = 1e-9) -> bool:\n    \"\"\"True when a and b state the same model, whatever order they were built in.\n\n    Names, bounds, integrality and the objective's sense must match exactly; coefficients and the\n    objective's offset may differ by a relative `rel_tol`.\n    \"\"\"\n    va, ra, oa = by_name(a)\n    vb, rb, ob = by_name(b)\n    if va != vb or ra.keys() != rb.keys():\n        return False\n    for name, (lb, ub, terms) in ra.items():\n        other_lb, other_ub, other_terms = rb[name]\n        if (lb, ub) != (other_lb, other_ub):\n            return False\n        if not coefficients_match(terms, other_terms, rel_tol):\n            return False\n    if a.objective.is_maximize != b.objective.is_maximize:\n        return False\n    return close(a.objective.offset, b.objective.offset, rel_tol) and coefficients_match(oa, ob, rel_tol)\n\n\nif __name__ == \"__main__\":\n    first = mathopt.Model(name=\"first\")\n    x, y = first.add_binary_variable(name=\"x\"), first.add_binary_variable(name=\"y\")\n    first.add_linear_constraint(3 * x + 0.1 * 3 * y <= 4, name=\"cap\")\n    second = mathopt.Model(name=\"second\")\n    y2, x2 = second.add_binary_variable(name=\"y\"), second.add_binary_variable(name=\"x\")\n    second.add_linear_constraint(0.3 * y2 + 3 * x2 <= 4, name=\"cap\")\n    print(\"0.1 * 3 == 0.3:\", 0.1 * 3 == 0.3, \"| same model:\", same_model(first, second))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef close(x: float, y: float, rel_tol: float) -> bool:\n    return math.isclose(x, y, rel_tol=rel_tol, abs_tol=0.0)\n\n\ndef coefficients_match(left: dict, right: dict, rel_tol: float) -> bool:\n    if left.keys() != right.keys():\n        return False\n    return all(close(left[name], right[name], rel_tol) for name in left)\n\n\ndef by_name(model: mathopt.Model) -> tuple[dict, dict, dict]:\n    variables, rows, objective = {}, {}, {}\n    for v in model.variables():\n        variables[v.name] = (v.lower_bound, v.upper_bound, v.integer)\n    for row in model.linear_constraints():\n        terms = {}\n        for term in row.terms():\n            terms[term.variable.name] = term.coefficient\n        rows[row.name] = (row.lower_bound, row.upper_bound, terms)\n    for term in model.objective.linear_terms():\n        objective[term.variable.name] = term.coefficient\n    return variables, rows, objective\n\n\ndef same_model(a: mathopt.Model, b: mathopt.Model, rel_tol: float = 1e-9) -> bool:\n    \"\"\"True when a and b state the same model, whatever order they were built in.\n\n    Names, bounds, integrality and the objective's sense must match exactly; coefficients and the\n    objective's offset may differ by a relative `rel_tol`.\n    \"\"\"\n    # TODO: compare by name; exact for names, bounds, integrality and sense; within rel_tol for numbers.\n    return False\n\nif __name__ == \"__main__\":\n    first = mathopt.Model(name=\"first\")\n    x, y = first.add_binary_variable(name=\"x\"), first.add_binary_variable(name=\"y\")\n    first.add_linear_constraint(3 * x + 0.1 * 3 * y <= 4, name=\"cap\")\n    second = mathopt.Model(name=\"second\")\n    y2, x2 = second.add_binary_variable(name=\"y\"), second.add_binary_variable(name=\"x\")\n    second.add_linear_constraint(0.3 * y2 + 3 * x2 <= 4, name=\"cap\")\n    print(\"0.1 * 3 == 0.3:\", 0.1 * 3 == 0.3, \"| same model:\", same_model(first, second))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "91849e1c83076f0bbf3bb9730cf7c65899011933690b2813af9a7a244a48dfbf",
+  "starting_code": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef close(x: float, y: float, rel_tol: float) -> bool:\n    return math.isclose(x, y, rel_tol=rel_tol, abs_tol=0.0)\n\n\ndef coefficients_match(left: dict, right: dict, rel_tol: float) -> bool:\n    if left.keys() != right.keys():\n        return False\n    return all(close(left[name], right[name], rel_tol) for name in left)\n\n\ndef by_name(model: mathopt.Model) -> tuple[dict, dict, dict]:\n    variables, rows, objective = {}, {}, {}\n    for v in model.variables():\n        variables[v.name] = (v.lower_bound, v.upper_bound, v.integer)\n    for row in model.linear_constraints():\n        terms = {}\n        for term in row.terms():\n            terms[term.variable.name] = term.coefficient\n        rows[row.name] = (row.lower_bound, row.upper_bound, terms)\n    for term in model.objective.linear_terms():\n        objective[term.variable.name] = term.coefficient\n    return variables, rows, objective\n\n\ndef same_model(a: mathopt.Model, b: mathopt.Model, rel_tol: float = 1e-9) -> bool:\n    \"\"\"True when a and b state the same model, whatever order they were built in.\n\n    Names, bounds, integrality and the objective's sense must match exactly; coefficients and the\n    objective's offset may differ by a relative `rel_tol`.\n    \"\"\"\n    # TODO: compare by name; exact for names, bounds, integrality and sense; within rel_tol for numbers.\n    return False\n\nif __name__ == \"__main__\":\n    first = mathopt.Model(name=\"first\")\n    x, y = first.add_binary_variable(name=\"x\"), first.add_binary_variable(name=\"y\")\n    first.add_linear_constraint(3 * x + 0.1 * 3 * y <= 4, name=\"cap\")\n    second = mathopt.Model(name=\"second\")\n    y2, x2 = second.add_binary_variable(name=\"y\"), second.add_binary_variable(name=\"x\")\n    second.add_linear_constraint(0.3 * y2 + 3 * x2 <= 4, name=\"cap\")\n    print(\"0.1 * 3 == 0.3:\", 0.1 * 3 == 0.3, \"| same model:\", same_model(first, second))\n",
+  "exercise": {
+    "main_path": "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-3/compare_models.py",
+    "test_path": "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-3/test_compare_models.py",
+    "run_command": [
+      "python3",
+      "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-3/compare_models.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-3/target/report.xml",
+      "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-3/test_compare_models.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_order_does_not_matter_and_a_changed_coefficient_does",
+        "kind": "main",
+        "says": "two models built in different orders are the same, and a changed coefficient makes them differ"
+      },
+      {
+        "id": "test_coefficients_equal_up_to_rounding_count_as_equal",
+        "kind": "edge",
+        "says": "coefficients that differ only by rounding count as equal, and a real difference does not"
+      },
+      {
+        "id": "test_a_term_missing_from_one_model_is_a_difference",
+        "kind": "edge",
+        "says": "a term present in one model's row and absent from the other's is a difference"
+      },
+      {
+        "id": "test_integrality_is_part_of_the_model",
+        "kind": "edge",
+        "says": "a variable that is integer in one model and continuous in the other is a difference"
+      },
+      {
+        "id": "test_the_objective_sense_is_part_of_the_model",
+        "kind": "edge",
+        "says": "maximizing and minimizing the same expression are different models"
+      },
+      {
+        "id": "test_a_row_bound_is_part_of_the_model",
+        "kind": "edge",
+        "says": "a row whose bound differs is a difference"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-3/target/report.xml"
+    },
+    "origin": {
+      "path": "42-model-building-at-scale/README_11.1.2.md",
+      "section": "A Fast Builder Is Correct Only If Its Exported Model Equals the Slow One's"
+    },
+    "concepts": [
+      "comparing by name ignores build order, and coefficients from different arithmetic need a tolerance"
+    ]
+  }
+}

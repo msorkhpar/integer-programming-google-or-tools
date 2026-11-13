@@ -1,0 +1,208 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "13-capstone",
+    "51-capstone-cipt-lite"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "The whole CIPT Lite model on the practice portfolio",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "Your capstone's planning model now meets the practice portfolio: the same fictional utility, the same snapshot format, and every rule its data carries. Build the whole model in MathOpt and solve it with HiGHS to a zero gap. The tests do not read your rows. They fix whole plans by their variable bounds and ask the model to accept or refuse each one, so any correct formulation passes, and they compare the best plan's NPV with the reference."
+    },
+    {
+      "type": "para",
+      "text": "**Write the formulation first**, on paper or in a comment, in the order lesson 13.1.2 uses: the sets (projects $`J`$, years $`Y`$, start years $`T_j`$, regions, programs, alternative groups, children with a parent); the parameters with their units (`cost` and `npv` in $k, budgets, region budgets, crew-months, floors, lags); the variables with their domains; the objective with its sense; and every row with its quantifier and its label."
+    },
+    {
+      "type": "para",
+      "text": "The starter gives you the scaffolding: `variables` creates $`x_{j,t} \\in \\{0, 1\\}`$ for each start year of each window (so a start outside a window has no variable), `solve`, `best` (the optimal value and plan) and `allows` (a plan fixed by bounds, then solved). You write two functions in `portfolio_model.py`:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "method",
+        "contract",
+        "modeling idea",
+        "lesson"
+      ],
+      "rows": [
+        [
+          "`add_rules(model, x, snap)`",
+          "`once_j`/`must_j`",
+          "$`s_j = \\sum_t x_{j,t}`$ at most 1, or exactly 1 for a must-do",
+          "6.4.1, 6.5.1"
+        ],
+        [
+          "",
+          "`alt_g`",
+          "at most one member of a group funded",
+          "6.5.3"
+        ],
+        [
+          "",
+          "`after_j_t`",
+          "started by year $`t`$ only if the parent started by $`t - L_j`$: the cumulative form, one row per $`t \\in T_j`$",
+          "6.4.3, 6.5.2, 6.5.4"
+        ],
+        [
+          "",
+          "`budget_y`, `region_r_y`",
+          "spend in year $`y`$ is $`\\sum_j \\sum_{t \\le y} c_{j,y-t}\\, x_{j,t}`$, at most the limit",
+          "6.4.2, 6.5.5"
+        ],
+        [
+          "",
+          "`crews_g_y`",
+          "crew-months of program $`g`$'s projects at work in year $`y`$, at most the limit",
+          "6.4.2"
+        ],
+        [
+          "",
+          "`floor_r`",
+          "the whole cost of region $`r`$'s funded projects, at least the floor",
+          "6.5.5"
+        ],
+        [
+          "`set_objective(model, x, snap)`",
+          "maximize $`\\sum_{j,t} \\text{npv}_{j,t}\\, x_{j,t}`$",
+          "each start valued at its own year",
+          "7.2.4"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`npv` is keyed by start year as an `int` (`snap[\"projects\"][\"J1\"][\"npv\"][2027]`), with one entry per start year of the window. Milestone 1 refused any window that leaves no room for the whole cost profile, so no start spends past the horizon (if one did, that year has no `budget_y` row, and its spend would count nowhere). A region missing from `region_budget`, a program missing from `crews` and a region missing from `floor` get no row: that limit does not exist. Manual overrides (lesson 6.5.6) are not part of this snapshot. A sum over an empty set is the number 0, and MathOpt refuses a row built from it: start each sum with `mathopt.LinearExpression()`. About forty-five lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport contextlib\nimport ctypes\nimport os\nimport sys\n\nfrom ortools.math_opt.python import mathopt\n\nPlan = dict[str, int]\n\n\n# --- Given: the variables, a quiet solve, the plan reader, and the plan test ----------------------\n\ndef variables(model: mathopt.Model, snap: dict) -> dict[tuple[str, int], mathopt.Variable]:\n    \"\"\"x[j, t] in {0, 1} for every project j and every start year t of its window.\"\"\"\n    return {(j, t): model.add_binary_variable(name=f\"x_{j}_{t}\")\n            for j, p in snap[\"projects\"].items() for t in range(p[\"earliest\"], p[\"latest\"] + 1)}\n\n\n@contextlib.contextmanager\ndef quiet():\n    \"\"\"Keep the HiGHS bundled with OR-Tools from printing a stray line on some solves.\"\"\"\n    sys.stdout.flush()\n    saved, sink = os.dup(1), os.open(os.devnull, os.O_WRONLY)\n    os.dup2(sink, 1)\n    try:\n        yield\n    finally:\n        ctypes.CDLL(None).fflush(None)\n        os.dup2(saved, 1)\n        os.close(saved)\n        os.close(sink)\n\n\ndef solve(model: mathopt.Model) -> mathopt.SolveResult:\n    with quiet():\n        return mathopt.solve(model, mathopt.SolverType.HIGHS,\n                             params=mathopt.SolveParameters(relative_gap_tolerance=0.0))\n\n\ndef build(snap: dict) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"practice portfolio\")\n    x = variables(model, snap)\n    add_rules(model, x, snap)\n    set_objective(model, x, snap)\n    return model, x\n\n\ndef best(snap: dict) -> tuple[float, Plan]:\n    \"\"\"The optimal plan's objective value and the plan, {project: start year}.\"\"\"\n    model, x = build(snap)\n    result = solve(model)\n    assert result.termination.reason == mathopt.TerminationReason.OPTIMAL, result.termination\n    values = result.variable_values()\n    return result.objective_value(), {j: t for (j, t), v in sorted(x.items()) if values[v] > 0.5}\n\n\ndef allows(snap: dict, plan: Plan) -> bool:\n    \"\"\"Does the model accept this whole plan? Every start variable is fixed by its bounds.\"\"\"\n    model, x = build(snap)\n    if any((j, t) not in x for j, t in plan.items()):\n        return False                                   # a start the model has no variable for\n    for (j, t), v in x.items():\n        v.lower_bound = v.upper_bound = 1.0 if plan.get(j) == t else 0.0\n    return solve(model).termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\n# --- Yours: every rule, and the objective -------------------------------------------------------\n\ndef add_rules(model: mathopt.Model, x: dict, snap: dict) -> None:\n    projects, years = snap[\"projects\"], snap[\"years\"]\n\n    def starts(j: str) -> list[int]:\n        return [t for (i, t) in x if i == j]\n\n    def funded(j: str) -> mathopt.LinearExpression:\n        return mathopt.LinearExpression() + sum(x[j, t] for t in starts(j))\n\n    for j, p in projects.items():\n        if p[\"must\"]:\n            model.add_linear_constraint(funded(j) == 1, name=f\"must_{j}\")\n        else:\n            model.add_linear_constraint(funded(j) <= 1, name=f\"once_{j}\")\n\n    groups: dict[str, list[str]] = {}\n    for j, p in projects.items():\n        if p[\"group\"] is not None:\n            groups.setdefault(p[\"group\"], []).append(j)\n    for g, members in groups.items():\n        model.add_linear_constraint(sum(funded(j) for j in members) <= 1, name=f\"alt_{g}\")\n\n    for j, p in projects.items():\n        if p[\"parent\"] is None:\n            continue\n        mother = p[\"parent\"]\n        for t in starts(j):\n            started_child = mathopt.LinearExpression() + sum(x[j, u] for u in starts(j) if u <= t)\n            started_parent = sum(x[mother, s] for s in starts(mother) if s + p[\"lag\"] <= t)\n            model.add_linear_constraint(started_child - started_parent <= 0, name=f\"after_{j}_{t}\")\n\n    def at_work(j: str, y: int):\n        \"\"\"(start variable, year of work k) for each start of j that has j working in year y.\"\"\"\n        return [(x[j, t], y - t) for t in starts(j) if 0 <= y - t < len(projects[j][\"cost\"])]\n\n    for y in years:\n        money = mathopt.LinearExpression() + sum(projects[j][\"cost\"][k] * v for j in projects\n                                                 for v, k in at_work(j, y))\n        model.add_linear_constraint(money <= snap[\"budget\"][y], name=f\"budget_{y}\")\n        for region, limits in snap[\"region_budget\"].items():\n            mine = mathopt.LinearExpression() + sum(projects[j][\"cost\"][k] * v for j in projects\n                                                    if projects[j][\"region\"] == region for v, k in at_work(j, y))\n            model.add_linear_constraint(mine <= limits[y], name=f\"region_{region}_{y}\")\n        for program, limits in snap[\"crews\"].items():\n            busy = mathopt.LinearExpression() + sum(projects[j][\"crews\"] * v for j in projects\n                                                    if projects[j][\"program\"] == program for v, _ in at_work(j, y))\n            model.add_linear_constraint(busy <= limits[y], name=f\"crews_{program}_{y}\")\n\n    for region, floor in snap[\"floor\"].items():\n        capex = mathopt.LinearExpression() + sum(sum(projects[j][\"cost\"]) * funded(j) for j in projects\n                                                 if projects[j][\"region\"] == region)\n        model.add_linear_constraint(capex >= floor, name=f\"floor_{region}\")\n\n\ndef set_objective(model: mathopt.Model, x: dict, snap: dict) -> None:\n    model.maximize(mathopt.LinearExpression() + sum(snap[\"projects\"][j][\"npv\"][t] * v for (j, t), v in x.items()))\n\n\nif __name__ == \"__main__\":\n    snap = {\"years\": [2027, 2028], \"rate\": 0.05, \"budget\": {2027: 100, 2028: 100},\n            \"region_budget\": {\"North\": {2027: 100, 2028: 100}}, \"crews\": {\"lines\": {2027: 1, 2028: 1}},\n            \"floor\": {\"North\": 0},\n            \"projects\": {\"J1\": {\"program\": \"lines\", \"region\": \"North\", \"cost\": [80], \"earliest\": 2027,\n                                \"latest\": 2028, \"must\": True, \"parent\": None, \"lag\": 0, \"group\": None,\n                                \"crews\": 1, \"npv\": {2027: 30, 2028: 25}}}}\n    print(best(snap))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport contextlib\nimport ctypes\nimport os\nimport sys\n\nfrom ortools.math_opt.python import mathopt\n\nPlan = dict[str, int]\n\n\n# --- Given: the variables, a quiet solve, the plan reader, and the plan test ----------------------\n\ndef variables(model: mathopt.Model, snap: dict) -> dict[tuple[str, int], mathopt.Variable]:\n    \"\"\"x[j, t] in {0, 1} for every project j and every start year t of its window.\"\"\"\n    return {(j, t): model.add_binary_variable(name=f\"x_{j}_{t}\")\n            for j, p in snap[\"projects\"].items() for t in range(p[\"earliest\"], p[\"latest\"] + 1)}\n\n\n@contextlib.contextmanager\ndef quiet():\n    \"\"\"Keep the HiGHS bundled with OR-Tools from printing a stray line on some solves.\"\"\"\n    sys.stdout.flush()\n    saved, sink = os.dup(1), os.open(os.devnull, os.O_WRONLY)\n    os.dup2(sink, 1)\n    try:\n        yield\n    finally:\n        ctypes.CDLL(None).fflush(None)\n        os.dup2(saved, 1)\n        os.close(saved)\n        os.close(sink)\n\n\ndef solve(model: mathopt.Model) -> mathopt.SolveResult:\n    with quiet():\n        return mathopt.solve(model, mathopt.SolverType.HIGHS,\n                             params=mathopt.SolveParameters(relative_gap_tolerance=0.0))\n\n\ndef build(snap: dict) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"practice portfolio\")\n    x = variables(model, snap)\n    add_rules(model, x, snap)\n    set_objective(model, x, snap)\n    return model, x\n\n\ndef best(snap: dict) -> tuple[float, Plan]:\n    \"\"\"The optimal plan's objective value and the plan, {project: start year}.\"\"\"\n    model, x = build(snap)\n    result = solve(model)\n    assert result.termination.reason == mathopt.TerminationReason.OPTIMAL, result.termination\n    values = result.variable_values()\n    return result.objective_value(), {j: t for (j, t), v in sorted(x.items()) if values[v] > 0.5}\n\n\ndef allows(snap: dict, plan: Plan) -> bool:\n    \"\"\"Does the model accept this whole plan? Every start variable is fixed by its bounds.\"\"\"\n    model, x = build(snap)\n    if any((j, t) not in x for j, t in plan.items()):\n        return False                                   # a start the model has no variable for\n    for (j, t), v in x.items():\n        v.lower_bound = v.upper_bound = 1.0 if plan.get(j) == t else 0.0\n    return solve(model).termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\n# --- Yours: every rule, and the objective -------------------------------------------------------\n\ndef add_rules(model: mathopt.Model, x: dict, snap: dict) -> None:\n    \"\"\"Every row of your formulation, each named as the table in the statement says.\"\"\"\n    # TODO: once/must, alt, after (with the lag), budget, region, crews, floor.\n\n\ndef set_objective(model: mathopt.Model, x: dict, snap: dict) -> None:\n    \"\"\"Maximize the plan's NPV, each start at its own start year's value.\"\"\"\n    # TODO\n    model.maximize(mathopt.LinearExpression())\n\n\nif __name__ == \"__main__\":\n    snap = {\"years\": [2027, 2028], \"rate\": 0.05, \"budget\": {2027: 100, 2028: 100},\n            \"region_budget\": {\"North\": {2027: 100, 2028: 100}}, \"crews\": {\"lines\": {2027: 1, 2028: 1}},\n            \"floor\": {\"North\": 0},\n            \"projects\": {\"J1\": {\"program\": \"lines\", \"region\": \"North\", \"cost\": [80], \"earliest\": 2027,\n                                \"latest\": 2028, \"must\": True, \"parent\": None, \"lag\": 0, \"group\": None,\n                                \"crews\": 1, \"npv\": {2027: 30, 2028: 25}}}}\n    print(best(snap))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 1,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "9fedc7b7af5ddcaf1c7d090f8bd1ad2578e1f633fb174606d6440939abcec729",
+  "starting_code": "from __future__ import annotations\n\nimport contextlib\nimport ctypes\nimport os\nimport sys\n\nfrom ortools.math_opt.python import mathopt\n\nPlan = dict[str, int]\n\n\n# --- Given: the variables, a quiet solve, the plan reader, and the plan test ----------------------\n\ndef variables(model: mathopt.Model, snap: dict) -> dict[tuple[str, int], mathopt.Variable]:\n    \"\"\"x[j, t] in {0, 1} for every project j and every start year t of its window.\"\"\"\n    return {(j, t): model.add_binary_variable(name=f\"x_{j}_{t}\")\n            for j, p in snap[\"projects\"].items() for t in range(p[\"earliest\"], p[\"latest\"] + 1)}\n\n\n@contextlib.contextmanager\ndef quiet():\n    \"\"\"Keep the HiGHS bundled with OR-Tools from printing a stray line on some solves.\"\"\"\n    sys.stdout.flush()\n    saved, sink = os.dup(1), os.open(os.devnull, os.O_WRONLY)\n    os.dup2(sink, 1)\n    try:\n        yield\n    finally:\n        ctypes.CDLL(None).fflush(None)\n        os.dup2(saved, 1)\n        os.close(saved)\n        os.close(sink)\n\n\ndef solve(model: mathopt.Model) -> mathopt.SolveResult:\n    with quiet():\n        return mathopt.solve(model, mathopt.SolverType.HIGHS,\n                             params=mathopt.SolveParameters(relative_gap_tolerance=0.0))\n\n\ndef build(snap: dict) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"practice portfolio\")\n    x = variables(model, snap)\n    add_rules(model, x, snap)\n    set_objective(model, x, snap)\n    return model, x\n\n\ndef best(snap: dict) -> tuple[float, Plan]:\n    \"\"\"The optimal plan's objective value and the plan, {project: start year}.\"\"\"\n    model, x = build(snap)\n    result = solve(model)\n    assert result.termination.reason == mathopt.TerminationReason.OPTIMAL, result.termination\n    values = result.variable_values()\n    return result.objective_value(), {j: t for (j, t), v in sorted(x.items()) if values[v] > 0.5}\n\n\ndef allows(snap: dict, plan: Plan) -> bool:\n    \"\"\"Does the model accept this whole plan? Every start variable is fixed by its bounds.\"\"\"\n    model, x = build(snap)\n    if any((j, t) not in x for j, t in plan.items()):\n        return False                                   # a start the model has no variable for\n    for (j, t), v in x.items():\n        v.lower_bound = v.upper_bound = 1.0 if plan.get(j) == t else 0.0\n    return solve(model).termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\n# --- Yours: every rule, and the objective -------------------------------------------------------\n\ndef add_rules(model: mathopt.Model, x: dict, snap: dict) -> None:\n    \"\"\"Every row of your formulation, each named as the table in the statement says.\"\"\"\n    # TODO: once/must, alt, after (with the lag), budget, region, crews, floor.\n\n\ndef set_objective(model: mathopt.Model, x: dict, snap: dict) -> None:\n    \"\"\"Maximize the plan's NPV, each start at its own start year's value.\"\"\"\n    # TODO\n    model.maximize(mathopt.LinearExpression())\n\n\nif __name__ == \"__main__\":\n    snap = {\"years\": [2027, 2028], \"rate\": 0.05, \"budget\": {2027: 100, 2028: 100},\n            \"region_budget\": {\"North\": {2027: 100, 2028: 100}}, \"crews\": {\"lines\": {2027: 1, 2028: 1}},\n            \"floor\": {\"North\": 0},\n            \"projects\": {\"J1\": {\"program\": \"lines\", \"region\": \"North\", \"cost\": [80], \"earliest\": 2027,\n                                \"latest\": 2028, \"must\": True, \"parent\": None, \"lag\": 0, \"group\": None,\n                                \"crews\": 1, \"npv\": {2027: 30, 2028: 25}}}}\n    print(best(snap))\n",
+  "exercise": {
+    "main_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-02/practice-2/portfolio_model.py",
+    "test_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-02/practice-2/test_portfolio_model.py",
+    "run_command": [
+      "python3",
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-02/practice-2/portfolio_model.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/13-capstone/51-capstone-cipt-lite/prose/unit-02/practice-2/target/report.xml",
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-02/practice-2/test_portfolio_model.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_best_plan_with_loose_limits_is_worth_the_reference",
+        "kind": "main",
+        "says": "with every limit loose and one start per project, the best plan is worth the reference $280k, and the reported value is the plan's NPV"
+      },
+      {
+        "id": "test_an_allowed_plan_passes_and_each_broken_rule_refuses_its_plan",
+        "kind": "main",
+        "says": "a plan that keeps every rule is allowed; a plan without its must-do, one with both alternatives, one over a region's budget, and one outside a window are refused"
+      },
+      {
+        "id": "test_a_lag_counts_years_between_the_starts",
+        "kind": "edge",
+        "says": "a child with a one-year lag may start the year after its parent, not the same year"
+      },
+      {
+        "id": "test_a_parent_may_start_earlier_than_the_lag_requires",
+        "kind": "edge",
+        "says": "a child may start when its parent started two years earlier, not only exactly the lag earlier"
+      },
+      {
+        "id": "test_money_lands_in_every_year_of_work",
+        "kind": "edge",
+        "says": "a two-year project's second-year cost counts against the second year's budget"
+      },
+      {
+        "id": "test_crews_work_every_year_of_a_project",
+        "kind": "edge",
+        "says": "a two-year project keeps its crews busy in its second year"
+      },
+      {
+        "id": "test_a_floor_counts_each_projects_whole_cost",
+        "kind": "edge",
+        "says": "a region's floor counts each funded project's whole cost"
+      },
+      {
+        "id": "test_the_best_plan_with_every_limit_binding_is_worth_the_reference",
+        "kind": "edge",
+        "says": "with the real limits, the best plan is worth the reference $271k, each start valued at its own year's NPV"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "51-capstone-cipt-lite/README_13.1.2.md",
+      "section": "Hand-Built Plans Test Each Rule From Both Sides"
+    },
+    "concepts": [
+      "the whole multi-period model on a new portfolio, judged by hand-built plans fixed by their bounds and by the best plan's value against a reference"
+    ]
+  }
+}

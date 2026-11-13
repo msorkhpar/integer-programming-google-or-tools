@@ -1,0 +1,159 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "03-integer-programming-foundations",
+    "09-branch-and-bound"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Dantzig's bound at a node",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A substation team picks spare transformers to stock: each candidate has a value (avoided outage cost) and a price, and one budget covers them all. Their branch-and-bound needs the LP bound at a node without calling an LP solver."
+    },
+    {
+      "type": "para",
+      "text": "Write `bound(items, budget, fixed)` in `bound.py`. `items` is a list of `(name, value, cost)` tuples with every cost above 0, in any order. `fixed` maps some names to 0 or 1. The node's LP is"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\Big\\{ \\sum_i v_i x_i \\;:\\; \\sum_i c_i x_i \\le \\text{budget},\\ 0 \\le x_i \\le 1,\\\nx_i = \\text{fixed}_i \\text{ for every fixed } i \\Big\\}"
+    },
+    {
+      "type": "para",
+      "text": "Compute it with Dantzig's fill: pay for the items fixed at 1; skip the items fixed at 0; then go through the free items by ratio $`v_i / c_i`$, highest first (ties by name), taking each one whole while it fits, and taking the fraction of the first one that does not fit that uses up what is left. Stop there."
+    },
+    {
+      "type": "para",
+      "text": "Return `(value, split)`: the LP value, and the name of the item taken in part, or `None` when no item is taken in part. Return `None` instead of a pair when the items fixed at 1 cost more than the budget."
+    },
+    {
+      "type": "para",
+      "text": "A budget used up exactly is not a split. When the whole items leave exactly 0 of the budget, the next item would be taken to the fraction 0, which is not taking it at all, so the reference returns `(value, None)`. Fixings that cost exactly the budget are allowed too: they leave 0, not less, so the node is feasible and its bound is the fixed items' value."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\n\ndef bound(items: list[tuple[str, int, int]], budget: float, fixed: dict[str, int]):\n    \"\"\"(LP value, split item or None) at a node, or None when the fixings are over budget.\"\"\"\n    left = budget - sum(cost for name, _, cost in items if fixed.get(name) == 1)\n    if left < 0:\n        return None\n    value = float(sum(v for name, v, _ in items if fixed.get(name) == 1))\n    free = [it for it in items if it[0] not in fixed]\n    for name, v, cost in sorted(free, key=lambda it: (-it[1] / it[2], it[0])):\n        if cost <= left:\n            left -= cost\n            value += v\n        else:\n            if left > 0:\n                return value + v * left / cost, name\n            return value, None\n    return value, None\n\n\nif __name__ == \"__main__\":\n    spares = [(\"T1\", 120, 40), (\"T2\", 100, 50), (\"T3\", 45, 45), (\"T4\", 30, 60)]\n    print(bound(spares, 70, {}))\n    print(bound(spares, 70, {\"T2\": 1}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\n\ndef bound(items: list[tuple[str, int, int]], budget: float, fixed: dict[str, int]):\n    \"\"\"(LP value, split item or None) at a node, or None when the fixings are over budget.\"\"\"\n    # TODO: pay for the items fixed at 1 (None if that is over budget), skip those fixed at 0,\n    # then fill the free items by value / cost, highest first, and take part of the first misfit.\n    return 0.0, None\n\n\nif __name__ == \"__main__\":\n    spares = [(\"T1\", 120, 40), (\"T2\", 100, 50), (\"T3\", 45, 45), (\"T4\", 30, 60)]\n    print(bound(spares, 70, {}))\n    print(bound(spares, 70, {\"T2\": 1}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "0ec56470cccc23fe3d108b3437aeb9d0fea44f3ff636c9caefcb03aec5e98d17",
+  "starting_code": "from __future__ import annotations\n\n\ndef bound(items: list[tuple[str, int, int]], budget: float, fixed: dict[str, int]):\n    \"\"\"(LP value, split item or None) at a node, or None when the fixings are over budget.\"\"\"\n    # TODO: pay for the items fixed at 1 (None if that is over budget), skip those fixed at 0,\n    # then fill the free items by value / cost, highest first, and take part of the first misfit.\n    return 0.0, None\n\n\nif __name__ == \"__main__\":\n    spares = [(\"T1\", 120, 40), (\"T2\", 100, 50), (\"T3\", 45, 45), (\"T4\", 30, 60)]\n    print(bound(spares, 70, {}))\n    print(bound(spares, 70, {\"T2\": 1}))\n",
+  "exercise": {
+    "main_path": "practice/03-integer-programming-foundations/09-branch-and-bound/prose/unit-04/practice-1/bound.py",
+    "test_path": "practice/03-integer-programming-foundations/09-branch-and-bound/prose/unit-04/practice-1/test_bound.py",
+    "run_command": [
+      "python3",
+      "practice/03-integer-programming-foundations/09-branch-and-bound/prose/unit-04/practice-1/bound.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/03-integer-programming-foundations/09-branch-and-bound/prose/unit-04/practice-1/target/report.xml",
+      "practice/03-integer-programming-foundations/09-branch-and-bound/prose/unit-04/practice-1/test_bound.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_fill_takes_whole_items_then_a_fraction_of_the_split",
+        "kind": "main",
+        "says": "items fill in ratio order and the first one that does not fit is taken in part"
+      },
+      {
+        "id": "test_when_every_item_fits_there_is_no_split",
+        "kind": "main",
+        "says": "when every item fits, the bound is their total value and the split is None"
+      },
+      {
+        "id": "test_items_are_filled_by_ratio_not_by_value",
+        "kind": "edge",
+        "says": "a cheap item with a lower value but a higher ratio is filled before an expensive valuable one"
+      },
+      {
+        "id": "test_the_fill_stops_at_the_split_item",
+        "kind": "edge",
+        "says": "after the split item the fill stops, even if a later item would fit in what is left"
+      },
+      {
+        "id": "test_items_fixed_at_one_are_paid_first_and_items_fixed_at_zero_are_skipped",
+        "kind": "edge",
+        "says": "an item fixed at 1 is paid for before the fill, whatever its ratio, and one fixed at 0 is never taken"
+      },
+      {
+        "id": "test_fixings_over_budget_make_the_node_infeasible",
+        "kind": "edge",
+        "says": "items fixed at 1 that cost more than the budget give None"
+      },
+      {
+        "id": "test_a_budget_used_up_exactly_has_no_split",
+        "kind": "edge",
+        "says": "when the whole items use the budget up exactly, no item is taken in part"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/03-integer-programming-foundations/09-branch-and-bound/prose/unit-04/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "09-branch-and-bound/README_3.2.4.md",
+      "section": "A One-Row LP Is Solved by Sorting: Dantzig's Bound"
+    },
+    "concepts": [
+      "a one-row LP is solved by filling in ratio order and taking a fraction of the first item that does not fit"
+    ]
+  }
+}

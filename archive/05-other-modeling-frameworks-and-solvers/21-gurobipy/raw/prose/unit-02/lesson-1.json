@@ -1,0 +1,751 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "05-other-modeling-frameworks-and-solvers",
+    "21-gurobipy"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Duals, reduced costs and sensitivity attributes",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "5.3.2 Duals, Reduced Costs and Sensitivity Attributes"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's finance partner has read lesson 2.3.4 and asks the modeling team three questions about next year's capital plan: what one more $k of the 2030 budget is worth, up to how much extra the answer holds, and how much a deferred project's NPV would have to rise before the plan takes it. In lesson 4.2.2 MathOpt answered the first with `dual_values`; MathOpt has no call for the other two, and lesson 2.3.3 got them from HiGHS's own interface. Gurobi answers all three with attributes of the solved model. This lesson reads them on the LP relaxation of GridCap small's selection model, checks each against a re-solve, and shows what Gurobi offers, and refuses, for a MIP. GridCap is a fictional utility, and its numbers are teaching data."
+    },
+    {
+      "type": "para",
+      "text": "The words come from lessons 2.3.1–2.3.3: a row's **dual value** (or shadow price) is how much the optimal objective changes per unit of extra right-hand side; a variable's **reduced cost** is how much the objective changes per unit the variable is pushed away from the bound it sits at; and **ranging** gives the interval over which each of those numbers holds. All three are properties of an optimal **basic** LP solution, the vertex a simplex method ends on (lesson 2.2.2)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The selection model of lesson 5.3.1 with its integrality dropped, the **LP relaxation** (lesson 3.1.1): each $`x_i`$ may take any value from 0 to 1."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`P`$ the candidate projects; $`Y`$ the years 2027–2031; $`M \\subseteq P`$ the must-do projects; $`\\mathcal{G}`$ the alternative groups; $`C \\subseteq P`$ the child projects, with parent $`p(c)`$."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`v_i`$, project $`i`$'s NPV at its earliest start ($k); $`c_{i,y}`$, its spend in year $`y`$ at that start ($k); $`B_y`$, the budget of year $`y`$ ($k)."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`0 \\le x_i \\le 1`$ for every $`i \\in P`$ (the MIP of the last section has $`x_i \\in \\{0, 1\\}`$)."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.** $`\\max \\sum_{i \\in P} v_i\\, x_i`$."
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\nx_i &= 1 && \\forall i \\in M && \\text{(must}_i) \\\\\n\\sum_{i \\in g} x_i &\\le 1 && \\forall g \\in \\mathcal{G} && \\text{(alt}_g) \\\\\nx_c &\\le x_{p(c)} && \\forall c \\in C && \\text{(needs}_c) \\\\\n\\sum_{i \\in P} c_{i,y}\\, x_i &\\le B_y && \\forall y \\in Y && \\text{(budget}_y)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "`build_selection(env, small, integer=False)` builds it; the rows are named as in lesson 5.3.1 (`budget[2030]`, `alt_G001`, …). The first sections use a smaller LP, stated where it appears."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "An Optimal LP Carries Pi, RC, Slack and a Basis"
+    },
+    {
+      "type": "para",
+      "text": "The LP of OR-Tools' `advanced_linear_programming.py` sample, which lesson 4.2.2 solved with GLOP through MathOpt: three variables $`x_0, x_1, x_2 \\ge 0`$,"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max\\;& 10 x_0 + 6 x_1 + 4 x_2 \\\\\n\\text{s.t.}\\;& 10 x_0 + 4 x_1 + 5 x_2 \\le 600 && \\text{(c1)} \\\\\n& 2 x_0 + 2 x_1 + 6 x_2 \\le 300 && \\text{(c2)} \\\\\n& x_0 + x_1 + x_2 \\le 100 && \\text{(c3)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "In gurobipy, with every LP result read as an attribute:"
+    },
+    {
+      "type": "example",
+      "id": "lp_duals-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "21-gurobipy/src/lp_duals.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "21-gurobipy/src/lp_duals.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "rows, cols = [c1, c2, c3], [x[0], x[1], x[2]]\nprint(\"status     :\", STATUS[m.Status], \"| objective\", round(m.ObjVal, 4))\nprint(\"X          :\", [round(v, 4) for v in m.getAttr(\"X\", cols)])\nprint(\"Pi         :\", [round(p, 4) + 0.0 for p in m.getAttr(\"Pi\", rows)])\nprint(\"Slack      :\", [round(s, 4) + 0.0 for s in m.getAttr(\"Slack\", rows)])\nprint(\"RC         :\", [round(r, 4) + 0.0 for r in m.getAttr(\"RC\", cols)])\nprint(\"CBasis     :\", m.getAttr(\"CBasis\", rows), \"(0 basic, -1 nonbasic)\")\nprint(\"VBasis     :\", m.getAttr(\"VBasis\", cols), \"(0 basic, -1 at lower bound, -2 at upper bound)\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "status     : OPTIMAL | objective 733.3333\nX          : [33.3333, 66.6667, 0.0]\nPi         : [0.6667, 0.0, 3.3333]\nSlack      : [0.0, 100.0, 0.0]\nRC         : [0.0, 0.0, -2.6667]\nCBasis     : [-1, 0, -1] (0 basic, -1 nonbasic)\nVBasis     : [0, 0, -1] (0 basic, -1 at lower bound, -2 at upper bound)"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The numbers are the ones GLOP returned in lesson 4.2.2, under Gurobi's names:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "MathOpt",
+        "gurobipy attribute",
+        "Of",
+        "Here"
+      ],
+      "rows": [
+        [
+          "`dual_values(rows)`",
+          "`Pi`",
+          "row",
+          "c1 is worth 0.6667 per unit, c3 3.3333, c2 0"
+        ],
+        [
+          "`reduced_costs(vars)`",
+          "`RC`",
+          "variable",
+          "$`x_2`$ would cost 2.6667 per unit forced in"
+        ],
+        [
+          "`constraint_status(rows)`",
+          "`CBasis`",
+          "row",
+          "c2 is basic (it has slack, 100), c1 and c3 are not"
+        ],
+        [
+          "`variable_status(vars)`",
+          "`VBasis`",
+          "variable",
+          "$`x_0`$, $`x_1`$ basic; $`x_2`$ at its lower bound 0"
+        ],
+        [
+          "(none; compute it)",
+          "`Slack`",
+          "row",
+          "$`\\text{RHS} - a^\\top x`$: c2 has 100 left"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The basis codes are numbers: a row's `CBasis` is 0 if the row is basic (its slack is in the basis) and $`-1`$ if not; a variable's `VBasis` is 0 if basic, $`-1`$ at its lower bound, $`-2`$ at its upper bound, and $`-3`$ superbasic (nonbasic yet strictly between its bounds). Complementary slackness (lesson 2.3.2) is visible: the row with slack, c2, has price 0, and the two tight rows have prices."
+    },
+    {
+      "type": "para",
+      "text": "These attributes exist only when they make sense. The attribute reference says `Pi` and `RC` are available for **continuous, convex** models, and `CBasis`, `VBasis` and every `SA` range below only for **basic** solutions. Reading one that is not there raises an error, as the last section shows."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Sign of Pi Follows the Model's Sense"
+    },
+    {
+      "type": "para",
+      "text": "The same LP can be written as a minimization of $`-f`$. The plan cannot change, but the prices change sign:"
+    },
+    {
+      "type": "example",
+      "id": "lp_duals-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "21-gurobipy/src/lp_duals.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "21-gurobipy/src/lp_duals.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "m.setObjective(-(10 * x[0] + 6 * x[1] + 4 * x[2]), GRB.MINIMIZE)\nm.optimize()\nprint(\"minimize -f:\", round(m.ObjVal, 4), \"| Pi\", [round(p, 4) + 0.0 for p in m.getAttr(\"Pi\", rows)],\n      \"| RC\", [round(r, 4) + 0.0 for r in m.getAttr(\"RC\", cols)])"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "minimize -f: -733.3333 | Pi [-0.6667, 0.0, -3.3333] | RC [0.0, 0.0, 2.6667]"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Both are right. `Pi` is the rate of change of the objective *as written*: one more unit of c1 raises $`f`$ by 0.6667, so it lowers $`-f`$ by 0.6667. The linear constraint attribute page states the rule:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Sense of the model",
+        "$`\\le`$ row",
+        "$`\\ge`$ row",
+        "$`=`$ row"
+      ],
+      "rows": [
+        [
+          "minimize",
+          "$`\\pi \\le 0`$",
+          "$`\\pi \\ge 0`$",
+          "any sign"
+        ],
+        [
+          "maximize",
+          "$`\\pi \\ge 0`$",
+          "$`\\pi \\le 0`$",
+          "any sign"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "So before quoting a price to finance, check the sense: for GridCap's maximized NPV, a budget row's `Pi` is the NPV gained per extra $k, and it is never negative."
+    },
+    {
+      "type": "para",
+      "text": "A variable's reduced cost follows from the prices. For a column $`j`$ with objective coefficient $`c_j`$ and coefficients $`a_{ij}`$ in the rows,"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\text{RC}_j \\;=\\; c_j - \\sum_{i} a_{ij}\\, \\pi_i"
+    },
+    {
+      "type": "para",
+      "text": "the value the variable brings, less what the rows it uses charge at their prices. For $`x_2`$: $`4 - (5 \\times 0.6667 + 6 \\times 0 + 1 \\times 3.3333) = -2.6667`$. In a maximization at optimum, a variable at its lower bound has $`\\text{RC} \\le 0`$ (bringing it in would not pay) and one at its upper bound $`\\text{RC} \\ge 0`$; a basic variable has $`\\text{RC} = 0`$."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Price Holds Only Inside SARHSLow to SARHSUp"
+    },
+    {
+      "type": "para",
+      "text": "On GridCap small's LP relaxation, `Pi` gives each year's budget price, and two more row attributes give its range: **`SARHSLow`** and **`SARHSUp`**, the lowest and highest right-hand side for which the current optimal basis stays optimal. Inside that interval the price is constant and the objective changes by exactly $`\\pi \\times \\Delta`$:"
+    },
+    {
+      "type": "example",
+      "id": "sensitivity-3",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "21-gurobipy/src/sensitivity.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "21-gurobipy/src/sensitivity.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "sel = build_selection(env, small, integer=False)          # 0 <= x_i <= 1: the LP relaxation\nm = sel.model\nm.optimize()\nbase = m.ObjVal\nprint(\"LP relaxation:\", STATUS[m.Status], round(base, 2))\nprint(\"row           Pi      RHS   SARHSLow  SARHSUp\")\nfor y, row in sel.budget.items():\n    print(f\"{row.ConstrName:13} {row.Pi:6.4f} {row.RHS:7,.0f} {row.SARHSLow:9,.1f} {row.SARHSUp:9,.1f}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "LP relaxation: OPTIMAL 23669.49\nrow           Pi      RHS   SARHSLow  SARHSUp\nbudget[2027]  0.6475   8,890   7,824.2  13,504.2\nbudget[2028]  0.5765   8,120   7,500.0   8,350.0\nbudget[2029]  0.0000   8,760   8,070.0       inf\nbudget[2030]  1.3817   8,610   7,620.0   9,300.0\nbudget[2031]  0.0000   7,850   5,030.0       inf"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The objective, 23,669.49, and the prices are the ones GLOP gave through MathOpt in lesson 4.2.2 (0.6475, 0.5765, 0, 1.3817, 0), and the module's tests check every price against GLOP's. The new columns answer finance's second question. One more $k in 2030 is worth $1.38k of NPV, and that holds from a 2030 budget of 7,620 up to 9,300. 2029 and 2031 have money to spare, so their price is 0, and no amount of extra budget changes that (the upper end is infinite); cutting them too far would (below 8,070 and 5,030)."
+    },
+    {
+      "type": "para",
+      "text": "The program checks the 2030 range by re-solving, once inside it, once at its end and once past it:"
+    },
+    {
+      "type": "example",
+      "id": "sensitivity-4",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "21-gurobipy/src/sensitivity.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "21-gurobipy/src/sensitivity.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "row = sel.budget[2030]\npi, rhs, up = row.Pi, row.RHS, row.SARHSUp\nfor new in (rhs + 100, up, up + 300):\n    row.RHS = new\n    m.optimize()\n    print(f\"budget 2030 = {new:8,.1f}: objective {m.ObjVal:9,.2f}  gain {m.ObjVal - base:7,.2f}\"\n          f\"  Pi x change {pi * (new - rhs):7,.2f}\")\nrow.RHS = rhs\nm.optimize()"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "budget 2030 =  8,710.0: objective 23,807.66  gain  138.17  Pi x change  138.17\nbudget 2030 =  9,300.0: objective 24,622.85  gain  953.35  Pi x change  953.35\nbudget 2030 =  9,600.0: objective 25,001.41  gain 1,331.92  Pi x change 1,367.86"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Up to 9,300 the gain is the price times the change, to the cent. Past it, the 300 extra $k earn $`1{,}331.92 - 953.35 = 378.57`$, about 1.26 per $k instead of 1.38: the basis changed, and with it the price. That is the answer finance needs: \"about $1.38k per extra $k, for up to $690k more\" ($`9{,}300 - 8{,}610`$), and a new solve beyond that. Two limits from lesson 2.3.3 still apply: a range assumes **one change at a time** (moving two budgets together can cross a breakpoint neither crosses alone), and it describes the **LP relaxation**, not the yes/no plan (lesson 2.3.4 and the last section)."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Objective Ranging Says How Far a Project's NPV Can Move"
+    },
+    {
+      "type": "para",
+      "text": "The third question, how much a project's NPV must change before the plan changes, is answered by two variable attributes: **`SAObjLow`** and **`SAObjUp`**, the range of the objective coefficient over which the current basis stays optimal. Read next to `X`, `VBasis` and `RC`:"
+    },
+    {
+      "type": "example",
+      "id": "sensitivity-5",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "21-gurobipy/src/sensitivity.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "21-gurobipy/src/sensitivity.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "print(\"var        X  VBasis       RC     Obj  SAObjLow   SAObjUp\")\nfor pid in (\"P005\", \"P002\", \"P024\", \"P001\"):\n    v = sel.x[pid]\n    print(f\"{v.VarName:8} {v.X:5.3f} {v.VBasis:4} {v.RC + 0.0:10.2f} {v.Obj:7,.0f} {v.SAObjLow + 0.0:9,.1f} {v.SAObjUp:9,.1f}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "var        X  VBasis       RC     Obj  SAObjLow   SAObjUp\nx[P005]  1.000   -2     576.00     576       0.0       inf\nx[P002]  0.000   -1    -551.93     386      -inf     937.9\nx[P024]  0.729    0       0.00     490     388.2     522.2\nx[P001]  1.000    0       0.00   1,401     849.1       inf"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Four cases, one per row:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**P005 is at its upper bound** ($`-2`$), fully funded. Its NPV could fall to 0 and the LP would still fund it, and any rise only confirms it. Its reduced cost equals its NPV, 576: P005 spends $1,510k only in 2029, whose price is 0, so the rows charge it nothing.",
+        "**P002 is at its lower bound** ($`-1`$), deferred. Its NPV of 386 would have to exceed 937.9 before the LP funds any of it, and the gap, $`937.9 - 386 = 551.9`$, is its reduced cost with the sign dropped. That is the \"why deferred\" number lesson 9.3.2 builds on.",
+        "**P024 is basic and fractional** (0.729): the LP funds 73% of it, and the basis holds while its NPV stays between 388.2 and 522.2.",
+        "**P001 is basic at 1.000.** A basic variable can sit at a bound; the LP is then **degenerate** (lesson 2.2.3), and its range, 849.1 upward, is for this basis."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Where does P002's reduced cost come from? Its column has two nonzero coefficients, and the program prints what each row charges at its price:"
+    },
+    {
+      "type": "example",
+      "id": "sensitivity-6",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "21-gurobipy/src/sensitivity.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "21-gurobipy/src/sensitivity.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "v = sel.x[\"P002\"]\ncolumn = m.getCol(v)\nterms = [(column.getConstr(k).ConstrName, column.getCoeff(k), column.getConstr(k).Pi) for k in range(column.size())]\nprint(f\"{v.VarName}'s column:\")\nfor name, a, price in terms:\n    print(f\"  {name:12} a {a:6,.0f}  Pi {price:8.4f}  charge {a * price:9.2f}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "x[P002]'s column:\n  alt_G001     a      1  Pi 640.0588  charge    640.06\n  budget[2027] a    460  Pi   0.6475  charge    297.87\n  RC = 386 - 937.93 = -551.93  (Gurobi's RC -551.93)"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`getCol` returns a variable's column: the rows it appears in and its coefficients there. P002 spends $460k in 2027, charged at 0.6475, and it belongs to alternative group G001, whose single seat the LP prices at 640.06. The sum, 937.93, is `SAObjUp`, the NPV P002 would need. The budget alone would have said 297.87; the alternative group is most of the reason P002 waits."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A MIP Has No Duals; fixed() Prices the Plan It Found"
+    },
+    {
+      "type": "para",
+      "text": "Now the real model, with $`x_i \\in \\{0, 1\\}`$:"
+    },
+    {
+      "type": "example",
+      "id": "mip_duals-7",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "21-gurobipy/src/mip_duals.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "21-gurobipy/src/mip_duals.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "m.optimize()\nprint(\"MIP:\", STATUS[m.Status], m.ObjVal, \"| IsMIP\", m.IsMIP)\ntry:\n    print(sel.budget[2027].Pi)\nexcept (AttributeError, gp.GurobiError) as error:\n    print(\"Pi on a MIP:\", type(error).__name__, error)"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "MIP: OPTIMAL 22532.0 | IsMIP 1\nPi on a MIP: AttributeError Unable to retrieve attribute 'Pi'"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "A MIP's best value jumps when a budget crosses a project's cost, so there is no rate of change to report, and Gurobi reports none: `Pi` (and `RC`, `SARHSLow` and the rest) are for continuous models only. MathOpt said the same with `has_dual_feasible_solution() == False` (lesson 4.2.2)."
+    },
+    {
+      "type": "para",
+      "text": "What Gurobi does offer is **`Model.fixed()`**: a new model, continuous, in which every integer variable is fixed at its value in the MIP's solution, as the Python reference describes it. Solved, it is an LP, and it has prices:"
+    },
+    {
+      "type": "example",
+      "id": "mip_duals-8",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "21-gurobipy/src/mip_duals.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "21-gurobipy/src/mip_duals.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "f = m.fixed()                                   # a new LP: every binary fixed at its solution value\nf.optimize()\nprint(\"fixed():\", STATUS[f.Status], f.ObjVal, \"| IsMIP\", f.IsMIP, \"| fixed vars\",\n      sum(1 for v in f.getVars() if v.LB == v.UB))\nprint(\"budget Pi in the fixed LP:\", [round(f.getConstrByName(f\"budget[{y}]\").Pi, 4) + 0.0 for y in small.years])\nfor pid in (\"P001\", \"P002\"):\n    v = f.getVarByName(f\"x[{pid}]\")\n    print(f\"  {v.VarName}: X {v.X + 0.0:g}  LB {v.LB + 0.0:g}  UB {v.UB + 0.0:g}  RC {v.RC:,.1f}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "fixed(): OPTIMAL 22532.0 | IsMIP 0 | fixed vars 40\nbudget Pi in the fixed LP: [0.0, 0.0, 0.0, 0.0, 0.0]\n  x[P001]: X 1  LB 1  UB 1  RC 1,401.0\n  x[P002]: X 0  LB 0  UB 0  RC 386.0"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The fixed LP has the MIP's value, 22,532, and duals, but read them carefully. Every budget price is 0: with all 40 variables fixed ($`\\text{LB} = \\text{UB}`$), no budget can change the plan, so no budget is worth anything. Each variable's reduced cost is its whole NPV, because the bound, not any row, holds it in place. In this selection model, where every variable is a binary, the fixed LP prices only the decisions already taken. Fixed-integer duals mean something when the model also has continuous variables (spend, carry-over, draws on a credit line) that stay free once the binaries are fixed; lessons 9.2.1 and 9.2.2 take that up, and say when such prices can be trusted."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**An optimal LP carries Pi, RC, Slack and a basis.** `Pi` and `Slack` on rows, `RC` on variables, `CBasis` and `VBasis` for the basis; on the sample LP they match GLOP's values in MathOpt.",
+        "**The sign of Pi follows the model's sense.** In a maximization a $`\\le`$ row's price is $`\\ge 0`$; minimize $`-f`$ and every sign flips. $`\\text{RC}_j = c_j - \\sum_i a_{ij}\\pi_i`$.",
+        "**A price holds only inside SARHSLow to SARHSUp.** GridCap's 2030 budget is worth $1.38k per $k from 7,620 to 9,300; a re-solve confirmed the price to the cent inside and found less past it.",
+        "**Objective ranging says how far a project's NPV can move.** `SAObjLow` and `SAObjUp`; a deferred project needs `SAObjUp`, here its NPV less its reduced cost, and `getCol` shows which rows set it.",
+        "**A MIP has no duals; `fixed()` prices the plan it found.** `Pi` raises on a MIP. The fixed LP of an all-binary model prices the bounds, not the budgets."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Attribute",
+        "Of",
+        "Meaning",
+        "Available"
+      ],
+      "rows": [
+        [
+          "`Pi`",
+          "linear row",
+          "dual value (shadow price)",
+          "continuous convex models"
+        ],
+        [
+          "`Slack`",
+          "linear row",
+          "right-hand side minus the row's value",
+          "after a solve"
+        ],
+        [
+          "`RC`",
+          "variable",
+          "reduced cost",
+          "continuous convex models"
+        ],
+        [
+          "`CBasis`, `VBasis`",
+          "row, variable",
+          "basis status: 0 basic, $`-1`$ nonbasic / at lower, $`-2`$ at upper, $`-3`$ superbasic",
+          "basic solutions"
+        ],
+        [
+          "`SARHSLow`, `SARHSUp`",
+          "linear row",
+          "right-hand-side range of the current basis",
+          "basic solutions"
+        ],
+        [
+          "`SAObjLow`, `SAObjUp`",
+          "variable",
+          "objective-coefficient range of the current basis",
+          "basic solutions"
+        ],
+        [
+          "`SALBLow`, `SALBUp`, `SAUBLow`, `SAUBUp`",
+          "variable",
+          "ranges of the lower and upper bound",
+          "basic solutions"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Task",
+        "gurobipy"
+      ],
+      "rows": [
+        [
+          "all prices of a list of rows",
+          "`m.getAttr(\"Pi\", rows)`"
+        ],
+        [
+          "a variable's column",
+          "`col = m.getCol(v)`; `col.getConstr(k)`, `col.getCoeff(k)`, `col.size()`"
+        ],
+        [
+          "a row or a variable by name",
+          "`m.getConstrByName(\"budget[2030]\")`, `m.getVarByName(\"x[P002]\")`"
+        ],
+        [
+          "the LP relaxation of a model",
+          "build it with continuous variables, or `m.relax()`"
+        ],
+        [
+          "the fixed-integer LP",
+          "`f = m.fixed(); f.optimize()`"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Term",
+        "Meaning"
+      ],
+      "rows": [
+        [
+          "basic solution",
+          "a vertex of the LP, described by which variables and slacks are in the basis"
+        ],
+        [
+          "ranging",
+          "the interval of one number (a right-hand side, a coefficient) over which the basis stays optimal"
+        ],
+        [
+          "degenerate",
+          "an LP whose optimal vertex has a basic variable at a bound"
+        ],
+        [
+          "fixed model",
+          "the LP left when a MIP's integer variables are fixed at their solution values"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading.** Gurobi, [Linear constraint attributes](https://docs.gurobi.com/projects/optimizer/en/current/reference/attributes/constraintlinear.html) (`Pi` and its sign rule, `Slack`, `CBasis`, `SARHSLow`, `SARHSUp`), [Variable attributes](https://docs.gurobi.com/projects/optimizer/en/current/reference/attributes/variable.html) (`RC`, `VBasis` and its codes, `SAObjLow`, `SAObjUp`, the bound ranges) and [Python API: Model](https://docs.gurobi.com/projects/optimizer/en/current/reference/python/model.html) (`fixed`, `getAttr`, `getCol`). OR-Tools, [`advanced_linear_programming.py`](https://github.com/google/or-tools/blob/stable/ortools/math_opt/samples/python/advanced_linear_programming.py), the sample whose LP the first sections port. Gurobi's [infeasibility and sensitivity examples tour](https://docs.gurobi.com/projects/examples/en/current/overview/infeasibility.html) lists a `sensitivity` example among its programs."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Read `SALBLow` and `SALBUp` for P024 and say in words what they mean for a planner.",
+        "Raise the 2028 budget past its `SARHSUp` of 8,350 and predict, before running, whether the gain per $k will be above or below 0.5765.",
+        "Build the timing model of lesson 5.3.1 with continuous variables and read the budget prices. Which year is the dearest?"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: A Price Is a Sentence With a Range in It"
+    },
+    {
+      "type": "para",
+      "text": "Finance does not need `Pi`; it needs \"each extra $k of the 2030 budget is worth about $1.38k, for up to $690k more, if nothing else changes\". Every part of that sentence is an attribute: `Pi`, `SARHSUp − RHS`, and the one-change-at-a-time rule. A report that prints prices without ranges invites the reading \"another $5M is worth $6.9M\", which the re-solve here already disproved at $300k past the range. Lesson 9.3.1 builds a binding-constraints report around exactly this sentence."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change. Each needs a Gurobi license in the runner (lesson 5.3.4)."
+    },
+    {
+      "type": "para",
+      "text": "**lp_duals.py.** The sample LP's `Pi`, `Slack`, `RC`, `CBasis` and `VBasis`, then the same LP as a minimization (*An Optimal LP Carries Pi, RC, Slack and a Basis*, *The Sign of Pi Follows the Model's Sense*). *Try:* Change c3's right-hand side to 120 and predict which prices change."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [lp_duals.py](src/lp_duals.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**sensitivity.py.** GridCap small's LP relaxation: budget prices and their ranges checked by re-solving, objective ranges, and P002's reduced cost taken apart (*A Price Holds Only Inside SARHSLow to SARHSUp*, *Objective Ranging*). *Try:* Check the 2027 range the same way, at its `SARHSUp` of 13,504.2."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [sensitivity.py](src/sensitivity.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**mip_duals.py.** The MIP's missing `Pi`, and the prices of its fixed LP (*A MIP Has No Duals*). *Try:* Print the reduced costs of every funded project in the fixed LP, and predict their sum."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [mip_duals.py](src/mip_duals.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 12,
+    "paras": 37,
+    "code": 3,
+    "tables": 5,
+    "lists": 6,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 8
+  },
+  "content_sha256": "e572acede06fdf1b294f8ba5d564c197db46823a3ac2e4ca54871bebaf4d0aaf"
+}

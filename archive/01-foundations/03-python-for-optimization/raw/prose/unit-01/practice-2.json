@@ -1,0 +1,188 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "01-foundations",
+    "03-python-for-optimization"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Check a budgets table before the model reads it",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The budget model has one row per year and region, $`\\text{spend}_{r,y} \\le B_{r,y}`$ for every $`y \\in Y`$ and $`r \\in R`$, so it needs exactly one valid budget $`B_{r,y} \\ge 0`$ for every pair, and nothing else. Finance sends the budgets as a CSV file with the columns `year`, `region` and `budget`, edited by hand."
+    },
+    {
+      "type": "para",
+      "text": "Write `budget_problems(budgets, years, regions)` in `budgets.py`. `budgets` is the file read with `pd.read_csv` and no `dtype=`; `years` and `regions` are the plan's $`Y`$ and $`R`$. It returns one string per problem, in any order. Line numbers count the header as line 1, so the row with index 0 is line 2."
+    },
+    {
+      "type": "table",
+      "headers": [
+        "problem",
+        "when"
+      ],
+      "rows": [
+        [
+          "`\"line N: budget is not a number\"`",
+          "the budget cell does not read as a number"
+        ],
+        [
+          "`\"line N: negative budget\"`",
+          "the budget is below zero"
+        ],
+        [
+          "`\"line N: unknown region\"`",
+          "the region is not in `regions`"
+        ],
+        [
+          "`\"line N: year outside the plan\"`",
+          "the year is not in `years`"
+        ],
+        [
+          "`\"line N: duplicate\"`",
+          "another row has the same year and region (report every such row)"
+        ],
+        [
+          "`\"missing Y R\"`",
+          "no row at all has year `Y` and region `R`"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "A row with a bad budget still counts as present for its year and region. An allowed table returns an empty list."
+    },
+    {
+      "type": "para",
+      "text": "About twelve lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport pandas as pd\n\n\ndef budget_problems(budgets: pd.DataFrame, years: list[int], regions: list[str]) -> list[str]:\n    \"\"\"One string per problem in a budgets table (see the statement's table).\"\"\"\n    amount = pd.to_numeric(budgets[\"budget\"], errors=\"coerce\")\n    rules = {\n        \"budget is not a number\": amount.isna(),\n        \"negative budget\": amount < 0,\n        \"unknown region\": ~budgets[\"region\"].isin(regions),\n        \"year outside the plan\": ~budgets[\"year\"].isin(years),\n        \"duplicate\": budgets.duplicated([\"year\", \"region\"], keep=False),\n    }\n    problems = []\n    for reason, mask in rules.items():\n        problems += [f\"line {n}: {reason}\" for n in budgets.index[mask] + 2]\n    present = set(zip(budgets[\"year\"], budgets[\"region\"]))\n    problems += [f\"missing {y} {r}\" for y in years for r in regions if (y, r) not in present]\n    return problems\n\n\nif __name__ == \"__main__\":\n    import io\n    demo = pd.read_csv(io.StringIO(\"year,region,budget\\n2031,North,500\\n2031,North,-5\\n\"))\n    print(budget_problems(demo, [2031], [\"North\", \"South\"]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport pandas as pd\n\n\ndef budget_problems(budgets: pd.DataFrame, years: list[int], regions: list[str]) -> list[str]:\n    \"\"\"One string per problem in a budgets table (see the statement's table).\"\"\"\n    # TODO: one boolean mask per rule, then the pairs that have no row at all.\n    return [\"not checked yet\"]\n\n\nif __name__ == \"__main__\":\n    import io\n    demo = pd.read_csv(io.StringIO(\"year,region,budget\\n2031,North,500\\n2031,North,-5\\n\"))\n    print(budget_problems(demo, [2031], [\"North\", \"South\"]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 1,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "a63e231344c807228d2610e16739c3933642fd17c2d50a181ff9db79a67a8f8e",
+  "starting_code": "from __future__ import annotations\n\nimport pandas as pd\n\n\ndef budget_problems(budgets: pd.DataFrame, years: list[int], regions: list[str]) -> list[str]:\n    \"\"\"One string per problem in a budgets table (see the statement's table).\"\"\"\n    # TODO: one boolean mask per rule, then the pairs that have no row at all.\n    return [\"not checked yet\"]\n\n\nif __name__ == \"__main__\":\n    import io\n    demo = pd.read_csv(io.StringIO(\"year,region,budget\\n2031,North,500\\n2031,North,-5\\n\"))\n    print(budget_problems(demo, [2031], [\"North\", \"South\"]))\n",
+  "exercise": {
+    "main_path": "practice/01-foundations/03-python-for-optimization/prose/unit-01/practice-2/budgets.py",
+    "test_path": "practice/01-foundations/03-python-for-optimization/prose/unit-01/practice-2/test_budgets.py",
+    "run_command": [
+      "python3",
+      "practice/01-foundations/03-python-for-optimization/prose/unit-01/practice-2/budgets.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/01-foundations/03-python-for-optimization/prose/unit-01/practice-2/target/report.xml",
+      "practice/01-foundations/03-python-for-optimization/prose/unit-01/practice-2/test_budgets.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_complete_clean_table_has_no_problems",
+        "kind": "main",
+        "says": "a table with one valid row for every year and region has no problems"
+      },
+      {
+        "id": "test_a_negative_budget_is_reported",
+        "kind": "main",
+        "says": "a negative budget is reported with its line"
+      },
+      {
+        "id": "test_an_unknown_region_is_reported",
+        "kind": "main",
+        "says": "a row for a region outside the plan is reported with its line"
+      },
+      {
+        "id": "test_a_zero_budget_is_allowed",
+        "kind": "edge",
+        "says": "a budget of zero is allowed"
+      },
+      {
+        "id": "test_a_budget_written_with_a_comma_is_not_a_number",
+        "kind": "edge",
+        "says": "a budget written as \"1,200\" is reported as not a number"
+      },
+      {
+        "id": "test_a_year_before_the_plan_is_outside_it",
+        "kind": "edge",
+        "says": "a year before the plan's first year is outside the plan"
+      },
+      {
+        "id": "test_every_copy_of_a_repeated_pair_is_reported",
+        "kind": "edge",
+        "says": "every row of a repeated year and region is reported, not only the later one"
+      },
+      {
+        "id": "test_a_missing_pair_is_reported_even_when_the_row_count_is_right",
+        "kind": "edge",
+        "says": "a missing year and region is reported even when a duplicate keeps the row count right"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/01-foundations/03-python-for-optimization/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "03-python-for-optimization/README_1.3.1.md",
+      "section": "Check Every Row Before the Model Sees It, One Mask per Rule"
+    },
+    "concepts": [
+      "each data rule is one boolean mask, and every row a mask marks is reported with its line"
+    ]
+  }
+}

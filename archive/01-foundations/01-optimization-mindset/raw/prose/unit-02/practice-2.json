@@ -1,0 +1,163 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "01-foundations",
+    "01-optimization-mindset"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "The plan that removes the most risk",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility has a pump-failure model for each of its stations and a list of projects: replace a station's pump, or repair it for less. The board wants the plan that removes the most failure cost per year, within the budget and the rules. The rules are already written in `allowed`: stay within the budget, fund every must-do project, and fund at most one project per station."
+    },
+    {
+      "type": "para",
+      "text": "Write two functions in `pumps.py`. `pof_next(age, beta, eta)` (next year's probability of failure for a pump working today) is written for you."
+    },
+    {
+      "type": "para",
+      "text": "**First,** `risk_avoided(project, assets)`, the coefficient $`a_i`$ of project $`i`$ on station $`k`$:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "a_i = \\text{CoF}_k \\Big( \\text{PoF}_{\\text{next}}(\\text{age}_k) - \\text{PoF}_{\\text{next}}(\\rho_i\\, \\text{age}_k) \\Big)"
+    },
+    {
+      "type": "para",
+      "text": "where $`\\rho_i`$ is `AGE_AFTER[project.work]`: 0 for a replacement, 0.5 for a repair."
+    },
+    {
+      "type": "para",
+      "text": "**Second,** `most_risk_removed(projects, assets, budget)`, which solves, by checking every plan:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{i \\in P} a_i\\, x_i \\quad \\text{over plans } x \\in \\{0, 1\\}^{|P|} \\text{ that } \\texttt{allowed} \\text{ accepts}"
+    },
+    {
+      "type": "para",
+      "text": "It returns `(total, plan)`, with `plan` a frozenset of project ids."
+    },
+    {
+      "type": "para",
+      "text": "About twelve lines in all."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport math\nfrom dataclasses import dataclass\nfrom itertools import combinations\n\n#: The share of its age an asset keeps after each kind of work.\nAGE_AFTER = {\"replace\": 0.0, \"repair\": 0.5}\n\n\n@dataclass(frozen=True)\nclass Asset:\n    age: float\n    cof: float      # what one failure costs, $k\n    beta: float     # Weibull shape\n    eta: float      # Weibull scale, years\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    asset: str\n    work: str       # a key of AGE_AFTER\n    cost: int\n    must_do: bool = False\n\n\ndef pof_next(age: float, beta: float, eta: float) -> float:\n    \"\"\"Probability of failing in the coming year, given the asset works at `age`.\"\"\"\n    def failed_by(t: float) -> float:\n        return 1 - math.exp(-((t / eta) ** beta))\n    return (failed_by(age + 1) - failed_by(age)) / (1 - failed_by(age))\n\n\ndef allowed(projects: list[Project], plan: frozenset[str], budget: int) -> bool:\n    \"\"\"The rules: within budget, every must-do funded, at most one project per asset.\"\"\"\n    chosen = [p for p in projects if p.pid in plan]\n    assets = [p.asset for p in chosen]\n    return (sum(p.cost for p in chosen) <= budget\n            and all(p.pid in plan for p in projects if p.must_do)\n            and len(assets) == len(set(assets)))\n\n\ndef risk_avoided(project: Project, assets: dict[str, Asset]) -> float:\n    \"\"\"a_i: the yearly failure cost the project's work removes, in $k.\"\"\"\n    a = assets[project.asset]\n    kept = AGE_AFTER[project.work] * a.age\n    return a.cof * (pof_next(a.age, a.beta, a.eta) - pof_next(kept, a.beta, a.eta))\n\n\ndef most_risk_removed(projects: list[Project], assets: dict[str, Asset],\n                      budget: int) -> tuple[float, frozenset[str]]:\n    \"\"\"The allowed plan with the largest total risk avoided, and that total.\"\"\"\n    best: tuple[float, frozenset[str]] = (-1.0, frozenset())\n    for k in range(len(projects) + 1):\n        for combo in combinations(projects, k):\n            plan = frozenset(p.pid for p in combo)\n            if allowed(projects, plan, budget):\n                total = sum(risk_avoided(p, assets) for p in combo)\n                if total > best[0]:\n                    best = (total, plan)\n    return best\n\n\nif __name__ == \"__main__\":\n    pumps = {\"K1\": Asset(age=30, cof=900, beta=3.0, eta=40)}\n    work = [Project(\"W1\", \"K1\", \"replace\", 400), Project(\"W2\", \"K1\", \"repair\", 80)]\n    print([round(risk_avoided(p, pumps), 1) for p in work], most_risk_removed(work, pumps, 300))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport math\nfrom dataclasses import dataclass\nfrom itertools import combinations\n\n#: The share of its age an asset keeps after each kind of work.\nAGE_AFTER = {\"replace\": 0.0, \"repair\": 0.5}\n\n\n@dataclass(frozen=True)\nclass Asset:\n    age: float\n    cof: float      # what one failure costs, $k\n    beta: float     # Weibull shape\n    eta: float      # Weibull scale, years\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    asset: str\n    work: str       # a key of AGE_AFTER\n    cost: int\n    must_do: bool = False\n\n\ndef pof_next(age: float, beta: float, eta: float) -> float:\n    \"\"\"Probability of failing in the coming year, given the asset works at `age`.\"\"\"\n    def failed_by(t: float) -> float:\n        return 1 - math.exp(-((t / eta) ** beta))\n    return (failed_by(age + 1) - failed_by(age)) / (1 - failed_by(age))\n\n\ndef allowed(projects: list[Project], plan: frozenset[str], budget: int) -> bool:\n    \"\"\"The rules: within budget, every must-do funded, at most one project per asset.\"\"\"\n    chosen = [p for p in projects if p.pid in plan]\n    assets = [p.asset for p in chosen]\n    return (sum(p.cost for p in chosen) <= budget\n            and all(p.pid in plan for p in projects if p.must_do)\n            and len(assets) == len(set(assets)))\n\n\ndef risk_avoided(project: Project, assets: dict[str, Asset]) -> float:\n    \"\"\"a_i: the yearly failure cost the project's work removes, in $k.\"\"\"\n    # TODO: the asset's yearly failure cost now, less what it is after the work.\n    return -1.0\n\n\ndef most_risk_removed(projects: list[Project], assets: dict[str, Asset],\n                      budget: int) -> tuple[float, frozenset[str]]:\n    \"\"\"The allowed plan with the largest total risk avoided, and that total.\"\"\"\n    # TODO: check every subset of the projects and keep the allowed one that removes the most risk.\n    return 0.0, frozenset()\n\n\nif __name__ == \"__main__\":\n    pumps = {\"K1\": Asset(age=30, cof=900, beta=3.0, eta=40)}\n    work = [Project(\"W1\", \"K1\", \"replace\", 400), Project(\"W2\", \"K1\", \"repair\", 80)]\n    print([round(risk_avoided(p, pumps), 1) for p in work], most_risk_removed(work, pumps, 300))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 7,
+    "code": 3,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "d18d61131164692630b0e6e797a903e3cc2136481557f0b00a0bd80d16a5a108",
+  "starting_code": "from __future__ import annotations\n\nimport math\nfrom dataclasses import dataclass\nfrom itertools import combinations\n\n#: The share of its age an asset keeps after each kind of work.\nAGE_AFTER = {\"replace\": 0.0, \"repair\": 0.5}\n\n\n@dataclass(frozen=True)\nclass Asset:\n    age: float\n    cof: float      # what one failure costs, $k\n    beta: float     # Weibull shape\n    eta: float      # Weibull scale, years\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    asset: str\n    work: str       # a key of AGE_AFTER\n    cost: int\n    must_do: bool = False\n\n\ndef pof_next(age: float, beta: float, eta: float) -> float:\n    \"\"\"Probability of failing in the coming year, given the asset works at `age`.\"\"\"\n    def failed_by(t: float) -> float:\n        return 1 - math.exp(-((t / eta) ** beta))\n    return (failed_by(age + 1) - failed_by(age)) / (1 - failed_by(age))\n\n\ndef allowed(projects: list[Project], plan: frozenset[str], budget: int) -> bool:\n    \"\"\"The rules: within budget, every must-do funded, at most one project per asset.\"\"\"\n    chosen = [p for p in projects if p.pid in plan]\n    assets = [p.asset for p in chosen]\n    return (sum(p.cost for p in chosen) <= budget\n            and all(p.pid in plan for p in projects if p.must_do)\n            and len(assets) == len(set(assets)))\n\n\ndef risk_avoided(project: Project, assets: dict[str, Asset]) -> float:\n    \"\"\"a_i: the yearly failure cost the project's work removes, in $k.\"\"\"\n    # TODO: the asset's yearly failure cost now, less what it is after the work.\n    return -1.0\n\n\ndef most_risk_removed(projects: list[Project], assets: dict[str, Asset],\n                      budget: int) -> tuple[float, frozenset[str]]:\n    \"\"\"The allowed plan with the largest total risk avoided, and that total.\"\"\"\n    # TODO: check every subset of the projects and keep the allowed one that removes the most risk.\n    return 0.0, frozenset()\n\n\nif __name__ == \"__main__\":\n    pumps = {\"K1\": Asset(age=30, cof=900, beta=3.0, eta=40)}\n    work = [Project(\"W1\", \"K1\", \"replace\", 400), Project(\"W2\", \"K1\", \"repair\", 80)]\n    print([round(risk_avoided(p, pumps), 1) for p in work], most_risk_removed(work, pumps, 300))\n",
+  "exercise": {
+    "main_path": "practice/01-foundations/01-optimization-mindset/prose/unit-02/practice-2/pumps.py",
+    "test_path": "practice/01-foundations/01-optimization-mindset/prose/unit-02/practice-2/test_pumps.py",
+    "run_command": [
+      "python3",
+      "practice/01-foundations/01-optimization-mindset/prose/unit-02/practice-2/pumps.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/01-foundations/01-optimization-mindset/prose/unit-02/practice-2/target/report.xml",
+      "practice/01-foundations/01-optimization-mindset/prose/unit-02/practice-2/test_pumps.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_replacement_removes_the_risk_of_its_age_less_the_risk_of_a_new_asset",
+        "kind": "main",
+        "says": "a replacement's coefficient is the asset's yearly failure cost now less that of a new asset"
+      },
+      {
+        "id": "test_a_repair_leaves_the_asset_at_half_its_age",
+        "kind": "edge",
+        "says": "a repair keeps half the asset's age, so it removes less risk than a replacement"
+      },
+      {
+        "id": "test_the_plan_removes_the_most_risk_the_budget_and_the_must_do_allow",
+        "kind": "main",
+        "says": "the plan is the allowed plan with the largest total risk avoided"
+      },
+      {
+        "id": "test_the_best_plan_is_not_the_riskiest_projects_first",
+        "kind": "edge",
+        "says": "funding the biggest risk first is not the best plan"
+      },
+      {
+        "id": "test_a_station_is_never_both_replaced_and_repaired",
+        "kind": "edge",
+        "says": "the same station's risk is never counted twice"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/01-foundations/01-optimization-mindset/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "01-optimization-mindset/README_1.1.2.md",
+      "section": "The Model"
+    },
+    "concepts": [
+      "the plan that removes the most risk is the selection model with risk avoided as its objective, under the same rules",
+      "a project's risk coefficient is the asset's yearly failure cost now less its failure cost after the work"
+    ]
+  }
+}

@@ -1,0 +1,135 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "10-numerics-and-determinism",
+    "41-determinism-and-reproducibility"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Most buses first, then the cheapest such fleet",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A transit agency replaces old buses within a capital budget. The board's rule: replace as many buses as the budget allows, and among the plans that replace that many, spend the least. Many plans replace the most buses, so a single solve could return any of them; the board wants the same answer every time."
+    },
+    {
+      "type": "para",
+      "text": "Write the model first. With $`B`$ the buses, $`c_b`$ the cost of bus $`b`$ and $`K`$ the budget, pass 1 is"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\sum_{b \\in B} x_b \\quad \\text{s.t.} \\quad \\sum_{b \\in B} c_b\\, x_b \\le K \\;\\; \\text{(budget)}, \\qquad x_b \\in \\{0, 1\\}"
+    },
+    {
+      "type": "para",
+      "text": "Write pass 2 in the same notation: its objective, and the row it adds (with a label) so that it cannot give up any of pass 1's buses. Then write `replacement_plan(costs, budget)`: build the model with MathOpt, solve both passes with HiGHS, and return the chosen ids in sorted order. Costs are whole numbers, so a count can be held exactly."
+    },
+    {
+      "type": "para",
+      "text": "About twelve lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nEXACT = mathopt.SolveParameters(relative_gap_tolerance=0.0)\n\n\ndef replacement_plan(costs: dict[str, int], budget: int) -> list[str]:\n    \"\"\"The cheapest of the plans that replace the most buses within the budget, as sorted ids.\"\"\"\n    model = mathopt.Model(name=\"buses\")\n    x = {b: model.add_binary_variable(name=f\"x_{b}\") for b in sorted(costs)}\n    model.add_linear_constraint(sum(costs[b] * x[b] for b in x) <= budget, name=\"budget\")\n    model.maximize(sum(x.values()))\n    most = round(mathopt.solve(model, mathopt.SolverType.HIGHS, params=EXACT).objective_value())\n    model.add_linear_constraint(sum(x.values()) >= most, name=\"keep_count\")\n    model.minimize(sum(costs[b] * x[b] for b in x))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=EXACT)\n    return sorted(b for b in x if result.variable_values(x[b]) > 0.5)\n\n\nif __name__ == \"__main__\":\n    print(replacement_plan({\"B1\": 300, \"B2\": 250, \"B3\": 420, \"B4\": 260}, 820))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nEXACT = mathopt.SolveParameters(relative_gap_tolerance=0.0)\n\n\ndef replacement_plan(costs: dict[str, int], budget: int) -> list[str]:\n    \"\"\"The cheapest of the plans that replace the most buses within the budget, as sorted ids.\"\"\"\n    model = mathopt.Model(name=\"buses\")\n    x = {b: model.add_binary_variable(name=f\"x_{b}\") for b in sorted(costs)}\n    model.add_linear_constraint(sum(costs[b] * x[b] for b in x) <= budget, name=\"budget\")\n    # TODO: pass 1, the row that keeps its count, pass 2.\n    return sorted(costs)\n\n\nif __name__ == \"__main__\":\n    print(replacement_plan({\"B1\": 300, \"B2\": 250, \"B3\": 420, \"B4\": 260}, 820))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "db1f800d5d9cfe16e242a97f7ce4982f8e0cc004b80db248d14723218e2779e5",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nEXACT = mathopt.SolveParameters(relative_gap_tolerance=0.0)\n\n\ndef replacement_plan(costs: dict[str, int], budget: int) -> list[str]:\n    \"\"\"The cheapest of the plans that replace the most buses within the budget, as sorted ids.\"\"\"\n    model = mathopt.Model(name=\"buses\")\n    x = {b: model.add_binary_variable(name=f\"x_{b}\") for b in sorted(costs)}\n    model.add_linear_constraint(sum(costs[b] * x[b] for b in x) <= budget, name=\"budget\")\n    # TODO: pass 1, the row that keeps its count, pass 2.\n    return sorted(costs)\n\n\nif __name__ == \"__main__\":\n    print(replacement_plan({\"B1\": 300, \"B2\": 250, \"B3\": 420, \"B4\": 260}, 820))\n",
+  "exercise": {
+    "main_path": "practice/10-numerics-and-determinism/41-determinism-and-reproducibility/prose/unit-03/practice-1/fleet.py",
+    "test_path": "practice/10-numerics-and-determinism/41-determinism-and-reproducibility/prose/unit-03/practice-1/test_fleet.py",
+    "run_command": [
+      "python3",
+      "practice/10-numerics-and-determinism/41-determinism-and-reproducibility/prose/unit-03/practice-1/fleet.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/10-numerics-and-determinism/41-determinism-and-reproducibility/prose/unit-03/practice-1/target/report.xml",
+      "practice/10-numerics-and-determinism/41-determinism-and-reproducibility/prose/unit-03/practice-1/test_fleet.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_plan_fits_the_budget_and_names_buses_in_order",
+        "kind": "main",
+        "says": "the plan is a sorted list of bus ids whose total cost fits the budget"
+      },
+      {
+        "id": "test_no_plan_replaces_more_buses",
+        "kind": "edge",
+        "says": "the second pass keeps the first pass's count of buses"
+      },
+      {
+        "id": "test_among_the_largest_plans_the_cheapest_wins",
+        "kind": "edge",
+        "says": "the second pass, not the first, decides which buses make up that count"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/10-numerics-and-determinism/41-determinism-and-reproducibility/prose/unit-03/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "41-determinism-and-reproducibility/README_10.2.3.md",
+      "section": "A Second Real Criterion, Solved in Two Passes, Picks One Plan"
+    },
+    "concepts": [
+      "a second criterion solved in a second pass, holding the first's value with a row"
+    ]
+  }
+}

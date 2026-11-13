@@ -1,0 +1,149 @@
+{
+  "project_api": 1,
+  "title": "Keep the access windows, the weeks off and the must-trims",
+  "before": "../../../../54-project-vegetation-crews/steps/04",
+  "after": "../../../../54-project-vegetation-crews/steps/05",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the tiny season matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "vegcrew/data.py",
+      "signature": "def spans(raw: list) -> Weeks",
+      "contract": "Turns a list of [first, last] pairs into a tuple of (first, last) int pairs, both weeks included.",
+      "idea": "A calendar is data: spans of weeks, read once and kept immutable.",
+      "lesson": {
+        "title": "14.1.5 Weather and Access Windows: Calendars and Optional Work",
+        "href": "../../../../14-growing-real-projects/54-project-vegetation-crews/units/unit-05/14.1.5-weather-and-access-windows-calendars-and-optional-work.unit.html"
+      },
+      "stub": "return ()"
+    },
+    {
+      "file": "vegcrew/data.py",
+      "signature": "def season_from_dict(raw: dict) -> Season",
+      "contract": "Also reads each circuit's windows (none: the whole season) and must flag (none: optional), and the season's crew_off, crew id to spans of weeks off (none: every crew works every week). Circuit gains `windows` and `must`, after `growth`; Season gains `crew_off: dict[str, Weeks]` between `months` and `circuits`, so a Season is built as Season(name, budget, crews, months, crew_off, circuits). Weeks is tuple[tuple[int, int], ...], a module-level alias in data.py.",
+      "idea": "A missing calendar column means no calendar, so older exports still load.",
+      "lesson": {
+        "title": "14.1.5 Weather and Access Windows: Calendars and Optional Work",
+        "href": "../../../../14-growing-real-projects/54-project-vegetation-crews/units/unit-05/14.1.5-weather-and-access-windows-calendars-and-optional-work.unit.html"
+      }
+    },
+    {
+      "file": "vegcrew/generate.py",
+      "signature": "def scenario(size: str = \"small\", seed: int = 54) -> dict",
+      "contract": "Also, from its own stream named 'access', one circuit at a time in order: must when a draw of random() is below 0.15; then a River circuit has the window [8, last week], a Hills circuit has the windows [0, 5] and [14, last week] when a second draw is below 0.5, and every other circuit no windows. The season's crew_off gives K1 the weeks [10, 11] and, with more than one crew, the last crew (K2 in the small season, K6 in the medium) the weeks [14, 17]. The season's dict holds `crew_off` between `months` and `circuits`.",
+      "idea": "A column drawn from its own stream leaves the values of every earlier column as they were.",
+      "lesson": {
+        "title": "14.1.5 Weather and Access Windows: Calendars and Optional Work",
+        "href": "../../../../14-growing-real-projects/54-project-vegetation-crews/units/unit-05/14.1.5-weather-and-access-windows-calendars-and-optional-work.unit.html"
+      }
+    },
+    {
+      "file": "vegcrew/planner.py",
+      "signature": "def start_domain(c: Circuit, h: int) -> cp_model.Domain",
+      "contract": "Returns every first week that keeps a trim of the circuit's weeks inside one of its windows (the whole season when it has none) and inside the season: one interval per window long enough, and an empty domain when none is.",
+      "idea": "An access window is a domain on the start, one interval per window, so a trim never runs across a closed week.",
+      "lesson": {
+        "title": "4.5.2 Cumulative Resources: Crews and Outage Windows",
+        "href": "../../../../04-google-or-tools-in-depth/16-cpsat-scheduling/units/unit-02/4.5.2-cumulative-resources-crews-and-outage-windows.unit.html"
+      },
+      "stub": "return cp_model.Domain.from_intervals([])"
+    },
+    {
+      "file": "vegcrew/planner.py",
+      "signature": "def build(season: Season) -> TrimModel",
+      "contract": "As before, with each start taking its values from start_domain, no crew options for a circuit whose domain is empty, each crew's weeks off as fixed intervals in that crew's no-overlap, and every must circuit trimmed.",
+      "idea": "A crew's weeks off are fixed intervals its trims may not overlap.",
+      "lesson": {
+        "title": "4.5.1 Interval Variables and `NoOverlap`",
+        "href": "../../../../04-google-or-tools-in-depth/16-cpsat-scheduling/units/unit-01/4.5.1-interval-variables-and-nooverlap.unit.html"
+      }
+    },
+    {
+      "file": "vegcrew/planner.py",
+      "signature": "def make_plan(season: Season) -> Plan",
+      "contract": "As before, keeping every calendar; when the must circuits cannot all be trimmed, a Plan with the status INFEASIBLE and no trims. (The reference also takes an `overrides` argument that it ignores, typed with a stub Override dataclass in data.py, ready for the next lesson; this step's tests do not use it.)",
+      "idea": "A must is a hard rule, so a season that cannot keep it has no plan.",
+      "lesson": {
+        "title": "14.1.5 Weather and Access Windows: Calendars and Optional Work",
+        "href": "../../../../14-growing-real-projects/54-project-vegetation-crews/units/unit-05/14.1.5-weather-and-access-windows-calendars-and-optional-work.unit.html"
+      }
+    },
+    {
+      "file": "vegcrew/report.py",
+      "signature": "def format_plan(season: Season, plan: Plan) -> str",
+      "contract": "Each crew's week chart also shows its weeks off, as 'x'; a trim never covers one, and the rest of the line is as before.",
+      "idea": "The report shows the calendar the plan was made to keep.",
+      "lesson": {
+        "title": "14.1.5 Weather and Access Windows: Calendars and Optional Work",
+        "href": "../../../../14-growing-real-projects/54-project-vegetation-crews/units/unit-05/14.1.5-weather-and-access-windows-calendars-and-optional-work.unit.html"
+      }
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_data.py::test_the_loader_ignores_columns_it_does_not_use",
+      "kept",
+      "the loader ignores columns it does not use"
+    ],
+    [
+      "tests/test_planner.py::test_the_plan_matches_every_subset_and_order_of_the_tiny_season",
+      "kept",
+      "with no calendars, the plan carries as little risk as the best subset and order of the tiny season"
+    ],
+    [
+      "tests/test_calendars.py::test_a_trim_stays_inside_its_access_window",
+      "main",
+      "a trim stays inside its circuit's access window"
+    ],
+    [
+      "tests/test_calendars.py::test_a_window_shorter_than_the_trim_leaves_it_for_next_season",
+      "main",
+      "a circuit whose window is shorter than its trim waits for next season"
+    ],
+    [
+      "tests/test_calendars.py::test_no_crew_works_in_its_weeks_off",
+      "main",
+      "no crew works in its weeks off"
+    ],
+    [
+      "tests/test_calendars.py::test_the_crew_with_no_time_off_takes_the_early_trim",
+      "main",
+      "the crew with no time off takes the early trim"
+    ],
+    [
+      "tests/test_calendars.py::test_a_must_circuit_is_trimmed_even_when_it_removes_less_risk",
+      "main",
+      "a must circuit is trimmed even where another would carry less risk"
+    ],
+    [
+      "tests/test_calendars.py::test_must_circuits_that_cannot_all_fit_make_the_season_infeasible",
+      "main",
+      "must circuits that cannot all fit make the season infeasible"
+    ],
+    [
+      "tests/test_calendars.py::test_a_trim_fits_inside_one_window_never_across_two",
+      "edge",
+      "a trim fits inside one of two windows, never across the closed weeks between them"
+    ]
+  ],
+  "plants": {
+    "tests/test_calendars.py::test_a_trim_fits_inside_one_window_never_across_two": [
+      [
+        "vegcrew/planner.py",
+        "    return cp_model.Domain.from_intervals(\n        [[first, min(last, h - 1) - c.weeks + 1] for first, last in windows\n         if min(last, h - 1) - c.weeks + 1 >= first])\n",
+        "    first, last = windows[0][0], min(windows[-1][1], h - 1)\n    return cp_model.Domain.from_intervals([[first, last - c.weeks + 1]] if last - c.weeks + 1 >= first else [])\n"
+      ]
+    ]
+  },
+  "cites": {
+    "path": "54-project-vegetation-crews/README_14.1.5.md",
+    "section": null
+  }
+}

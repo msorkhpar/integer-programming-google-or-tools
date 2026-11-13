@@ -1,0 +1,92 @@
+{
+  "project_api": 1,
+  "title": "Check each requirement's format, as strict validation does",
+  "before": "../../../../58-project-sdd-openspec/steps/00",
+  "after": "../../../../58-project-sdd-openspec/steps/01",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the tiny portfolio matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "specs_check.py",
+      "signature": "def check_requirement(req: Requirement, where: str) -> list[Issue]",
+      "contract": "The issues of one requirement, each an Issue(level, where, message) with the `where` it is given, in this order: an ERROR 'requirement \"<name>\" has no text under its header' when req.text is empty, or else a WARNING 'requirement \"<name>\" should contain SHALL or MUST in its text' when the text has neither as a whole upper-case word (KEYWORD); an ERROR 'requirement \"<name>\" must include at least one scenario' when no scenario in req.scenarios has a non-empty body; then, for each scenario with a body, a WARNING 'scenario \"<name>\" is missing <what>' when has_steps finds no WHEN or GIVEN step ('a WHEN or GIVEN step') or no THEN step ('a THEN step'), both joined by ' and ' when both are missing. An empty list when the requirement keeps every rule.",
+      "idea": "A requirement states one behaviour with SHALL or MUST in its text, not only its header; a scenario counts only with steps under it, and needs a trigger and an outcome. Strict validation fails on warnings too.",
+      "lesson": {
+        "title": "14.4.1 Baseline Specs: Write Down What the Planner Already Does",
+        "href": "../../../../14-growing-real-projects/58-project-sdd-openspec/units/unit-01/14.4.1-baseline-specs-write-down-what-the-planner-already-does.unit.html"
+      }
+    },
+    {
+      "file": "main.py",
+      "signature": "def main() -> None",
+      "contract": "As before, then one more line about the project's living specs: 'openspec: <n> specs, <r> requirements, <s> scenarios; strict validation passed' (or FAILED), counting openspec/specs/*/spec.md next to main.py, their requirements and scenarios, and passing when specs_check.validate's issues pass in strict mode for every item.",
+      "idea": "The project checks its own specs on every run, as `openspec validate --strict` would.",
+      "lesson": {
+        "title": "14.4.1 Baseline Specs: Write Down What the Planner Already Does",
+        "href": "../../../../14-growing-real-projects/58-project-sdd-openspec/units/unit-01/14.4.1-baseline-specs-write-down-what-the-planner-already-does.unit.html"
+      }
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_spec_checks.py::test_a_requirement_with_no_text_is_an_error",
+      "main",
+      "a requirement with no text under its header is an error"
+    ],
+    [
+      "tests/test_spec_checks.py::test_text_without_shall_or_must_is_a_warning",
+      "main",
+      "text without SHALL or MUST is a warning"
+    ],
+    [
+      "tests/test_spec_checks.py::test_a_keyword_only_in_the_header_does_not_count",
+      "edge",
+      "a SHALL in the requirement's header alone does not count"
+    ],
+    [
+      "tests/test_spec_checks.py::test_a_requirement_without_scenarios_is_an_error",
+      "main",
+      "a requirement with no scenario is an error"
+    ],
+    [
+      "tests/test_spec_checks.py::test_an_empty_scenario_does_not_count",
+      "main",
+      "a scenario heading with nothing under it does not count"
+    ],
+    [
+      "tests/test_spec_checks.py::test_a_scenario_without_then_is_a_warning",
+      "main",
+      "a scenario without a THEN step is a warning"
+    ],
+    [
+      "tests/test_spec_checks.py::test_strict_mode_fails_on_a_warning",
+      "main",
+      "strict mode fails on a warning that plain mode passes"
+    ],
+    [
+      "tests/test_spec_checks.py::test_these_specs_pass_strict_validation",
+      "main",
+      "this project's own specs pass strict validation"
+    ]
+  ],
+  "plants": {
+    "tests/test_spec_checks.py::test_a_keyword_only_in_the_header_does_not_count": [
+      [
+        "specs_check.py",
+        "    elif not KEYWORD.search(req.text):\n",
+        "    elif not KEYWORD.search(req.name + \" \" + req.text):\n"
+      ]
+    ]
+  },
+  "cites": {
+    "path": "58-project-sdd-openspec/README_14.4.1.md",
+    "section": null
+  }
+}

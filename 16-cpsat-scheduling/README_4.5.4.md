@@ -1,0 +1,367 @@
+# 4.5.4 Scheduling Vegetation Crews Across Circuits
+
+This lesson puts the module together into the schedule GridCap's vegetation manager actually
+needs. Twelve jobs across four regions, a pool of three crews with one held back for storm duty in
+weeks 12 to 15, circuit clears that must sit inside their region's outage windows, one outage per
+region at a time: all of lesson 4.5.2's rules at once. And now a due week for every job, with a
+weight that says how much it matters.
+
+Why due weeks? Trees keep growing during the season. A circuit whose conductors are already close
+to the canopy (GridCap's asset-health model gives it a short remaining useful life) carries a
+higher chance of a tree contact, an outage or a fire for every week its trim waits. `season.py`
+turns that into two numbers per job (GridCap and these rules are fictional):
+
+- the **due week** $`\delta_j`$: week 6 if the asset's remaining useful life is 2 years or less,
+  week 12 if it is 15 or less, week 20 otherwise;
+- the **weight** $`w_j`$: the asset's consequence of failure divided by 100, read as $k of risk
+  carried for every week the job finishes after its due week.
+
+The makespan of lessons 4.5.1 and 4.5.2 is blind to all of this. The manager's question is "which
+schedule carries the least risk?", and the answer is a different objective: the **risk-weighted
+lateness**, the sum over jobs of weight times weeks late.
+
+## Due Weeks as Hard Rules Make the Season Infeasible
+
+The first idea is to make every due week a rule, $`s_j + d_j \le \delta_j`$:
+
+```python
+hard = build(season, **RULES)
+for j in season:
+    hard.model.add(hard.end(j.jid) <= j.due)
+print("every due week as a hard rule:", solve(hard.model)[1])
+```
+
+```text
+every due week as a hard rule: INFEASIBLE
+```
+
+`INFEASIBLE` means CP-SAT proved that no schedule meets every rule. Here you can see why by hand.
+Five jobs are due at week 6: P004 (6 weeks, 1 crew), P006 (4 weeks, 2 crews), P008 (6 weeks,
+1 crew), P011 (4 weeks, 1 crew) and P012 (6 weeks, 2 crews). They need
+$`6 + 8 + 6 + 4 + 12 = 36`$ crew-weeks before week 6, and three crews supply 18. No ordering can fix
+that. A due week that cannot always be met is not a rule but a wish, and a wish belongs in the
+objective, where it can be traded against other wishes.
+
+## Lateness Is max(0, end − due), and Its Weight Is the Risk Carried
+
+The **lateness** of job $`j`$ is how many weeks it finishes after its due week, and 0 if it
+finishes on time or early:
+
+```math
+L_j = \max\big(0,\; s_j + d_j - \delta_j\big)
+```
+
+The floor at 0 matters: finishing early earns nothing. Without it, a job that ends three weeks early
+would count $`-3`$ and pay for another job's lateness, which is not how risk works. CP-SAT writes the
+max directly with `add_max_equality`, as the makespan was written, and the objective weights each
+lateness by its job's risk:
+
+```math
+\min \; \sum_{j \in J} w_j\, L_j
+```
+
+```python
+def minimize_lateness(s: Season, horizon: int = HORIZON) -> None:
+    """late_j = max(0, end_j - due_j); minimize the sum of weight_j * late_j."""
+    for j in s.jobs:
+        s.late[j.jid] = s.model.new_int_var(0, horizon, f"late_{j.jid}")
+        s.model.add_max_equality(s.late[j.jid], [0, s.end(j.jid) - j.due])
+    s.model.minimize(sum(j.weight * s.late[j.jid] for j in s.jobs))
+```
+
+`add_max_equality` makes $`L_j`$ *equal* to the max, so the value you read back is the lateness
+itself. A MIP writes the same objective with two rows, $`L_j \ge 0`$ and
+$`L_j \ge s_j + d_j - \delta_j`$, and lets the minimization push $`L_j`$ down onto the larger of the
+two; that also works here, because a smaller $`L_j`$ always lowers the objective. The equality is
+simply exact whatever the objective.
+
+`season_lateness.py` builds the full season (every rule of lesson 4.5.2) with this objective:
+
+```python
+s = build(season, **RULES)
+minimize_lateness(s)
+solver, status = solve(s.model)
+best = starts(s, solver)
+```
+
+```text
+least risk: OPTIMAL, risk-weighted lateness $360k, makespan 24
+  P004 Plains trim  crews 1  weeks  0- 5  due  6
+  P008 Ridge  clear crews 1  weeks  0- 5  due  6
+  P011 Coast  trim  crews 1  weeks  0- 3  due  6
+  P015 Coast  clear crews 1  weeks  4- 5  due 12
+  P010 Valley clear crews 1  weeks  6- 9  due 12
+  P012 Coast  widen crews 2  weeks  6-11  due  6  late 6 x 22
+  P003 Valley clear crews 1  weeks 10-11  due 20
+  P035 Ridge  widen crews 2  weeks 12-17  due 20
+  P014 Coast  trim  crews 1  weeks 16-17  due 20
+  P018 Valley clear crews 1  weeks 18-23  due 20  late 4 x 30
+  P020 Ridge  widen crews 2  weeks 18-19  due 20
+  P006 Valley widen crews 2  weeks 20-23  due  6  late 18 x 6
+rules broken: none
+```
+
+Three jobs are late: P012 by 6 weeks at $22k a week, P018 by 4 at $30k, and P006 by 18 at $6k.
+$`132 + 120 + 108 = 360`$, the objective. Compare the two late corridors due at week 6. P006, with
+the lowest weight of the season ($6k a week), is the job left to the very end of the season, 18
+weeks late. P012, at $22k, starts at week 6: in weeks 0 to 5 the three crews are on P004, P008 and P011
+(also due at week 6) and P015, which leaves no week with the two crews P012 needs. `OPTIMAL` says that no schedule keeping every rule carries
+less than $360k, so any other way of sharing out the lateness costs at least as much.
+
+<!-- practice 1 -->
+
+## The Shortest Season Is Not the Safest One
+
+The same rules with the makespan objective, and the risk of the schedule it returns, computed
+afterwards from its starts:
+
+```python
+fast = build(season, **RULES)
+minimize_makespan(fast)
+solver, status = solve(fast.model)
+quick = starts(fast, solver)
+print(f"shortest season: {status}, makespan {solver.value(fast.makespan)}, "
+      f"risk-weighted lateness ${risk(season, quick)}k")
+```
+
+```text
+shortest season: OPTIMAL, makespan 24, risk-weighted lateness $1038k
+```
+
+Both schedules end at week 24, and the makespan objective cannot tell them apart. Their risk differs
+almost threefold: $1,038k against $360k. Lesson 4.5.1 noted that, for one crew, any order of the jobs
+gave the same makespan; with due weeks the order is the whole question, and only an objective that
+sees the due weeks can answer it.
+
+This is a general lesson about objectives, not about scheduling. An objective is a statement of what
+the planner values, and the solver optimizes exactly that and nothing else. Two optimal schedules
+for two objectives can share every rule and differ in everything the planner cares about. When a
+schedule looks wrong, ask first whether the objective says what was meant. When the planners care
+about both, rank them: first the least risk, then, among schedules with that risk, the shortest
+season. That is a prioritized objective, which lesson 4.3.2 builds in MathOpt with
+`add_auxiliary_objective`. Lesson 8.2.1, later in the course, treats such hierarchies of objectives
+in depth.
+
+## A Checker Written From the Rules Proves the Schedule
+
+How do you know the model says what the planners said? Write the rules a second time, in plain
+Python, as a function that takes a schedule and lists every rule it breaks, and run it on what the
+solver returns. The checker shares no code with the model: it reads the same data, and nothing
+else.
+
+```python
+def violations(jobs: list[Job], start: dict[str, int], standby: dict = STANDBY) -> list[str]:
+    found = []
+    for j in jobs:
+        s, e = start[j.jid], start[j.jid] + j.weeks
+        if s < 0 or e > HORIZON:
+            found.append(f"{j.jid} runs outside the season (weeks {s}-{e - 1})")
+        if j.needs_outage and not any(a <= s and e <= b for a, b in OUTAGE_WINDOWS[j.region]):
+            found.append(f"{j.jid} is not inside one {j.region} outage window (weeks {s}-{e - 1})")
+    for w in range(HORIZON):
+        away = sum(n for first, (weeks, n) in standby.items() if first <= w < first + weeks)
+        busy = sum(j.crews for j in jobs if start[j.jid] <= w < start[j.jid] + j.weeks)
+        if busy > CREWS - away:
+            found.append(f"week {w}: {busy} crews at work, {CREWS - away} available")
+```
+
+(The function goes on with the one-outage-per-region rule, pair by pair.) It is slow and obvious on
+purpose: a loop over weeks, a sum per week, a test per rule, each written the way the planner says
+it. `season_lateness.py` already printed its verdict on the least-risk schedule, `rules broken:
+none`. A checker earns its keep when it can fail, so `check_demo.py` also runs it on two hand edits
+of the solver's schedule:
+
+```text
+solver's schedule: risk $360k, rules broken: none
+P015 moved to week 9: risk $360k
+   P015 is not inside one Coast outage window (weeks 9-10)
+   week 9: 4 crews at work, 3 available
+   week 10: 4 crews at work, 3 available
+P003 moved to week 8: risk $360k
+   week 8: 4 crews at work, 3 available
+   week 9: 4 crews at work, 3 available
+   P003 and P010 de-energize Valley circuits at the same time
+```
+
+Each edit breaks rules the risk alone would never show: the risk is the same $360k, since neither
+job is late. In a test suite (the section 12 lesson *Unit-testing one constraint at a time* builds one), the checker runs on every schedule the
+model returns, for every instance, so a model change that quietly drops a rule fails the build
+instead of reaching a planner.
+
+<!-- practice 2 -->
+
+## Named Crews Come From Handing Out Free Crews in Start Order
+
+The cumulative constraint promises that no week needs more crews than there are. It does not say
+*which* crew does which job, and a crew foreman needs a name on the work order. Can every pool
+schedule be turned into named crews? Yes, and with a simple rule: go through the jobs (and the
+standby) in order of start week, and give each the crews that are free at its start.
+
+```python
+for s_, e, need, what in sorted(work):
+    free = sorted(c for c, f in free_from.items() if f <= s_)
+    assert len(free) >= need, f"no crews left for {what}"
+    crew_of[what] = free[:need]
+    for c in free[:need]:
+        free_from[c] = e
+```
+
+Why does it never run short? Think of a job that needs $`k`$ crews as $`k`$ copies of the same
+interval. At the moment a job starts, the crews still busy are exactly those on jobs that started
+earlier and have not ended, and the cumulative constraint says those, plus this job's demand, fit in
+the pool. So enough crews are free. (This is the classic result that intervals can be coloured with
+as many colours as the most of them that overlap at one time.) Note what makes it work: the jobs are
+handed out in start order. In any other order a crew could be booked for a later job first and be
+missing for an earlier one.
+
+```text
+crew A: P011 0-3, P015 4-5, P010 6-9, P003 10-11, standby 12-15, P014 16-17, P020 18-19, P006 20-23
+crew B: P004 0-5, P012 6-11, P035 12-17, P020 18-19, P006 20-23
+crew C: P008 0-5, P012 6-11, P035 12-17, P018 18-23
+```
+
+The corridor jobs appear on two crews each (P012 on B and C, P020 on A and B), every crew's jobs
+are in sequence without overlap, and crew A takes the storm standby. The `assert` in the loop never
+fired. A model with named crews from the start (one optional interval per job and crew, as in lesson
+4.5.1) would give the same answer with many more variables; when crews are interchangeable, schedule
+the pool and name the crews afterwards.
+
+<!-- practice 3 -->
+
+## The Model
+
+The season model `season_lateness.py` solves, in one place. Lesson 4.5.2 built the rules; this
+lesson added the due weeks, the lateness variables and the objective.
+
+**Sets.** $`J`$ the jobs; $`O \subseteq J`$ the circuit clears; $`R`$ the regions, $`r(j)`$ the
+region of job $`j`$; $`\mathcal{W}_r`$ the outage windows of region $`r`$, each a span $`[a, b)`$.
+
+**Parameters.** $`d_j`$, the weeks of job $`j`$; $`c_j`$, the crews it holds; $`\delta_j`$, its due
+week; $`w_j`$, its weight in $k per week late; $`K = 3`$ crews; $`H = 30`$ weeks; the standby,
+$`n = 1`$ crew away in weeks $`[12, 16)`$.
+
+**Variables.**
+
+```math
+\begin{aligned}
+& s_j \in \{0, \dots, H - d_j\} && \forall j \in J \setminus O && \text{(start week)} \\
+& s_j \in \textstyle\bigcup_{[a,b) \in \mathcal{W}_{r(j)},\ b - d_j \ge a} \{a, \dots, b - d_j\} && \forall j \in O && \text{(start inside a window)} \\
+& L_j \in \{0, \dots, H\} && \forall j \in J && \text{(weeks late)}
+\end{aligned}
+```
+
+**Objective.**
+
+```math
+\min \; \sum_{j \in J} w_j\, L_j \qquad \leftarrow \text{this lesson}
+```
+
+**Constraints.**
+
+```math
+\begin{aligned}
+& \textstyle\sum_{j \in J \,:\, s_j \le t < s_j + d_j} c_j \;+\; n\,[12 \le t < 16] \;\le\; K && \forall t \in \{0, \dots, H-1\} && \text{(crews)} \\
+& \text{NoOverlap}\big(\{[s_j, s_j + d_j) : j \in O,\ r(j) = r\}\big) && \forall r \in R && \text{(outage}_r) \\
+& L_j = \max\big(0,\ s_j + d_j - \delta_j\big) && \forall j \in J && \text{(late}_j) \quad \leftarrow \text{this lesson}
+\end{aligned}
+```
+
+| Label | In `season_model.py` |
+| --- | --- |
+| start inside a window | `new_int_var_from_domain(start_domain(j, horizon), ...)` |
+| crews | `add_cumulative(intervals, demands, crews)` with the standby interval |
+| outage$`_r`$ | `add_no_overlap(clears)` per region |
+| late$`_j`$ | `add_max_equality(s.late[j.jid], [0, s.end(j.jid) - j.due])` |
+| objective | `minimize(sum(j.weight * s.late[j.jid] for j in s.jobs))` |
+
+## Summary
+
+- **Due weeks as hard rules make the season infeasible.** Five jobs due at week 6 need 36
+  crew-weeks against 18; a target that cannot always be met belongs in the objective.
+- **Lateness is max(0, end − due), and its weight is the risk carried.** `add_max_equality` with 0
+  in the list; minimize the weighted sum. The least-risk schedule carries $360k.
+- **The shortest season is not the safest one.** Both objectives give week 24; the makespan
+  schedule carries $1,038k of risk. An objective optimizes what it says and nothing else.
+- **A checker written from the rules proves the schedule.** Plain Python, no shared code with the
+  model, run on every schedule; test that it can fail.
+- **Named crews come from handing out free crews in start order.** The cumulative constraint
+  guarantees the hand-out never runs short.
+
+## Reference
+
+| Quantity | Formula | In CP-SAT |
+| --- | --- | --- |
+| end | $`s_j + d_j`$ | `task.end_expr()` |
+| lateness | $`\max(0, s_j + d_j - \delta_j)`$ | `add_max_equality(late, [0, end - due])` |
+| tardiness flag | $`L_j \ge 1`$ | a Boolean `b` with `add(late >= 1).only_enforce_if(b)` and `add(late == 0).only_enforce_if(~b)` |
+| earliness | $`\max(0, \delta_j - s_j - d_j)`$ | `add_max_equality(early, [0, due - end])` |
+| makespan | $`\max_j (s_j + d_j)`$ | `add_max_equality(makespan, ends)` |
+
+| Objective | What it rewards |
+| --- | --- |
+| makespan | ending the season early, whatever the order |
+| total lateness $`\sum L_j`$ | fewer late weeks, every job alike |
+| weighted lateness $`\sum w_j L_j`$ | fewer late weeks where the risk is highest |
+| number of late jobs | as few late jobs as possible, however late they are |
+
+**Further reading:** OR-Tools,
+[The Job Shop Problem](https://developers.google.com/optimization/scheduling/job_shop) and
+[Employee Scheduling](https://developers.google.com/optimization/scheduling/employee_scheduling),
+the two models this module grew from; the CP-SAT samples
+[`cumulative_variable_profile_sample_sat.py`](https://github.com/google/or-tools/blob/stable/ortools/sat/samples/cumulative_variable_profile_sample_sat.py),
+whose `check_solution` re-computes the load minute by minute after the solve, the habit this
+lesson's checker follows, and
+[`ranking_sample_sat.py`](https://github.com/google/or-tools/blob/stable/ortools/sat/samples/ranking_sample_sat.py),
+which ranks the jobs on one resource with order literals, for when the order itself must be
+reported; the CP-SAT Primer,
+[Advanced Modeling](https://d-krupke.github.io/cpsat-primer/advanced_modelling.html), on
+intervals, presence literals and cumulative.
+
+## Challenges
+
+1. Raise P006's weight to 30 in `season.py` and predict which job takes its place at the end of the
+   season. Then run `season_lateness.py`.
+2. Minimize the number of late jobs instead (one Boolean per job, as in the Reference table).
+   Predict whether it is more or less than three, and what the risk-weighted lateness becomes.
+3. In `crew_assignment.py`, hand out crews in order of job id instead of start week. Find the job
+   for which the `assert` fires.
+
+## Design Note: Risk Weights Are a Model Too
+
+The weights here are a crude proxy: consequence of failure over 100, flat for every week late. A
+real program would make the risk grow with the weeks (a tree grows into the line faster in midsummer)
+and with the circuit's condition. Two things carry over whatever the weights are. First, the
+objective is linear in the lateness, so a job's weight is exactly the price of one week's delay of
+that job, and a planner can read it that way. Second, the weights are data: keep them in the data
+set, next to the due weeks, where the asset-health team can review them, rather than in the model
+code. When they change, the schedule changes, and the checker still proves it keeps every rule.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson
+shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy
+of the code, so the course's own files never change.
+
+**season_lateness.py.** The full season: due weeks as hard rules, then the makespan objective with
+its risk, then the least-risk schedule and the checker's verdict (*Due Weeks as Hard Rules Make the
+Season Infeasible*, *Lateness Is max(0, end − due)*, *The Shortest Season Is Not the Safest One*).
+*Try:* Remove the storm standby from `RULES`. Predict whether the least risk goes down, and by how
+much at most.
+
+- Program: [season_lateness.py](src/season_lateness.py)
+
+**check_demo.py.** The checker on the solver's schedule and on two hand edits (*A Checker Written
+From the Rules Proves the Schedule*). *Try:* Move P020 to week 12. Predict which rules break.
+
+- Program: [check_demo.py](src/check_demo.py)
+
+**crew_assignment.py.** Turns the least-risk pool schedule into named crews A, B and C (*Named
+Crews Come From Handing Out Free Crews in Start Order*). *Try:* Sort the free crews in reverse
+order. Predict whether the hand-out still succeeds.
+
+- Program: [crew_assignment.py](src/crew_assignment.py)
+
+**schedule_check.py.** The checker and the risk function, written from the rules with no solver. It
+runs nothing itself.
+
+- Library: [schedule_check.py](src/schedule_check.py)

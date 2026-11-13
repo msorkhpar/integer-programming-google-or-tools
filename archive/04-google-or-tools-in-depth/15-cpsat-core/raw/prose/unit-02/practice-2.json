@@ -1,0 +1,143 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "15-cpsat-core"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Site rules for a cold-storage warehouse",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A cold-storage warehouse (not GridCap) plans each day with a handful of decisions, made for you by `site_variables(model)`: four Booleans (`night`, `freezer`, `dock_a`, `dock_b`) and three counts (`night_staff` from 0 to 20, `frozen_orders` from 0 to 500, `forklifts` from 0 to 6). The site manager's rules:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\text{night} &\\Rightarrow \\text{night\\_staff} \\ge \\text{min\\_night} && \\text{(crew)} \\\\\n\\lnot\\,\\text{night} &\\Rightarrow \\text{night\\_staff} = 0 && \\text{(no\\_shift)} \\\\\n\\lnot\\,\\text{freezer} &\\Rightarrow \\text{frozen\\_orders} = 0 && \\text{(frozen)} \\\\\n(\\text{dock\\_a} \\land \\text{dock\\_b}) &\\Rightarrow \\text{forklifts} \\ge \\text{forklifts\\_both} && \\text{(docks)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "($`\\land`$ is AND.) Write `add_site_rules(model, v, min_night, forklifts_both)` in `site_rules.py`, where `v` is the dict `site_variables` returns. Each rule is one linear row switched by the right literals; no big-M. The tests fix some decisions and ask CP-SAT whether the rules allow them. Four lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef site_variables(model: cp_model.CpModel) -> dict:\n    \"\"\"The warehouse's decisions for one day.\"\"\"\n    return {\n        \"night\": model.new_bool_var(\"night\"),            # the night shift runs\n        \"freezer\": model.new_bool_var(\"freezer\"),        # the freezer room is open\n        \"dock_a\": model.new_bool_var(\"dock_a\"),          # dock A is open\n        \"dock_b\": model.new_bool_var(\"dock_b\"),          # dock B is open\n        \"night_staff\": model.new_int_var(0, 20, \"night_staff\"),\n        \"frozen_orders\": model.new_int_var(0, 500, \"frozen_orders\"),\n        \"forklifts\": model.new_int_var(0, 6, \"forklifts\"),\n    }\n\n\ndef add_site_rules(model: cp_model.CpModel, v: dict, min_night: int, forklifts_both: int) -> None:\n    \"\"\"The site rules, each a linear row switched by literals.\"\"\"\n    model.add(v[\"night_staff\"] >= min_night).only_enforce_if(v[\"night\"])\n    model.add(v[\"night_staff\"] == 0).only_enforce_if(~v[\"night\"])\n    model.add(v[\"frozen_orders\"] == 0).only_enforce_if(~v[\"freezer\"])\n    model.add(v[\"forklifts\"] >= forklifts_both).only_enforce_if(v[\"dock_a\"], v[\"dock_b\"])\n\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    v = site_variables(model)\n    add_site_rules(model, v, 4, 3)\n    model.maximize(v[\"frozen_orders\"] - 10 * v[\"forklifts\"])\n    solver = cp_model.CpSolver()\n    print(solver.status_name(solver.solve(model)), {k: solver.value(x) for k, x in v.items()})\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef site_variables(model: cp_model.CpModel) -> dict:\n    \"\"\"The warehouse's decisions for one day.\"\"\"\n    return {\n        \"night\": model.new_bool_var(\"night\"),            # the night shift runs\n        \"freezer\": model.new_bool_var(\"freezer\"),        # the freezer room is open\n        \"dock_a\": model.new_bool_var(\"dock_a\"),          # dock A is open\n        \"dock_b\": model.new_bool_var(\"dock_b\"),          # dock B is open\n        \"night_staff\": model.new_int_var(0, 20, \"night_staff\"),\n        \"frozen_orders\": model.new_int_var(0, 500, \"frozen_orders\"),\n        \"forklifts\": model.new_int_var(0, 6, \"forklifts\"),\n    }\n\n\ndef add_site_rules(model: cp_model.CpModel, v: dict, min_night: int, forklifts_both: int) -> None:\n    \"\"\"The site rules, each a linear row switched by literals.\"\"\"\n    # TODO: four rows, each switched by the right literals.\n    return None\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    v = site_variables(model)\n    add_site_rules(model, v, 4, 3)\n    model.maximize(v[\"frozen_orders\"] - 10 * v[\"forklifts\"])\n    solver = cp_model.CpSolver()\n    print(solver.status_name(solver.solve(model)), {k: solver.value(x) for k, x in v.items()})\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 2,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "8c415485804610f2467b02d99f51bd3c7f5f8906ea5da65e16d90a1378ed6e08",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef site_variables(model: cp_model.CpModel) -> dict:\n    \"\"\"The warehouse's decisions for one day.\"\"\"\n    return {\n        \"night\": model.new_bool_var(\"night\"),            # the night shift runs\n        \"freezer\": model.new_bool_var(\"freezer\"),        # the freezer room is open\n        \"dock_a\": model.new_bool_var(\"dock_a\"),          # dock A is open\n        \"dock_b\": model.new_bool_var(\"dock_b\"),          # dock B is open\n        \"night_staff\": model.new_int_var(0, 20, \"night_staff\"),\n        \"frozen_orders\": model.new_int_var(0, 500, \"frozen_orders\"),\n        \"forklifts\": model.new_int_var(0, 6, \"forklifts\"),\n    }\n\n\ndef add_site_rules(model: cp_model.CpModel, v: dict, min_night: int, forklifts_both: int) -> None:\n    \"\"\"The site rules, each a linear row switched by literals.\"\"\"\n    # TODO: four rows, each switched by the right literals.\n    return None\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    v = site_variables(model)\n    add_site_rules(model, v, 4, 3)\n    model.maximize(v[\"frozen_orders\"] - 10 * v[\"forklifts\"])\n    solver = cp_model.CpSolver()\n    print(solver.status_name(solver.solve(model)), {k: solver.value(x) for k, x in v.items()})\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-2/site_rules.py",
+    "test_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-2/test_site_rules.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-2/site_rules.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-2/target/report.xml",
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-2/test_site_rules.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_night_shift_has_its_minimum_crew",
+        "kind": "main",
+        "says": "a night shift with its minimum crew is allowed, and one short-staffed is refused"
+      },
+      {
+        "id": "test_a_closed_freezer_takes_no_frozen_orders",
+        "kind": "main",
+        "says": "a closed freezer with no frozen orders is allowed, and one with orders is refused"
+      },
+      {
+        "id": "test_two_open_docks_need_their_forklifts",
+        "kind": "main",
+        "says": "two open docks with enough forklifts are allowed, and with too few are refused"
+      },
+      {
+        "id": "test_one_open_dock_needs_no_extra_forklifts",
+        "kind": "edge",
+        "says": "either dock open alone needs no extra forklifts"
+      },
+      {
+        "id": "test_no_night_shift_means_no_night_staff",
+        "kind": "edge",
+        "says": "a day with no night shift has no night staff"
+      },
+      {
+        "id": "test_an_open_freezer_takes_frozen_orders",
+        "kind": "edge",
+        "says": "an open freezer may take frozen orders"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "15-cpsat-core/README_4.4.2.md",
+      "section": "OnlyEnforceIf Switches a Linear Row On a Conjunction of Literals"
+    },
+    "concepts": [
+      "only_enforce_if switches a linear row on when all its literals are true, with no big-M",
+      "a literal is a Boolean variable or its negation, written with the tilde operator"
+    ]
+  }
+}

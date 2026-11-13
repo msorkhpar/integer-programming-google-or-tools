@@ -1,0 +1,146 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "26-multi-period-timing"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Spend by region and year",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "Three counties fund a shared fiber-backbone program, and each county's board approves its own yearly cap. The plan's model must report, for every county and every year, what the plan spends there, so a cap can be written against each number."
+    },
+    {
+      "type": "para",
+      "text": "Write `spend_by_region_year(projects, x, years)` in `regional.py`. It returns a dict with one entry for every `(region, year)` pair (every region that has a project, every year in `years`), each a linear expression in the start variables `x[(pid, start_year)]`. A project's `cost_profile[k]` is what it spends in its k-th year of work, counting its start year as year 0. A cost that would fall in a year outside `years` belongs to no entry."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix a schedule and evaluate your expressions, so any correct expression passes. About eight lines in total."
+    },
+    {
+      "type": "para",
+      "text": "In the lesson's notation, with $`R`$ the regions, $`P_r`$ the projects in region $`r`$, $`T_i`$ the start years of project $`i`$, $`c_{i,k}`$ its `cost_profile[k]` and $`x_{i,t} \\in \\{0, 1\\}`$ the start variables, you are writing the expression $`\\text{spend}_{r,y}`$ for every $`r \\in R`$ and $`y \\in Y`$. Write it as a sum first (which pairs $`(i, t)`$ put money into year $`y`$?), then code it. A cap would then be the row $`\\text{spend}_{r,y} \\le \\text{cap}_{r,y}`$."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    region: str\n    cost_profile: tuple[int, ...]     # spend in each year of work, start year first\n    starts: tuple[int, ...]           # the years it may start in\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project]) -> dict:\n    return {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n\n\ndef spend_by_region_year(projects: list[Project], x: dict, years: list[int]) -> dict:\n    \"\"\"{(region, year): what the plan spends in that region in that year}, as linear expressions.\"\"\"\n    regions = sorted({p.region for p in projects})\n    spend = {(r, y): mathopt.LinearExpression() for r in regions for y in years}\n    for p in projects:\n        for t in p.starts:\n            for k, c in enumerate(p.cost_profile):\n                if t + k in years:\n                    spend[p.region, t + k] += c * x[p.pid, t]\n    return spend\n\n\nif __name__ == \"__main__\":\n    fiber = [Project(\"F1\", \"North\", (100, 300), (2027, 2028))]\n    model = mathopt.Model()\n    x = start_variables(model, fiber)\n    print(spend_by_region_year(fiber, x, [2027, 2028, 2029]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    region: str\n    cost_profile: tuple[int, ...]     # spend in each year of work, start year first\n    starts: tuple[int, ...]           # the years it may start in\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project]) -> dict:\n    return {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n\n\ndef spend_by_region_year(projects: list[Project], x: dict, years: list[int]) -> dict:\n    \"\"\"{(region, year): what the plan spends in that region in that year}, as linear expressions.\"\"\"\n    regions = sorted({p.region for p in projects})\n    spend = {(r, y): mathopt.LinearExpression() for r in regions for y in years}\n    # TODO: add each project's cost, year by year, to the right (region, year) entry.\n    return spend\n\n\nif __name__ == \"__main__\":\n    fiber = [Project(\"F1\", \"North\", (100, 300), (2027, 2028))]\n    model = mathopt.Model()\n    x = start_variables(model, fiber)\n    print(spend_by_region_year(fiber, x, [2027, 2028, 2029]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "e824c317175bdc9846ea647c3df66414c23b46a76b1b3aef08e6c7f2c167792c",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    region: str\n    cost_profile: tuple[int, ...]     # spend in each year of work, start year first\n    starts: tuple[int, ...]           # the years it may start in\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project]) -> dict:\n    return {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n\n\ndef spend_by_region_year(projects: list[Project], x: dict, years: list[int]) -> dict:\n    \"\"\"{(region, year): what the plan spends in that region in that year}, as linear expressions.\"\"\"\n    regions = sorted({p.region for p in projects})\n    spend = {(r, y): mathopt.LinearExpression() for r in regions for y in years}\n    # TODO: add each project's cost, year by year, to the right (region, year) entry.\n    return spend\n\n\nif __name__ == \"__main__\":\n    fiber = [Project(\"F1\", \"North\", (100, 300), (2027, 2028))]\n    model = mathopt.Model()\n    x = start_variables(model, fiber)\n    print(spend_by_region_year(fiber, x, [2027, 2028, 2029]))\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-02/practice-1/regional.py",
+    "test_path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-02/practice-1/test_regional.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-02/practice-1/regional.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/26-multi-period-timing/prose/unit-02/practice-1/target/report.xml",
+      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-02/practice-1/test_regional.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_one_region_plan_spends_its_whole_cost",
+        "kind": "main",
+        "says": "the spend of a one-region plan, summed over every year, is the cost of the projects it starts"
+      },
+      {
+        "id": "test_the_start_year_carries_only_the_first_year_of_work",
+        "kind": "edge",
+        "says": "a two-year project's start year carries only its first year's cost"
+      },
+      {
+        "id": "test_work_begins_in_the_start_year",
+        "kind": "edge",
+        "says": "a project spends in the very year it starts"
+      },
+      {
+        "id": "test_an_uneven_profile_keeps_its_shape",
+        "kind": "edge",
+        "says": "a project whose second year costs more than its first spends that larger amount in its second year"
+      },
+      {
+        "id": "test_regions_are_kept_apart",
+        "kind": "edge",
+        "says": "a project's spend appears only in its own region's rows"
+      },
+      {
+        "id": "test_the_last_year_of_the_plan_counts",
+        "kind": "edge",
+        "says": "a project started in the plan's last year spends in that year"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "26-multi-period-timing/README_6.4.2.md",
+      "section": "Build Spend as an Expression Once, and Every Budget Rule Reuses It"
+    },
+    "concepts": [
+      "a project started in year t spends its k-th year's cost in year t + k",
+      "spend is built once as expressions and every money rule is a row on them"
+    ]
+  }
+}

@@ -1,0 +1,456 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "07-the-capital-planning-domain",
+    "31-financial-evaluation"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Present value, NPV and discount rates",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "7.2.1 Present Value, NPV and Discount Rates"
+    },
+    {
+      "type": "para",
+      "text": "Every GridCap model since lesson 1.1.1 has maximized a sum of NPVs, and lesson 6.4.1 went further: project P022 is worth $1,496k if it starts in 2027, $1,287k in 2028 and $1,102k in 2029. A planner reading that plan asks the obvious question: P022 costs the same $2,550k whichever year it starts, so why is it worth less later? Finance's answer is that money has a time value: $1,000k paid in 2030 is not the same thing as $1,000k paid now. This lesson makes that precise. It defines the present value of one payment, the net present value of a whole cash flow, and the discount rate that connects the two, in three rules, each with a program you can run."
+    },
+    {
+      "type": "para",
+      "text": "GridCap is a fictional utility's portfolio, generated for this course. The two projects compared in the last rule are invented for this lesson."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Dollar Later Is Worth Less Than a Dollar Now"
+    },
+    {
+      "type": "para",
+      "text": "Suppose GridCap could put money in an account that pays 7% a year. $100k deposited at the start of 2027 is $107k a year later, $114.49k after two years ($`107 \\times 1.07`$), and after $`n`$ years it is $`100 \\times 1.07^n`$. Growing money forward this way is **compounding**: each year's interest earns interest the next year."
+    },
+    {
+      "type": "para",
+      "text": "Turn it around. If a payment $`F`$ arrives $`n`$ years from now, how much money today is worth the same to GridCap? The amount $`P`$ that would grow into $`F`$ by then:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "P \\,(1 + r)^n = F \\quad\\Longrightarrow\\quad P = \\frac{F}{(1 + r)^n}"
+    },
+    {
+      "type": "para",
+      "text": "$`P`$ is the **present value** (PV) of $`F`$, and $`r`$ is the **discount rate**: the yearly rate at which the organization trades money now for money later. Going from $`F`$ to $`P`$ is **discounting**. The multiplier $`1/(1 + r)^n`$ is the **discount factor**: the value today of $1 paid $`n`$ years from now."
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def discount_factor(rate: float, years: float) -> float:\n    \"\"\"What $1 paid `years` from the valuation date is worth on that date.\"\"\"\n    return (1 + rate) ** -years"
+    },
+    {
+      "type": "para",
+      "text": "`(1 + rate) ** -years` is the same number as `1 / (1 + rate) ** years`. Here are the factors at three rates, GridCap's 7% in the middle:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "years ahead     3%      7%     10%\n         0  1.0000  1.0000  1.0000\n         1  0.9709  0.9346  0.9091\n         2  0.9426  0.8734  0.8264\n         3  0.9151  0.8163  0.7513\n         5  0.8626  0.7130  0.6209\n        10  0.7441  0.5083  0.3855\n        20  0.5537  0.2584  0.1486\n        30  0.4120  0.1314  0.0573"
+    },
+    {
+      "type": "para",
+      "text": "Read down a column: at 7%, a dollar ten years out is worth about 51 cents today, and a dollar thirty years out about 13 cents. Read across a row: the higher the rate, the less the future counts. Two facts in the table are worth remembering because they come up in every later lesson. A payment **now** ($`n = 0`$) is never discounted, at any rate. And discounting is steep and uneven: going from 3% to 10% roughly halves the value of year 10 but cuts year 30 to about a seventh."
+    },
+    {
+      "type": "para",
+      "text": "Applied to one payment, with the valuation date set to the start of 2027:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "$1,000k paid in 2030 is worth $816.30k at the start of 2027\n$816.30k invested at 7% for 3 years grows to $1,000.00k"
+    },
+    {
+      "type": "para",
+      "text": "The second line is the check: compounding the present value forward three years at the same rate gives back the payment. Discounting and compounding are the same equation read in two directions."
+    },
+    {
+      "type": "para",
+      "text": "Why should a utility care about a rate like this when it never deposits its capital in an account? Because the money it spends is not free. A utility funds its projects with debt, on which it pays interest, and with shareholders' equity, on which investors expect a return. The blended yearly cost of that money is the **cost of capital**, often computed as a weighted average of the two (the *weighted average cost of capital*, WACC). Spending $1,000k in 2027 instead of 2030 means paying for that money three more years. A discount rate built from the cost of capital charges every project for exactly that. GridCap's planners use 7%; the number is part of the fictional data (`portfolio.discount_rate`), set by the course, not measured."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "NPV Adds Every Discounted Cash Flow, Counted From One Stated Date"
+    },
+    {
+      "type": "para",
+      "text": "A project is not one payment but a **cash flow**: money out (costs, negative) and money in, or money saved (benefits, positive), year by year. Its **net present value** is the sum of every year's net amount, each discounted to the same **valuation date**:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\text{NPV} = \\sum_{y} \\frac{\\text{CF}_y}{(1 + r)^{\\,y - y_0}}"
+    },
+    {
+      "type": "para",
+      "text": "where $`\\text{CF}_y`$ is the net cash flow in year $`y`$ and $`y_0`$ is the valuation year. This course treats an amount booked in year $`y`$ as paid at the start of that year, so an amount in the valuation year itself has exponent 0 and is not discounted. In code, with the flows kept as a dictionary from calendar year to amount, NPV is one sum:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def present_value(flows: dict[int, float], rate: float, valuation_year: int) -> float:\n    \"\"\"The value on `valuation_year` of a cash flow {calendar year: amount}.\"\"\"\n    return sum(amount * discount_factor(rate, year - valuation_year) for year, amount in flows.items())"
+    },
+    {
+      "type": "para",
+      "text": "Try it on an invented feeder undergrounding: it costs $1,200k in 2027 and then saves $180k a year of outage and repair cost in each of the ten years 2028–2037. Adding the numbers without discounting says the project returns $600k more than it costs. Discounting to the start of 2027 at 7% tells a different story, and the numpy-financial package agrees:"
+    },
+    {
+      "type": "example",
+      "id": "npv_by_hand-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "31-financial-evaluation/src/npv_by_hand.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "31-financial-evaluation/src/npv_by_hand.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "rate = 0.07\nflows = {2027: -1_200, **{y: 180 for y in range(2028, 2038)}}\nvalues = [flows[y] for y in sorted(flows)]\n\nby_hand = present_value(flows, rate, 2027)\nprint(f\"undiscounted sum       {sum(values):>9,.2f}\")\nprint(f\"NPV at 2027, by hand   {by_hand:>9,.2f}\")\nprint(f\"npf.npv(0.07, values)  {npf.npv(rate, values):>9,.2f}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "undiscounted sum          600.00\nNPV at 2027, by hand       64.24\nnpf.npv(0.07, values)      64.24"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The NPV is positive, so at 7% the project earns more than the money it uses costs: it is worth doing on its own. But it is worth $64k, not $600k: most of its savings arrive years after the $1,200k leaves, and later money counts for less. An NPV of zero would mean the project exactly pays for its money; a negative NPV, that the utility would be better off not spending the money."
+    },
+    {
+      "type": "para",
+      "text": "**numpy-financial** (imported as `npf`) is a small package of spreadsheet-style finance functions that used to live inside NumPy. Its `npf.npv(rate, values)` takes a list, not a dictionary: the values of consecutive periods, with `values[0]` at time 0. Its documentation is explicit that the first value is not discounted: the sum runs from $`t = 0`$, so `values[0]` is divided by $`(1 + r)^0 = 1`$. That is the same convention as `present_value` with the valuation year equal to the first year of the list, which is why the two numbers match."
+    },
+    {
+      "type": "para",
+      "text": "Not every tool or textbook counts this way. A common alternative treats every amount as paid at the **end** of its period, so the first amount is already discounted once. numpy-financial's documentation shows how to get that convention from `npv`: put a 0 in front of the list. On the same flows:"
+    },
+    {
+      "type": "example",
+      "id": "npv_by_hand-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "31-financial-evaluation/src/npv_by_hand.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "31-financial-evaluation/src/npv_by_hand.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "end_of_year = npf.npv(rate, [0] + values)\nprint(f\"each flow a year later {end_of_year:>9,.2f}  (= {by_hand:,.2f} / 1.07 = {by_hand / 1.07:,.2f})\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "each flow a year later     60.04  (= 64.24 / 1.07 = 60.04)"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Shifting every flow one year later divides the whole NPV by $`1.07`$. Neither convention is wrong. Mixing them is: if one project's NPV is valued at the start of 2027 and another's at the end, the second is understated by 7% and a ranking between them is meaningless. An NPV is only a number once you know its valuation date, its timing convention and its rate, and a table of NPVs is only comparable if all three are the same for every entry. Lesson 7.2.4 builds GridCap's table under one set of all three."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Discount Rate Is the Price of Waiting, and It Can Reorder Projects"
+    },
+    {
+      "type": "para",
+      "text": "The rate does more than scale every NPV down. It changes how much a project's *later* years count relative to its early ones, so it can change which of two projects is better. Two invented projects show it. Both cost $500k now. A circuit clearing returns $150k a year for five years and then nothing. An undergrounding returns $60k a year, but for twenty years."
+    },
+    {
+      "type": "example",
+      "id": "rate_ranking-3",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "31-financial-evaluation/src/rate_ranking.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "31-financial-evaluation/src/rate_ranking.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "clearing = [-500] + [150] * 5\nundergrounding = [-500] + [60] * 20"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "rate   clearing  undergrounding  better\n  0%      250.0           700.0  undergrounding\n  3%      187.0           392.6  undergrounding\n  5%      149.4           247.7  undergrounding\n  7%      115.0           135.6  undergrounding\n 10%       68.6            10.8  clearing"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "At 0% (no time value) the undergrounding is worth almost three times as much: it simply returns more money. As the rate rises, its far-off years fade faster than the clearing's near ones, and by 10% the order has reversed. The rate at which the two NPVs are equal is the **crossover rate**:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "IRR clearing       0.1524\nIRR undergrounding 0.1032\ncrossover rate     0.0766"
+    },
+    {
+      "type": "para",
+      "text": "Each project's **internal rate of return** (IRR) is the discount rate at which its own NPV is zero, which `npf.irr` finds. The clearing's IRR is 15.24%: discount its flows at that rate and they sum to nothing. The crossover rate is the IRR of the *difference* of the two cash flows, year by year (clearing minus undergrounding, with the clearing's missing years as zeros): where the difference has NPV zero, the two projects have equal NPVs. Below 7.66% the undergrounding wins, above it the clearing does, and GridCap's 7% sits close enough to the line that a planner should know it."
+    },
+    {
+      "type": "para",
+      "text": "Two traps follow, and interviewers like both."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**IRR does not rank projects.** The clearing has the higher IRR (15.2% against 10.3%), yet at GridCap's 7% the undergrounding is worth more. IRR measures how fast a project returns money, not how much value it adds at the organization's own cost of money. Rank by NPV at the chosen rate; use IRR, if at all, as a description.",
+        "**The rate is a decision with consequences.** A higher rate favours quick payback and penalizes long-lived assets: poles, cables and transformers that last decades. Utilities and their regulators argue about the rate for exactly that reason. In a model, the rate is a parameter that changes every objective coefficient at once; lesson 7.2.4 solves GridCap small at three rates and shows where the plan moves."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Where do these numbers go? Into the objective. The one-period model of lesson 1.1.1 maximizes $`\\sum_i \\text{npv}_i\\, x_i`$, and every $`\\text{npv}_i`$ in it is an NPV computed as in this lesson, at one rate, on one date. The solver never sees a cash flow or a rate, only the coefficients. If they were computed inconsistently, the model optimizes the inconsistency."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**A dollar later is worth less than a dollar now.** The present value of $`F`$ paid $`n`$ years out is $`F/(1 + r)^n`$; compounding at the same rate takes it back.",
+        "**NPV adds every discounted cash flow, counted from one stated date.** `npf.npv` does not discount its first value; prepend a 0 for the end-of-period convention. A table of NPVs is comparable only with one date, one convention and one rate.",
+        "**The discount rate is the price of waiting, and it can reorder projects.** A higher rate favours quick payback. Rank by NPV at the chosen rate, not by IRR."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Term",
+        "Formula",
+        "numpy-financial"
+      ],
+      "rows": [
+        [
+          "discount factor",
+          "$`(1 + r)^{-n}`$",
+          "—"
+        ],
+        [
+          "present value of one payment",
+          "$`F (1 + r)^{-n}`$",
+          "`npf.pv(r, n, 0, -F)`"
+        ],
+        [
+          "NPV, first flow at $`t = 0`$",
+          "$`\\sum_{t \\ge 0} \\text{CF}_t (1 + r)^{-t}`$",
+          "`npf.npv(r, values)`"
+        ],
+        [
+          "NPV, first flow at $`t = 1`$",
+          "$`\\sum_{t \\ge 1} \\text{CF}_t (1 + r)^{-t}`$",
+          "`npf.npv(r, [0] + values)`"
+        ],
+        [
+          "IRR",
+          "the $`r`$ with $`\\text{NPV}(r) = 0`$",
+          "`npf.irr(values)`"
+        ],
+        [
+          "crossover rate of A and B",
+          "IRR of $`\\text{CF}^A - \\text{CF}^B`$",
+          "`npf.irr(a - b)`"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "GridCap convention",
+        "Value"
+      ],
+      "rows": [
+        [
+          "discount rate",
+          "7% a year (`portfolio.discount_rate`)"
+        ],
+        [
+          "valuation date",
+          "the start of the first plan year (2027)"
+        ],
+        [
+          "timing",
+          "an amount in year $`y`$ is paid at the start of $`y`$"
+        ],
+        [
+          "units",
+          "$k"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [numpy-financial: `npv`](https://numpy.org/numpy-financial/latest/_api_stubs/numpy_financial.npv.html) (the $`t = 0`$ convention and how to shift it); [numpy-financial API](https://numpy.org/numpy-financial/latest/api.html) (`irr`, `pv` and the other functions); [Klevorick, *Mathematical Programming and Capital Budgeting Under Risk*, Princeton Econometric Research Program, 1966](https://www.princeton.edu/%7Eerp/ERParchives/archivepdfs/R14.pdf) (capital budgeting as choosing projects under a budget per period, and why the \"cost of capital\" is hard to pin down when capital is rationed)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "A payment of $500k arrives in 2035. What is it worth at the start of 2027 at 7%? At 3%? Use the table before you compute.",
+        "Add a $300k refurbishment in 2032 to the feeder undergrounding. Is its NPV still positive?",
+        "Find a rate at which the clearing and the undergrounding are both worth less than nothing."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: One Date for the Whole Model"
+    },
+    {
+      "type": "para",
+      "text": "GridCap discounts every project to the start of 2027, the first year of the plan, whatever year the project starts. That choice is arbitrary: any date would do, because moving the valuation date multiplies every NPV by the same factor and leaves every comparison unchanged. What is not arbitrary is that the date is the same for all of them. The tempting alternative, valuing each project from its own start, quietly removes the cost of waiting, and lesson 7.2.4 shows what that does to a start-year table."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**discounting.py.** Prints discount factors at three rates and values one future payment today (*A Dollar Later Is Worth Less Than a Dollar Now*). *Try:* Add a 5% column. Predict the 30-year factor before running."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [discounting.py](src/discounting.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**npv_by_hand.py.** Computes one project's NPV by hand and with `npf.npv`, then with every flow at the end of its year (*NPV Adds Every Discounted Cash Flow*). *Try:* Move the valuation date to the year 2025. Predict whether the NPV rises or falls."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [npv_by_hand.py](src/npv_by_hand.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**rate_ranking.py.** Compares two projects across five rates and finds their IRRs and crossover rate (*The Discount Rate Is the Price of Waiting*). *Try:* Give the undergrounding 25 years of savings instead of 20. Predict whether the crossover rate moves up or down."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [rate_ranking.py](src/rate_ranking.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**finance.py.** The module's money arithmetic, which every program imports: discounting, present value, escalation, annuities and start-year NPV. It prints nothing."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [finance.py](src/finance.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 9,
+    "paras": 29,
+    "code": 7,
+    "tables": 2,
+    "lists": 7,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 3
+  },
+  "content_sha256": "4ae34081dd64746ab142c6d5b7cf84834d21822b51eac5f369b0e18d5a55ba0f"
+}

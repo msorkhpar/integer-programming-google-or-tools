@@ -1,0 +1,436 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "24-big-m-and-indicators"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "What a loose M does to the LP bound and to numerics",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "6.2.2 What a Loose M Does to the LP Bound and to Numerics"
+    },
+    {
+      "type": "para",
+      "text": "A colleague reviews the crew model of lesson 6.2.1 and asks why it computes an $`M`$ for every row. \"Put $`10^6`$ everywhere. It is bigger than any crew use GridCap will ever have, so it is valid, and the answer is the same.\" Both halves of that sentence are true for the best plan on GridCap small: $`10^6`$ is valid, and the MILP returns the same plan. This lesson measures what the colleague's model costs anyway, in four rules: it gives the solver a weaker bound, it makes the search longer, and with a larger $`M`$ still, it lets the solver return an \"optimal\" plan that breaks the crew rule."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The model is lesson 6.2.1's, unchanged except for the value of $`M_{g,y}`$, which this lesson varies. It is restated here in full."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`P`$ the projects; $`Y`$ the years; $`T_i \\subseteq Y`$ project $`i`$'s start years; $`P^{\\text{must}}`$ the must-do projects; $`\\mathcal{G}`$ the alternative groups; $`C`$ the child projects, with parent $`p(c)`$ and lag $`L_c`$; $`G`$ the programs, $`P_g`$ the projects of program $`g`$; $`A_{g,y}`$ the pairs $`(i, t)`$, $`i \\in P_g`$, $`t \\in T_i`$, with project $`i`$ started in $`t`$ still being worked on in year $`y`$."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`\\text{npv}_{i,t}`$ ($k); $`c_{i,k}`$, project $`i`$'s spend in its $`k`$-th year of work ($k); $`B_y`$ the budget ($k); $`\\kappa_i`$ the crew-months project $`i`$ needs per year of work; $`K_{g,y}`$ the in-house crew-months; $`F = 300`$ the contractor fee ($k); $`M_{g,y} \\ge 0`$, the big-M of crew row $`(g, y)`$, in crew-months."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_{i,t} \\in \\{0, 1\\}`$ for $`i \\in P`$, $`t \\in T_i`$; $`h_{g,y} \\in \\{0, 1\\}`$ for $`g \\in G`$, $`y \\in Y`$. In the LP relaxation both are relaxed to $`[0, 1]`$."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{i \\in P} \\sum_{t \\in T_i} \\text{npv}_{i,t}\\, x_{i,t} \\;-\\; F \\sum_{g \\in G} \\sum_{y \\in Y} h_{g,y}"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{t \\in T_i} x_{i,t} &\\le 1 && \\forall i \\in P \\setminus P^{\\text{must}} && \\text{(once}_i) \\\\\n\\sum_{t \\in T_i} x_{i,t} &= 1 && \\forall i \\in P^{\\text{must}} && \\text{(must}_i) \\\\\n\\sum_{i \\in g} \\sum_{t \\in T_i} x_{i,t} &\\le 1 && \\forall g \\in \\mathcal{G} && \\text{(alt}_g) \\\\\n\\sum_{u \\in T_c,\\, u \\le t} x_{c,u} &\\le \\sum_{s \\in T_{p(c)},\\, s \\le t - L_c} x_{p(c),s} && \\forall c \\in C,\\ t \\in T_c && \\text{(after}_{c,t}) \\\\\n\\sum_{i \\in P} \\sum_{t \\in T_i,\\, t \\le y} c_{i,\\,y-t}\\, x_{i,t} &\\le B_y && \\forall y \\in Y && \\text{(budget}_y) \\\\\n\\sum_{(i,t) \\in A_{g,y}} \\kappa_i\\, x_{i,t} &\\le K_{g,y} + M_{g,y}\\, h_{g,y} && \\forall g \\in G,\\ y \\in Y && \\text{(crews}_{g,y}) \\quad \\leftarrow M_{g,y} \\text{ varies}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The pieces from lessons 6.4.1 to 6.4.4 read as in lesson 6.2.1: $`x_{i,t} = 1`$ says project $`i`$ starts in year $`t`$; $`T_i`$ is its window, and a year outside it gets no variable; `started(i)`, the sum $`\\sum_{t \\in T_i} x_{i,t}`$, is 1 when the project is funded; row after$`_{c,t}`$ says the child can have started by year $`t`$ only if its parent had started by year $`t - L_c`$; and $`A_{g,y}`$ lists the start choices that keep a crew of program $`g`$ busy in year $`y`$. Lessons 6.4.1 and 6.4.3, later in this section, treat them in full."
+    },
+    {
+      "type": "para",
+      "text": "The values of $`M_{g,y}`$ compared are lesson 6.2.1's: $`10^6`$ for every row, and the four per-row values from variable bounds, once rows, the LP maximum and the MILP maximum."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "With a Loose M the LP Hires a Sliver of a Contractor"
+    },
+    {
+      "type": "para",
+      "text": "In the MILP, $`h_{g,y}`$ is 0 or 1. In the LP relaxation it may be any number in between, and the LP picks the smallest one the crew row allows. If a plan uses $`v`$ crew-months over the in-house $`K_{g,y}`$, the row needs"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "h_{g,y} \\;\\ge\\; \\frac{v}{M_{g,y}}, \\qquad \\text{so the LP pays a fee of } F\\,h_{g,y} = \\frac{F}{M_{g,y}}\\; v ."
+    },
+    {
+      "type": "para",
+      "text": "In the LP relaxation, then, the crew rule is a **price**: $`F / M`$ for every crew-month over the limit. The real rule charges the whole $300k fee for the first crew-month over. The LP charges $`300/M`$ per crew-month, and the larger $`M`$ is, the cheaper breaking the rule looks. Here is one row, transmission in 2029, in the LP with the colleague's $`M`$ and with the tightest:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "LP relaxation, row ('transmission', 2029): crew use, in-house crews, M and the LP's hire value\n  M = 1e6       use  23.1  crews 20  M 1,000,000  hire 0.000003  fee paid   0.00k\n  M = MILP max  use  23.9  crews 20  M        26  hire 0.151216  fee paid  45.36k"
+    },
+    {
+      "type": "para",
+      "text": "With $`M = 10^6`$, 3.1 crew-months over cost the LP a fee of less than $0.01k. With $`M = 26`$ the LP pays 300/26, about $11.5k, per crew-month: 3.9 over cost $45.36k. Neither is the real $300k, because a relaxation is always more optimistic than the rule it relaxes, but the tight $`M`$ keeps the LP's price as close to the rule as a big-M row can."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Loose M Weakens the LP Bound; the MILP Optimum Does Not Move"
+    },
+    {
+      "type": "para",
+      "text": "Every allowed plan is a point of the LP relaxation, so the LP's optimal value is an upper bound on every plan's value (lesson 3.1.2). The cheaper the relaxation makes it to break a rule, the higher that bound sits above the best plan. Lesson 3.2.2 showed why that matters: branch and bound throws away a part of its search tree only when that part's LP bound falls below the best plan found so far, so a higher bound means less is thrown away."
+    },
+    {
+      "type": "para",
+      "text": "The whole model, solved as an LP and as a MILP for each choice of $`M`$:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "M choice     LP bound  MILP optimum  HiGHS nodes  (presolve off)  contractors hired\n1e6          26,587.4      23,341.0           30             662  [('transmission', 2031), ('vegetation', 2031)]\nbounds       26,481.8      23,341.0           30              39  [('transmission', 2031), ('vegetation', 2031)]\nonce rows    26,471.6      23,341.0           31              49  [('transmission', 2031), ('vegetation', 2031)]\nLP max       26,388.3      23,341.0           33              39  [('transmission', 2031), ('vegetation', 2031)]\nMILP max     26,334.5      23,341.0           27              32  [('transmission', 2031), ('vegetation', 2031)]\nLP with no crew rule and no fee: 26,587.4"
+    },
+    {
+      "type": "para",
+      "text": "Four things to read from it:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**The MILP optimum is the same, $23,341k, for every valid $`M`$**, with the same two contractors. A valid $`M`$ never changes which plans are allowed, so it cannot change the best one. The colleague was right about that.",
+        "**The LP bound with $`M = 10^6`$ is exactly the bound of a model with no crew rule and no fee**, $26,587.4k. At $0.0003k per crew-month the crew rule has vanished from the relaxation.",
+        "**Each tighter $`M`$ lowers the bound.** The gap between the LP bound and the best plan is $3,246.4k with $`10^6`$ and $2,993.5k with the tightest $`M`$: the per-row $`M`$ closes about 8% of it, on a model where only 15 of the rows are crew rows. Lesson 6.4.3, later in this section, shows the same kind of effect for precedence rows; section 6.7 compares whole formulations this way.",
+        "**The search is longer with the loose $`M`$ when the solver works on the model as written.** The column \"presolve off\" solves each model with HiGHS's **presolve** turned off. Presolve is the pass a MILP solver makes over the model before the search, simplifying what it can prove (lesson 3.3.2). Without it, $`M = 10^6`$ takes 662 nodes of branch and bound against 32 for the tightest $`M`$. With presolve on (the default), the counts are close, from 27 to 33: on this model presolve undid most of the damage the loose $`M`$ did. You cannot plan on that, as the next rule shows."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Valid $`M`$s all give the same plan; tight ones give it with a better bound and, measured here, a shorter search when presolve cannot repair the row."
+    },
+    {
+      "type": "para",
+      "text": "The OR-Tools guide *The Bin Packing Problem* has a big-M row in it, though it does not use the name. Eleven items weighing 370 in all go into bins of capacity 100, and the goal is the fewest bins. A binary $`y_j`$ says bin $`j`$ is used, and the guide writes the bin's row as $`\\sum_i w_i x_{i,j} \\le 100\\, y_j`$: with $`y_j = 0`$ the bin holds nothing, with $`y_j = 1`$ it holds up to its capacity. That is a switched row whose $`M`$ is the capacity, and by lesson 6.2.1's second rule it is the tightest one: the capacity row already caps the load at 100, so no allowed plan needs more. `bin_packing_m.py` is the guide's model in MathOpt, as written and with the switch split from the capacity row and given a looser $`M`$: 370 from the bound rule (every item in one bin), and $`10^6`$:"
+    },
+    {
+      "type": "example",
+      "id": "bin_packing_m-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "24-big-m-and-indicators/src/bin_packing_m.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "24-big-m-and-indicators/src/bin_packing_m.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "if big_m is None:\n    model.add_linear_constraint(load <= CAPACITY * y[j], name=f\"capacity_{j}\")\nelse:\n    model.add_linear_constraint(load <= CAPACITY, name=f\"capacity_{j}\")\n    model.add_linear_constraint(load <= big_m * y[j], name=f\"used_{j}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "11 items weighing 370 in all, bins of 100\nswitch row                   LP bound MILP bins\nload <= 100 y (the example)    3.7000         4\nload <= 370 y (bounds)         1.0000         4\nload <= 1e6 y                  0.0004         4"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "All three need 4 bins, the answer the guide reports. The LP bounds tell the story of this section in one column. With the guide's row the LP must open $`370 / 100 = 3.7`$ bins' worth of $`y`$, a bound that rounds up to the true 4. With $`M = 370`$ it opens one bin's worth, and with $`10^6`$ almost nothing: the relaxation has forgotten that bins cost anything. Here the capacity is the right $`M`$, and the guide's one row states both rules at once."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Huge M Lets the Integrality Tolerance Switch a Rule Off"
+    },
+    {
+      "type": "para",
+      "text": "A MILP solver works in floating-point arithmetic, so it cannot demand that a binary be exactly 0 or 1. It accepts a value within a small **integrality tolerance** of a whole number as that whole number (lesson 3.2.1 met the same idea). For most variables that is harmless: $`x = 0.0000003`$ is a project not started. For the switch of a big-M row, it is not harmless, because the row multiplies the switch by $`M`$. A switch of $`3 \\times 10^{-7}`$ counts as \"no contractor\", yet gives the row $`3 \\times 10^{-7} \\cdot M`$ of extra room: $`0.0000078`$ crew-months with $`M = 26`$, 3 crew-months with $`M = 10^7`$."
+    },
+    {
+      "type": "para",
+      "text": "Here is the model with presolve off, solved by HiGHS for four values of $`M`$. For each solution, every row that uses more than the in-house crews while its switch counts as 0 is listed:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "M = MILP max OPTIMAL  objective  23,341.0  contractors hired 2\nM = 1e6      OPTIMAL  objective  23,341.0  contractors hired 2\nM = 1e7      OPTIMAL  objective  24,130.0  contractors hired 0\n    distribution 2029   2.0 crew-months over, hire = 2.0e-07  (M x hire = 2.0)\n    distribution 2031   7.0 crew-months over, hire = 7.0e-07  (M x hire = 7.0)\n    vegetation   2027   1.0 crew-months over, hire = 1.0e-07  (M x hire = 1.0)\n    vegetation   2029   2.0 crew-months over, hire = 2.0e-07  (M x hire = 2.0)\nM = 1e9      OPTIMAL  objective  24,039.0  contractors hired 0\n    transmission 2031   1.0 crew-months over, hire = 1.0e-09  (M x hire = 1.0)\n    distribution 2029   3.0 crew-months over, hire = 3.0e-09  (M x hire = 3.0)\n    distribution 2031   2.0 crew-months over, hire = 2.0e-09  (M x hire = 2.0)\n    vegetation   2027   1.0 crew-months over, hire = 1.0e-09  (M x hire = 1.0)\n    vegetation   2031   5.0 crew-months over, hire = 7.3e-09  (M x hire = 7.3)\nM = 1e9 with presolve on (the default): objective 23,341.0  contractors hired 2\ncrew-row coefficients: crew-months 1 to 14, tight M up to 26, loose M 1e9"
+    },
+    {
+      "type": "para",
+      "text": "With $`M = 10^7`$ HiGHS reports OPTIMAL with a value of $24,130k. The true best plan is worth $23,341k, so this \"optimal\" plan is worth more than any plan the rules allow: it hires no contractor and still runs four program-years over their crews, each through a switch of a few times $`10^{-7}`$. Status, objective and the list of hired contractors all look normal. Only checking the plan against the rule shows the problem."
+    },
+    {
+      "type": "para",
+      "text": "The line \"M = 1e9 with presolve on\" solves the same model with HiGHS's default settings, and gets the right plan: on this model, presolve repaired the rows before the search could exploit them. That is luck you cannot plan on. Presolve simplifies what it happens to prove about the model in front of it, and one changed setting was enough here to turn the same model into a wrong \"optimal\" answer."
+    },
+    {
+      "type": "para",
+      "text": "The last line is the general warning. Without the loose $`M`$, the crew rows' coefficients run from 1 to 26; with it, from 1 to $`10^9`$. A tolerance that is harmless on numbers near 1 becomes a whole crew-month when it is multiplied by $`10^9`$. Section 10 treats numerics in general; for big-M rows, the rule is short: **the smallest valid $`M`$ is also the safest one**."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Check the Plan Against the Rule, Not Against the Solver's Status"
+    },
+    {
+      "type": "para",
+      "text": "A solver's OPTIMAL means \"optimal for the model, within my tolerances\". It does not mean \"the plan obeys the business rules\". So a model that uses big-M rows, or any switched row, gets a check after every solve that reads the plan the way a planner would: round every binary to 0 or 1 (`> 0.5`; lesson 6.4.1 reads start variables the same way), then recompute each rule from the data, with no $`M`$ in it. The loop that printed the rows above is that check for the crew rule:"
+    },
+    {
+      "type": "example",
+      "id": "tolerance_leak-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "24-big-m-and-indicators/src/tolerance_leak.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "24-big-m-and-indicators/src/tolerance_leak.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "for key, hire in cm.hire.items():\n    over = mathopt.evaluate_expression(cm.use[key], values) - small.crews[key]\n    if values[hire] < 0.5 and over > 1e-6:"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`mathopt.evaluate_expression` computes a linear expression's value at the solution, so `over` is the program's crew use less its in-house crews. A row is broken when its switch rounds to 0 and the use is over the crews by more than a small tolerance. On the runs with a valid, tight $`M`$ it found nothing; on the $`10^7`$ and $`10^9`$ runs it found every leak."
+    },
+    {
+      "type": "para",
+      "text": "Two habits follow:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Write the check once per rule, in plain Python over the data, and run it after every solve in development and in production. It is the same kind of check lesson 1.2.1 applied with $`Ax \\le b`$.",
+        "When the check finds a leak, the fix is a smaller $`M`$ (lesson 6.2.1) or a formulation that needs none (lesson 6.2.3), never a tighter tolerance alone: a tolerance of $`10^{-9}`$ would have been beaten by $`M = 10^{12}`$ in the same way."
+      ]
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**With a loose M the LP hires a sliver of a contractor.** In the relaxation a big-M rule with a fee costs $`F/M`$ per unit over the limit; with $`M = 10^6`$ that is nothing.",
+        "**A loose M weakens the LP bound; the MILP optimum does not move.** The bound with $`10^6`$ equalled the bound with no crew rule at all; the tight $`M`$ closed about 8% of the gap and, with presolve off, cut the search from 662 nodes to 32.",
+        "**A huge M lets the integrality tolerance switch a rule off.** With $`M = 10^7`$ HiGHS reported OPTIMAL for a plan worth more than any allowed plan, through switches of about $`10^{-7}`$.",
+        "**Check the plan against the rule, not against the solver's status.** Round the binaries, recompute every rule from the data, and report any row that is broken."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Quantity",
+        "With a loose M",
+        "With a tight M"
+      ],
+      "rows": [
+        [
+          "LP price of one unit over a fee-switched limit",
+          "$`F/M`$, near 0",
+          "$`F/M`$, as high as validity allows"
+        ],
+        [
+          "LP bound",
+          "as if the rule were absent",
+          "lower, closer to the best plan"
+        ],
+        [
+          "MILP optimum (valid M)",
+          "unchanged",
+          "unchanged"
+        ],
+        [
+          "slack a switch of size $`\\epsilon`$ buys",
+          "$`\\epsilon M`$, can be whole units",
+          "$`\\epsilon M`$, negligible"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Term",
+        "Meaning"
+      ],
+      "rows": [
+        [
+          "integrality tolerance",
+          "how far from a whole number a solver lets an integer variable be and still count it as whole"
+        ],
+        [
+          "presolve",
+          "the solver's pass over the model before the search, simplifying what it can prove"
+        ],
+        [
+          "leak",
+          "a switched row broken while its switch counts as off, through $`\\epsilon M`$"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [The Bin Packing Problem (OR-Tools)](https://developers.google.com/optimization/pack/bin_packing) (the example of `bin_packing_m.py`: the bin's capacity multiplied by its \"used\" binary, and why that forces the binary to 1 when the bin holds anything); [MathOpt `SolveParameters` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/parameters.py) (what `presolve` and `cuts` control, the `Emphasis` levels, and the invalid-argument error a solver raises for a setting it lacks); [Integer Programming, Chapter 9 of Applied Mathematical Programming (MIT 15.053)](https://web.mit.edu/15.053/www/AMP-Chapter-09.pdf) (section 9.2: take the smallest constant that works, to avoid numerical difficulties); [Vielma, Mixed Integer Linear Programming Formulation Techniques](https://juan-pablo-vielma.github.io/publications/Mixed-Integer-Linear-Programming-Formulation-Techniques.pdf) (section 2.2: why the strength of a formulation's LP relaxation matters to an LP-based solver)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Raise the fee $`F`$ from 300 to 3,000 and predict, before running `loose_m_lp.py`, whether the gap between the $`10^6`$ and the tight LP bound widens or narrows.",
+        "Run `tolerance_leak.py` with $`M = 10^5`$. Does the leak appear? What does the size of $`M \\times \\text{hire}`$ have to reach for it to matter?",
+        "Write the post-solve check for the budget rows of the same model. Does it need rounding?"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Why the Course Never Writes 1e6"
+    },
+    {
+      "type": "para",
+      "text": "An $`M`$ of $`10^6`$ in a model has the same shape as a magic number in any code: it carries an unstated assumption (\"no row ever exceeds a million\") that nobody checks when the data grow, and it is wrong in both directions at once: too large for the LP bound, and possibly too small for tomorrow's data. A function that computes $`M`$ from the data, as `crew_model.py` does, is easier to review, and a post-solve check catches whatever the review missed."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**loose_m_lp.py.** The crew model as LP and MILP for $`10^6`$ and the four per-row values of $`M`$, with node counts with and without presolve (*With a Loose M the LP Hires a Sliver of a Contractor*, *A Loose M Weakens the LP Bound*). *Try:* Add $`M = 10^4`$ to `choices`. Predict its LP bound before running."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [loose_m_lp.py](src/loose_m_lp.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**tolerance_leak.py.** The model with presolve off for $`M`$ from tight to $`10^9`$, with the post-solve check that lists every leaking row (*A Huge M Lets the Integrality Tolerance Switch a Rule Off*). *Try:* Replace `values[hire] < 0.5` by `values[hire] == 0`. Predict which leaks the check stops reporting."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [tolerance_leak.py](src/tolerance_leak.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**bin_packing_m.py.** OR-Tools' bin packing example in MathOpt, with its capacity row as written and with the switch split off and given a looser $`M`$ (*A Loose M Weakens the LP Bound*). *Try:* Add a fourth run with $`M = 150`$. Predict its LP bound before running."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [bin_packing_m.py](src/bin_packing_m.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**crew_model.py.** The model builder, shared with lesson 6.2.1."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [crew_model.py](src/crew_model.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 11,
+    "paras": 33,
+    "code": 6,
+    "tables": 2,
+    "lists": 8,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 2
+  },
+  "content_sha256": "ccdd684e1c70e7a6795d1da11fe1d45eb2313dbc69bfdac0d908f9f45e1f8001"
+}

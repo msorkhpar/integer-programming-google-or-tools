@@ -1,0 +1,153 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "15-mock-interviews",
+    "53-mock-interviews"
+  ],
+  "variant": "prose",
+  "unit": 6,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Projects under a budget, crews and regional caps",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "This is the screen's whiteboard, coded. A telecom operator chooses tower upgrades: each has a `cost` ($k), `crew` weeks, a `region` and a `value`. `upgrades.py` already has one binary per project and the objective, the most value. Write `add_rules(model, x, projects, limits)` with every rule:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "the total cost is at most `limits.budget`, and the total crew-weeks at most `limits.crew`;",
+        "at most `limits.region_cap[r]` projects in each region `r`; a region with no entry in `limits.region_cap` has no cap;",
+        "for each pair in `limits.conflicts`, not both;",
+        "for each pair `(a, b)` in `limits.needs`, `a` only if `b`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Write the formulation first (sets, parameters, variables with domains, labelled rows with quantifiers). The tests fix plans and ask HiGHS whether the model accepts them, so any correct formulation passes. About ten lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int            # $k\n    crew: int            # crew-weeks\n    region: str\n    value: int = 0\n\n\n@dataclass(frozen=True)\nclass Limits:\n    budget: int\n    crew: int\n    region_cap: dict[str, int]\n    conflicts: list[tuple[str, str]] = field(default_factory=list)   # not both\n    needs: list[tuple[str, str]] = field(default_factory=list)       # (a, b): a only if b\n\n\ndef add_rules(model: mathopt.Model, x: dict, projects: list[Project], limits: Limits) -> None:\n    \"\"\"Budget, crew-weeks, a cap per region, conflicting pairs and needs.\"\"\"\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in projects) <= limits.budget, name=\"budget\")\n    model.add_linear_constraint(sum(p.crew * x[p.pid] for p in projects) <= limits.crew, name=\"crews\")\n    for region, cap in limits.region_cap.items():\n        members = [x[p.pid] for p in projects if p.region == region]\n        if members:\n            model.add_linear_constraint(sum(members) <= cap, name=f\"region_{region}\")\n    for a, b in limits.conflicts:\n        model.add_linear_constraint(x[a] + x[b] <= 1, name=f\"conflict_{a}_{b}\")\n    for a, b in limits.needs:\n        model.add_linear_constraint(x[a] - x[b] <= 0, name=f\"needs_{a}_{b}\")\n\n\ndef build(projects: list[Project], limits: Limits) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"tower-upgrades\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    add_rules(model, x, projects, limits)\n    model.maximize(sum(p.value * x[p.pid] for p in projects))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Project(\"A\", 40, 3, \"N\", 10), Project(\"B\", 30, 2, \"N\", 8)], Limits(60, 4, {\"N\": 1}))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    print(result.termination.reason.name, result.objective_value())\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int            # $k\n    crew: int            # crew-weeks\n    region: str\n    value: int = 0\n\n\n@dataclass(frozen=True)\nclass Limits:\n    budget: int\n    crew: int\n    region_cap: dict[str, int]\n    conflicts: list[tuple[str, str]] = field(default_factory=list)   # not both\n    needs: list[tuple[str, str]] = field(default_factory=list)       # (a, b): a only if b\n\n\ndef add_rules(model: mathopt.Model, x: dict, projects: list[Project], limits: Limits) -> None:\n    \"\"\"Budget, crew-weeks, a cap per region, conflicting pairs and needs.\"\"\"\n    # TODO: the rows of your formulation.\n    return None\n\n\ndef build(projects: list[Project], limits: Limits) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"tower-upgrades\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    add_rules(model, x, projects, limits)\n    model.maximize(sum(p.value * x[p.pid] for p in projects))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Project(\"A\", 40, 3, \"N\", 10), Project(\"B\", 30, 2, \"N\", 8)], Limits(60, 4, {\"N\": 1}))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    print(result.termination.reason.name, result.objective_value())\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 2,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "e78cc9db82ece9c23b891f45b3cbdd886e70db5ef80fd2b201274709222d406a",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int            # $k\n    crew: int            # crew-weeks\n    region: str\n    value: int = 0\n\n\n@dataclass(frozen=True)\nclass Limits:\n    budget: int\n    crew: int\n    region_cap: dict[str, int]\n    conflicts: list[tuple[str, str]] = field(default_factory=list)   # not both\n    needs: list[tuple[str, str]] = field(default_factory=list)       # (a, b): a only if b\n\n\ndef add_rules(model: mathopt.Model, x: dict, projects: list[Project], limits: Limits) -> None:\n    \"\"\"Budget, crew-weeks, a cap per region, conflicting pairs and needs.\"\"\"\n    # TODO: the rows of your formulation.\n    return None\n\n\ndef build(projects: list[Project], limits: Limits) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"tower-upgrades\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    add_rules(model, x, projects, limits)\n    model.maximize(sum(p.value * x[p.pid] for p in projects))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Project(\"A\", 40, 3, \"N\", 10), Project(\"B\", 30, 2, \"N\", 8)], Limits(60, 4, {\"N\": 1}))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    print(result.termination.reason.name, result.objective_value())\n",
+  "exercise": {
+    "main_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-2/upgrades.py",
+    "test_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-2/test_upgrades.py",
+    "run_command": [
+      "python3",
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-2/upgrades.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-2/target/report.xml",
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-2/test_upgrades.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_plan_over_budget_is_refused",
+        "kind": "main",
+        "says": "a plan within the budget is allowed, and one over it refused"
+      },
+      {
+        "id": "test_a_plan_over_the_crew_weeks_is_refused",
+        "kind": "main",
+        "says": "a plan that needs more crew-weeks than there are is refused"
+      },
+      {
+        "id": "test_a_region_over_its_cap_is_refused",
+        "kind": "main",
+        "says": "a region with more projects than its cap is refused"
+      },
+      {
+        "id": "test_a_conflicting_pair_is_refused",
+        "kind": "main",
+        "says": "two conflicting projects together are refused"
+      },
+      {
+        "id": "test_a_need_runs_one_way",
+        "kind": "edge",
+        "says": "a needed project may be funded alone, and the one that needs it may not"
+      },
+      {
+        "id": "test_each_region_has_its_own_cap",
+        "kind": "edge",
+        "says": "projects in different regions count against different caps"
+      },
+      {
+        "id": "test_a_region_with_no_cap_entry_has_no_cap",
+        "kind": "edge",
+        "says": "a region missing from the caps has no cap, and a region with a cap still has one"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "53-mock-interviews/README_15.1.6.md",
+      "section": "Whiteboard: Projects Under a Budget, Crews and Regional Caps"
+    },
+    "concepts": [
+      "budget and crew-week rows on one binary per project",
+      "regional caps, conflicting pairs and one-way needs as rows, formulation first"
+    ]
+  }
+}

@@ -1,0 +1,559 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "07-the-capital-planning-domain",
+    "33-value-functions"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Normalizing different units",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "7.4.2 Normalizing Different Units"
+    },
+    {
+      "type": "para",
+      "text": "Lesson 7.4.1 left the GridCap board with four lists that disagree. An analyst offers a quick fix: add each project's four benefits into one score and sort. Tiny's P003, the tower set, comes out on top. A week later a colleague redoes the sheet with reliability in SAIDI minutes instead of customer-minutes, the unit the regulator reports, and P004, the breaker replacement, comes out on top. Same projects, same benefits, a different winner, and nobody changed their mind about anything."
+    },
+    {
+      "type": "para",
+      "text": "This lesson finds the cause and the cure in four rules: raw measures cannot be added; dividing each measure by a **reference** in its own unit makes the units cancel; when scores are added across the projects of a plan, zero must mean \"no benefit\"; and the references are fixed before the candidates are scored."
+    },
+    {
+      "type": "para",
+      "text": "GridCap is a fictional utility generated for this course, and its consequence table and references are invented. The first three rules use the tiny portfolio of lesson 7.4.1 and the last uses small, and the two number their projects independently: tiny's P006 is a transformer replacement, small's P006 a vegetation corridor widening."
+    },
+    {
+      "type": "para",
+      "text": "The rules below combine scores with the board's **swing weights**, one per measure. Lesson 7.4.3 shows how they are elicited; here they are only used. The board rates the four measures 100 (reliability), 80 (safety), 60 (financial) and 20 (environmental), and each weight is its rating divided by the total, 260:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Measure",
+        "Rating",
+        "Weight"
+      ],
+      "rows": [
+        [
+          "reliability",
+          "100",
+          "0.3846"
+        ],
+        [
+          "safety",
+          "80",
+          "0.3077"
+        ],
+        [
+          "financial",
+          "60",
+          "0.2308"
+        ],
+        [
+          "environmental",
+          "20",
+          "0.0769"
+        ]
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Adding Raw Measures Lets the Units Choose the Winner"
+    },
+    {
+      "type": "para",
+      "text": "The analyst's score is the plain sum of the four measures of lesson 7.4.1, each in its own unit:"
+    },
+    {
+      "type": "example",
+      "id": "units_choose-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "33-value-functions/src/units_choose.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "33-value-functions/src/units_choose.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "def raw_sum(benefit: dict[str, float]) -> float:\n    return sum(benefit.values())\n\n\nin_minutes = {pid: raw_sum(b) for pid, b in benefits.items()}\n# The same benefits, with reliability stated as SAIDI minutes instead of customer-minutes.\nin_saidi = {pid: raw_sum({**b, \"reliability\": b[\"reliability\"] / CUSTOMERS_SERVED}) for pid, b in benefits.items()}"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "raw sum, reliability in customer-minutes: P003 P006 P007 P001 P002 P004 P008 P005\nraw sum, reliability in SAIDI minutes:    P004 P001 P006 P002 P003 P007 P008 P005\n  P003:  1,653,792.6 vs    579.4\n  P004:    170,510.0 vs  2,122.8"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Compare these rankings with lesson 7.4.1's. The first is exactly the reliability ranking, and the second is exactly the financial one. In customer-minutes, reliability numbers run to the millions and drown the rest: P003's sum is 1,653,792.6, of which 1,653,216 are customer-minutes. In SAIDI minutes the same benefit is 2.76, NPV's hundreds and thousands of $k take over, and the ranking becomes the finance list. Safety, in fractions of an incident, never mattered in either."
+    },
+    {
+      "type": "para",
+      "text": "A sum of raw measures is a weighted sum whose weights nobody chose: each measure's weight is \"one per unit\", and the unit is an accident of how the data was stored. Changing a unit is not a change of opinion, so it must not be able to change a decision. That is the test every combined score has to pass, and the raw sum fails it."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Normalized Score Divides by a Reference, So the Units Cancel"
+    },
+    {
+      "type": "para",
+      "text": "The cure is to divide each measure by a **reference** amount of the same measure, in the same unit, before anything is added:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "n_{i,k} = \\frac{m_{i,k}}{R_k}"
+    },
+    {
+      "type": "para",
+      "text": "$`m_{i,k}`$ is project $`i`$'s benefit in measure $`k`$ and $`R_k`$ is measure $`k`$'s reference. The result $`n_{i,k}`$ is the **normalized score**: a pure number with no unit, saying what share of the reference the project delivers. $`n = 0.5`$ means \"half the reference amount\", whatever the unit."
+    },
+    {
+      "type": "para",
+      "text": "Why the units cancel: restating a measure in another unit multiplies every amount of it by the same factor $`c > 0`$ (customer-minutes to SAIDI minutes: $`c = 1/600{,}000`$; $k to $M: $`c = 1/1{,}000`$). The reference is an amount of the same measure, so it is multiplied too, and"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\frac{c\\, m_{i,k}}{c\\, R_k} = \\frac{m_{i,k}}{R_k}"
+    },
+    {
+      "type": "para",
+      "text": "The normalized score is unchanged, so every sum built from it, every ranking and every plan chosen on it are unchanged as well."
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def normalized(benefit: dict[str, float], reference: dict[str, float]) -> dict[str, float]:\n    \"\"\"Each benefit as a share of its reference swing: 0 is no benefit, 1 is the full swing.\"\"\"\n    return {k: benefit[k] / reference[k] for k in benefit}"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's references (lesson 7.4.3 explains where they come from) are 3,000,000 customer-minutes, 1 safety incident, 200 tCO2e and $5,000k. Here is the tiny portfolio scored in those units, and again with every measure in a second set of units (SAIDI minutes, $M and kilograms of CO2e), with the references restated the same way:"
+    },
+    {
+      "type": "example",
+      "id": "normalize_units-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "33-value-functions/src/normalize_units.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "33-value-functions/src/normalize_units.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "scale = {\"reliability\": 1 / CUSTOMERS_SERVED, \"safety\": 1.0, \"environmental\": 1_000.0, \"financial\": 1 / 1_000}\nbenefits_2 = {pid: {k: b[k] * scale[k] for k in b} for pid, b in benefits.items()}\nreference_2 = {k: REFERENCE[k] * scale[k] for k in REFERENCE}"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "reference, first units:  {'reliability': 3000000, 'safety': 1.0, 'environmental': 200.0, 'financial': 5000}\nreference, second units: {'reliability': 5.0, 'safety': 1.0, 'environmental': 200000.0, 'financial': 5.0}\nP003 scores, first units:  {'reliability': 0.5511, 'safety': 0.0459, 'environmental': 0.0029, 'financial': 0.1152}\nP003 scores, second units: {'reliability': 0.5511, 'safety': 0.0459, 'environmental': 0.0029, 'financial': 0.1152}\nnormalized, first units:  P003 P006 P007 P001 P004 P002 P008 P005\nnormalized, second units: P003 P006 P007 P001 P004 P002 P008 P005\nlargest difference in value: 1.4e-17"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The value used for the ranking is the weighted sum of the scores, with the weights in the table at the top of the lesson. Its two versions differ by $`1.4 \\times 10^{-17}`$, floating-point rounding, and the rankings are the same. P003 delivers 55% of the reliability reference whether you call it 1,653,216 customer-minutes or 2.76 SAIDI minutes."
+    },
+    {
+      "type": "para",
+      "text": "The one way to break this is to rescale a measure and forget its reference. Lesson 7.4.4 does that on purpose and shows the ranking move; a test of the value function should catch it."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Zero Must Mean No Benefit When Scores Are Added Across Projects"
+    },
+    {
+      "type": "para",
+      "text": "A common alternative is the **min-max** (or \"0 to 100\") scale: the worst candidate scores 0 on each measure and the best scores 1, with the others in between:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "n^{\\text{mm}}_{i,k} = \\frac{m_{i,k} - L_k}{H_k - L_k}, \\qquad L_k = \\min_j m_{j,k},\\;\\; H_k = \\max_j m_{j,k}"
+    },
+    {
+      "type": "para",
+      "text": "It also cancels units (a unit change multiplies the top and the bottom of the fraction alike), and it is the \"relative scale\" of decision analysis, anchored at the least and most preferred options, much as the Celsius scale is anchored at freezing and boiling water. For choosing **one** option out of several it works well."
+    },
+    {
+      "type": "para",
+      "text": "A capital plan does not choose one project. It chooses a set, and its value is the **sum** of the selected projects' values. Under min-max, a project's score is its benefit *minus the worst candidate's*, so every selected project pays a deduction of $`\\sum_k w_k L_k / (H_k - L_k)`$ in value, once per project. A plan of two projects pays it twice; a plan of one pays it once. The scale's zero is not \"no benefit\" but \"as little as the worst candidate\", and adding scores multiplies that error by the number of projects."
+    },
+    {
+      "type": "para",
+      "text": "Compare two tiny plans: two vegetation projects, P005 and P008 ($830k together), against one line rebuild, P002 ($2,730k), all tiny's. On each scale, the program sums the weighted scores, with the weights in the table at the top of the lesson. To isolate the zero, the \"from zero\" scale uses the same top as min-max, the best candidate:"
+    },
+    {
+      "type": "example",
+      "id": "zero_anchor-3",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "33-value-functions/src/zero_anchor.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "33-value-functions/src/zero_anchor.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "def min_max(b):          # 0 at the worst candidate, 1 at the best\n    return sum(WEIGHTS[k] * (b[k] - low[k]) / (high[k] - low[k]) for k in MEASURES)\n\n\ndef from_zero(b):        # 0 at no benefit, 1 at the best candidate\n    return sum(WEIGHTS[k] * b[k] / high[k] for k in MEASURES)"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "min-max  : P005 0.036 + P008 0.095 = 0.131  vs  P002 0.152  -> P002\nfrom zero: P005 0.096 + P008 0.151 = 0.247  vs  P002 0.208  -> P005 + P008\nP005's benefit in each measure: {'reliability': 17092.012, 'safety': 0.014, 'environmental': 2.374, 'financial': 123.0}\nlowest candidate in each measure: {'reliability': 17092.012, 'safety': 0.009, 'environmental': 0.457, 'financial': 123.0}"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The two scales prefer different plans. P005 is the worst candidate on reliability and on NPV, so min-max scores those two at zero, as if the $123k of NPV and the 17,092 customer-minutes it delivers did not exist. It is scored only on what it delivers *beyond the worst*, while P002 is scored on its excess over the same worst amount, deducted once. With two projects the pair pays the deduction twice, and the single project wins."
+    },
+    {
+      "type": "para",
+      "text": "On the from-zero scale a project with no benefit scores exactly 0 and adding it to a plan changes nothing, which is what a sum over projects needs. That is why the CIPT value function uses $`n = m / R`$: a **ratio scale** whose zero is \"no benefit\". The general rule: when a score is added up over a set, an additive shift in the score becomes a per-item bonus or penalty, so the scale's zero must be the zero of what it measures. A z-score (subtract the mean, divide by the standard deviation) fails for the same reason: its zero is the average candidate."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Reference Is Fixed Before the Candidates Are Scored"
+    },
+    {
+      "type": "para",
+      "text": "If the reference is not the best candidate, what is it? The tempting answer is \"the best candidate\"; it is easy and needs no meeting. But then each project's score depends on every other candidate. Here GridCap small's 39 projects other than small's P006 are ranked four times: with references taken from the best of all 40 candidates, from the best of the 39 after P006 is withdrawn (the vegetation team moves it into next year's maintenance budget), and twice with GridCap's fixed references:"
+    },
+    {
+      "type": "example",
+      "id": "moving_reference-4",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "33-value-functions/src/moving_reference.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "33-value-functions/src/moving_reference.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "print(\"top five of the 39 projects other than P006, by the reference used:\")\nfor label, reference in ((\"best of all 40 (P006 in)\", best_of(benefits)),\n                         (\"best of the 39 (P006 withdrawn)\", best_of(others)),\n                         (\"fixed swing, P006 in\", REFERENCE),\n                         (\"fixed swing, P006 withdrawn\", REFERENCE)):\n    order = ranking({p: value(benefits[p], reference, WEIGHTS) for p in others})"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "top five of the 39 projects other than P006, by the reference used:\n  best of all 40 (P006 in)       : P030 P028 P032 P022 P027\n  best of the 39 (P006 withdrawn): P027 P030 P022 P019 P007\n  fixed swing, P006 in           : P030 P028 P022 P032 P027\n  fixed swing, P006 withdrawn    : P030 P028 P022 P032 P027\nmeasures in which P006 is the best of all 40: ['reliability', 'safety', 'environmental']\nP006's reliability score against the fixed swing: 1.08"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "None of the 39 projects changed, yet withdrawing P006 moved P027 from fifth to first and pushed P028 out of the top five. P006 held the top of three measures, so its withdrawal shrank those references, and every remaining project's reliability, safety and environmental scores grew while its financial score stayed put. The weights were not touched, but the measures' relative pull was. A board that sees its ranking of P027 and P028 flip because of a project nobody discussed will not trust the model again."
+    },
+    {
+      "type": "para",
+      "text": "With fixed references both rankings are the same, because a project's score depends only on its own benefits. So the references are set once per planning cycle, written into the portfolio snapshot, and changed only on purpose. Two ways to set them:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**A fixed scale from the business:** the smallest change worth anything (normally 0, no benefit) to the largest a single project in this program could plausibly deliver. The UK government's multi-criteria manual suggests fixed scales whenever options are judged one after another rather than all at once, which is exactly the situation of a portfolio that gains and loses candidates between planning cycles.",
+        "**A frozen snapshot:** the best candidate of the portfolio at Budget Lock (lesson 7.1.3), stored and never recomputed for later what-if runs."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "A score above 1 is allowed: a project that delivers more than the reference simply scores more than the full swing (small's P006 scores 1.08 on reliability against 3,000,000 customer-minutes). Capping it at 1 would throw away real benefit: P006's last 8% of reliability would count for nothing."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Choosing a Normalization"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Method",
+        "Formula",
+        "Units cancel",
+        "Zero means no benefit",
+        "Score moves when a candidate leaves"
+      ],
+      "rows": [
+        [
+          "raw sum",
+          "$`m`$",
+          "no",
+          "yes",
+          "no"
+        ],
+        [
+          "ratio to a fixed reference",
+          "$`m / R`$",
+          "yes",
+          "yes",
+          "no"
+        ],
+        [
+          "ratio to the best candidate",
+          "$`m / \\max_j m_j`$",
+          "yes",
+          "yes",
+          "yes"
+        ],
+        [
+          "min-max",
+          "$`(m - L)/(H - L)`$",
+          "yes",
+          "no",
+          "yes"
+        ],
+        [
+          "z-score",
+          "$`(m - \\bar m)/s`$",
+          "yes",
+          "no",
+          "yes"
+        ],
+        [
+          "rank",
+          "position in the list",
+          "yes",
+          "no",
+          "yes"
+        ],
+        [
+          "monetize",
+          "$`m \\times p`$ ($ per unit)",
+          "yes, if $`p`$ is restated with the unit",
+          "yes",
+          "no"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Monetizing, pricing each unit in dollars (say $2.78 per customer-minute), is the ratio method in disguise: a fixed price $`p_k`$ is the same as $`w_k / R_k`$ in lesson 7.4.3. Some regulators publish such prices, and when a utility has them it can use them directly. A rank throws away magnitude: the first and second project differ by one place whether they differ by a hair or by a factor of ten."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Adding raw measures lets the units choose the winner.** On GridCap tiny the raw sum follows reliability in customer-minutes and finance in SAIDI minutes.",
+        "**A normalized score divides by a reference, so the units cancel.** $`n = m/R`$ with $`R`$ in the same unit; restating both by $`c`$ changes nothing, and the tiny ranking is the same in two unit systems.",
+        "**Zero must mean no benefit when scores are added across projects.** Min-max deducts the worst candidate once per project and prefers P002 to P005 + P008; the ratio scale prefers the pair.",
+        "**The reference is fixed before the candidates are scored.** References taken from the candidates let a withdrawn project reorder the others; fixed ones do not."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Symbol",
+        "Meaning"
+      ],
+      "rows": [
+        [
+          "$`m_{i,k}`$",
+          "benefit of project $`i`$ in measure $`k`$, in $`k`$'s unit"
+        ],
+        [
+          "$`R_k`$",
+          "measure $`k`$'s reference, in the same unit; GridCap: 3,000,000 customer-minutes, 1 incident, 200 tCO2e, $5,000k"
+        ],
+        [
+          "$`n_{i,k} = m_{i,k} / R_k`$",
+          "normalized score: no unit, 0 = no benefit, 1 = the full reference"
+        ],
+        [
+          "$`L_k, H_k`$",
+          "worst and best candidate in measure $`k`$ (min-max only)"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** UK Department for Communities and Local Government, [Multi-criteria analysis: a manual](https://assets.publishing.service.gov.uk/government/uploads/system/uploads/attachment_data/file/7612/1132618.pdf) (2009), section 6.2.8 on relative scales anchored at the least and most preferred options and on fixed scales for options judged one at a time, and section 6.2.10 on why scales in different units cannot be added until their units are equated (its Celsius and Fahrenheit example)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Restate safety in \"incidents per 1,000 failures\" and forget to restate its reference. Which way does safety's pull on the value move, and by what factor?",
+        "A board member wants SAIDI *after* the plan as the reliability measure (smaller is better). Write a normalized score for it whose zero is \"no improvement\".",
+        "The best candidate is frozen as the reference at Budget Lock. In a later what-if run a new project beats it on reliability. What is its reliability score, and is anything wrong?"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Test the Units, Not Only the Numbers"
+    },
+    {
+      "type": "para",
+      "text": "A value function is easy to break in a way no reviewer sees: someone loads emissions in kilograms from a new source and the references still say tonnes. Every emissions score is now a thousand times too large, each one still looks like a number, and the plan quietly starts caring about little but emissions. The defence is a test that restates each measure in another unit, together with its reference, and checks that every value and the ranking are unchanged (lesson 7.4.4 writes one), plus a check on load that each measure and its reference name the same unit. The units cancel only if they are the same units."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**units_choose.py.** Ranks tiny by the raw sum in two units for reliability (*Adding Raw Measures*). *Try:* State NPV in dollars instead of $k (multiply by 1,000). Predict the first project."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [units_choose.py](src/units_choose.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**normalize_units.py.** Scores tiny against the references in two unit systems (*A Normalized Score Divides by a Reference*). *Try:* Leave `reference_2` equal to `REFERENCE`. Predict which project comes first."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [normalize_units.py](src/normalize_units.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**zero_anchor.py.** Compares a pair of projects with a single one on min-max and from-zero scales (*Zero Must Mean No Benefit*). *Try:* Compare P005 + P008 + P002 with P001 on both scales. Predict which scale changes its mind."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [zero_anchor.py](src/zero_anchor.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**moving_reference.py.** Ranks small's projects against references from the candidates and against fixed references, with and without P006 (*The Reference Is Fixed*). *Try:* Withdraw P030 instead of P006. Predict whether the top five move."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [moving_reference.py](src/moving_reference.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**value_function.py.** The references, the weights and the value function used by every program."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [value_function.py](src/value_function.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 11,
+    "paras": 33,
+    "code": 4,
+    "tables": 3,
+    "lists": 8,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 4
+  },
+  "content_sha256": "403a65f33c57cb5edac0f0c4efb7a49434603a642f0558faf2502fa36f51c9a9"
+}

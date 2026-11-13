@@ -1,0 +1,152 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "49-cloud-deployment"
+  ],
+  "variant": "prose",
+  "unit": 6,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Lint a workflow before it can run",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The vegetation team is writing its own CI workflow for the trim planner. Before any workflow in the organisation may run, a lint step reads it, parsed by PyYAML, and refuses the habits this lesson warns about."
+    },
+    {
+      "type": "para",
+      "text": "In `workflow_lint.py`, write `lint(workflow)`. `workflow` is the parsed file (a dict; remember that PyYAML reads the key `on` as `True`, which this check does not need). Return the sorted findings, each once, as these exact texts:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`workflow: no top-level permissions` when the workflow has no `permissions` key, and `workflow: permissions write-all` when it is the string `write-all`. A job whose `permissions` is `write-all` gives `JOB: permissions write-all`.",
+        "`JOB: REF is not pinned to a commit SHA` for every `uses:` value not of the form `owner/name@` followed by a full 40-character lower-case hex SHA. A local action, whose `uses` starts with `./`, is code in the same repository and needs no pin.",
+        "`JOB: uses secret NAME` for every `secrets.NAME` found anywhere in a job's steps (`run`, `with`, `env`, at any depth), except `GITHUB_TOKEN`, the token GitHub gives every job.",
+        "`JOB: id-token: write without an AWS credentials step` when a job's permissions grant `id-token: write` and none of its steps uses `aws-actions/configure-aws-credentials`. A job with no `permissions` key of its own gets the workflow's, so a workflow-level `id-token: write` counts for it; a job that sets its own `permissions` uses only those. (The `write-all` finding, above, looks only at what each level writes itself.)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`PINNED`, `SECRET`, `AWS_STEP` and `texts` (every string inside a value) are given; about 20 lines remain."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport re\n\nPINNED = re.compile(r\"[^@\\s]+@[0-9a-f]{40}\")\nSECRET = re.compile(r\"secrets\\.(\\w+)\")\nAWS_STEP = \"aws-actions/configure-aws-credentials@\"\n\n\ndef texts(value) -> list[str]:\n    \"\"\"Every string inside a YAML value: a step's run, its with and env values.\"\"\"\n    if isinstance(value, str):\n        return [value]\n    if isinstance(value, dict):\n        return [t for v in value.values() for t in texts(v)]\n    if isinstance(value, list):\n        return [t for v in value for t in texts(v)]\n    return []\n\n\ndef lint(workflow: dict) -> list[str]:\n    \"\"\"The findings for a parsed workflow, sorted, each once.\"\"\"\n    found = set()\n    top = workflow.get(\"permissions\")\n    if top is None:\n        found.add(\"workflow: no top-level permissions\")\n    elif top == \"write-all\":\n        found.add(\"workflow: permissions write-all\")\n    for name, job in workflow.get(\"jobs\", {}).items():\n        perms = job.get(\"permissions\", {})\n        if perms == \"write-all\":\n            found.add(f\"{name}: permissions write-all\")\n        steps = job.get(\"steps\", [])\n        uses = [step[\"uses\"] for step in steps if \"uses\" in step]\n        for ref in uses:\n            if not ref.startswith(\"./\") and not PINNED.fullmatch(ref):\n                found.add(f\"{name}: {ref} is not pinned to a commit SHA\")\n        for secret in SECRET.findall(\" \".join(texts(steps))):\n            if secret != \"GITHUB_TOKEN\":\n                found.add(f\"{name}: uses secret {secret}\")\n        granted = job.get(\"permissions\", top)            # a job with no permissions of its own gets the workflow's\n        if isinstance(granted, dict) and granted.get(\"id-token\") == \"write\" and not any(u.startswith(AWS_STEP) for u in uses):\n            found.add(f\"{name}: id-token: write without an AWS credentials step\")\n    return sorted(found)\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport re\n\nPINNED = re.compile(r\"[^@\\s]+@[0-9a-f]{40}\")\nSECRET = re.compile(r\"secrets\\.(\\w+)\")\nAWS_STEP = \"aws-actions/configure-aws-credentials@\"\n\n\ndef texts(value) -> list[str]:\n    \"\"\"Every string inside a YAML value: a step's run, its with and env values.\"\"\"\n    if isinstance(value, str):\n        return [value]\n    if isinstance(value, dict):\n        return [t for v in value.values() for t in texts(v)]\n    if isinstance(value, list):\n        return [t for v in value for t in texts(v)]\n    return []\n\n\ndef lint(workflow: dict) -> list[str]:\n    \"\"\"The findings for a parsed workflow, sorted, each once.\"\"\"\n    found: set[str] = set()\n    # TODO: the workflow's permissions, then each job's permissions, pins, secrets and id-token.\n    return sorted(found)\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "bcdf78287ffec21baa519543f0d8dd8a83124cca99428fb66408e11e9e2d692f",
+  "starting_code": "from __future__ import annotations\n\nimport re\n\nPINNED = re.compile(r\"[^@\\s]+@[0-9a-f]{40}\")\nSECRET = re.compile(r\"secrets\\.(\\w+)\")\nAWS_STEP = \"aws-actions/configure-aws-credentials@\"\n\n\ndef texts(value) -> list[str]:\n    \"\"\"Every string inside a YAML value: a step's run, its with and env values.\"\"\"\n    if isinstance(value, str):\n        return [value]\n    if isinstance(value, dict):\n        return [t for v in value.values() for t in texts(v)]\n    if isinstance(value, list):\n        return [t for v in value for t in texts(v)]\n    return []\n\n\ndef lint(workflow: dict) -> list[str]:\n    \"\"\"The findings for a parsed workflow, sorted, each once.\"\"\"\n    found: set[str] = set()\n    # TODO: the workflow's permissions, then each job's permissions, pins, secrets and id-token.\n    return sorted(found)\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-06/practice-1/workflow_lint.py",
+    "test_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-06/practice-1/test_workflow_lint.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-06/practice-1/workflow_lint.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-06/practice-1/target/report.xml",
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-06/practice-1/test_workflow_lint.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_clean_workflow_passes_and_a_careless_one_is_caught",
+        "kind": "main",
+        "says": "a clean workflow has no findings; one with a tag, a stored key and no permissions has three"
+      },
+      {
+        "id": "test_a_short_sha_is_not_a_pin_and_a_local_action_needs_none",
+        "kind": "edge",
+        "says": "a seven-character SHA is not a pin, and a local ./ action needs none"
+      },
+      {
+        "id": "test_write_all_is_caught_at_both_levels",
+        "kind": "edge",
+        "says": "write-all permissions are found on the workflow and on a job"
+      },
+      {
+        "id": "test_a_secret_in_a_run_line_is_found_and_github_token_is_allowed",
+        "kind": "edge",
+        "says": "a secret inside a run line is found; GITHUB_TOKEN is allowed"
+      },
+      {
+        "id": "test_id_token_write_needs_an_aws_credentials_step",
+        "kind": "edge",
+        "says": "a job that may request an OIDC token but never uses it is caught"
+      },
+      {
+        "id": "test_a_workflow_level_id_token_is_inherited_by_a_job_without_its_own_permissions",
+        "kind": "edge",
+        "says": "a job with no permissions of its own inherits the workflow's id-token: write, and is caught the same way"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-06/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "49-cloud-deployment/README_12.5.6.md",
+      "section": "Pin Every Action to a Commit and Give the Token Least Privilege"
+    },
+    "concepts": [
+      "short-lived AWS credentials through OIDC and a role per job",
+      "actions pinned to commits and the token's least privilege"
+    ]
+  }
+}

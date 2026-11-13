@@ -1,0 +1,178 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "09-diagnostics-and-explainability",
+    "37-infeasibility"
+  ],
+  "variant": "prose",
+  "unit": 6,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A conflict, in the road planners' words",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A city's road-resurfacing model names its rows like this, and its conflict finder returns a list of such names. The council's planners want each one as a sentence. The table gives the exact sentence for each kind of row:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Row name",
+        "Sentence"
+      ],
+      "rows": [
+        [
+          "`cap_2027`",
+          "`The 2027 resurfacing budget is $12,500k.`"
+        ],
+        [
+          "`need_R12`",
+          "`R12 Elm Street must be done this plan.`"
+        ],
+        [
+          "`pin_R31_2027`",
+          "`Council fixed R31 Harbour Road to 2027.`"
+        ],
+        [
+          "`crew_north_2027`",
+          "`The north district has 3 paving crews in 2027.`"
+        ],
+        [
+          "`before_R07_R12`",
+          "`R07 Mill Lane must finish before R12 Elm Street starts.`"
+        ],
+        [
+          "any other name, such as `noise_R12_night`",
+          "`Rule noise_R12_night has no description yet.`"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "A district with one crew gets the singular: `The west district has 1 paving crew in 2029.` A row of a known kind that names a job, year or district missing from the data (`need_R99` when `jobs` has no `R99`) gets the same fallback sentence as an unknown kind: `Rule need_R99 has no description yet.`"
+    },
+    {
+      "type": "para",
+      "text": "`jobs` maps a job id (letters and digits, no underscores) to its street; `caps` maps a year to the resurfacing budget in $k, written with a thousands separator; `crews` maps `(district, year)` to the number of paving crews. A district name may contain underscores (`south_east`); in the sentence each underscore becomes a space."
+    },
+    {
+      "type": "para",
+      "text": "Write `translate(conflict, jobs, caps, crews)` returning the sentences, in the conflict's order. The `sentence` helper is a good place for the per-row work. About twenty lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\n\ndef _cap(args, jobs, caps, crews):\n    return f\"The {args[0]} resurfacing budget is ${caps[int(args[0])]:,}k.\"\n\n\ndef _need(args, jobs, caps, crews):\n    return f\"{args[0]} {jobs[args[0]]} must be done this plan.\"\n\n\ndef _pin(args, jobs, caps, crews):\n    return f\"Council fixed {args[0]} {jobs[args[0]]} to {args[1]}.\"\n\n\ndef _crew(args, jobs, caps, crews):\n    *district, year = args                                  # a district name may hold underscores\n    count = crews['_'.join(district), int(year)]\n    return f\"The {' '.join(district)} district has {count} paving crew{'s' if count != 1 else ''} in {year}.\"\n\n\ndef _before(args, jobs, caps, crews):\n    return f\"{args[0]} {jobs[args[0]]} must finish before {args[1]} {jobs[args[1]]} starts.\"\n\n\nWRITERS = {\"cap\": _cap, \"need\": _need, \"pin\": _pin, \"crew\": _crew, \"before\": _before}\n\n\ndef unknown(row: str) -> str:\n    return f\"Rule {row} has no description yet.\"\n\n\ndef sentence(row: str, jobs: dict, caps: dict, crews: dict) -> str:\n    \"\"\"One conflict row of the road program, in the words the city's planners use.\"\"\"\n    kind, *args = row.split(\"_\")\n    if kind not in WRITERS:\n        return unknown(row)\n    try:\n        return WRITERS[kind](args, jobs, caps, crews)\n    except KeyError:                                        # a job, year or district the data lacks\n        return unknown(row)\n\n\ndef translate(conflict: list[str], jobs: dict, caps: dict, crews: dict) -> list[str]:\n    return [sentence(row, jobs, caps, crews) for row in conflict]\n\n\nif __name__ == \"__main__\":\n    jobs = {\"R12\": \"Elm Street\"}\n    print(translate([\"need_R12\", \"cap_2027\"], jobs, {2027: 12500}, {}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\n\ndef sentence(row: str, jobs: dict, caps: dict, crews: dict) -> str:\n    \"\"\"One conflict row of the road program, in the words the city's planners use.\"\"\"\n    # TODO: one sentence per kind of row, as the table in the statement says.\n    return row\n\n\ndef translate(conflict: list[str], jobs: dict, caps: dict, crews: dict) -> list[str]:\n    return [sentence(row, jobs, caps, crews) for row in conflict]\n\n\nif __name__ == \"__main__\":\n    jobs = {\"R12\": \"Elm Street\"}\n    print(translate([\"need_R12\", \"cap_2027\"], jobs, {2027: 12500}, {}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 1,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "fa53a2cd3f8faa650145ad7ee45e5aa33d0b1e7c526f1b692f5fcfd6d24fc60b",
+  "starting_code": "from __future__ import annotations\n\n\ndef sentence(row: str, jobs: dict, caps: dict, crews: dict) -> str:\n    \"\"\"One conflict row of the road program, in the words the city's planners use.\"\"\"\n    # TODO: one sentence per kind of row, as the table in the statement says.\n    return row\n\n\ndef translate(conflict: list[str], jobs: dict, caps: dict, crews: dict) -> list[str]:\n    return [sentence(row, jobs, caps, crews) for row in conflict]\n\n\nif __name__ == \"__main__\":\n    jobs = {\"R12\": \"Elm Street\"}\n    print(translate([\"need_R12\", \"cap_2027\"], jobs, {2027: 12500}, {}))\n",
+  "exercise": {
+    "main_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-06/practice-1/messages.py",
+    "test_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-06/practice-1/test_messages.py",
+    "run_command": [
+      "python3",
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-06/practice-1/messages.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-06/practice-1/target/report.xml",
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-06/practice-1/test_messages.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_each_kind_of_row_becomes_its_sentence",
+        "kind": "main",
+        "says": "each kind of row becomes its sentence, with the job's id and street"
+      },
+      {
+        "id": "test_a_district_name_may_contain_an_underscore",
+        "kind": "edge",
+        "says": "a district name may hold underscores, and the sentence writes them as spaces"
+      },
+      {
+        "id": "test_money_is_written_with_a_thousands_separator",
+        "kind": "edge",
+        "says": "a budget below ten thousand still gets a thousands separator"
+      },
+      {
+        "id": "test_a_row_the_translator_does_not_know_still_gets_a_sentence",
+        "kind": "edge",
+        "says": "a row of an unknown kind still gets a sentence, never its raw name alone"
+      },
+      {
+        "id": "test_a_row_naming_an_unknown_job_or_district_gets_the_same_fallback",
+        "kind": "edge",
+        "says": "a row that names a job, year or district the data lacks gets the fallback sentence"
+      },
+      {
+        "id": "test_one_crew_is_singular",
+        "kind": "edge",
+        "says": "one crew is written in the singular"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-06/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "37-infeasibility/README_9.1.6.md",
+      "section": "A Planner Message Names Rules and Projects, Never Rows"
+    },
+    "concepts": [
+      "a sentence per kind of row, with names, money and who set the number"
+    ]
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "project_api": 1,
+  "title": "Give the same plan every run, and record it",
+  "before": "../../../../54-project-vegetation-crews/steps/06",
+  "after": "../../../../54-project-vegetation-crews/steps/07",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the tiny season matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "vegcrew/planner.py",
+      "signature": "def make_plan(season: Season, overrides: tuple[Override, ...] = ()) -> Plan",
+      "contract": "As before, with the solver set from SETTINGS, a module constant: 4 workers that interleave instead of racing, random_seed 7, and max_deterministic_time 10.0 in place of a limit in seconds.",
+      "idea": "Determinism is a setting: interleaved workers, a seed and a limit on deterministic time repeat the same search on every run.",
+      "lesson": {
+        "title": "4.6.3 Deterministic Time, Seeds and Reproducible Runs",
+        "href": "../../../../04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/units/unit-03/4.6.3-deterministic-time-seeds-and-reproducible-runs.unit.html"
+      }
+    },
+    {
+      "file": "vegcrew/record.py",
+      "signature": "def canonical(value) -> str",
+      "contract": "Returns a value as JSON with sorted keys and no spaces, so equal values give equal text.",
+      "idea": "A hash identifies content only when the content is written one way.",
+      "lesson": {
+        "title": "10.2.5 Building the Deterministic Run Harness",
+        "href": "../../../../10-numerics-and-determinism/41-determinism-and-reproducibility/units/unit-05/10.2.5-building-the-deterministic-run-harness.unit.html"
+      },
+      "stub": "return \"\""
+    },
+    {
+      "file": "vegcrew/record.py",
+      "signature": "def fingerprint(raw: dict, overrides: tuple[Override, ...] = ()) -> str",
+      "contract": "Returns the SHA-256 hex digest of the canonical JSON of {'season': raw, 'overrides': each override's fields as a dictionary}.",
+      "idea": "Equal inputs give equal fingerprints, and any change to the season or the overrides changes it.",
+      "lesson": {
+        "title": "10.2.5 Building the Deterministic Run Harness",
+        "href": "../../../../10-numerics-and-determinism/41-determinism-and-reproducibility/units/unit-05/10.2.5-building-the-deterministic-run-harness.unit.html"
+      }
+    },
+    {
+      "file": "vegcrew/record.py",
+      "signature": "def plan_record(raw: dict, plan: Plan, overrides: tuple[Override, ...] = ()) -> dict",
+      "contract": "Returns the record of a plan: input_sha256, the OR-Tools version (ortools.__version__), the settings, status, risk_carried, cost, the trims sorted by circuit id as `<cid> on <crew> weeks <first>-<last>`, and the explanation as a list.",
+      "idea": "A record names the input, the solver and its settings, so a difference points at its cause.",
+      "lesson": {
+        "title": "10.2.5 Building the Deterministic Run Harness",
+        "href": "../../../../10-numerics-and-determinism/41-determinism-and-reproducibility/units/unit-05/10.2.5-building-the-deterministic-run-harness.unit.html"
+      }
+    },
+    {
+      "file": "vegcrew/record.py",
+      "signature": "def dumps(record: dict) -> str",
+      "contract": "Returns the record as the text stored and compared: keys sorted, an indent of one, and a newline at the end.",
+      "idea": "Two runs gave the same plan exactly when their records are equal byte for byte.",
+      "lesson": {
+        "title": "12.3.3 Golden Datasets and Regression Tests",
+        "href": "../../../../12-engineering-the-optimization-service/47-testing-optimization-code/units/unit-03/12.3.3-golden-datasets-and-regression-tests.unit.html"
+      }
+    },
+    {
+      "file": "vegcrew/__main__.py",
+      "signature": "def main(argv: list[str] | None = None) -> None",
+      "contract": "With --record, prints the plan's record as dumps writes it, adding no newline of its own; without it, the report as before.",
+      "idea": "A golden file is written by the code itself and reviewed by a person.",
+      "lesson": {
+        "title": "12.3.3 Golden Datasets and Regression Tests",
+        "href": "../../../../12-engineering-the-optimization-service/47-testing-optimization-code/units/unit-03/12.3.3-golden-datasets-and-regression-tests.unit.html"
+      }
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_records.py::test_the_record_names_its_input_solver_and_settings",
+      "main",
+      "the record names its input's fingerprint, the OR-Tools version and the seeded settings"
+    ],
+    [
+      "tests/test_records.py::test_the_tiny_plan_matches_its_golden_record",
+      "main",
+      "the tiny season's record matches its golden file"
+    ],
+    [
+      "tests/test_records.py::test_the_small_plan_matches_its_golden_record",
+      "main",
+      "the small season's record matches its golden file"
+    ],
+    [
+      "tests/test_records.py::test_the_fingerprint_changes_with_the_input_and_nothing_else",
+      "edge",
+      "the fingerprint changes with the season and with the overrides, and with nothing else"
+    ],
+    [
+      "tests/test_records.py::test_two_fresh_processes_print_the_golden_record_byte_for_byte",
+      "edge",
+      "two fresh processes print the golden record byte for byte"
+    ]
+  ],
+  "plants": {
+    "tests/test_records.py::test_the_fingerprint_changes_with_the_input_and_nothing_else": [
+      [
+        "vegcrew/record.py",
+        "[vars(o) for o in overrides]",
+        "[]"
+      ]
+    ],
+    "tests/test_records.py::test_two_fresh_processes_print_the_golden_record_byte_for_byte": [
+      [
+        "vegcrew/__main__.py",
+        "print(dumps(plan_record(raw, plan)), end=\"\")",
+        "print(dumps(plan_record(raw, plan)))"
+      ]
+    ]
+  },
+  "cites": {
+    "path": "54-project-vegetation-crews/README_14.1.7.md",
+    "section": null
+  }
+}

@@ -1,0 +1,153 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "23-binary-logic"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Rent the inspection robot by the week",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility is choosing which trunk mains to inspect this season with a pipe-crawling robot. It rents the robot from a specialist firm, and the rental terms decide which inspection plans are affordable:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "The robot is rented in **whole weeks** at `weekly_rate` ($k) per week, and in one week it can inspect up to `km_per_week` kilometres of pipe, in any mix of pipes.",
+        "The firm can lend the robot for at most `max_weeks` weeks this season.",
+        "The season's **budget** must cover the inspections' own costs (crews, traffic control, access pits) *and* the rental."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The model in `inspection.py` has a binary `x[pid]` for each candidate main (1 if it is inspected). Write `add_inspection_rules(model, x, pipes, km_per_week, weekly_rate, max_weeks, budget)` so that the model allows exactly the plans the rental terms make affordable. Add whatever variables you need; the starter has no budget row, so the budget is yours to write."
+    },
+    {
+      "type": "para",
+      "text": "With $`P`$ the candidate mains, $`\\ell_p`$ the length of main $`p`$ (km) and $`c_p`$ its inspection cost ($k), the model so far is only"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "x_p \\in \\{0, 1\\} \\quad \\forall p \\in P \\qquad \\text{(inspect main } p\\text{)}"
+    },
+    {
+      "type": "para",
+      "text": "Write the rest of the formulation first: each new variable with its domain and bounds, then each row with a label. Then code it."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix which mains are inspected and ask the solver whether some rental makes the plan affordable, so any correct formulation passes. About five lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Pipe:\n    pid: str\n    km: float\n    cost: int        # $k, the inspection's own cost\n\n\ndef add_inspection_rules(model: mathopt.Model, x: dict, pipes: list[Pipe], km_per_week: float,\n                         weekly_rate: int, max_weeks: int, budget: int) -> None:\n    \"\"\"Whole weeks of rental cover the kilometres inspected; costs plus rental stay within the budget.\"\"\"\n    weeks = model.add_variable(lb=0, ub=max_weeks, is_integer=True, name=\"weeks\")\n    model.add_linear_constraint(km_per_week * weeks >= sum(p.km * x[p.pid] for p in pipes), name=\"coverage\")\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in pipes) + weekly_rate * weeks <= budget,\n                                name=\"budget\")\n\n\ndef build(pipes: list[Pipe], km_per_week: float, weekly_rate: int, max_weeks: int,\n          budget: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"pipe-inspection\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in pipes}\n    add_inspection_rules(model, x, pipes, km_per_week, weekly_rate, max_weeks, budget)\n    model.maximize(sum(p.km * x[p.pid] for p in pipes))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    mains = [Pipe(\"M1\", 12.0, 40), Pipe(\"M2\", 25.0, 90)]\n    model, x = build(mains, 30.0, 50, 2, 300)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Pipe:\n    pid: str\n    km: float\n    cost: int        # $k, the inspection's own cost\n\n\ndef add_inspection_rules(model: mathopt.Model, x: dict, pipes: list[Pipe], km_per_week: float,\n                         weekly_rate: int, max_weeks: int, budget: int) -> None:\n    \"\"\"Whole weeks of rental cover the kilometres inspected; costs plus rental stay within the budget.\"\"\"\n    # TODO: the rental variable, the coverage row and the budget row.\n    return None\n\n\ndef build(pipes: list[Pipe], km_per_week: float, weekly_rate: int, max_weeks: int,\n          budget: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"pipe-inspection\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in pipes}\n    add_inspection_rules(model, x, pipes, km_per_week, weekly_rate, max_weeks, budget)\n    model.maximize(sum(p.km * x[p.pid] for p in pipes))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    mains = [Pipe(\"M1\", 12.0, 40), Pipe(\"M2\", 25.0, 90)]\n    model, x = build(mains, 30.0, 50, 2, 300)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "8fff9de242f8060bfd118c9bde4b22bb51850d3e2fc9f2e285ccf6b2bf768fc3",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Pipe:\n    pid: str\n    km: float\n    cost: int        # $k, the inspection's own cost\n\n\ndef add_inspection_rules(model: mathopt.Model, x: dict, pipes: list[Pipe], km_per_week: float,\n                         weekly_rate: int, max_weeks: int, budget: int) -> None:\n    \"\"\"Whole weeks of rental cover the kilometres inspected; costs plus rental stay within the budget.\"\"\"\n    # TODO: the rental variable, the coverage row and the budget row.\n    return None\n\n\ndef build(pipes: list[Pipe], km_per_week: float, weekly_rate: int, max_weeks: int,\n          budget: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"pipe-inspection\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in pipes}\n    add_inspection_rules(model, x, pipes, km_per_week, weekly_rate, max_weeks, budget)\n    model.maximize(sum(p.km * x[p.pid] for p in pipes))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    mains = [Pipe(\"M1\", 12.0, 40), Pipe(\"M2\", 25.0, 90)]\n    model, x = build(mains, 30.0, 50, 2, 300)\n    print(len(list(model.linear_constraints())), \"rows\")\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-2/inspection.py",
+    "test_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-2/test_inspection.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-2/inspection.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-2/target/report.xml",
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-2/test_inspection.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_rental_is_paid_from_the_budget",
+        "kind": "main",
+        "says": "a plan whose pipe costs and robot rental fit the budget is allowed, and one whose pipe costs fit but whose rental does not is refused"
+      },
+      {
+        "id": "test_the_robot_is_available_for_a_limited_number_of_weeks",
+        "kind": "main",
+        "says": "a plan with more kilometres than the available weeks can inspect is refused"
+      },
+      {
+        "id": "test_weeks_are_rented_whole",
+        "kind": "edge",
+        "says": "a plan that would fit the budget only if the robot could be rented for part of a week is refused"
+      },
+      {
+        "id": "test_a_plan_with_no_pipes_rents_no_weeks",
+        "kind": "edge",
+        "says": "a plan that inspects no pipe pays no rental"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "23-binary-logic/README_6.1.1.md",
+      "section": "A Count Rounded Up to Whole Batches Needs an Integer Variable"
+    },
+    "concepts": [
+      "a number of batches is an integer variable bounded below by the quantity it must cover"
+    ]
+  }
+}

@@ -1,0 +1,368 @@
+# 6.7.3 Symmetry and How to Break It
+
+GridCap medium's Ridge region has fourteen large transmission jobs to finish, each needing between 9
+and 14 months of one line crew's work, and four line crews to do them. The crews are
+interchangeable: same skills, same depot, same equipment. Each job goes to one crew, a crew works
+its jobs one after another, and the planners want every job done as early as possible, so they
+minimize the month the last crew finishes. It is a small model, 57 variables, and HiGHS with its
+symmetry handling switched off needs 3,913 nodes to prove its answer. The reason is not the size of
+the model. It is that every plan appears in it 24 times.
+
+This lesson explains why identical crews (or trucks, or transformers, or any identical assets) make a
+MILP slow, and four ways to deal with it, each measured on the same crews: rows that order the
+crews, counting identical jobs instead of naming them, and the solver's own symmetry handling.
+
+GridCap is a fictional utility's portfolio, generated for this course. Reading a project's
+`crew_months` as the months one crew needs for it, and the four identical crews, are this lesson's
+own scenario.
+
+## The Model
+
+**Sets.** $`J`$ the jobs (Ridge's 14 largest transmission projects, in order of crew-months, largest
+first, ties by project id); $`K = \{0, 1, 2, 3\}`$ the crews.
+
+**Parameters.** $`m_j`$, the months of work job $`j`$ needs (14, 14, 13, 13, 13, 13, 12, 12, 11,
+11, 10, 10, 10, 9).
+
+**Variables.** $`x_{j,k} \in \{0, 1\}`$ for $`j \in J`$, $`k \in K`$: job $`j`$ goes to crew $`k`$.
+$`0 \le C \le \sum_j m_j`$: the makespan, the month by which every crew has finished.
+
+**Objective.**
+
+```math
+\min \; C
+```
+
+**Constraints.** Write $`L_k = \sum_{j \in J} m_j\, x_{j,k}`$ for crew $`k`$'s load, the month it
+finishes.
+
+```math
+\begin{aligned}
+\sum_{k \in K} x_{j,k} &= 1 && \forall j \in J && \text{(one\_crew}_j) \\
+L_k &\le C && \forall k \in K && \text{(finish}_k) \\
+L_k &\ge L_{k+1} && \forall k \in K,\ k < |K| - 1 && \text{(load\_order}_k\text{, optional)} \quad \leftarrow \text{this lesson} \\
+x_{j,k} &= 0 && \forall j \in J,\ k \in K,\ k > n(j) && \text{(index\_order}_{j,k}\text{, optional)} \quad \leftarrow \text{this lesson}
+\end{aligned}
+```
+
+where $`n(j)`$ is job $`j`$'s position in the list, counting from 0. A model uses at most one of the two
+optional families; the third rule shows why never both.
+
+```python
+def build(jobs: dict[str, int], crews: int, order: str | None = None) -> CrewSplit:
+    model = mathopt.Model(name="crew split")
+    x = {(j, k): model.add_binary_variable(name=f"x_{j}_{k}") for j in jobs for k in range(crews)}
+    makespan = model.add_variable(lb=0, ub=sum(jobs.values()), name="makespan")
+    for j in jobs:
+        model.add_linear_constraint(sum(x[j, k] for k in range(crews)) == 1, name=f"one_crew_{j}")
+    load = [sum(m * x[j, k] for j, m in jobs.items()) for k in range(crews)]
+    for k in range(crews):
+        model.add_linear_constraint(load[k] <= makespan, name=f"finish_{k}")
+    add_order(model, x, jobs, crews, load, order)
+    model.minimize(makespan)
+    return CrewSplit(model, x, makespan, jobs)
+```
+
+## Identical Crews Make Every Plan Appear Once per Numbering of the Crews
+
+A **symmetry** of a model is a way of renaming its variables that turns every allowed point into an
+allowed point with the same objective value. Here, renumbering the crews is one: if crews 0 and 2
+swap all their jobs, every row still holds (each job still has one crew, and the two loads swap
+places under the same makespan), and the makespan is unchanged. With 4 crews there are
+$`4! = 4 \times 3 \times 2 \times 1 = 24`$ numberings, so a plan that uses all four crews with
+different jobs appears as 24 different points $`x`$:
+
+```text
+Ridge's 14 largest transmission jobs, crew-months: [14, 14, 13, 13, 13, 13, 12, 12, 11, 11, 10, 10, 10, 9], total 165
+best makespan 43 months (a perfect split would be 41.25)
+  crew 0: P354 P102 P202 P388  load 42
+  crew 1: P324 P198 P238  load 40
+  crew 2: P217 P128 P143 P260  load 43
+  crew 3: P384 P167 P208  load 40
+renumberings of the 4 crews: 24, distinct x: 24, allowed with makespan 43: 24
+```
+
+To the business these 24 points are one plan: "these four groups of jobs, one group per crew". To
+the MILP they are 24 different optimal solutions. The same is true of every other plan, good or bad,
+so the whole space of 0/1 points is 24 copies of the space of real plans.
+
+The question to ask of any model is whether it has identical things that the model names apart:
+crews, trucks, warehouses, transformers bought in a batch, time slots of the same length. Lesson
+6.3.2's design note found that GridCap's own crews differ by region and capacity, so its model there
+had no such symmetry. These four do not differ in anything the model reads.
+
+## Symmetry Costs Nodes Because Each Copy Must Be Ruled Out Separately
+
+The LP relaxation's bound is $`165 / 4 = 41.25`$ months: it can split every job into fractions and
+spread the 165 months evenly. The best plan finishes in month 43, so branch-and-bound must prove that
+no split finishes by month 42 (the loads are whole months, so the makespan is too).
+
+Proving that something is impossible means ruling out every way it could happen. Suppose the search
+branches on "job P324 goes to crew 0" and, deep in that branch, rules out every split with P324 on
+crew 0. The other branch, "P324 is not on crew 0", still contains the same splits with P324 on crew 1,
+2 or 3, and the LP relaxation cannot tell them apart from the ones just ruled out. They are ruled out
+again, three more times, and the same happens at every level below. A pruned node prunes one copy,
+not the plan. With HiGHS's own symmetry handling switched off (the last rule shows the switch), the
+plain model takes 3,913 nodes:
+
+```text
+order rows   detection  makespan  nodes
+None         off              43   3913
+```
+
+(the first line of the next rule's table). `symmetry_rows.py` builds and solves that plain model
+twice more at its end, and gets the same count each time:
+
+```text
+plain model, detection off, two more identical runs: nodes 3913, 3913
+```
+
+HiGHS repeats its node count when the model, the HiGHS version and the settings are the same, which
+is what makes the comparisons within this lesson and the next valid. A count does not carry over:
+lesson 6.6.3 warned that it depends on the instance, the solver and its version, even on the order
+of the rows, so another OR-Tools release, or the same rows written in another order, may give a
+different number.
+
+## An Ordering Row Keeps at Least One Copy of Every Plan and Removes the Rest
+
+The cure is to choose one numbering of the crews in advance and add rows that refuse every other.
+Such **symmetry-breaking rows** are not valid inequalities in the sense of lesson 6.7.2: they do cut
+off allowed plans, the other numberings. What they must keep is at least one copy of every plan, so
+that the optimum value cannot change. Two classic choices:
+
+**Order by load.** Number the crews from busiest to least busy: $`L_0 \ge L_1 \ge L_2 \ge L_3`$. Any
+plan can be renumbered this way (sort its crews by load), so every plan keeps at least one copy.
+When two crews have equal loads, both orders survive, so a plan can keep more than one copy.
+
+**Order by first job.** Number the crews by the first job (in the list $`J`$) each one holds. Then
+crew 0 holds job 0; crew 1's first job comes after crew 0's; and so on. A consequence that is easy
+to write as rows: job number $`n`$ can only be on crews $`0, \dots, n`$, because the crews before
+its own each hold an earlier job. So
+
+```math
+x_{j,k} = 0 \qquad \text{for every crew } k > n(j)
+```
+
+Any plan can be renumbered by first job, and that copy satisfies these rows, so again every plan
+keeps a copy. The rows do not refuse every other copy: they only restrict jobs 0, 1 and 2, the jobs
+whose position is below the last crew's number, so some other numberings pass too. What they do
+refuse, they refuse by fixing variables, the cheapest kind of row there is.
+
+```python
+    if order == "load":
+        # Crew 0 is the busiest, crew 1 the next, and so on.
+        for k in range(crews - 1):
+            model.add_linear_constraint(load[k] >= load[k + 1], name=f"load_order_{k}")
+    elif order == "index":
+        # Job number n (0-based, in the jobs' order) may only go to crews 0..n.
+        for n, j in enumerate(jobs):
+            for k in range(n + 1, crews):
+                model.add_linear_constraint(x[j, k] == 0, name=f"index_order_{j}_{k}")
+```
+
+**Never both.** Each family picks a numbering, and they pick by different rules. Take a plan whose
+busiest crew does not hold job 0, like the one above: P324, job 0, is on a crew with 40 months, and
+the busiest crew has 43. The first-job rows put P324's crew first; the load rows put the
+43-month crew first. No numbering does both, so that plan loses every copy. If it was the only
+optimal plan, the optimum changes. Two symmetry-breaking families are safe together only when one
+numbering satisfies both, which must be proved, not hoped. Nor does the second family buy a smaller
+search for sure: removing copies is not a promise of fewer nodes, as the table below shows, and the
+extra rows cannot loosen the LP bound either, since a row can only shrink the LP region. The one
+thing the combination adds for certain is the risk of losing the optimum.
+
+All three models on Ridge, with HiGHS's symmetry detection off and on:
+
+```text
+order rows   detection  makespan  nodes
+None         off              43   3913
+None         on               43    305
+load         off              43    791
+load         on               43    196
+index        off              43    688
+index        on               43    139
+```
+
+The makespan is 43 in every row: no copy of the best plan was lost. With detection off, the load rows
+cut the search from 3,913 nodes to 791 and the first-job rows to 688.
+
+<!-- practice 1 -->
+
+## Identical Jobs Are Symmetric Too: Count Them Instead of Naming Them
+
+The crews are not the only identical things here. Four jobs need 13 months, and nothing else about
+them matters to this model. Swapping two of them between crews changes $`x`$ and changes nothing
+else, another symmetry. Ordering rows could break it too, but there is a more direct remedy: stop
+naming the identical things. Group the jobs by length, let $`a_s`$ be the number of jobs of $`s`$
+months, and decide only how many of each length each crew gets:
+
+```math
+\begin{aligned}
+& n_{s,k} \in \{0, 1, \dots, a_s\} && \forall s \in S,\ k \in K && \text{(integer)} \\
+& \textstyle\sum_{k \in K} n_{s,k} = a_s && \forall s \in S && \text{(all}_s) \\
+& \textstyle\sum_{s \in S} s\, n_{s,k} \le C && \forall k \in K && \text{(finish}_k)
+\end{aligned}
+```
+
+with $`S`$ the set of lengths. A plan of this model, "crew 0 gets two 13-month jobs and one 14-month
+job", stands for every assignment of named jobs with those counts; turning it back into named jobs
+is a matter of handing them out in any order. The model never sees the difference between two
+13-month jobs, so it cannot explore both versions.
+
+```python
+    n = {(s, k): model.add_integer_variable(lb=0, ub=have[s], name=f"n_{s}_{k}") for s in lengths for k in range(crews)}
+```
+
+```text
+job lengths and how many of each: {14: 2, 13: 4, 12: 2, 11: 2, 10: 3, 9: 1}
+named jobs                variables 57  rows 18  detection off  makespan 43  nodes 3913
+named jobs                variables 57  rows 18  detection on   makespan 43  nodes 305
+counted jobs              variables 25  rows 10  detection off  makespan 43  nodes 178
+counted jobs              variables 25  rows 10  detection on   makespan 43  nodes 178
+counted jobs, load order  variables 25  rows 13  detection off  makespan 43  nodes 182
+counted jobs, load order  variables 25  rows 13  detection on   makespan 43  nodes 182
+```
+
+Ordering rows and the solver's symmetry detection both keep every named variable, so neither makes
+the model smaller; only counting does. The count has to be a number, not a yes/no: a binary per period saying whether any identical job runs
+then would lose how many run, which the crew limit and the cost depend on. Counting removes the jobs'
+symmetry and shrinks the model from 57 variables to 25, and the search
+from 3,913 nodes to 178, with no ordering rows at all. The crews are still identical in the counted
+model, yet adding load-order rows to it changed little (182 nodes), and switching HiGHS's detection
+on changed nothing. This is the strongest form of symmetry breaking when it applies: if a group of
+things is truly identical, give the model a count, not a list of names. It applies when the
+identical things are the decisions' subjects (which jobs, how many poles); the crews here receive
+work, and their loads are what the objective reads, so they keep their numbers.
+
+<!-- practice 2 -->
+
+## Solvers Break Symmetry Too, So Measure Your Rows Against Theirs
+
+MILP solvers look for symmetry themselves. HiGHS has an option `mip_detect_symmetry`, on by default,
+and MathOpt passes HiGHS options through `SolveParameters(highs=...)`:
+
+```python
+    return mathopt.SolveParameters(
+        relative_gap_tolerance=0.0,
+        highs=highs_pb2.HighsOptionsProto(bool_options={"mip_detect_symmetry": detect}))
+```
+
+CP-SAT has its own parameter for the same purpose, `symmetry_level` (default 2: detect symmetries in
+presolve and also break some during the search, according to its parameter file). The table of the
+previous rule already showed the effect on Ridge: detection alone took the plain model from 3,913
+nodes to 305, and with ordering rows on top it went lower still (196 and 139).
+
+One instance is one data point. The same six setups on twelve instances, the four regions' largest
+transmission jobs with three, four and five crews:
+
+```text
+12 instances; every setup found the same makespan on each: True
+order rows   detection  total nodes  fewer than plain  more than plain
+None         off             10,334                 0                0
+None         on               1,175                 7                0
+load         off              5,875                 6                4
+load         on               1,757                 8                2
+index        off              2,351                 8                1
+index        on                 645                 8                1
+```
+
+"Plain" is the first line: no ordering rows, detection off. Three things to read:
+
+- **The solver's detection did the most for the least effort.** On its own it cut the total from
+  10,334 nodes to 1,175 and never made an instance worse.
+- **First-job rows helped more than load rows**, with detection off (2,351 against 5,875) and with it
+  on (645 against 1,757). First-job rows only fix variables; load rows add rows over all of the
+  crews' variables.
+- **Rows can hurt.** Load rows took more nodes than the plain model on 4 of the 12 instances with
+  detection off, and on 2 with detection on. A row changes the LP at every node, and with it the
+  path the search takes; nothing guarantees that the new path is shorter.
+
+So the rule is the course's usual one: try the solver's own handling first, add ordering rows that
+fix variables if the model is still slow, prove that every plan keeps a copy, and measure on several
+instances, not one.
+
+## Summary
+
+- **Identical crews make every plan appear once per numbering of the crews:** 24 copies of each plan
+  with 4 crews, all with the same makespan.
+- **Symmetry costs nodes because each copy must be ruled out separately.** The plain Ridge model took
+  3,913 nodes with HiGHS's symmetry detection off.
+- **An ordering row keeps at least one copy of every plan and removes the rest.** Order by load or by
+  first job, never both; 791 and 688 nodes.
+- **Identical jobs are symmetric too: count them instead of naming them.** 25 variables instead of 57
+  and 178 nodes.
+- **Solvers break symmetry too, so measure your rows against theirs.** Detection alone: 10,334 nodes
+  to 1,175 on twelve instances; first-job rows with detection: 645; load rows sometimes hurt.
+
+## Reference
+
+| Remedy | Rows or change | Keeps | Note |
+| --- | --- | --- | --- |
+| order by load | $`L_k \ge L_{k+1}`$ | at least one copy of every plan | ties keep several copies |
+| order by first job | $`x_{j,k} = 0`$ for $`k > n(j)`$ | at least the copy numbered by first job | fixes variables |
+| count identical items | integers $`n_{s,k}`$ instead of $`x_{j,k}`$ | every plan, once per count | when the items are what is decided |
+| solver detection | HiGHS `mip_detect_symmetry`; CP-SAT `symmetry_level` | every plan | on by default |
+
+| Term | Meaning |
+| --- | --- |
+| symmetry | a renaming of variables that maps allowed points to allowed points of equal value |
+| symmetry-breaking row | a row that refuses some copies of a plan and keeps at least one copy of each |
+| makespan | the time by which every crew (machine) has finished |
+
+**Further reading:** [CP-SAT `sat_parameters.proto`](https://github.com/google/or-tools/blob/stable/ortools/sat/sat_parameters.proto)
+(OR-Tools source): `symmetry_level` and what each level detects and breaks ·
+[MathOpt `SolveParameters`](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/parameters.py)
+(OR-Tools source): the `highs` field that carries solver-specific options ·
+[HiGHS options](https://ergo-code.github.io/HiGHS/dev/options/definitions/): `mip_detect_symmetry`,
+on by default.
+
+## Challenges
+
+1. Give Ridge five crews instead of four. Predict how many renumberings each plan has, then run
+   `symmetry_rows.py` with `crews=5` and compare the plain node count with four crews.
+2. Write the counted model's crews in load order and also order the 14-month jobs' counts:
+   $`n_{14,0} \ge n_{14,1} \ge \dots`$. Is that safe together with the load rows? Find a plan it
+   would lose, or argue that none exists.
+3. Make one crew different: crew 3 can take at most 30 months. Which of the ordering rows is still
+   valid, and how would you change it?
+
+## Design Note: Break Symmetry Where It Is Born
+
+The cheapest symmetry is the one never written. Before adding ordering rows, ask whether the model
+needs the names at all: identical jobs became counts here, and identical crews could become a count
+in a model where only the number of crews used matters. When the names are needed, put the ordering
+rows in the builder next to the variables they order (`add_order` here), with the argument that
+every plan keeps a copy written as its comment, so the next person who adds a family of rows can
+check that the two agree.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson
+shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy
+of the code, so the course's own files never change.
+
+**copies.py.** Solves Ridge's crew split, then renumbers the crews 24 ways and checks each copy
+(*Identical Crews Make Every Plan Appear Once per Numbering*). *Try:* Give two crews identical job
+lists by hand. Predict how many distinct $`x`$ the 24 renumberings give.
+
+- Program: [copies.py](src/copies.py)
+
+**symmetry_rows.py.** The plain model, load rows and first-job rows, each with HiGHS's symmetry
+detection off and on, then the plain model twice more to check that its node count repeats
+(*An Ordering Row Keeps at Least One Copy*). *Try:* Add both families at once.
+Predict whether the makespan stays at 43.
+
+- Program: [symmetry_rows.py](src/symmetry_rows.py)
+
+**job_counts.py.** The counted model, with and without load rows (*Identical Jobs Are Symmetric
+Too*). *Try:* Use the Coast region's jobs. Predict whether counting helps as much there.
+
+- Program: [job_counts.py](src/job_counts.py)
+
+**symmetry_survey.py.** The six setups on twelve instances (*Solvers Break Symmetry Too*). *Try:* Add
+the counted model as a seventh setup. Predict its total.
+
+- Program: [symmetry_survey.py](src/symmetry_survey.py)
+
+**crew_split.py.** The crew-split builders, `add_order`, `build_counts` and the solve parameters.
+
+- Library: [crew_split.py](src/crew_split.py)

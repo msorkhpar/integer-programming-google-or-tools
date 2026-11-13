@@ -1,0 +1,151 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "47-testing-optimization-code"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "A strategy for feasible water-main instances",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The water utility's property tests (practice 1) need instances to run on, and a random instance is often useless: a must-do that costs more than the budget makes the whole instance infeasible, and then there is no plan to check. Write a Hypothesis strategy whose every instance has a valid plan."
+    },
+    {
+      "type": "para",
+      "text": "The rules are the selection's of practice 1: with $`y_p \\in \\{0,1\\}`$,"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& \\sum_{p} a_p\\, y_p \\le A && \\text{(capital)} \\\\\n& \\sum_{p} o_p\\, y_p \\le O && \\text{(operating)} \\\\\n& y_p = 1 && \\forall p \\in M \\quad \\text{(must}_p) \\\\\n& y_p \\le y_q && \\forall p \\in P,\\ q \\in N_p \\quad \\text{(needs}_{p,q})\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Write `instances()` in `water_strategy.py`, a `@st.composite` strategy returning the dict described in its docstring, with project names of your choice. Each instance must have:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "one to six projects, and every project a key of `cost`, `needs` and `value`;",
+        "capital costs of 1 to 40, operating costs of 1 to 10, and values of 1 to 20;",
+        "at most two prerequisites per project, each another project, and no chain of prerequisites that leads back to where it started;",
+        "must-dos, and budgets, such that some plan meets all four rules;",
+        "budgets that are sometimes tight: across the drawn instances, funding every project at once must sometimes break a budget."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The tests draw 150 instances with a fixed seed and check each condition. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"A Hypothesis strategy for water-main selection instances that always have a valid plan.\n\nAn instance is a dict:\n    \"cost\":   {project: (capital $k, operating $k)}\n    \"budget\": (capital budget $k, operating budget $k)\n    \"must\":   [projects that must be funded]\n    \"needs\":  {project: [its prerequisites]}, every project a key\n    \"value\":  {project: value}\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom hypothesis import strategies as st\n\n\n@st.composite\ndef instances(draw) -> dict:\n    names = [f\"w{k}\" for k in range(1, draw(st.integers(1, 6)) + 1)]\n    cost, needs, value, chosen = {}, {}, {}, set()\n    for k, name in enumerate(names):\n        cost[name] = (draw(st.integers(1, 40)), draw(st.integers(1, 10)))\n        value[name] = draw(st.integers(1, 20))\n        earlier = names[:k]\n        needs[name] = draw(st.lists(st.sampled_from(earlier), unique=True, max_size=2)) if earlier else []\n        if all(q in chosen for q in needs[name]) and draw(st.booleans()):\n            chosen.add(name)\n    must = [p for p in names if p in chosen and draw(st.booleans())]\n    capital = sum(cost[p][0] for p in chosen) + draw(st.integers(0, 30))\n    operating = sum(cost[p][1] for p in chosen) + draw(st.integers(0, 8))\n    return {\"cost\": cost, \"budget\": (capital, operating), \"must\": must, \"needs\": needs, \"value\": value}\n\n\nif __name__ == \"__main__\":\n    print(instances().example())\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"A Hypothesis strategy for water-main selection instances that always have a valid plan.\n\nAn instance is a dict:\n    \"cost\":   {project: (capital $k, operating $k)}\n    \"budget\": (capital budget $k, operating budget $k)\n    \"must\":   [projects that must be funded]\n    \"needs\":  {project: [its prerequisites]}, every project a key\n    \"value\":  {project: value}\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom hypothesis import strategies as st\n\n\n@st.composite\ndef instances(draw) -> dict:\n    # TODO: draw a valid plan first, then build the data around it.\n    return {\"cost\": {}, \"budget\": (0, 0), \"must\": [], \"needs\": {}, \"value\": {}}\n\nif __name__ == \"__main__\":\n    print(instances().example())\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "7f4b71b5707ff79a41e7171df6b439eccb5fe48b27b6d596fb8f9778e876e686",
+  "starting_code": "\"\"\"A Hypothesis strategy for water-main selection instances that always have a valid plan.\n\nAn instance is a dict:\n    \"cost\":   {project: (capital $k, operating $k)}\n    \"budget\": (capital budget $k, operating budget $k)\n    \"must\":   [projects that must be funded]\n    \"needs\":  {project: [its prerequisites]}, every project a key\n    \"value\":  {project: value}\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom hypothesis import strategies as st\n\n\n@st.composite\ndef instances(draw) -> dict:\n    # TODO: draw a valid plan first, then build the data around it.\n    return {\"cost\": {}, \"budget\": (0, 0), \"must\": [], \"needs\": {}, \"value\": {}}\n\nif __name__ == \"__main__\":\n    print(instances().example())\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-02/practice-2/water_strategy.py",
+    "test_path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-02/practice-2/test_water_strategy.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-02/practice-2/water_strategy.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-02/practice-2/target/report.xml",
+      "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-02/practice-2/test_water_strategy.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_every_instance_is_well_formed",
+        "kind": "main",
+        "says": "every drawn instance has one to six projects, the five fields, and prerequisites that are other existing projects"
+      },
+      {
+        "id": "test_every_instance_has_a_valid_plan",
+        "kind": "edge",
+        "says": "a must-do's prerequisites must be paid for too, so every drawn instance has a plan that meets all four rules"
+      },
+      {
+        "id": "test_prerequisites_never_form_a_cycle",
+        "kind": "edge",
+        "says": "no project is its own prerequisite through a chain, so prerequisites point only one way"
+      },
+      {
+        "id": "test_some_instance_has_a_budget_that_binds",
+        "kind": "edge",
+        "says": "the budgets are tight enough that funding every project breaks one of them in some draws"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "47-testing-optimization-code/README_12.3.2.md",
+      "section": "Fix the Seed, Bound the Examples, Pin What You Found"
+    },
+    "concepts": [
+      "a strategy draws a valid plan first and builds budgets and must-dos around it"
+    ]
+  }
+}

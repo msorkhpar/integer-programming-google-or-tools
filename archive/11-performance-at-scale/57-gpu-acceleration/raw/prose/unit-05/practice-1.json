@@ -1,0 +1,127 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "11-performance-at-scale",
+    "57-gpu-acceleration"
+  ],
+  "variant": "prose",
+  "unit": 5,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "The crew's job selection, as a plan of record",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A maintenance crew chooses which jobs to do this year. Job $`j`$ is worth $`v_j`$ ($k of avoided risk) and takes $`h_{j,q}`$ crew-weeks in quarter $`q`$; quarter $`q`$ has $`C_q`$ crew-weeks. Some jobs depend on others: for each pair $`(a, b)`$ in `requires`, job $`b`$ may be done only if job $`a`$ is. The selection is the plan of record, so it must come from a solve that repeats bit for bit when the auditors rerun it."
+    },
+    {
+      "type": "para",
+      "text": "Before you code, write the formulation: the binary variables, the objective, one labelled row per quarter and one per dependency, with their quantifiers. Then write `build(values, hours, capacity, requires)` in `crew.py`, returning a `highspy.HighsLp` that maximises the value. `solve(lp, fixed=None)` is given: it solves on one thread and can pin some jobs to 0 or 1 first, which is how the tests check plans you did not choose. Any correct formulation passes. About twenty-five lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport highspy\n\n\ndef build(values: list[float], hours: list[list[float]], capacity: list[float],\n          requires: list[tuple[int, int]]) -> highspy.HighsLp:\n    \"\"\"The crew's job selection: x_j = 1 if job j is done this year.\"\"\"\n    n, quarters = len(values), len(capacity)\n    inf = highspy.kHighsInf\n    lp = highspy.HighsLp()\n    lp.num_col_ = n\n    lp.col_cost_, lp.col_lower_, lp.col_upper_ = list(values), [0.0] * n, [1.0] * n\n    lp.integrality_ = [highspy.HighsVarType.kInteger] * n\n    starts, index, value, lower, upper = [0], [], [], [], []\n    for q in range(quarters):                                  # crew_q: the quarter's hours\n        for j in range(n):\n            if hours[j][q]:\n                index.append(j)\n                value.append(float(hours[j][q]))\n        starts.append(len(index))\n        lower.append(-inf)\n        upper.append(float(capacity[q]))\n    for a, b in requires:                                      # after_a_b: x_b <= x_a\n        index += [b, a]\n        value += [1.0, -1.0]\n        starts.append(len(index))\n        lower.append(-inf)\n        upper.append(0.0)\n    lp.num_row_ = len(lower)\n    lp.row_lower_, lp.row_upper_ = lower, upper\n    lp.a_matrix_.format_ = highspy.MatrixFormat.kRowwise\n    lp.a_matrix_.start_, lp.a_matrix_.index_, lp.a_matrix_.value_ = starts, index, value\n    lp.sense_ = highspy.ObjSense.kMaximize\n    return lp\n\n\ndef solve(lp: highspy.HighsLp, fixed: dict[int, int] | None = None) -> tuple[str, float, list[float]]:\n    \"\"\"Solve on one thread (so a rerun repeats); `fixed` pins some jobs to 0 or 1 first.\"\"\"\n    h = highspy.Highs()\n    h.setOptionValue(\"output_flag\", False)\n    h.setOptionValue(\"threads\", 1)\n    h.passModel(lp)\n    for j, v in (fixed or {}).items():\n        h.changeColBounds(j, float(v), float(v))\n    h.run()\n    return h.modelStatusToString(h.getModelStatus()), h.getInfo().objective_function_value, list(h.getSolution().col_value)\n\n\nif __name__ == \"__main__\":\n    print(solve(build([5, 4], [[2, 0], [1, 1]], [2, 1], [(0, 1)])))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport highspy\n\n\ndef build(values: list[float], hours: list[list[float]], capacity: list[float],\n          requires: list[tuple[int, int]]) -> highspy.HighsLp:\n    \"\"\"The crew's job selection: x_j = 1 if job j is done this year.\"\"\"\n    lp = highspy.HighsLp()\n    # TODO: binary columns worth values[j], a crew row per quarter, a row per (a, b) in requires.\n    return lp\n\n\ndef solve(lp: highspy.HighsLp, fixed: dict[int, int] | None = None) -> tuple[str, float, list[float]]:\n    \"\"\"Solve on one thread (so a rerun repeats); `fixed` pins some jobs to 0 or 1 first.\"\"\"\n    h = highspy.Highs()\n    h.setOptionValue(\"output_flag\", False)\n    h.setOptionValue(\"threads\", 1)\n    h.passModel(lp)\n    for j, v in (fixed or {}).items():\n        h.changeColBounds(j, float(v), float(v))\n    h.run()\n    return h.modelStatusToString(h.getModelStatus()), h.getInfo().objective_function_value, list(h.getSolution().col_value)\n\n\nif __name__ == \"__main__\":\n    print(solve(build([5, 4], [[2, 0], [1, 1]], [2, 1], [(0, 1)])))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 2,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "c2209168e07a298b65a2ef3550795517e88569d74b6702f711b1aa6dcbea68b0",
+  "starting_code": "from __future__ import annotations\n\nimport highspy\n\n\ndef build(values: list[float], hours: list[list[float]], capacity: list[float],\n          requires: list[tuple[int, int]]) -> highspy.HighsLp:\n    \"\"\"The crew's job selection: x_j = 1 if job j is done this year.\"\"\"\n    lp = highspy.HighsLp()\n    # TODO: binary columns worth values[j], a crew row per quarter, a row per (a, b) in requires.\n    return lp\n\n\ndef solve(lp: highspy.HighsLp, fixed: dict[int, int] | None = None) -> tuple[str, float, list[float]]:\n    \"\"\"Solve on one thread (so a rerun repeats); `fixed` pins some jobs to 0 or 1 first.\"\"\"\n    h = highspy.Highs()\n    h.setOptionValue(\"output_flag\", False)\n    h.setOptionValue(\"threads\", 1)\n    h.passModel(lp)\n    for j, v in (fixed or {}).items():\n        h.changeColBounds(j, float(v), float(v))\n    h.run()\n    return h.modelStatusToString(h.getModelStatus()), h.getInfo().objective_function_value, list(h.getSolution().col_value)\n\n\nif __name__ == \"__main__\":\n    print(solve(build([5, 4], [[2, 0], [1, 1]], [2, 1], [(0, 1)])))\n",
+  "exercise": {
+    "main_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-05/practice-1/crew.py",
+    "test_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-05/practice-1/test_crew.py",
+    "run_command": [
+      "python3",
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-05/practice-1/crew.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-05/practice-1/target/report.xml",
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-05/practice-1/test_crew.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_model_finds_the_best_selection",
+        "kind": "main",
+        "says": "the model finds the most valuable selection"
+      },
+      {
+        "id": "test_a_rerun_on_one_thread_gives_the_same_bits",
+        "kind": "main",
+        "says": "a rerun on one thread gives the same bits"
+      },
+      {
+        "id": "test_a_job_needs_the_job_it_depends_on",
+        "kind": "edge",
+        "says": "a job is done only if the job it depends on is"
+      },
+      {
+        "id": "test_each_quarter_has_its_own_crew_limit",
+        "kind": "edge",
+        "says": "each quarter's crew limit holds on its own"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-05/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "57-gpu-acceleration/README_11.4.5.md",
+      "section": "HiGHS on One Thread Is the Plan of Record"
+    },
+    "concepts": [
+      "the plan of record is a MILP formulated by hand and solved on one CPU thread, so a rerun repeats"
+    ]
+  }
+}

@@ -1,0 +1,316 @@
+# 9.3.4 Writing Results for Planners, Finance and Auditors
+
+The 2029 budget cut of lesson 9.3.3 has been run, diffed and priced. Now it has to be *written up*,
+and for three readers at once. The planning team wants to know which projects moved and why, so it
+can tell the fleet teams. Finance wants the money by year and what the cut costs in value. The
+internal auditor, who will one day stand behind this plan in a rate case, wants to know exactly
+what was run, on which inputs, and whether anyone can check it. Lesson 7.1.4 set out what each group
+needs from an optimizer; this lesson writes one result three ways and states the rules that make
+each version trustworthy.
+
+The rule that holds them together comes first: **every number in every version comes from data the
+program produced**, collected once in a record. A memo typed by hand from a screen of output is how
+a plan's NPV ends up as $23,068k in one email and $23,086k in another. Printing fewer numbers does
+not fix that: each reader still needs theirs, and any number copied by hand can be copied wrong.
+
+GridCap is a fictional utility, generated for this course; no number in it describes a real one.
+
+## The Model
+
+The result is the cut scenario of lesson 9.3.3: the model of lesson 9.3.2 with $`B_{2029} = 6{,}000`$,
+solved to a relative gap of 0, compared with the base scenario ($`B_{2029} = 8{,}760`$), and with each
+changed decision priced by a forced re-solve of the cut scenario (lesson 9.3.2's
+$`\Delta_{\text{in}}`$, $`\Delta_{\text{out}}`$ and $`\Delta_{\text{at}}`$).
+
+**Sets.** $`P`$ the projects; $`Y`$ the plan's years, 2027 to 2031; $`T_i \subseteq Y`$ the start
+years project $`i`$ may use; $`M \subseteq P`$ the must-do projects; $`\mathcal{G}`$ the alternative
+groups; $`C \subseteq P`$ the child projects, with parent $`p(c)`$ and lag $`L_c`$; $`F^{+}`$ and
+$`F^{-}`$ the projects forced in and out (empty in both scenarios, except in a pricing re-solve).
+
+**Parameters.** $`\text{npv}_{i,t}`$ ($k); $`c_{i,k}`$, what project $`i`$ spends in its $`k`$-th
+year of work ($k); $`B_y`$, the budget of year $`y`$ ($k).
+
+**Variables.** $`x_{i,t} \in \{0, 1\}`$ for every $`i \in P`$ and $`t \in T_i`$, with
+$`\text{started}(i) = \sum_{t \in T_i} x_{i,t}`$ and
+$`\text{by}(i, t) = \sum_{s \in T_i,\, s \le t} x_{i,s}`$.
+
+**Objective.**
+
+```math
+\max \; \sum_{i \in P} \sum_{t \in T_i} \text{npv}_{i,t}\, x_{i,t}
+```
+
+**Constraints.**
+
+```math
+\begin{aligned}
+\text{started}(i) &\le 1 && \forall i \in P \setminus (M \cup F^{+} \cup F^{-}) && \text{(once}_i) \\
+\text{started}(i) &= 1 && \forall i \in M && \text{(must}_i) \\
+\text{started}(i) &= 1 && \forall i \in F^{+} \setminus M && \text{(in}_i) \\
+\text{started}(i) &= 0 && \forall i \in F^{-} && \text{(out}_i) \\
+\textstyle\sum_{i \in g} \text{started}(i) &\le 1 && \forall g \in \mathcal{G} && \text{(alt}_g) \\
+\text{by}(c, t) &\le \text{by}(p(c),\, t - L_c) && \forall c \in C,\ t \in T_c && \text{(after}_{c,t}) \\
+\textstyle\sum_{i \in P} \sum_{t \in T_i,\, t \le y} c_{i,\,y-t}\, x_{i,t} &\le B_y && \forall y \in Y && \text{(budget}_y)
+\end{aligned}
+```
+
+## One Record per Run, and Every Text Is Written From It
+
+`record.make_record` solves the scenario and the one it was copied from, diffs them, prices every
+changed decision with a forced re-solve, checks the plan, reruns it, and returns one dictionary.
+Its last lines show what goes in:
+
+```python
+    return {
+        "scenario": scenario.name, "parent": parent.name,
+        "snapshot": scenario.snapshot(portfolio), "parent_snapshot": parent.snapshot(portfolio),
+        "inputs_changed": input_changes(parent.inputs(portfolio), scenario.inputs(portfolio)),
+        "software": {"ortools": ortools.__version__, **SETTINGS},
+        "status": run.status, "npv": run.npv, "bound": run.result.best_objective_bound(),
+        "parent_npv": before.npv, "funded": len(run.plan), "plan": run.plan,
+        "selected": d.selected, "deferred": d.deferred, "shifted": d.shifted, "reasons": reasons,
+        "budget": {y: scenario.budget.get(y, portfolio.budget[y]) for y in portfolio.years},
+        "spend": real_spend(portfolio, run.plan), "parent_spend": real_spend(portfolio, before.plan),
+        "checks": verify(portfolio, scenario, run.plan),
+        "rerun_same_plan": again.plan == run.plan,
+    }
+```
+
+`three_readers.py` builds the record for the cut and prints some of its fields, as JSON:
+
+```text
+RECORD (some of its fields)
+{"scenario": "cut-2029", "status": "OPTIMAL", "npv": 23086.0, "bound": 23086.0, "selected": ["P002", "P037"], "deferred": ["P001", "P005", "P016"], "inputs_changed": ["budget.2029: 8760 -> 6000"]}
+  reasons P005: {"cost_to_reverse": 57, "rules": [{"row": "budget_2029", "year": 2029, "left": 310, "needs": 1510}, {"row": "budget_2030", "year": 2030, "left": 0, "needs": 1510}]}
+```
+
+Three properties make the record the right thing to write from.
+
+- **It is data, not text.** A reason is stored as facts (`left: 310, needs: 1510`), not as a
+  sentence, so each reader's version can word it its own way and none can change the numbers.
+- **It is complete.** Each writer reads the record and nothing else: no writer solves, queries the
+  model or looks at a screen. If a version needs a number, the number goes into the record first.
+- **It can be kept.** JSON goes into a file or a database beside the scenario's snapshot (lesson
+  12.4.3 designs result schemas, 12.1.4 stores them), so the texts can be written again, or checked,
+  years later.
+
+Note `bound`: MathOpt's `best_objective_bound()`, the solver's proven limit on how good any plan
+could be. Equal to the NPV, as here, it says the plan is proven optimal; finance and the auditor
+both read it.
+
+## Planners Read Projects, What Changed and the Rule Behind Each
+
+A planner acts project by project, so that version is a list of projects: what happens to each, in
+words about the rules, and what it would cost to undo. It is lesson 9.3.3's diff with lesson 9.3.2's
+reasons attached. The rule facts are turned into words by one small function, so that every reason
+reads the same way:
+
+```python
+def in_words(facts: list[dict]) -> str:
+    """Rule facts as a planner reads them: the alternative taken, then the budgets with no room."""
+    words = [f"its alternative {', '.join(f['funded'])} is in the plan" for f in facts if "funded" in f]
+    full = [f"{f['year']} ({f['left']:,} left, needs {f['needs']:,})" for f in facts if "year" in f]
+    if full:
+        words.append("no room in the budget of " + ", ".join(full))
+    return "; ".join(words)
+```
+
+```text
+PLANNERS
+Scenario cut-2029 funds 26 projects. Against base:
+- P001 leaves the plan (its alternative P002 is in the plan; no room in the budget of 2028 (50 left, needs 1,320), 2029 (310 left, needs 1,320), 2030 (0 left, needs 1,320), 2031 (50 left, needs 1,320)). Putting it back costs $45k.
+- P005 leaves the plan (no room in the budget of 2029 (310 left, needs 1,510), 2030 (0 left, needs 1,510)). Putting it back costs $57k.
+- P016 leaves the plan (no room in the budget of 2030 (0 left, needs 310), 2031 (50 left, needs 950)). Putting it back costs $68k.
+- P002 joins the plan. Taking it out again costs $45k.
+- P037 joins the plan. Taking it out again costs $57k.
+- P008 starts 2029 instead of 2031 (earlier). Holding it at 2031 costs $68k.
+- P011 starts 2029 instead of 2031 (earlier). Holding it at 2031 costs $68k.
+- P012 starts 2030 instead of 2031 (earlier). Holding it at 2031 costs $43k.
+- P021 starts 2028 instead of 2029 (earlier). Holding it at 2029 costs $68k.
+- P025 starts 2029 instead of 2028 (later). Holding it at 2028 costs $45k.
+- P035 starts 2028 instead of 2027 (later). Holding it at 2027 costs $3k.
+Changes that cost under $50k to reverse are close calls: P001, P002, P012, P025, P035.
+```
+
+What makes this version work for planners:
+
+- **Every line is about a project**, in the order a planner acts: what leaves, what joins, what
+  moves. Row names such as `budget_2030` are translated ("no room in the budget of 2030"); the
+  facts behind them stay in the record for anyone who asks.
+- **Every change has a reason and a price.** P001 is out because its repair option P002 took its
+  place and no year has $1,320k free; putting it back costs $45k. The price is computed in the *cut*
+  scenario, the one the planner is looking at, so it differs from lesson 9.3.2's base-scenario prices.
+- **It says where the plan is fragile.** Five changes cost under $50k to undo. The threshold is a
+  choice the planning team makes once and writes down (here about 0.2% of the plan's NPV); the
+  program only applies it. Those five are where a planner's local knowledge should win, and where a
+  small change of inputs could flip the plan (lesson 9.3.3's near ties).
+
+## Finance Reads Money by Year, the Change in Value, and Whether It Is Proven
+
+Finance reads the same record through money: what is spent each year against what was authorized,
+what the change does to value, and whether the value is a proven optimum or a solver's best effort.
+
+```python
+    gap = abs(r["bound"] - r["npv"])
+    lines.append(f"NPV ${r['npv']:,.0f}k, {r['npv'] - r['parent_npv']:+,.0f}k against {r['parent']} "
+                 f"(${r['parent_npv']:,.0f}k); solver status {r['status']}, gap to its bound ${gap:,.0f}k.")
+```
+
+```text
+FINANCE
+year  budget   spend  headroom    vs base
+2027   8,890   8,630       260       -120
+2028   8,120   8,070        50       +100
+2029   6,000   5,690       310     -2,940
+2030   8,610   8,610         0        +50
+2031   7,850   7,800        50        +80
+NPV $23,086k, -1,174k against base ($24,260k); solver status OPTIMAL, gap to its bound $0k.
+Spend over the plan falls $2,830k; NPV lost per $k of spend removed: 0.415 (an average over this one change, not a marginal value).
+```
+
+What makes this version work for finance:
+
+- **Spend by year, against the authorized budget, and against the plan it replaces.** A five-year
+  total hides a year that breaks; here 2030 is spent to the dollar, which finance will want to know
+  before anyone adds to it.
+- **The spend is summed from the cost profiles**, not read from the model's rows (`real_spend`,
+  lesson 6.4.2), so the table reconciles with the projects' own budgets.
+- **Value with its proof.** NPV, its change, the solver's status and the gap to the bound. An NPV
+  from a run that stopped early is a lower limit on what the inputs allow (lesson 3.4.1); finance must
+  never read it as the best plan without the gap beside it.
+- **A ratio labelled for what it is.** Cutting $2,760k of 2029 budget removes $2,830k of spend over
+  the plan and $1,174k of NPV, 0.415 per $k of spend removed. That is an average over one discrete
+  change. It is *not* the value of the next dollar, which on a MILP is a step function; lessons 9.2.3
+  and 9.2.4 build that curve. The text says so in its own words, so nobody multiplies 0.415 by a
+  different cut.
+
+<!-- practice 1 -->
+
+## Auditors Read Inputs, Settings and Checks They Can Repeat Without the Model
+
+An auditor does not need the plan explained; the auditor needs to be able to *repeat* and *check*
+it. That version lists what was run, on what, with what, and the result of checks that do not trust
+the model. The checks are the heart of it:
+
+```python
+def verify(portfolio: Portfolio, scenario: Scenario, plan: dict[str, int]) -> list[tuple[str, bool]]:
+    """Check the plan against every rule from the data alone: no model, no solver."""
+```
+
+```python
+        ("at most one option per alternative group", all(n <= 1 for n in groups.values())),
+        ("every funded child starts its lag after its parent",
+         all(by_id[p].parent in plan and t >= plan[by_id[p].parent] + by_id[p].parent_lag
+             for p, t in plan.items() if by_id[p].parent)),
+        ("each year's spend is within its budget", all(spend[y] <= budget[y] for y in portfolio.years)),
+```
+
+```text
+AUDITORS
+scenario cut-2029 snapshot f071659293251d597a338efcbbd15c2798244b5e8434985351827c4e9a8caa3a
+copied from base snapshot 5d3b8d36fe54d060a4e25f02c8af0ee79328f5bf5264f03b829cfe33bd34ed03
+inputs changed: budget.2029: 8760 -> 6000
+software: OR-Tools 9.15.6755, solver HIGHS, relative_gap_tolerance 0.0
+termination OPTIMAL, objective 23,086, bound 23,086
+rules re-checked on the plan from the data, without the model:
+  PASS  every start is inside its project's window
+  PASS  every must-do is funded
+  PASS  every forced-in project is funded, in its year if one is set
+  PASS  no forced-out project is funded
+  PASS  at most one option per alternative group
+  PASS  every funded child starts its lag after its parent
+  PASS  each year's spend is within its budget
+rerun of the same snapshot gives the same plan: True
+```
+
+What makes this version work for an auditor:
+
+- **Full identifiers.** The whole snapshot hash, not the 12 characters a screen shows, and the
+  parent's, so the auditor can match the inputs to a stored scenario (lesson 7.1.3) and see that only
+  the 2029 budget changed.
+- **The software and settings.** OR-Tools' version, the solver and the gap tolerance. A rerun on
+  different software is a different experiment (lessons 10.2.2 and 10.2.4).
+- **Checks that do not trust the model.** `verify` reads the portfolio's data and the plan, and
+  nothing the model built. If a row had been written wrongly, the model would have kept the wrong
+  rule and its own slacks would agree with it; the check, written separately from the data, would
+  not. That is lesson 7.1.4's worksheet habit applied to one run. The module's tests show that it
+  catches a plan with both P001 and P002 funded.
+- **The rerun, reported as evidence.** "Same plan: True" is what one rerun on one machine showed.
+  It is not a guarantee, and the version says what was done rather than "the result is
+  reproducible".
+
+<!-- practice 2 -->
+
+## Summary
+
+- **One record per run, and every text is written from it.** The record holds inputs, snapshot,
+  status, bound, plan, diff, priced reasons, spend and checks, as data; the writers read only the
+  record.
+- **Planners read projects, what changed and the rule behind each.** One line per project, the rule
+  in words, the price of undoing it, and the close calls.
+- **Finance reads money by year, the change in value, and whether it is proven.** Spend against
+  budget and against the previous plan, NPV with its gap, and averages labelled as averages.
+- **Auditors read inputs, settings and checks they can repeat without the model.** Full snapshots,
+  software and settings, rule checks from the data, and a rerun stated as evidence.
+
+## Reference
+
+| Reader | First question | From the record |
+| --- | --- | --- |
+| planners | what moved, and why? | `deferred`, `selected`, `shifted`, `reasons` (facts and cost to reverse) |
+| finance | what do we spend, and what is it worth? | `budget`, `spend`, `parent_spend`, `npv`, `parent_npv`, `status`, `bound` |
+| auditors | what was run, and does it check out? | `snapshot`, `parent_snapshot`, `inputs_changed`, `software`, `checks`, `rerun_same_plan` |
+
+| Do | Don't |
+| --- | --- |
+| write every number from the record | type a number from a screen |
+| store reasons as facts | store reasons as finished sentences |
+| show NPV with status and gap | show NPV alone |
+| label an average as an average | present a one-change ratio as a marginal value |
+| check the plan from the data | check the plan with the model that made it |
+| report a rerun as what it showed | promise reproducibility |
+
+**Further reading:** the OR-Tools [MathOpt overview](https://developers.google.com/optimization/math_opt)
+(its detailed termination reasons, which the record keeps as `status`);
+[MathOpt `result.py` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/result.py)
+(the docstrings of `objective_value`, which points to the primal bound, and `best_objective_bound`,
+equal to the dual bound: the two numbers finance's line compares); the OR-Tools MathOpt sample
+[`integer_programming.py`](https://github.com/google/or-tools/blob/stable/ortools/math_opt/samples/python/integer_programming.py)
+(it refuses to read values unless the termination is optimal or feasible, the first thing any of the
+three versions depends on); the [Gurobi reference for linear constraint attributes](https://docs.gurobi.com/projects/optimizer/en/current/reference/attributes/constraintlinear.html)
+(slack reported per row of the current solution, the kind of fact a record stores). The CIPT job
+(lesson 9.3.1) names planners, finance partners and regulators as the people who rely on the
+results, and asks for outputs that explain them.
+
+## Challenges
+
+1. Add a line to the finance version that names the year with the least headroom. Which field of the
+   record does it need, and is it already there?
+2. Write a fourth version, for the board: three sentences, no table. Which record fields does it use?
+3. Break `verify` on purpose: change its budget check to compare with the *base* budgets. Predict
+   which line of the auditors' version changes for the cut scenario.
+
+## Design Note: Templates in Code, Not Prose in Code
+
+The three writers here are small Python functions that format strings. That is enough to show the
+rules, and it keeps every number tied to the record. A real service would keep the record as a typed
+schema (lesson 12.4.3) and the wording in templates that people outside the team can edit, because
+the people who know how finance wants a sentence phrased are not the people who write the solver.
+Whatever the tooling, the rule stands: wording may change freely, numbers may come only from the
+record.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson
+shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy
+of the code, so the course's own files never change.
+
+**three_readers.py.** Builds the record for the 2029 cut and prints the planners', finance's and the
+auditors' versions (every section of this lesson). *Try:* Build the record for the scenario that
+forces P024 in instead. Predict which of the three versions changes most.
+
+- Program: [three_readers.py](src/three_readers.py)
+
+**record.py.** `make_record`, `verify` and the three writers. It runs nothing itself.
+
+- Library: [record.py](src/record.py)

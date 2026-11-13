@@ -1,0 +1,163 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "01-foundations",
+    "03-python-for-optimization"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Build the model's parameters from two tables",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The feeder team exports its candidate projects as two CSV files, and the selection model needs three of its parameters from them. For each project $`i \\in P`$:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\text{capex}_i &= \\sum_{k} c_{i,k} && \\text{(the sum of the yearly costs } c_{i,k} \\text{ in its cost profile)} \\\\\n\\text{value}_i &= \\text{npv}_{i,\\,e_i} && \\text{(its NPV if it starts in its earliest start year } e_i\\text{)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "and, for each child project $`c \\in C`$, its parent $`p(c)`$. A project whose parent cell is blank is not a child."
+    },
+    {
+      "type": "para",
+      "text": "Write `model_inputs(projects, npv)` in `inputs.py`. It returns three dicts keyed by project id: `capex`, `value`, and `parent` (child id to parent id, children only)."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`projects` has the columns `project_id`, `cost_profile` (yearly costs joined by `;`, for example `300;200`), `earliest_start` and `parent`.",
+        "`npv` is long: the columns `project_id`, `start_year` and `npv`, one row per project and start year."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Both frames come straight from `pd.read_csv` with no `dtype=`, as the team's loader reads them, so every column has the type pandas guessed for that file."
+    },
+    {
+      "type": "para",
+      "text": "About six lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport pandas as pd\n\n\ndef model_inputs(projects: pd.DataFrame, npv: pd.DataFrame) -> tuple[dict, dict, dict]:\n    \"\"\"Return (capex, value, parent): three dicts keyed by project id.\"\"\"\n    capex = {pid: sum(int(c) for c in str(profile).split(\";\"))\n             for pid, profile in zip(projects[\"project_id\"], projects[\"cost_profile\"])}\n    npv_at = npv.set_index([\"project_id\", \"start_year\"])[\"npv\"].to_dict()\n    value = {pid: npv_at[pid, start] for pid, start in zip(projects[\"project_id\"], projects[\"earliest_start\"])}\n    children = projects[projects[\"parent\"].notna()]\n    parent = dict(zip(children[\"project_id\"], children[\"parent\"]))\n    return capex, value, parent\n\n\nif __name__ == \"__main__\":\n    import io\n    projects = pd.read_csv(io.StringIO(\"project_id,cost_profile,earliest_start,parent\\nA,100;50,2030,\\nB,70,2031,A\\n\"))\n    npv = pd.read_csv(io.StringIO(\"project_id,start_year,npv\\nA,2030,210\\nB,2031,95\\n\"))\n    print(model_inputs(projects, npv))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport pandas as pd\n\n\ndef model_inputs(projects: pd.DataFrame, npv: pd.DataFrame) -> tuple[dict, dict, dict]:\n    \"\"\"Return (capex, value, parent): three dicts keyed by project id.\"\"\"\n    # TODO: build the three dicts the model indexes (see the statement).\n    return {}, {}, {}\n\n\nif __name__ == \"__main__\":\n    import io\n    projects = pd.read_csv(io.StringIO(\"project_id,cost_profile,earliest_start,parent\\nA,100;50,2030,\\nB,70,2031,A\\n\"))\n    npv = pd.read_csv(io.StringIO(\"project_id,start_year,npv\\nA,2030,210\\nB,2031,95\\n\"))\n    print(model_inputs(projects, npv))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "035b2a601b56ad34369d97a14aa42bff0609566ebfe853e42f23a2be846eae5a",
+  "starting_code": "from __future__ import annotations\n\nimport pandas as pd\n\n\ndef model_inputs(projects: pd.DataFrame, npv: pd.DataFrame) -> tuple[dict, dict, dict]:\n    \"\"\"Return (capex, value, parent): three dicts keyed by project id.\"\"\"\n    # TODO: build the three dicts the model indexes (see the statement).\n    return {}, {}, {}\n\n\nif __name__ == \"__main__\":\n    import io\n    projects = pd.read_csv(io.StringIO(\"project_id,cost_profile,earliest_start,parent\\nA,100;50,2030,\\nB,70,2031,A\\n\"))\n    npv = pd.read_csv(io.StringIO(\"project_id,start_year,npv\\nA,2030,210\\nB,2031,95\\n\"))\n    print(model_inputs(projects, npv))\n",
+  "exercise": {
+    "main_path": "practice/01-foundations/03-python-for-optimization/prose/unit-01/practice-1/inputs.py",
+    "test_path": "practice/01-foundations/03-python-for-optimization/prose/unit-01/practice-1/test_inputs.py",
+    "run_command": [
+      "python3",
+      "practice/01-foundations/03-python-for-optimization/prose/unit-01/practice-1/inputs.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/01-foundations/03-python-for-optimization/prose/unit-01/practice-1/target/report.xml",
+      "practice/01-foundations/03-python-for-optimization/prose/unit-01/practice-1/test_inputs.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_capex_sums_each_profile",
+        "kind": "main",
+        "says": "each project's capex is the sum of its yearly costs"
+      },
+      {
+        "id": "test_value_is_the_npv_at_the_earliest_start",
+        "kind": "main",
+        "says": "each project's value is its NPV for a start in its earliest start year"
+      },
+      {
+        "id": "test_a_file_of_one_year_profiles_still_works",
+        "kind": "edge",
+        "says": "a file whose profiles are all one year long, so pandas reads the column as integers, gives the right capex"
+      },
+      {
+        "id": "test_npv_rows_may_come_in_any_order",
+        "kind": "edge",
+        "says": "the NPV table's rows may come in any order"
+      },
+      {
+        "id": "test_a_later_start_worth_more_is_not_the_value",
+        "kind": "edge",
+        "says": "a later start with a higher NPV does not change a project's value"
+      },
+      {
+        "id": "test_only_children_have_a_parent",
+        "kind": "edge",
+        "says": "a project with a blank parent cell is not in the parent dict"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/01-foundations/03-python-for-optimization/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "03-python-for-optimization/README_1.3.1.md",
+      "section": "Turn Each Table Into the Sets and Dicts the Model Indexes"
+    },
+    "concepts": [
+      "a blank cell reads as NaN, which an if treats as true, so missing values are found with notna",
+      "a long table keyed by two columns becomes a dict keyed by pairs, which is how a model indexes a two-index parameter"
+    ]
+  }
+}

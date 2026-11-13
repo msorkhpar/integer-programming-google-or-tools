@@ -1,0 +1,158 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "05-other-modeling-frameworks-and-solvers",
+    "20-pulp"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Write a pump refurbishment model in PuLP from its formulation",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility refurbishes some of its pump stations each year. A refurbished pump uses less energy, so each refurbishment saves a known amount a year, but it costs money, takes crew-days, and takes the station offline while the work is done. Some stations share a bypass main: if both of a pair were offline at once, the district they serve would lose pressure. The regulator also names stations that must be done this year."
+    },
+    {
+      "type": "para",
+      "text": "In `refurbish.py`, the variables and the objective are written. Add the rows, so that:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`build(stations, budget, crew_days, bypass_pairs)` returns the PuLP problem and its variables `y[sid]`, with one row per rule below, named as in the labels;",
+        "`refurbish(...)`, already written, solves it with CBC and returns the yearly savings and the sorted ids of the stations to refurbish."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The formulation. $`S`$ is the stations, $`K`$ the pairs that share a bypass, $`M \\subseteq S`$ the must-do stations. Each station $`i`$ saves $`s_i`$ ($k a year), costs $`c_i`$ ($k) and takes $`h_i`$ crew-days; the year has a budget $`B`$ and $`H`$ crew-days."
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max\\ & \\sum_{i \\in S} s_i\\, y_i && && \\text{(savings)} \\\\\n& \\sum_{i \\in S} c_i\\, y_i \\le B && && \\text{(budget)} \\\\\n& \\sum_{i \\in S} h_i\\, y_i \\le H && && \\text{(crew)} \\\\\n& y_a + y_b \\le 1 && \\forall (a, b) \\in K && \\text{(bypass}_{a,b}) \\\\\n& y_i = 1 && \\forall i \\in M && \\text{(must}_i) \\\\\n& y_i \\in \\{0, 1\\} && \\forall i \\in S\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Name each row as its label says, with the ids filled in: `budget`, `crew`, `bypass_S1_S2`, `must_S4`. A station may appear in more than one bypass pair. About six lines."
+    },
+    {
+      "type": "para",
+      "text": "Write the model out as an LP file and read it once before you run the tests. Run and the tests start in the course's root folder, not in this practice's folder, so `prob.writeLP(\"pumps.lp\")` would put `pumps.lp` at the root of the course. Write it inside your practice folder, next to `refurbish.py`, instead: `prob.writeLP(str(Path(__file__).with_name(\"pumps.lp\")))`, with `from pathlib import Path` at the top."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pulp\n\n\n@dataclass(frozen=True)\nclass Station:\n    sid: str\n    savings: float        # energy saved per year after the refurbishment, $k\n    cost: float           # cost of the refurbishment, $k\n    crew_days: int        # crew-days the refurbishment takes\n    must: bool = False    # required by the regulator this year\n\n\ndef build(stations: list[Station], budget: float, crew_days: int,\n          bypass_pairs: list[tuple[str, str]]) -> tuple[pulp.LpProblem, dict[str, pulp.LpVariable]]:\n    \"\"\"The refurbishment model, with one named row per rule.\"\"\"\n    prob = pulp.LpProblem(\"pump_refurbishment\", pulp.LpMaximize)\n    y = {s.sid: prob.add_variable(f\"y_{s.sid}\", 0, 1, cat=pulp.LpBinary) for s in stations}\n    prob += pulp.lpSum(s.savings * y[s.sid] for s in stations), \"savings\"\n    prob += pulp.lpSum(s.cost * y[s.sid] for s in stations) <= budget, \"budget\"\n    prob += pulp.lpSum(s.crew_days * y[s.sid] for s in stations) <= crew_days, \"crew\"\n    for a, b in bypass_pairs:\n        prob += y[a] + y[b] <= 1, f\"bypass_{a}_{b}\"\n    for s in stations:\n        if s.must:\n            prob += y[s.sid] == 1, f\"must_{s.sid}\"\n    return prob, y\n\n\ndef refurbish(stations: list[Station], budget: float, crew_days: int,\n              bypass_pairs: list[tuple[str, str]]) -> tuple[float, list[str]]:\n    \"\"\"Solve with CBC at a gap of 0: the yearly savings and the stations to refurbish, sorted.\"\"\"\n    prob, y = build(stations, budget, crew_days, bypass_pairs)\n    prob.solve(pulp.PULP_CBC_CMD(msg=False, gapRel=0))\n    return pulp.value(prob.objective), sorted(sid for sid, v in y.items() if v.varValue > 0.5)\n\n\nif __name__ == \"__main__\":\n    demo = [Station(\"N1\", 20, 30, 4), Station(\"N2\", 15, 20, 3, must=True), Station(\"N3\", 18, 25, 5)]\n    print(refurbish(demo, budget=50, crew_days=8, bypass_pairs=[(\"N1\", \"N3\")]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pulp\n\n\n@dataclass(frozen=True)\nclass Station:\n    sid: str\n    savings: float        # energy saved per year after the refurbishment, $k\n    cost: float           # cost of the refurbishment, $k\n    crew_days: int        # crew-days the refurbishment takes\n    must: bool = False    # required by the regulator this year\n\n\ndef build(stations: list[Station], budget: float, crew_days: int,\n          bypass_pairs: list[tuple[str, str]]) -> tuple[pulp.LpProblem, dict[str, pulp.LpVariable]]:\n    \"\"\"The refurbishment model, with one named row per rule.\"\"\"\n    prob = pulp.LpProblem(\"pump_refurbishment\", pulp.LpMaximize)\n    y = {s.sid: prob.add_variable(f\"y_{s.sid}\", 0, 1, cat=pulp.LpBinary) for s in stations}\n    prob += pulp.lpSum(s.savings * y[s.sid] for s in stations), \"savings\"\n    # TODO: add the budget, crew, bypass and must rows of the formulation, each with its name.\n    return prob, y\n\n\ndef refurbish(stations: list[Station], budget: float, crew_days: int,\n              bypass_pairs: list[tuple[str, str]]) -> tuple[float, list[str]]:\n    \"\"\"Solve with CBC at a gap of 0: the yearly savings and the stations to refurbish, sorted.\"\"\"\n    prob, y = build(stations, budget, crew_days, bypass_pairs)\n    prob.solve(pulp.PULP_CBC_CMD(msg=False, gapRel=0))\n    return pulp.value(prob.objective), sorted(sid for sid, v in y.items() if v.varValue > 0.5)\n\n\nif __name__ == \"__main__\":\n    demo = [Station(\"N1\", 20, 30, 4), Station(\"N2\", 15, 20, 3, must=True), Station(\"N3\", 18, 25, 5)]\n    print(refurbish(demo, budget=50, crew_days=8, bypass_pairs=[(\"N1\", \"N3\")]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "e148bdd88d3e343d68865f3305e49f6c9d2ae0e93fd4e534ed75c25de0e4e256",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pulp\n\n\n@dataclass(frozen=True)\nclass Station:\n    sid: str\n    savings: float        # energy saved per year after the refurbishment, $k\n    cost: float           # cost of the refurbishment, $k\n    crew_days: int        # crew-days the refurbishment takes\n    must: bool = False    # required by the regulator this year\n\n\ndef build(stations: list[Station], budget: float, crew_days: int,\n          bypass_pairs: list[tuple[str, str]]) -> tuple[pulp.LpProblem, dict[str, pulp.LpVariable]]:\n    \"\"\"The refurbishment model, with one named row per rule.\"\"\"\n    prob = pulp.LpProblem(\"pump_refurbishment\", pulp.LpMaximize)\n    y = {s.sid: prob.add_variable(f\"y_{s.sid}\", 0, 1, cat=pulp.LpBinary) for s in stations}\n    prob += pulp.lpSum(s.savings * y[s.sid] for s in stations), \"savings\"\n    # TODO: add the budget, crew, bypass and must rows of the formulation, each with its name.\n    return prob, y\n\n\ndef refurbish(stations: list[Station], budget: float, crew_days: int,\n              bypass_pairs: list[tuple[str, str]]) -> tuple[float, list[str]]:\n    \"\"\"Solve with CBC at a gap of 0: the yearly savings and the stations to refurbish, sorted.\"\"\"\n    prob, y = build(stations, budget, crew_days, bypass_pairs)\n    prob.solve(pulp.PULP_CBC_CMD(msg=False, gapRel=0))\n    return pulp.value(prob.objective), sorted(sid for sid, v in y.items() if v.varValue > 0.5)\n\n\nif __name__ == \"__main__\":\n    demo = [Station(\"N1\", 20, 30, 4), Station(\"N2\", 15, 20, 3, must=True), Station(\"N3\", 18, 25, 5)]\n    print(refurbish(demo, budget=50, crew_days=8, bypass_pairs=[(\"N1\", \"N3\")]))\n",
+  "exercise": {
+    "main_path": "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-01/practice-1/refurbish.py",
+    "test_path": "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-01/practice-1/test_refurbish.py",
+    "run_command": [
+      "python3",
+      "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-01/practice-1/refurbish.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-01/practice-1/target/report.xml",
+      "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-01/practice-1/test_refurbish.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_best_plan_within_the_budget",
+        "kind": "main",
+        "says": "the plan saves the most a year within the budget, with the must-do station and one station of the bypass pair"
+      },
+      {
+        "id": "test_rows_carry_the_formulation_labels",
+        "kind": "main",
+        "says": "the model has one row per rule, named budget, crew, bypass_<a>_<b> and must_<id>"
+      },
+      {
+        "id": "test_crew_days_not_stations_are_counted",
+        "kind": "edge",
+        "says": "the crew row adds up each station's crew-days, not the number of stations"
+      },
+      {
+        "id": "test_a_station_in_two_bypass_pairs_gets_a_row_for_each",
+        "kind": "edge",
+        "says": "a station that shares a bypass with two others is in two rows, and each pair keeps one station running"
+      },
+      {
+        "id": "test_a_must_station_is_refurbished_even_when_others_save_more",
+        "kind": "edge",
+        "says": "a must-do station is refurbished even when the money would save more elsewhere"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "20-pulp/README_5.2.1.md",
+      "section": "Write the LP File and Read It Before You Solve"
+    },
+    "concepts": [
+      "the LP file shows every row by name with its terms moved to the left, as the solver receives it",
+      "a PuLP model is a problem with variables, an objective set by += of an expression, and rows added by += of a named comparison"
+    ]
+  }
+}

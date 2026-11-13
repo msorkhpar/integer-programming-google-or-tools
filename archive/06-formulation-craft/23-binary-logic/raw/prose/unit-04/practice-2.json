@@ -1,0 +1,153 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "23-binary-logic"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "One liner thickness for a relining program",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility relines old cast-iron pipes with a cured-in-place resin liner. The lining contractor sets up for **one** liner thickness `t` (in mm) for the whole program, chosen between `t_low` and `t_high`; every pipe relined this year gets that thickness."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Relining pipe `p` at thickness `t` uses `kg_per_mm * t` kilograms of resin; a pipe that is not relined uses none. The resin used by the whole program must not exceed `supply` kilograms.",
+        "Each pipe has a structural minimum `min_mm`: if the pipe is relined, the program's thickness must be at least that minimum. A pipe that is not relined sets no minimum."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The model in `relining.py` has a binary `x[pid]` per pipe (1 if relined) and a continuous `t` between `t_low` and `t_high`. Write `add_liner_rules(model, x, t, pipes, t_low, t_high, supply)` so that the model allows exactly the plans (which pipes, and which thickness) that keep both rules. Add whatever variables you need."
+    },
+    {
+      "type": "para",
+      "text": "With $`P`$ the pipes, $`m_p`$ the resin per mm of pipe $`p`$ (kg) and $`d_p`$ its minimum thickness (mm), the model so far is"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& x_p \\in \\{0, 1\\} && \\forall p \\in P && \\text{(reline pipe } p\\text{)} \\\\\n& t_{\\text{low}} \\le t \\le t_{\\text{high}} && && \\text{(liner thickness, mm)} \\\\\n& \\text{?} && && \\text{(your variables and rows)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The resin of one pipe is a product of a binary and a continuous variable. Write it, replace it by a new variable with its domain and rows, and decide which of those rows the supply row really needs. Use the bounds the data gives you."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix both which pipes are relined and the thickness, and ask the solver whether the model accepts the plan, so any correct formulation passes. About eight lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Pipe:\n    pid: str\n    kg_per_mm: float    # resin per mm of liner thickness\n    min_mm: float       # structural minimum thickness if relined\n\n\ndef add_liner_rules(model: mathopt.Model, x: dict, t: mathopt.Variable, pipes: list[Pipe],\n                    t_low: float, t_high: float, supply: float) -> None:\n    \"\"\"Resin at the program's thickness for every relined pipe within supply; each relined pipe's minimum.\"\"\"\n    resin = []\n    for p in pipes:\n        lined = model.add_variable(lb=0, ub=t_high, name=f\"lined_{p.pid}\")    # x[p] * t\n        model.add_linear_constraint(lined <= t_high * x[p.pid], name=f\"lined_off_{p.pid}\")\n        model.add_linear_constraint(lined <= t - t_low * (1 - x[p.pid]), name=f\"lined_le_{p.pid}\")\n        model.add_linear_constraint(lined >= t_low * x[p.pid], name=f\"lined_on_{p.pid}\")\n        model.add_linear_constraint(lined >= t - t_high * (1 - x[p.pid]), name=f\"lined_ge_{p.pid}\")\n        model.add_linear_constraint(t >= p.min_mm * x[p.pid], name=f\"thick_{p.pid}\")\n        resin.append(p.kg_per_mm * lined)\n    model.add_linear_constraint(sum(resin) <= supply, name=\"supply\")\n\n\ndef build(pipes: list[Pipe], t_low: float, t_high: float, supply: float) -> tuple[mathopt.Model, dict, mathopt.Variable]:\n    model = mathopt.Model(name=\"relining\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in pipes}\n    t = model.add_variable(lb=t_low, ub=t_high, name=\"t\")\n    add_liner_rules(model, x, t, pipes, t_low, t_high, supply)\n    model.maximize(sum(x.values()))\n    return model, x, t\n\n\nif __name__ == \"__main__\":\n    pipes = [Pipe(\"Main St\", 10.0, 4.0), Pipe(\"Mill Rd\", 8.0, 6.0)]\n    model, x, t = build(pipes, 3.0, 8.0, 100.0)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Pipe:\n    pid: str\n    kg_per_mm: float    # resin per mm of liner thickness\n    min_mm: float       # structural minimum thickness if relined\n\n\ndef add_liner_rules(model: mathopt.Model, x: dict, t: mathopt.Variable, pipes: list[Pipe],\n                    t_low: float, t_high: float, supply: float) -> None:\n    \"\"\"Resin at the program's thickness for every relined pipe within supply; each relined pipe's minimum.\"\"\"\n    # TODO: a resin variable per pipe, its rows, the supply row and the minimum-thickness rows.\n    return None\n\n\ndef build(pipes: list[Pipe], t_low: float, t_high: float, supply: float) -> tuple[mathopt.Model, dict, mathopt.Variable]:\n    model = mathopt.Model(name=\"relining\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in pipes}\n    t = model.add_variable(lb=t_low, ub=t_high, name=\"t\")\n    add_liner_rules(model, x, t, pipes, t_low, t_high, supply)\n    model.maximize(sum(x.values()))\n    return model, x, t\n\n\nif __name__ == \"__main__\":\n    pipes = [Pipe(\"Main St\", 10.0, 4.0), Pipe(\"Mill Rd\", 8.0, 6.0)]\n    model, x, t = build(pipes, 3.0, 8.0, 100.0)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "08d590a9dbb1099585439b6c13bfdb5b9e093e17484f6ce2a132392268745b37",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Pipe:\n    pid: str\n    kg_per_mm: float    # resin per mm of liner thickness\n    min_mm: float       # structural minimum thickness if relined\n\n\ndef add_liner_rules(model: mathopt.Model, x: dict, t: mathopt.Variable, pipes: list[Pipe],\n                    t_low: float, t_high: float, supply: float) -> None:\n    \"\"\"Resin at the program's thickness for every relined pipe within supply; each relined pipe's minimum.\"\"\"\n    # TODO: a resin variable per pipe, its rows, the supply row and the minimum-thickness rows.\n    return None\n\n\ndef build(pipes: list[Pipe], t_low: float, t_high: float, supply: float) -> tuple[mathopt.Model, dict, mathopt.Variable]:\n    model = mathopt.Model(name=\"relining\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in pipes}\n    t = model.add_variable(lb=t_low, ub=t_high, name=\"t\")\n    add_liner_rules(model, x, t, pipes, t_low, t_high, supply)\n    model.maximize(sum(x.values()))\n    return model, x, t\n\n\nif __name__ == \"__main__\":\n    pipes = [Pipe(\"Main St\", 10.0, 4.0), Pipe(\"Mill Rd\", 8.0, 6.0)]\n    model, x, t = build(pipes, 3.0, 8.0, 100.0)\n    print(len(list(model.linear_constraints())), \"rows\")\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-04/practice-2/relining.py",
+    "test_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-04/practice-2/test_relining.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-04/practice-2/relining.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/23-binary-logic/prose/unit-04/practice-2/target/report.xml",
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-04/practice-2/test_relining.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_resin_used_fits_the_supply",
+        "kind": "main",
+        "says": "a plan whose resin at the chosen thickness fits the supply is allowed, and one that needs more resin is refused"
+      },
+      {
+        "id": "test_a_relined_pipe_gets_at_least_its_minimum_thickness",
+        "kind": "main",
+        "says": "a relined pipe at its minimum thickness is allowed, and one below its minimum is refused"
+      },
+      {
+        "id": "test_resin_is_counted_at_the_chosen_thickness",
+        "kind": "edge",
+        "says": "a plan that would fit the supply at the thinnest liner but not at the chosen one is refused"
+      },
+      {
+        "id": "test_a_pipe_that_is_not_relined_sets_no_minimum",
+        "kind": "edge",
+        "says": "a thickness below the minimum of a pipe that is not relined is allowed"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/23-binary-logic/prose/unit-04/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "23-binary-logic/README_6.1.4.md",
+      "section": "The Bounds in the Rows Are Part of the Formulation"
+    },
+    "concepts": [
+      "a binary times a bounded continuous variable is a new continuous variable pinned by four rows",
+      "the bounds written into the product rows come from the data and change the relaxation"
+    ]
+  }
+}

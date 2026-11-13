@@ -1,0 +1,381 @@
+# 10.2.2 Seeds, Threads and Deterministic Work Limits, Solver by Solver
+
+GridCap's planning service can call four solvers: HiGHS and SCIP through MathOpt, CP-SAT, and
+Gurobi for the teams that hold a license. The platform team must write one page of policy for each:
+which settings to pin so a rerun repeats, which limit to stop the search with, and which pieces
+of common advice are wrong. Two pieces of that advice are on trial in this lesson:
+"set `Method=2` to make Gurobi deterministic" and "`num_search_workers` with a seed makes CP-SAT
+repeat".
+
+Lesson 10.2.1 named the sources of a different answer: threads, clocks and ties. This lesson goes
+through the settings that control them, solver by solver, and runs each one. The model is lesson
+10.2.1's timing model, unchanged, with the NPV objective unless a run says otherwise; every run is
+a fresh process (`repeat.py`), and each block of output says which fields repeated. GridCap is a
+fictional utility's portfolio.
+
+## Three Settings Decide Whether a Run Can Repeat
+
+Every solver here has the same three knobs, under different names:
+
+- **The seed.** A solver makes some choices at random: which of two equal candidates to branch on
+  first, how to perturb an LP to avoid stalling. The random numbers come from a generator started
+  from a **seed**, so a fixed seed gives the same choices. A seed is a label for one path, not a
+  setting to tune.
+- **The thread count.** Several threads can make a run race (lesson 10.2.1). Some solvers are
+  built so that a fixed number of threads still repeats; others are not. Either way, the count is
+  an input, and "use every core" makes the machine part of the input.
+- **The kind of limit.** A clock limit stops the path at a different place each run; a **work
+  limit**, counted in the solver's own units (nodes, iterations, deterministic time, work units),
+  stops it at the same place.
+
+MathOpt offers common names for these (`random_seed`, `threads`, `time_limit`, `node_limit`), and
+its docstrings say only what each limits: the seed's valid range depends on the solver and an
+out-of-range seed is clamped, and nothing in them promises that a seed makes a run repeat. That is
+each solver's business, so this lesson measures it. `solve_once.py` turns a run's parameters into
+MathOpt's, sending HiGHS's thread count through HiGHS's own options because MathOpt refuses the
+common `threads` for HiGHS (lesson 4.2.4):
+
+```python
+def mathopt_params(solver: str, params: dict) -> mathopt.SolveParameters:
+    """MathOpt's common parameters by name; HiGHS's thread count goes in its own options (lesson 4.2.4)."""
+    common = {k: v for k, v in params.items() if k != "highs_threads"}
+    if "time_limit" in common:
+        common["time_limit"] = datetime.timedelta(seconds=common["time_limit"])
+    solve_params = mathopt.SolveParameters(**common)
+    if "highs_threads" in params:
+        solve_params.highs = highs_pb2.HighsOptionsProto(int_options={"threads": params["highs_threads"]})
+    return solve_params
+```
+
+## HiGHS: A Seed, a Thread Count Fixed per Process, and a Node Limit for Work
+
+HiGHS's options list has `random_seed` (default 0), `threads` (default 0, meaning HiGHS decides) and
+`time_limit` in seconds. It lists no limit on deterministic time; the limits that count work are
+counts of steps, such as `mip_max_nodes` for branch-and-bound nodes, which MathOpt's `node_limit`
+reaches (the runs below stop at exactly 300 nodes). GridCap medium, stopped at 300 nodes, under
+three seeds and then under two thread counts, each setting run twice:
+
+```text
+HiGHS, node limit 300, random_seed 1 (2 runs)
+  result.objective                   226,751
+  result.bound                       226,880
+  result.plan_digest                 a00104bc6c3e
+  result.stats.simplex_iterations    60,327
+HiGHS, node limit 300, random_seed 2 (2 runs)
+  result.objective                   226,748
+  result.bound                       226,899
+  result.plan_digest                 2faf0a36247a
+  result.stats.simplex_iterations    52,472
+HiGHS, node limit 300, random_seed 3 (2 runs)
+  result.objective                   226,767
+  result.bound                       226,874
+  result.plan_digest                 63afe0bb8c10
+  result.stats.simplex_iterations    66,861
+HiGHS, node limit 300, random_seed 1, threads 1 (2 runs)
+  result.objective                   226,751
+  result.bound                       226,880
+  result.plan_digest                 a00104bc6c3e
+  result.stats.simplex_iterations    60,327
+HiGHS, node limit 300, random_seed 1, threads 4 (2 runs)
+  result.objective                   226,751
+  result.bound                       226,880
+  result.plan_digest                 a00104bc6c3e
+  result.stats.simplex_iterations    60,327
+```
+
+Each seed repeats itself exactly, down to the simplex iterations, and each seed takes another path
+to another plan: three seeds, three plans, three bounds after the same 300 nodes. The thread count
+changed nothing on this model: one thread, four threads and HiGHS's own choice all gave the seed-1
+run. That is a measurement on one model and one HiGHS version, not a promise for every model, so
+the policy still pins the count.
+
+Pinning it has a HiGHS-specific rule. The first HiGHS solve in a process fixes the thread count for
+the whole process, and a later solve asking for a different count fails (lesson 4.2.4 shows it).
+So a service decides the count once, at start-up, and passes that same value on every solve;
+a harness that compares thread counts runs each in its own process, as `repeat.py` does.
+
+The HiGHS policy, then: a fixed `random_seed`, a thread count fixed for the process through
+`highs=HighsOptionsProto(int_options={"threads": n})`, and `node_limit` rather than `time_limit`
+when the run must repeat.
+
+<!-- practice 1 -->
+
+## CP-SAT: num_workers Is the New Name, and Only Interleaving Makes Workers Repeat
+
+CP-SAT's parameters proto defines the worker count twice. `num_workers` is the current name; the
+proto calls `num_search_workers` deprecated and says it is still read when `num_workers` is 0. The
+program prints both fields' numbers in the proto and what setting the old one does:
+
+```python
+fields = sat_parameters_pb2.SatParameters.DESCRIPTOR.fields_by_name
+print("proto field numbers:", {name: fields[name].number for name in ("num_search_workers", "num_workers")})
+solver = cp_model.CpSolver()
+solver.parameters.num_search_workers = 4
+print("set num_search_workers=4 -> num_workers reads", solver.parameters.num_workers)
+```
+
+```text
+proto field numbers: {'num_search_workers': 100, 'num_workers': 206}
+set num_search_workers=4 -> num_workers reads 0
+```
+
+They are two separate fields, and setting the old one leaves the new one at 0, its "not set" value,
+so the solver falls back to reading the old one. Code and articles written before the rename still
+work, which is why the old name keeps appearing. Neither name is a determinism setting. Four workers
+under each, with a seed and a deterministic limit, on GridCap medium:
+
+```text
+CP-SAT num_search_workers=4, seed 7, deterministic limit 2 (5 runs)
+  result.objective                   differs
+  result.plan_digest                 differs
+  result.stats.deterministic_time    differs
+CP-SAT num_search_workers=4, interleave_search, seed 7, deterministic limit 2 (3 runs)
+  result.objective                   226,469
+  result.plan_digest                 72cc88ddfafe
+  result.stats.deterministic_time    8.2350
+CP-SAT num_workers=4, interleave_search, seed 7, deterministic limit 2 (3 runs)
+  result.objective                   226,469
+  result.plan_digest                 72cc88ddfafe
+  result.stats.deterministic_time    8.2350
+```
+
+The seed and the work limit did not stop four racing workers from ending at different plans.
+`interleave_search`, which the proto marks experimental and describes as deterministic whatever the
+number of workers, made every field repeat, and the two names gave the identical run. As in lesson
+4.6.3, the interleaved search ran well past its limit of 2 (8.2350 units here), so treat the limit as
+approximate in that mode.
+
+`solve_once.py` sets CP-SAT's parameters by name, so a config can use either name:
+
+```python
+    solver = cp_model.CpSolver()
+    for name, value in config.get("params", {}).items():
+        setattr(solver.parameters, name, value)
+```
+
+The CP-SAT policy: `num_workers` (not the old name) and `random_seed`, a `max_deterministic_time`
+limit rather than `max_time_in_seconds`, and `interleave_search = True` whenever there is more than
+one worker; or one worker. Recheck the interleaved mode on every OR-Tools upgrade, since the proto
+calls it experimental.
+
+<!-- practice 2 -->
+
+## SCIP: Repeatable Here, and a Seed That Picks Among Tied Plans
+
+SCIP's own parameter list includes `randomization/randomseedshift`, which shifts every random seed
+SCIP uses, its LP solver's included; permutation seeds, off by default; and `parallel/mode`, whose
+default is the deterministic mode. The runs here leave the thread count unset. Three runs on GridCap
+small's NPV question, the count question under two seeds, and GridCap medium stopped at 200 nodes
+under two seeds:
+
+```text
+SCIP, highest NPV, random_seed 5, GridCap small (3 runs)
+  result.objective                   24,260
+  result.plan_digest                 092777a3fdd1
+  result.stats.nodes                 155
+  result.stats.simplex_iterations    2,069
+SCIP, most projects, random_seed 1, GridCap small (2 runs)
+  result.objective                   33
+  result.plan_digest                 74829f679e33
+SCIP, most projects, random_seed 4, GridCap small (2 runs)
+  result.objective                   33
+  result.plan_digest                 e4a26124812d
+SCIP, node limit 200, random_seed 1, GridCap medium (2 runs)
+  result.objective                   226,607
+  result.bound                       226,920.1988
+  result.plan_digest                 471f8eb533fc
+SCIP, node limit 200, random_seed 2, GridCap medium (2 runs)
+  result.objective                   226,607
+  result.bound                       226,922.0405
+  result.plan_digest                 471f8eb533fc
+```
+
+Every setting repeated, node counts included. On the NPV question SCIP found the same plan HiGHS did
+(`092777a3fdd1`), because there is only one best plan. On the count question, where many plans tie,
+the seed alone picked which one came back: seed 1 and seed 4 returned different plans, each one
+every time. That is the seed acting as a tie-picker, and the reason a seed belongs in the record of
+a run. On medium the two seeds ended at the same plan with different bounds, showing that they took
+different paths.
+
+One caution from earlier in the course: on the indicator model of lesson 6.2.3, SCIP's node count
+differed between runs with a fixed seed and one thread, while the values and statuses repeated.
+On this model the counts repeated. Check your own model before you put SCIP's node count in a
+comparison.
+
+## Gurobi: Deterministic for a Fixed Thread Count, and Method=2 Is Barrier
+
+Gurobi's parameter reference and its support article "Is Gurobi deterministic?" say:
+
+- Gurobi is designed to be deterministic: the same model, parameters, version and computer give the
+  same result and path, with several threads too;
+- `Threads` defaults to 0, meaning about as many threads as the machine has virtual processors;
+- `Seed` perturbs the path; `TimeLimit` is in seconds and can make runs differ, while `WorkLimit`
+  counts **work units** (roughly a second of one thread's work) and is deterministic;
+- `Method` picks the algorithm for an LP or a MIP's root relaxation: 0 primal simplex, 1 dual
+  simplex, 2 barrier, 3 concurrent (not deterministic), 4 and 5 deterministic concurrent, and -1
+  automatic, which can choose a non-deterministic concurrent run in some cases;
+- `ConcurrentMIP`, off by default, is not deterministic.
+
+`gurobi_settings.py` checks this on GridCap medium (887 binaries, inside the size-limited license).
+Every Gurobi environment starts quiet, as in lesson 5.3.1, because Gurobi's messages can name the
+machine and the license holder, and the program prints only numbers:
+
+```python
+def quiet_env() -> gp.Env:
+    """A started environment that prints nothing; raises GurobiError if there is no license."""
+    env = gp.Env(empty=True)
+    env.setParam("OutputFlag", 0)
+    env.start()
+    return env
+```
+
+```text
+Gurobi, default parameters (3 runs)
+  result.status                      OPTIMAL
+  result.objective                   226,807
+  result.plan_digest                 f5e205d2fe60
+  result.stats.nodes                 35,922
+  result.stats.work                  1.4312
+  result.stats.fingerprint           1,980,860,281
+Gurobi, Threads=1 (3 runs)
+  result.status                      OPTIMAL
+  result.objective                   226,814
+  result.plan_digest                 644c756d33d0
+  result.stats.nodes                 35,432
+  result.stats.work                  13.9736
+  result.stats.fingerprint           1,980,860,281
+Gurobi, Threads=4 (3 runs)
+  result.status                      OPTIMAL
+  result.objective                   226,814
+  result.plan_digest                 644c756d33d0
+  result.stats.nodes                 41,616
+  result.stats.work                  6.3391
+  result.stats.fingerprint           1,980,860,281
+Gurobi, Method=2 (3 runs)
+  result.status                      OPTIMAL
+  result.objective                   226,815
+  result.plan_digest                 fb8ce1f8ddbb
+  result.stats.nodes                 17,627
+  result.stats.work                  0.9586
+  result.stats.fingerprint           1,980,860,281
+Gurobi, WorkLimit=0.2 (3 runs)
+  result.status                      WORK_LIMIT
+  result.objective                   226,801
+  result.plan_digest                 b38eb98eb777
+  result.stats.nodes                 332
+  result.stats.work                  0.2004
+  result.stats.fingerprint           1,980,860,281
+Gurobi, TimeLimit=0.3 (3 runs)
+  result.status                      TIME_LIMIT
+  result.stats.work                  differs
+```
+
+The `fingerprint` is Gurobi's `Model.Fingerprint` attribute, a hash of the model as Gurobi received
+it, so equal fingerprints confirm that every run solved the same model. Reading the output against
+the two claims:
+
+- **Gurobi is deterministic by default for a fixed thread count.** The default run repeated in all
+  three processes, nodes and work included. So did `Threads=1` and `Threads=4`, each with its own
+  path: the thread count is an input. The default uses the machine's processor count, so the
+  default line is a fact about the machine these runs used; on yours it may show another plan. Pin
+  `Threads` in a policy, and the default's repeatability then carries to any machine with the same
+  version and enough cores.
+- **`Method=2` is barrier, not a determinism switch.** It repeated, like every setting above, and it
+  took another path to another plan. It does rule out the automatic choice of a concurrent LP run,
+  which the support article warns can be non-deterministic, and so would 0, 1 or 4; but the default
+  run here repeated without it. Pinning `Method` is a fine way to make the root algorithm explicit;
+  it is not what makes Gurobi repeat.
+
+Two more lines are worth reading. `WorkLimit=0.2` stopped every run at the same node with the same
+plan, while `TimeLimit=0.3` stopped each run after a different amount of work. And the four settings
+that finished, all OPTIMAL, report four objectives between 226,807 and 226,815: a MIP is "optimal"
+when its gap is within the tolerance (`MIPGap`, 0.01% by default), so plans worth $8k apart on a $227
+million objective can all be optimal. Lesson 10.2.3 takes that up.
+
+## Summary
+
+- **Three settings decide whether a run can repeat:** a fixed seed, a fixed thread count, and a
+  limit that counts work rather than seconds.
+- **HiGHS: a seed, a thread count fixed per process, and a node limit for work.** Each seed repeated
+  and took its own path; set threads through HiGHS's options, once per process.
+- **CP-SAT: `num_workers` is the new name, and only interleaving makes workers repeat.** Four
+  workers raced under either name; `interleave_search` repeated every field.
+- **SCIP: repeatable here, and a seed that picks among tied plans.** Every setting repeated here; seeds 1
+  and 4 returned different tied plans on the count question.
+- **Gurobi: deterministic for a fixed thread count, and `Method=2` is barrier.** Every setting with
+  a work limit or none repeated; the thread count and the method each changed the path.
+
+## Reference
+
+| | Seed | Threads | Work limit (repeats) | Clock limit (does not) |
+| --- | --- | --- | --- | --- |
+| HiGHS via MathOpt | `random_seed` | `highs=HighsOptionsProto(int_options={"threads": n})`, fixed per process | `node_limit` | `time_limit` |
+| CP-SAT | `random_seed` | `num_workers` (old name `num_search_workers`), with `interleave_search` above 1 | `max_deterministic_time` | `max_time_in_seconds` |
+| SCIP via MathOpt | `random_seed` | left unset in these runs | `node_limit` | `time_limit` |
+| Gurobi | `Seed` | `Threads` (default 0: the machine's processors) | `WorkLimit`, `NodeLimit` | `TimeLimit` |
+
+| Claim | Verdict on our runs |
+| --- | --- |
+| "`Method=2` makes Gurobi deterministic" | no: it selects barrier; the default repeated already for a fixed thread count |
+| "`num_search_workers` and a seed make CP-SAT repeat" | no: old name of `num_workers`; workers repeat only with `interleave_search` |
+| "a seed makes a run repeat" | only with fixed threads and a work limit; and a different seed may return a different tied plan |
+
+**Further reading:** [CP-SAT parameters proto (OR-Tools)](https://github.com/google/or-tools/blob/stable/ortools/sat/sat_parameters.proto)
+(`random_seed` reset at each solve, `num_workers` and the deprecated `num_search_workers`,
+`interleave_search` and `interleave_batch_size`, `max_deterministic_time`);
+[MathOpt `SolveParameters` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/parameters.py)
+(`random_seed` ranges and clamping per solver, `threads`, `node_limit`);
+[HiGHS options](https://ergo-code.github.io/HiGHS/dev/options/definitions/) (`random_seed`,
+`threads`, `time_limit`, `mip_max_nodes`);
+[SCIP parameters](https://www.scipopt.org/doc/html/PARAMETERS.php) (`randomization/randomseedshift`,
+`randomization/permutationseed`, `parallel/mode`, `limits/nodes`);
+[Gurobi parameter reference](https://docs.gurobi.com/projects/optimizer/en/current/reference/parameters.html)
+(`Method`, `Seed`, `Threads`, `TimeLimit`, `WorkLimit`, `NodeLimit`, `MIPGap`, `ConcurrentMIP`) and
+[Is Gurobi deterministic? (Gurobi support)](https://support.gurobi.com/hc/en-us/articles/360031636051).
+
+## Challenges
+
+1. Run the HiGHS seeds of `highs_settings.py` with `node_limit` 1,000. Predict whether the three
+   seeds end closer together or further apart.
+2. Add `{"Seed": 3}` to the Gurobi settings. Predict which fields repeat, and whether the plan is
+   the default's.
+3. A teammate sets `num_workers = 8` and `num_search_workers = 4` on the same solver. Using the
+   proto's rule for the old name, predict how many workers run.
+
+## Design Note: A Policy per Solver, Written Down
+
+The three settings have different names and different traps in each solver: HiGHS's thread count
+sticks to the process, CP-SAT's workers need interleaving, Gurobi's default thread count is the
+machine's. Write the repeatable settings for each solver once, in one function per solver, and
+record what they were in every run's manifest (lesson 10.2.4). A setting chosen in one place and
+recorded every time can be checked; one typed at each call site cannot.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change.
+
+**highs_settings.py.** HiGHS on GridCap medium with a node limit, under three seeds and two thread
+counts (*HiGHS: A Seed, a Thread Count Fixed per Process*). *Try:* Replace the node limit with
+`time_limit` 5. Predict which lines change to `differs`.
+
+- Program: [highs_settings.py](src/highs_settings.py)
+
+**cpsat_names.py.** The two worker-count fields of the proto, and four workers with and without
+interleaving under each name (*CP-SAT: num_workers Is the New Name*). *Try:* Set `num_workers` to 1
+without interleaving. Predict whether the runs repeat.
+
+- Program: [cpsat_names.py](src/cpsat_names.py)
+
+**scip_settings.py.** SCIP through MathOpt with seeds, on both questions and with a node limit
+(*SCIP: Repeatable Here, and a Seed That Picks Among Tied Plans*). *Try:* Add seeds 2 and 3 to the count
+question. Predict how many different plans come back.
+
+- Program: [scip_settings.py](src/scip_settings.py)
+
+**gurobi_settings.py.** Gurobi with its default settings, two thread counts, `Method=2`, a work limit
+and a time limit; without a license each run reports `NO_LICENSE` (*Gurobi: Deterministic for a
+Fixed Thread Count*). *Try:* Add `{"Threads": 4, "Method": 2}`. Predict whether it matches either
+of the two runs it combines.
+
+- Program: [gurobi_settings.py](src/gurobi_settings.py)
+- Library: [grb_plan.py](src/grb_plan.py)

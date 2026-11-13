@@ -1,0 +1,140 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "26-multi-period-timing"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A covenant on every run of years",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A port authority finances its capital plan through a bond program, and the bond covenant now limits how fast it may spend: any `k` consecutive years of the plan together may spend at most `cap`. The model in `rolling.py` holds only the whole plan to one cap, so a plan can still crowd its spending into a few years."
+    },
+    {
+      "type": "para",
+      "text": "The model so far, with $`Y = (y_1, \\dots, y_n)`$ the plan's years in order and $`\\text{spend}_y`$ the given linear expressions in the plan's 0/1 variables:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_{y \\in Y} \\text{spend}_y \\le C \\qquad \\text{(plan\\_cap)}"
+    },
+    {
+      "type": "para",
+      "text": "Write the covenant first in this notation: which sets of years it caps (say exactly which first years a window may have), and one row per such set, with its quantifier and a label. Then write `add_rolling_caps(model, spend, years, k, cap)` to add those rows and return them in a dict keyed by each window's first year. If the plan has fewer than `k` years, no window fits and there is no row. `add_plan_cap` shows the old row; the tests call your function alone."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix a plan and ask the solver whether it is allowed, so any correct formulation passes. About five lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_plan_cap(model: mathopt.Model, spend: dict, years: list[int], cap: int) -> None:\n    \"\"\"The old rule: the whole plan's spend within one cap.\"\"\"\n    model.add_linear_constraint(sum(spend[y] for y in years) <= cap, name=\"plan_cap\")\n\n\ndef add_rolling_caps(model: mathopt.Model, spend: dict, years: list[int], k: int, cap: int) -> dict:\n    \"\"\"Hold the spend of every `k` consecutive years of the plan to `cap`.\"\"\"\n    rows = {}\n    for i in range(len(years) - k + 1):\n        window = years[i:i + k]\n        rows[window[0]] = model.add_linear_constraint(\n            sum(spend[y] for y in window) <= cap, name=f\"rolling_{window[0]}\")\n    return rows\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_binary_variable(name=\"dredging\")\n    spend = {2027: 50 * x, 2028: 50 * x, 2029: 0 * x}\n    print(add_rolling_caps(model, spend, [2027, 2028, 2029], 2, 80))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_plan_cap(model: mathopt.Model, spend: dict, years: list[int], cap: int) -> None:\n    \"\"\"The old rule: the whole plan's spend within one cap.\"\"\"\n    model.add_linear_constraint(sum(spend[y] for y in years) <= cap, name=\"plan_cap\")\n\n\ndef add_rolling_caps(model: mathopt.Model, spend: dict, years: list[int], k: int, cap: int) -> dict:\n    \"\"\"Hold the spend of every `k` consecutive years of the plan to `cap`.\"\"\"\n    # TODO: write the formulation first, then its rows. Return the rows in a dict by their first year.\n    return {}\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_binary_variable(name=\"dredging\")\n    spend = {2027: 50 * x, 2028: 50 * x, 2029: 0 * x}\n    print(add_rolling_caps(model, spend, [2027, 2028, 2029], 2, 80))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "aac3d92c45218de27bab536745a95d38416167b1c49a94ec64e9284b5a6cce2b",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_plan_cap(model: mathopt.Model, spend: dict, years: list[int], cap: int) -> None:\n    \"\"\"The old rule: the whole plan's spend within one cap.\"\"\"\n    model.add_linear_constraint(sum(spend[y] for y in years) <= cap, name=\"plan_cap\")\n\n\ndef add_rolling_caps(model: mathopt.Model, spend: dict, years: list[int], k: int, cap: int) -> dict:\n    \"\"\"Hold the spend of every `k` consecutive years of the plan to `cap`.\"\"\"\n    # TODO: write the formulation first, then its rows. Return the rows in a dict by their first year.\n    return {}\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_binary_variable(name=\"dredging\")\n    spend = {2027: 50 * x, 2028: 50 * x, 2029: 0 * x}\n    print(add_rolling_caps(model, spend, [2027, 2028, 2029], 2, 80))\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-04/practice-1/rolling.py",
+    "test_path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-04/practice-1/test_rolling.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-04/practice-1/rolling.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/26-multi-period-timing/prose/unit-04/practice-1/target/report.xml",
+      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-04/practice-1/test_rolling.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_plan_within_the_cap_is_allowed_and_one_over_it_refused",
+        "kind": "main",
+        "says": "a plan whose every run of k years fits the cap is allowed, and one that breaks the first run is refused"
+      },
+      {
+        "id": "test_a_plan_that_breaks_only_an_overlapping_window_is_refused",
+        "kind": "edge",
+        "says": "the runs overlap: each year starts one, not every k-th year"
+      },
+      {
+        "id": "test_the_last_full_window_is_capped_too",
+        "kind": "edge",
+        "says": "the last run of k years ends in the plan's last year"
+      },
+      {
+        "id": "test_a_window_holds_k_years_not_fewer",
+        "kind": "edge",
+        "says": "each run holds k years, so a plan can fit every shorter run and still break one"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-04/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "26-multi-period-timing/README_6.4.4.md",
+      "section": "A Cap on Carry-Over and a Cap on a Window Are More Rows on the Same Expressions"
+    },
+    "concepts": [
+      "a carry-over cap and a multi-year cap are more rows on the same spend expressions and carry variables"
+    ]
+  }
+}

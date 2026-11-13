@@ -1,0 +1,628 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "03-integer-programming-foundations",
+    "11-mip-gap-and-termination"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Best bound, incumbent, absolute and relative gap",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "3.4.1 Best Bound, Incumbent, Absolute and Relative Gap"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's planning job picks which of the medium portfolio's 400 candidate projects to fund. Last night an operator stopped it early, and the dashboard showed two figures: *NPV $224,315k, gap 0.11%*. The finance lead asks the obvious questions. Is this the best plan? If not, how much better could the best one be? Can we tell without running the job to the end? GridCap is a fictional utility, and its numbers are teaching data."
+    },
+    {
+      "type": "para",
+      "text": "Every mixed-integer solver answers those questions with two numbers it keeps during the whole run: the value of the best plan it has found, and a value it has proved no plan can beat. This lesson names the two, shows how they move as the search goes on, reads them from a MathOpt result, and turns them into the **gap** that a dashboard prints."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The planning job solves GridCap's **project-selection MILP**: one yes/no decision per project, each project starting at its earliest start year. A **MILP** (mixed-integer linear program, lesson 1.1.3) is a linear model in which some variables may only take whole-number values; here every variable is **binary**, 0 or 1."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`P`$ the candidate projects; $`Y`$ the plan's years; $`M \\subseteq P`$ the must-do projects; $`\\mathcal{G}`$ the alternative groups, each a set of projects of which at most one may be funded; $`C \\subseteq P`$ the child projects, each with a parent project $`p(c)`$."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`v_i`$, the NPV of project $`i`$ if it starts at its earliest start ($k); $`c_{i,y}`$, what project $`i`$ spends in year $`y`$ when it starts then ($k, 0 in a year it is not worked); $`B_y`$, the budget of year $`y`$ ($k)."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_i \\in \\{0, 1\\}`$ for every $`i \\in P`$: 1 if project $`i`$ is in the plan."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{i \\in P} v_i\\, x_i"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\nx_i &= 1 && \\forall i \\in M && \\text{(must}_i) \\\\\n\\sum_{i \\in g} x_i &\\le 1 && \\forall g \\in \\mathcal{G} && \\text{(alt}_g) \\\\\nx_c &\\le x_{p(c)} && \\forall c \\in C && \\text{(needs}_c) \\\\\n\\sum_{i \\in P} c_{i,y}\\, x_i &\\le B_y && \\forall y \\in Y && \\text{(budget}_y)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The needs$`_c`$ row is the parent rule that lessons 3.1.2 to 3.2.4 call parent$`_c`$ and lessons 3.3.1 to 3.3.4 call after$`_c`$: the same row, $`x_c \\le x_{p(c)}`$, under another name. The code names each row after its label: `must_P017`, `alt_G03`, `needs_P212`, `budget_2029`. The builder is `build` in `selection.py`. On the medium portfolio it makes 39 must rows, 18 alt rows, 18 needs rows and 10 budget rows:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "GridCap medium selection MILP: 400 binary variables, 85 rows"
+    },
+    {
+      "type": "para",
+      "text": "Lesson 3.3.2 also solved \"the selection model on GridCap medium\", with 80 rows and an optimum of $274,999k. This one has 85 rows and a lower optimum, and the difference is one set of rows. Lesson 3.3.2's five-year model caps only the first five plan years, 2027 to 2031, and leaves later spend uncapped. This model has a budget row for every year of the plan, $`Y = \\{2027, \\dots, 2036\\}`$: five more rows. `two_models.py` solves this model to a proven optimum, then lifts the caps of 2032 to 2036 to get lesson 3.3.2's model back:"
+    },
+    {
+      "type": "example",
+      "id": "two_models-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "11-mip-gap-and-termination/src/two_models.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "11-mip-gap-and-termination/src/two_models.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "for y in years[5:]:\n    sel.budget[y].upper_bound = math.inf     # drop the cap of years 6 to 10: lesson 3.3.2's model\nfirst_five = solve_highs(sel.model, EXACT)"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "plan years 2027-2036: 10 budget rows, 85 rows in all\nevery year capped (this lesson):         optimum 224,384\nfirst five years capped (lesson 3.3.2): optimum 274,999\nlesson 3.3.2's plan, spend against the caps lesson 3.3.2 leaves out:\n  2032  spend    74,860  budget    35,880  over\n  2033  spend    81,190  budget    36,370  over\n  2034  spend    77,730  budget    40,200  over\n  2035  spend    73,240  budget    34,390  over\n  2036  spend    44,720  budget    41,740  over"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Lesson 3.3.2's best plan spends more than the budget in each of the five later years, about twice it in 2032 to 2035, so this model refuses it. Every plan this model allows, lesson 3.3.2's model allows too (it has the same rows minus five), so this model's optimum can only be lower or equal: here it is $50,615k lower."
+    },
+    {
+      "type": "para",
+      "text": "Every program in this lesson solves this model with HiGHS, the course's default solver, through MathOpt in OR-Tools 9.15. The numbers on this page are what those programs printed; another solver, another version or another machine can print different ones."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A MILP Solver Keeps Two Numbers: the Best Plan Found and a Bound on Every Plan"
+    },
+    {
+      "type": "para",
+      "text": "A MILP solver does not try plans one by one; the medium model has $`2^{400}`$ yes/no combinations. It works with **LP relaxations** instead (lesson 1.1.3): the same model with each $`x_i`$ allowed anywhere between 0 and 1. An LP solves fast, and its value is at least as high as any whole-number plan's value (lesson 3.1.2 gives the argument)."
+    },
+    {
+      "type": "para",
+      "text": "The search, **branch and bound** (lessons 3.2.1 to 3.2.4), splits the problem into smaller problems called **nodes**. Each node fixes some variables (say $`x_{P077} = 1`$ in one node and $`x_{P077} = 0`$ in the other) and solves the LP relaxation of what is left. Along the way the solver keeps two numbers:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "The **incumbent** is the best whole-number plan found so far, and its objective value. It is a real plan that obeys every row, so you could fund it today. Solvers also call its value the **primal bound**.",
+        "The **best bound** is a value the solver has proved no plan can beat. For a maximization it is the highest LP value among the nodes still waiting to be explored: every plan not yet ruled out lives in one of those nodes, and none is worth more than its node's LP value. Solvers also call it the **dual bound**. Before any branching it is the LP relaxation of the whole model."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The true optimum $`z^*`$, the value of the best plan, is unknown until the end, but it always sits between the two:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\text{incumbent} \\;\\le\\; z^* \\;\\le\\; \\text{best bound} \\qquad \\text{(maximization)}"
+    },
+    {
+      "type": "para",
+      "text": "For a minimization everything flips: the incumbent is the lowest cost found, the best bound is a cost no plan can go below, and $`\\text{best bound} \\le z^* \\le \\text{incumbent}`$. In both cases the incumbent is a plan you hold, and the best bound is a promise about plans you do not hold."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Incumbent Rises and the Bound Falls Until They Meet"
+    },
+    {
+      "type": "para",
+      "text": "`bracket.py` solves the model several times, each time letting HiGHS explore at most a given number of nodes (`node_limit`, a stopping rule lesson 3.4.2 covers), and prints both numbers at the stop. Each run also sets `relative_gap_tolerance=0.0`, so the node limit is the only thing that can stop it early. The last run has no node limit:"
+    },
+    {
+      "type": "example",
+      "id": "bracket-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "11-mip-gap-and-termination/src/bracket.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "11-mip-gap-and-termination/src/bracket.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "for limit in (1, 1000, 4000, 7000, 10000, 12000):\n    result = solve_highs(sel.model, mathopt.SolveParameters(node_limit=limit, relative_gap_tolerance=0.0))\n    incumbent = result.objective_value()\n    bound = result.best_objective_bound()\n    absolute = bound - incumbent\n    relative = absolute / abs(incumbent)"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "LP relaxation (every x between 0 and 1): 224,870.85\n\nnode limit  stopped  incumbent  best bound  abs gap  rel gap\n         1     NODE    224,315     224,555      240   0.107%\n      1000     NODE    224,315     224,552      237   0.106%\n      4000     NODE    224,315     224,515      200   0.089%\n      7000     NODE    224,340     224,508      168   0.075%\n     10000     NODE    224,359     224,472      113   0.050%\n     12000     NODE    224,384     224,453       69   0.031%\n\nrun to the end: OPTIMAL, incumbent 224,384, best bound 224,384, 13,930 nodes"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Read it row by row:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "The LP relaxation, $224,870.85k, is the first bound any solver has. After the first node the bound is already lower, $224,555k. The log at the end of this lesson shows HiGHS adding **cutting planes** at the root (lesson 3.3.1): extra rows that cut off fractional points without cutting off any whole-number plan, which pulls the LP value down.",
+        "Down the table the incumbent never falls and the bound never rises, so the bracket $`[\\text{incumbent}, \\text{best bound}]`$ narrows. Each row is a separate run that starts from scratch, not a snapshot of one run. Within a single run the pattern holds by definition: the incumbent is the best plan found *so far*, and a bound once proved stays proved. Across rows nothing forces it: the pattern relies on HiGHS making the same choices in every run, so that a run with a larger node limit goes over the same ground as a smaller one before going further. A solver whose search changed from run to run could print a row with a lower incumbent than the row above it. Lesson 3.4.2, in its rule *Time Limits Are Not Repeatable; Node and Solution Limits Are*, shows HiGHS repeating a node-limited run exactly.",
+        "At 12,000 nodes the incumbent is already $224,384k, the true optimum, but the solver cannot know it yet: the bound still allows plans up to $224,453k. From there on there was no better plan to find. The rest of the full run, up to 13,930 nodes, pushed the bound down until it met the incumbent, and that meeting is what **proves** the plan optimal.",
+        "At the end the two numbers are equal, and the termination reason is `OPTIMAL`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "So the honest answer to the finance lead, at any moment before the end, is the bracket: *the best plan is worth between the incumbent and the bound*. At the operator's stop, with $224,315k found and nothing worth more than $224,552k, the best plan is worth at most $237k more than the one in hand."
+    },
+    {
+      "type": "para",
+      "text": "The 486.85 between the LP relaxation and the optimum is the **integrality gap** of lesson 3.1.2. Do not confuse the two. The integrality gap is a fixed property of the formulation. The gap of this lesson is a property of one moment of one run, and it closes as the run goes on."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Read Both Bounds From the SolveResult"
+    },
+    {
+      "type": "para",
+      "text": "`mathopt.solve` returns a `SolveResult`. Its `termination` field says how the run ended, and `termination.objective_bounds` holds the two numbers, under the names `primal_bound` (incumbent) and `dual_bound` (best bound). Two methods give them too: `objective_value()` is the objective of the best plan returned, and `best_objective_bound()` is the dual bound. With them, the gap of a maximization that holds a plan worth more than 0 is two lines:"
+    },
+    {
+      "type": "example",
+      "id": "read_gap-3",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "11-mip-gap-and-termination/src/read_gap.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "11-mip-gap-and-termination/src/read_gap.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "def gap(result: mathopt.SolveResult) -> tuple[float, float]:\n    \"\"\"Absolute and relative gap of a maximization that holds a plan worth more than 0.\"\"\"\n    bounds = result.termination.objective_bounds\n    absolute = bounds.dual_bound - bounds.primal_bound\n    relative = absolute / abs(bounds.primal_bound)\n    return absolute, relative"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "On a run stopped after 100 nodes, `read_gap.py` reads the result each of these ways, then computes the gap with `gap`:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "termination: FEASIBLE, limit NODE\nresult.objective_value():   224,315.0\nresult.best_objective_bound(): 224,552.0\nresult.termination.objective_bounds: ObjectiveBounds(primal_bound=224315.0, dual_bound=224552.0)\nabsolute gap 237.0 ($k), relative gap 0.1057%"
+    },
+    {
+      "type": "para",
+      "text": "`FEASIBLE` means \"a plan, not proved best\"; lesson 3.4.2 lists every way a run can end. The `primal_bound` and `objective_value()` agree here. MathOpt's documentation of `objective_value` allows the primal bound to be slightly better than the returned plan's value, within the solver's tolerances, so the gap is read from `objective_bounds`, where both numbers come from the same moment."
+    },
+    {
+      "type": "para",
+      "text": "A run without a plan is the case code must not get wrong. Cut 2027's budget to $1,000k, below what the must-do projects spend that year, and solve:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "2027 budget cut to 1,000: INFEASIBLE, has a plan: False\nobjective_bounds: ObjectiveBounds(primal_bound=-inf, dual_bound=-inf)\nobjective_value(): ValueError: No primal feasible solution available."
+    },
+    {
+      "type": "para",
+      "text": "With no plan, the primal bound of a maximization is $`-\\infty`$ (for a minimization, $`+\\infty`$), and `objective_value()` raises an error rather than invent a number. Here the dual bound is $`-\\infty`$ as well, because the solver proved that no plan exists at all. A run can also stop on a limit before it has found any plan; lesson 3.4.2 shows how its result says so. Either way the rule for code is the same: check `has_primal_feasible_solution()`, or that the primal bound is finite, before you read a plan's value or compute a relative gap."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Absolute Gap Is in the Objective's Units"
+    },
+    {
+      "type": "para",
+      "text": "The **absolute gap** is the distance between the two bounds:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\text{absolute gap} = |\\,\\text{best bound} - \\text{incumbent}\\,|"
+    },
+    {
+      "type": "para",
+      "text": "The absolute value makes it the same formula for a maximization and a minimization. It is in the objective's units, which in this model are $k of NPV. The 237.0 above says: *no plan is worth more than $237k above the one in hand*. It is a guarantee about the plan's value, and a planner can weigh it against money they understand, such as the cost of a single project."
+    },
+    {
+      "type": "para",
+      "text": "It is also only an upper limit on what the incumbent leaves behind. The true optimum can be anywhere inside the bracket, and in this run it was $69k above the incumbent ($224,384k against $224,315k), not $237k. Only the bound was too high."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Relative Gap Divides by a Number Each Solver Chooses"
+    },
+    {
+      "type": "para",
+      "text": "The **relative gap** puts the absolute gap on a scale, so that one tolerance can serve a model worth $300k and a model worth $3B:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\text{relative gap} = \\frac{|\\,\\text{best bound} - \\text{incumbent}\\,|}{\\text{a reference value}}"
+    },
+    {
+      "type": "para",
+      "text": "What the reference value is depends on the solver. MathOpt's own documentation of `relative_gap_tolerance` says so: the normalization is solver-dependent, for example dividing by the incumbent's objective value. `denominators.py` stops HiGHS and SCIP (another MILP solver that MathOpt runs, as `GSCIP`) at the first plan each finds, on the selection model (max NPV) and on a second model that minimizes capex subject to an NPV of at least $200,000k. It prints each solver's own final gap line from its log, then the gap divided three ways:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "max NPV, HIGHS: incumbent 219,607, best bound 224,870.0, absolute gap 5,263.0\n  log says   Gap               2.4% (tolerance: 0.01%)\n  |gap|/|incumbent| = 2.3966%   |gap|/|bound| = 2.3405%   |gap|/min(|incumbent|, |bound|) = 2.3966%\nmax NPV, GSCIP: incumbent 44,958, best bound 320,861.0, absolute gap 275,903.0\n  log says   Gap                : 613.69 %\n  |gap|/|incumbent| = 613.6906%   |gap|/|bound| = 85.9883%   |gap|/min(|incumbent|, |bound|) = 613.6906%\nmin capex, HIGHS: incumbent 314,120, best bound 312,716.6, absolute gap 1,403.4\n  log says   Gap               0.447% (tolerance: 0.01%)\n  |gap|/|incumbent| = 0.4468%   |gap|/|bound| = 0.4488%   |gap|/min(|incumbent|, |bound|) = 0.4488%\nmin capex, GSCIP: incumbent 315,770, best bound 312,805.2, absolute gap 2,964.8\n  log says   Gap                : 0.95 %\n  |gap|/|incumbent| = 0.9389%   |gap|/|bound| = 0.9478%   |gap|/min(|incumbent|, |bound|) = 0.9478%"
+    },
+    {
+      "type": "para",
+      "text": "Match each \"log says\" against the three columns. In these four runs:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**HiGHS divides by the incumbent.** 2.4% matches 2.3966% (not 2.3405%), and 0.447% matches 0.4468% (not 0.4488%), for the maximization and the minimization alike. HiGHS's documentation says the same: its option `mip_rel_gap` is the tolerance on $`\\lvert ub - lb \\rvert / \\lvert ub \\rvert`$, where $`ub`$ is the primal bound of the minimization HiGHS solves internally, and its terminology page calls the gap relative to the primal bound the better measure.",
+        "**SCIP divides by the smaller of the two in size.** In the maximization the incumbent is the smaller, and 613.69% matches it; in the minimization the bound is the smaller, and 0.95% matches 0.9478%, not the 0.9389% that dividing by the incumbent would give."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Three things follow:"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "**The same tolerance does not mean the same stop.** A relative tolerance of 0.01% asks HiGHS and SCIP for slightly different things. The difference is tiny when the gap is tiny, and large when it is not.",
+        "**A relative gap can exceed 100%.** SCIP's first plan, $44,958k, was far below its bound, and the gap is six times the plan's value. Nothing caps it at 100%.",
+        "**Near zero, a relative gap means little.** When the incumbent is 0, dividing by it gives infinity, and when the incumbent and the bound have opposite signs, no division describes the distance well. Profit models that hover around zero are judged by the absolute gap."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The relative gap is a ratio, and a ratio is only as meaningful as what it divides by. This course computes it the way HiGHS does, divided by the incumbent, and says so wherever it prints one."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Log's Progress Table Prints the Same Three Numbers"
+    },
+    {
+      "type": "para",
+      "text": "HiGHS's log, when asked for (`enable_output=True` and a `msg_cb` that keeps the lines, as in lesson 2.4.2), prints a progress table with the three numbers this lesson is about. `progress_log.py` runs the 100-node solve again and prints the table, with the wall-clock times replaced by `<t>`:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      \nSrc  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time\n z       0       0         0   0.00%   inf             41050              Large        0      0      0         0     <t>s\n p       0       0         0   0.00%   inf             52247              Large        0      0      0         0     <t>s\n J       0       0         0   0.00%   inf             53658              Large        0      0      0         0     <t>s\n R       0       0         0   0.00%   224870.849213   219607             2.40%        0      0      0        17     <t>s\n L       0       0         0   0.00%   224611.600517   224191             0.19%     1826     76     18       370     <t>s\n L       0       0         0   0.00%   224609.731273   224200             0.18%     1896     80     18       741     <t>s"
+    },
+    {
+      "type": "para",
+      "text": "and, further down, its last row and the footer:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "       100      22        40  37.69%   224552.529017   224315             0.11%      594     64   2393     17990     <t>s\nStatus            Solution limit reached\nPrimal bound      224315\nDual bound        224552\nGap               0.106%\nNodes             100"
+    },
+    {
+      "type": "para",
+      "text": "The three columns under *Objective Bounds* are the best bound, the incumbent (`BestSol`) and the relative gap. Read them top to bottom:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "The first three rows have plans (41,050, then 52,247, then 53,658) but no bound yet (`inf`), so the gap is printed as `Large`. Quick heuristics found those plans before any LP was solved. The letter in the first column says which method found a row's plan, and lesson 3.3.4 reads every column.",
+        "The `R` row has the first bound, 224,870.849213: the LP relaxation, as `bracket.py` printed it.",
+        "The `0.11%` on the last row is `0.106%` in the footer: the table rounds harder.",
+        "The footer's `Status` line says `Solution limit reached`, though the run stopped on its node limit. That is HiGHS's wording; MathOpt reported `limit NODE` for this same run. A program reads the stop from `result.termination`, never from the log's words."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**A MILP solver keeps two numbers.** The incumbent is the best plan found (the primal bound); the best bound is a value no plan can beat (the dual bound). The optimum is always between them.",
+        "**The incumbent rises and the bound falls until they meet.** Meeting is the proof of optimality; the last part of a run often finds no better plan and only lowers the bound.",
+        "**Read both bounds from the SolveResult**, in `termination.objective_bounds`. With no plan the primal bound is infinite and `objective_value()` raises.",
+        "**The absolute gap is in the objective's units**: no plan is better than the incumbent by more.",
+        "**The relative gap divides by a number each solver chooses**: HiGHS the incumbent, SCIP the smaller of the two. It can exceed 100%, and near zero it means little.",
+        "**The integrality gap is not this gap.** One belongs to the formulation; the other to a moment of a run."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Term",
+        "Maximization",
+        "Minimization"
+      ],
+      "rows": [
+        [
+          "incumbent, primal bound",
+          "best plan found; rises",
+          "best plan found; falls"
+        ],
+        [
+          "best bound, dual bound",
+          "no plan is worth more; falls",
+          "no plan costs less; rises"
+        ],
+        [
+          "where the optimum is",
+          "incumbent ≤ $`z^*`$ ≤ bound",
+          "bound ≤ $`z^*`$ ≤ incumbent"
+        ],
+        [
+          "no plan found",
+          "primal bound $`-\\infty`$",
+          "primal bound $`+\\infty`$"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Gap",
+        "Formula",
+        "Units"
+      ],
+      "rows": [
+        [
+          "absolute",
+          "$`\\lvert \\text{bound} - \\text{incumbent} \\rvert`$",
+          "the objective's ($k here)"
+        ],
+        [
+          "relative, HiGHS",
+          "absolute / $`\\lvert \\text{incumbent} \\rvert`$",
+          "a fraction, printed as %"
+        ],
+        [
+          "relative, SCIP",
+          "absolute / $`\\min(\\lvert \\text{incumbent} \\rvert, \\lvert \\text{bound} \\rvert)`$",
+          "a fraction, printed as %"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "MathOpt",
+        "Gives"
+      ],
+      "rows": [
+        [
+          "`result.termination.objective_bounds.primal_bound`",
+          "the incumbent's value, or $`\\mp\\infty`$ with no plan"
+        ],
+        [
+          "`result.termination.objective_bounds.dual_bound`",
+          "the best bound"
+        ],
+        [
+          "`result.best_objective_bound()`",
+          "the same as `dual_bound`"
+        ],
+        [
+          "`result.objective_value()`",
+          "the best returned plan's value; raises `ValueError` with no plan"
+        ],
+        [
+          "`result.has_primal_feasible_solution()`",
+          "whether the result holds a plan"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [MathOpt `SolveResult`, `Termination` and `ObjectiveBounds` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/result.py) (`primal_bound`, `dual_bound`, `best_objective_bound()` and `objective_value()`, with what each promises and when each raises); [MathOpt `SolveParameters` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/parameters.py) (`relative_gap_tolerance`, whose normalization the docstring calls solver-dependent, and `absolute_gap_tolerance`); [MathOpt parameter and result reference (OR-Tools)](https://developers.google.com/optimization/service/reference/rpc/google.research.optimization.v1/mathopt) (the same fields documented for every MathOpt solve, and the trivial bounds of a result with no plan); [Getting Started with MathOpt (OR-Tools)](https://developers.google.com/optimization/math_opt/basic_example) (check the termination reason before reading the objective or the variables); [HiGHS terminology: MIP](https://ergo-code.github.io/HiGHS/dev/terminology/) (primal bound, dual bound, and the gap relative to the primal bound); [HiGHS option definitions](https://ergo-code.github.io/HiGHS/dev/options/definitions/) (`mip_rel_gap` as $`\\lvert ub - lb \\rvert / \\lvert ub \\rvert`$ and `mip_abs_gap`, with their defaults); [Integer Programming, Chapter 9 of Applied Mathematical Programming (MIT 15.053)](https://web.mit.edu/15.053/www/AMP-Chapter-09.pdf) (section 9.5 brackets the optimum between the best integer point found and the largest LP value of a node not yet divided)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "A run reports incumbent 9,800 and best bound 10,000 on a maximization. What is the largest value the best plan can have, and the smallest? What are the absolute gap and HiGHS's relative gap?",
+        "The same numbers come from a minimization (incumbent 10,000, bound 9,800). What changes in your answers to the first challenge, and what does not?",
+        "For a maximization, why does a run never need a best bound higher than the LP relaxation of the whole model, once that LP is solved? Answer from the definition of the bound, then explain the `inf` in the first rows of the progress table."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Report the Bracket, Not Only the Plan"
+    },
+    {
+      "type": "para",
+      "text": "A dashboard that shows only the incumbent's NPV hides the most useful fact a stopped run has: how much better a plan could be. Reporting the incumbent, the bound and the absolute gap in money costs one line, and it turns \"is this the best plan?\" from a question nobody can answer into a number finance can weigh. The relative gap is a good stopping rule (lesson 3.4.2), but a poor sentence for a planner: \"within $237k\" says more than \"within 0.11%\"."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**selection.py.** The selection MILP's builder (`build`), the helper that reads a plan from a result (`plan`), a quiet HiGHS solve that can keep the log (`solve_highs`), and the time masking for log lines. It prints nothing."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [selection.py](src/selection.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**two_models.py.** This lesson's model against lesson 3.3.2's five-year model: both optima, and lesson 3.3.2's plan checked against the five budget rows only this model has (*The Model*). *Try:* Lift only the 2036 cap. Predict whether the optimum moves, given that lesson 3.3.2's plan overspends 2036 least."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [two_models.py](src/two_models.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**bracket.py.** The LP relaxation, then the incumbent and the best bound at a growing node limit, then a run to the end (*The Incumbent Rises and the Bound Falls*). *Try:* Add 13,000 to the node limits. Before running, predict whether its row's incumbent is above $224,384k."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [bracket.py](src/bracket.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**read_gap.py.** Reads both bounds from a 100-node run, then from an infeasible run (*Read Both Bounds From the SolveResult*). *Try:* Call `gap(broken)` on the infeasible result. Predict what it returns before you run it, and say why the function's docstring rules this call out."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [read_gap.py](src/read_gap.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**denominators.py.** HiGHS and SCIP stopped at their first plan, on a maximization and a minimization, with each log's gap and three ways to compute it (*The Relative Gap Divides by a Number Each Solver Chooses*). *Try:* Change the NPV target of the minimization to 150,000. Predict whether HiGHS's \"log says\" still matches the first column."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [denominators.py](src/denominators.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**progress_log.py.** The progress table and footer of HiGHS's log for the 100-node run (*The Log's Progress Table*). *Try:* Raise the node limit to 1,000 and find the first row whose `BestSol` is above 224,315. Predict, before running, whether there is one."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [progress_log.py](src/progress_log.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 13,
+    "paras": 45,
+    "code": 11,
+    "tables": 3,
+    "lists": 13,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 3
+  },
+  "content_sha256": "00545ab752330a0fe10ada070bed282bad8add022b1c72003fd131e697705c6b"
+}

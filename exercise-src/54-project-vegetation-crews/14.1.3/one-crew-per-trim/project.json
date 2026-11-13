@@ -1,0 +1,122 @@
+{
+  "project_api": 1,
+  "title": "Give every trim one crew and a run of weeks",
+  "before": "../../../../54-project-vegetation-crews/steps/02",
+  "after": "../../../../54-project-vegetation-crews/steps/03",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the tiny season matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "vegcrew/planner.py",
+      "signature": "def crew_ids(season: Season) -> list[str]",
+      "contract": "Returns the season's crew ids, K1 to `K<crews>`.",
+      "idea": "A crew is a resource with its own timeline, so it needs a name.",
+      "lesson": {
+        "title": "14.1.3 A Trim Takes Weeks on One Crew: From MILP to CP-SAT Intervals",
+        "href": "../../../../14-growing-real-projects/54-project-vegetation-crews/units/unit-03/14.1.3-a-trim-takes-weeks-on-one-crew-from-milp-to-cp-sat-intervals.unit.html"
+      }
+    },
+    {
+      "file": "vegcrew/planner.py",
+      "signature": "def horizon(season: Season) -> int",
+      "contract": "Returns the season's length in weeks, months times WEEKS_PER_MONTH.",
+      "idea": "Weeks, not months, are the unit of time once a trim is a run of weeks.",
+      "lesson": {
+        "title": "14.1.3 A Trim Takes Weeks on One Crew: From MILP to CP-SAT Intervals",
+        "href": "../../../../14-growing-real-projects/54-project-vegetation-crews/units/unit-03/14.1.3-a-trim-takes-weeks-on-one-crew-from-milp-to-cp-sat-intervals.unit.html"
+      }
+    },
+    {
+      "file": "vegcrew/planner.py",
+      "signature": "def trimmed(self, cid: str) -> cp_model.LinearExprT",
+      "contract": "A method of TrimModel, a mutable dataclass (`@dataclass`, not frozen) that holds the model and its variables: `model: cp_model.CpModel`, then three dicts keyed by (circuit id, crew id), each `field(default_factory=dict)`: `present` (the presence literals), `start` (the start weeks) and `work` (the optional intervals). `trimmed(cid)` returns the sum of the circuit's presence literals over the crews: 1 when the circuit is trimmed, 0 when it is not.",
+      "idea": "The sum of a circuit's presence literals plays the part the month model's sum of x over months played.",
+      "lesson": {
+        "title": "14.1.3 A Trim Takes Weeks on One Crew: From MILP to CP-SAT Intervals",
+        "href": "../../../../14-growing-real-projects/54-project-vegetation-crews/units/unit-03/14.1.3-a-trim-takes-weeks-on-one-crew-from-milp-to-cp-sat-intervals.unit.html"
+      }
+    },
+    {
+      "file": "vegcrew/planner.py",
+      "signature": "def build(season: Season) -> TrimModel",
+      "contract": "Takes a Season. Returns a TrimModel of a CP-SAT model: for each circuit that fits in the season and each crew, a presence literal, a start week from 0 to horizon minus the circuit's weeks, and an optional interval of the circuit's weeks; at most one crew per circuit; no two intervals of one crew overlapping; the trimmed circuits' cost within the budget; and their summed risk as the objective to maximize. A circuit longer than the season gets no interval. The expected report comes from this build order: for each circuit in the season's order that fits, and for each crew from K1 on, the presence literal `p_<cid>_<crew>`, the start `s_<cid>_<crew>` and the interval `w_<cid>_<crew>`, then that circuit's at-most-one; after every circuit, one no-overlap per crew from K1 on, the budget row, and the objective. The objective does not name the order of the work, so another build order can give another plan that is just as good; the tests accept it, the report check does not.",
+      "idea": "A trim is an optional interval on each crew, and a crew's intervals never overlap.",
+      "lesson": {
+        "title": "4.5.1 Interval Variables and `NoOverlap`",
+        "href": "../../../../04-google-or-tools-in-depth/16-cpsat-scheduling/units/unit-01/4.5.1-interval-variables-and-nooverlap.unit.html"
+      }
+    },
+    {
+      "file": "vegcrew/planner.py",
+      "signature": "def make_plan(season: Season) -> Plan",
+      "contract": "Solves the model with CP-SAT, with max_time_in_seconds set to TIME_LIMIT and num_workers to WORKERS (module constants of planner.py: TIME_LIMIT = 10.0 seconds, WORKERS = 4), and returns a Plan with one Trim(cid, crew, start, end) per present interval, end being start plus the circuit's weeks, and the summed cost and risk removed. Any status but OPTIMAL or FEASIBLE is a Plan with the status alone. main.py sets planner.WORKERS = 1 before it plans, so that Run's search is the same every time: four workers race, and may return another of the tiny season's equally good plans.",
+      "idea": "Read the crew from the presence literal that is true and the weeks from that crew's start.",
+      "lesson": {
+        "title": "4.5.4 Scheduling Vegetation Crews Across Circuits",
+        "href": "../../../../04-google-or-tools-in-depth/16-cpsat-scheduling/units/unit-04/4.5.4-scheduling-vegetation-crews-across-circuits.unit.html"
+      }
+    },
+    {
+      "file": "vegcrew/report.py",
+      "signature": "def format_plan(season: Season, plan: Plan) -> str",
+      "contract": "The first line ends `, crews <crews>, weeks <horizon>` in place of the months. After the status line comes one line per crew from K1 on, in place of the month lines: two spaces, the crew id, one space, the week chart, two spaces, and the crew's trims in order of start, each as `<cid>:<first>-<last>` with both weeks included, separated by single spaces. The chart has one character per week of the season: `.` when the crew is free and the last character of the circuit id while it trims. The two spaces after the chart are printed even when the crew has no trims, so an idle crew's line ends in two spaces.",
+      "idea": "One letter per week shows at a glance that no crew works two circuits at once.",
+      "lesson": {
+        "title": "14.1.3 A Trim Takes Weeks on One Crew: From MILP to CP-SAT Intervals",
+        "href": "../../../../14-growing-real-projects/54-project-vegetation-crews/units/unit-03/14.1.3-a-trim-takes-weeks-on-one-crew-from-milp-to-cp-sat-intervals.unit.html"
+      }
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_crews.py::test_crews_can_stop_a_plan_the_budget_allows",
+      "kept",
+      "the crews can stop a plan the budget allows"
+    ],
+    [
+      "tests/test_crews.py::test_each_trim_runs_on_one_crew_for_its_weeks",
+      "main",
+      "each trim runs on one crew for the circuit's weeks, inside the season"
+    ],
+    [
+      "tests/test_crews.py::test_no_crew_works_two_circuits_at_once",
+      "main",
+      "no crew works two circuits in the same week"
+    ],
+    [
+      "tests/test_crews.py::test_a_trim_longer_than_a_month_runs_across_two",
+      "main",
+      "a trim longer than a month runs on into the next month"
+    ],
+    [
+      "tests/test_crews.py::test_one_crew_does_two_trims_one_after_the_other",
+      "main",
+      "one crew does two trims, one after the other"
+    ],
+    [
+      "tests/test_crews.py::test_two_crews_cannot_share_one_trim",
+      "edge",
+      "a trim longer than the season is left out, never split between two crews"
+    ]
+  ],
+  "plants": {
+    "tests/test_crews.py::test_two_crews_cannot_share_one_trim": [
+      [
+        "vegcrew/planner.py",
+        "        if c.weeks > h:\n            continue                                # cannot fit in the season on any crew\n",
+        ""
+      ]
+    ]
+  },
+  "cites": {
+    "path": "54-project-vegetation-crews/README_14.1.3.md",
+    "section": null
+  }
+}

@@ -1,0 +1,145 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "11-performance-at-scale",
+    "57-gpu-acceleration"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Where does the GPU start to pay?",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "An analytics team has timed its LP solvers on its own machine: several CPU and GPU solvers, several LP sizes $`n`$, each run repeated. Each record holds the `solver`, the `device` (`\"cpu\"` or `\"gpu\"`), the size `n`, the `seconds`, whether it was the process's first GPU solve (`first_in_process`), and its `rel_error` against a CPU reference. They want two numbers per decision, computed by a rule, not by eye:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`speedups(records, needed)`: for each size, the **speed-up** = (best CPU solver's time) / (best GPU solver's time), where a solver's time is the **median** of its runs at that size, a process's first GPU solve is left out (it also starts CUDA), and a GPU solver counts only if every run of it at that size has `rel_error <= needed`. A run left out as a process's first is left out of that accuracy check too: an inaccurate first run does not disqualify its solver. The value is None when no GPU solver counts, and None when the size has no CPU run (there is nothing to compare with). Return a dict from every size in the records to its speed-up.",
+        "`crossover(table)`: the smallest size from which the GPU is faster (speed-up above 1) at that size **and at every larger size** in the table, or None."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Write both in `speedup.py`. The tests pass lists of records; no solver runs. About twenty lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom statistics import median\n\n\ndef speedups(records: list[dict], needed: float) -> dict[int, float | None]:\n    \"\"\"For each size n: the best CPU time over the best eligible GPU time (None if no GPU run is eligible).\n\n    A record is {\"solver\", \"device\", \"n\", \"seconds\", \"first_in_process\", \"rel_error\"}. A solver's time is the\n    median of its runs, leaving out each process's first GPU solve; a GPU solver is eligible only if every\n    run it counts has rel_error within `needed`. A size with no CPU run gets None.\n    \"\"\"\n    out = {}\n    for n in sorted({r[\"n\"] for r in records}):\n        times = {\"cpu\": {}, \"gpu\": {}}\n        accurate = {}\n        for r in records:\n            if r[\"n\"] != n or r[\"first_in_process\"]:\n                continue\n            times[r[\"device\"]].setdefault(r[\"solver\"], []).append(r[\"seconds\"])\n            accurate[r[\"solver\"]] = accurate.get(r[\"solver\"], True) and r[\"rel_error\"] <= needed\n        if not times[\"cpu\"]:                         # no CPU run at this size: nothing to compare with\n            out[n] = None\n            continue\n        cpu = min(median(t) for t in times[\"cpu\"].values())\n        gpu = [median(t) for s, t in times[\"gpu\"].items() if accurate[s]]\n        out[n] = cpu / min(gpu) if gpu else None\n    return out\n\n\ndef crossover(table: dict[int, float | None]) -> int | None:\n    \"\"\"The smallest size from which the GPU is faster at that size and every larger one.\"\"\"\n    best = None\n    for n in sorted(table, reverse=True):\n        if table[n] is None or table[n] <= 1.0:\n            break\n        best = n\n    return best\n\n\nif __name__ == \"__main__\":\n    rows = [{\"solver\": \"ipm\", \"device\": \"cpu\", \"n\": 300, \"seconds\": 0.6, \"first_in_process\": False, \"rel_error\": 0.0},\n            {\"solver\": \"pdlp\", \"device\": \"gpu\", \"n\": 300, \"seconds\": 0.4, \"first_in_process\": False, \"rel_error\": 2e-9}]\n    print(speedups(rows, 1e-6), crossover(speedups(rows, 1e-6)))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom statistics import median\n\n\ndef speedups(records: list[dict], needed: float) -> dict[int, float | None]:\n    \"\"\"For each size n: the best CPU time over the best eligible GPU time (None if no GPU run is eligible).\n\n    A record is {\"solver\", \"device\", \"n\", \"seconds\", \"first_in_process\", \"rel_error\"}. A solver's time is the\n    median of its runs, leaving out each process's first GPU solve; a GPU solver is eligible only if every\n    run it counts has rel_error within `needed`. A size with no CPU run gets None.\n    \"\"\"\n    # TODO: per size, the median time per solver without first GPU solves, then the best CPU over the\n    # best GPU solver accurate enough.\n    return {}\n\n\ndef crossover(table: dict[int, float | None]) -> int | None:\n    \"\"\"The smallest size from which the GPU is faster at that size and every larger one.\"\"\"\n    # TODO: walk the sizes from the largest down.\n    return None\n\n\nif __name__ == \"__main__\":\n    rows = [{\"solver\": \"ipm\", \"device\": \"cpu\", \"n\": 300, \"seconds\": 0.6, \"first_in_process\": False, \"rel_error\": 0.0},\n            {\"solver\": \"pdlp\", \"device\": \"gpu\", \"n\": 300, \"seconds\": 0.4, \"first_in_process\": False, \"rel_error\": 2e-9}]\n    print(speedups(rows, 1e-6), crossover(speedups(rows, 1e-6)))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 2,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "c7dd89ec49f3d04d0868fa8b49a36113fce1790a7a10907eddf671d3358281ee",
+  "starting_code": "from __future__ import annotations\n\nfrom statistics import median\n\n\ndef speedups(records: list[dict], needed: float) -> dict[int, float | None]:\n    \"\"\"For each size n: the best CPU time over the best eligible GPU time (None if no GPU run is eligible).\n\n    A record is {\"solver\", \"device\", \"n\", \"seconds\", \"first_in_process\", \"rel_error\"}. A solver's time is the\n    median of its runs, leaving out each process's first GPU solve; a GPU solver is eligible only if every\n    run it counts has rel_error within `needed`. A size with no CPU run gets None.\n    \"\"\"\n    # TODO: per size, the median time per solver without first GPU solves, then the best CPU over the\n    # best GPU solver accurate enough.\n    return {}\n\n\ndef crossover(table: dict[int, float | None]) -> int | None:\n    \"\"\"The smallest size from which the GPU is faster at that size and every larger one.\"\"\"\n    # TODO: walk the sizes from the largest down.\n    return None\n\n\nif __name__ == \"__main__\":\n    rows = [{\"solver\": \"ipm\", \"device\": \"cpu\", \"n\": 300, \"seconds\": 0.6, \"first_in_process\": False, \"rel_error\": 0.0},\n            {\"solver\": \"pdlp\", \"device\": \"gpu\", \"n\": 300, \"seconds\": 0.4, \"first_in_process\": False, \"rel_error\": 2e-9}]\n    print(speedups(rows, 1e-6), crossover(speedups(rows, 1e-6)))\n",
+  "exercise": {
+    "main_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-03/practice-2/speedup.py",
+    "test_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-03/practice-2/test_speedup.py",
+    "run_command": [
+      "python3",
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-03/practice-2/speedup.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-03/practice-2/target/report.xml",
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-03/practice-2/test_speedup.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_speed_up_is_the_best_cpu_time_over_the_best_gpu_time",
+        "kind": "main",
+        "says": "the speed-up is the best CPU time over the best GPU time"
+      },
+      {
+        "id": "test_the_crossover_is_where_the_gpu_starts_winning",
+        "kind": "main",
+        "says": "the crossover is the size where the GPU starts winning"
+      },
+      {
+        "id": "test_a_process_first_gpu_solve_is_left_out",
+        "kind": "edge",
+        "says": "a process's first GPU solve, which starts CUDA, is left out"
+      },
+      {
+        "id": "test_one_slow_repeat_does_not_set_the_time",
+        "kind": "edge",
+        "says": "one slow repeat does not set a solver's time"
+      },
+      {
+        "id": "test_a_gpu_solver_less_accurate_than_needed_does_not_count",
+        "kind": "edge",
+        "says": "a GPU solver less accurate than needed does not count"
+      },
+      {
+        "id": "test_a_size_where_the_gpu_loses_again_moves_the_crossover_up",
+        "kind": "edge",
+        "says": "the GPU must win at every larger size too"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-03/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "57-gpu-acceleration/README_11.4.3.md",
+      "section": "Accuracy Differs by Default: 2e-9 Against 3e-5"
+    },
+    "concepts": [
+      "a speed-up is read from medians without start-up runs, only for solvers accurate enough, and a crossover needs the GPU to win at every larger size"
+    ]
+  }
+}

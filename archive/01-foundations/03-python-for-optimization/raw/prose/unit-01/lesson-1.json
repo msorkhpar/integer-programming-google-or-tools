@@ -1,0 +1,699 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "01-foundations",
+    "03-python-for-optimization"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Preparing model input with pandas",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "1.3.1 Preparing Model Input with pandas"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's planning database exports the portfolio every Monday as five CSV files and one small JSON file, and the selection model of lesson 1.1.1 runs on them. Last month a planner pasted six rows into the export by hand. One had a cost of \"1,250\", one started after it ended, and one named a parent project that does not exist. The model has no idea what a CSV file is. It needs a set of projects, a cost and a value for each, the must-do set, the parent of each child and the alternative groups, and every one of those numbers has to be right. This lesson goes from the files to those sets and numbers with pandas, in three rules. GridCap is a fictional utility, and these files are generated, not real data."
+    },
+    {
+      "type": "para",
+      "text": "[pandas](https://pandas.pydata.org/docs/) is Python's table library. A **DataFrame** is a table with named columns, and each column holds one type, its **dtype**. `pd.read_csv(path)` reads a CSV file into a DataFrame."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Read Each Column With the Type the Model Needs, Not the Type pandas Guesses"
+    },
+    {
+      "type": "para",
+      "text": "Here is the start of the tiny portfolio's `projects.csv`, read with pandas' defaults:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "projects.csv, first lines and a few columns:\nproject_id      program cost_profile  earliest_start  must_do parent\n      P001 distribution         2150            2028        0    NaN\n      P002 transmission         2730            2028        1    NaN\n      P003 transmission     980;1490            2027        0    NaN\n      P004 transmission    2000;1000            2028        0   P003"
+    },
+    {
+      "type": "para",
+      "text": "`cost_profile` is what a project spends in each year of its work, joined by `;`. `must_do` is 1 for a compliance project. `parent` names the project this one depends on, and it is blank for most rows."
+    },
+    {
+      "type": "para",
+      "text": "pandas guesses each column's dtype from what is in it. The guess is right for this file, and it is the reason a loader that works for months fails one Monday. Read only the vegetation rows, whose projects all take one year. (`text` holds the whole file as one string; `io.StringIO` wraps a string so that `read_csv` can read it as if it were a file.)"
+    },
+    {
+      "type": "example",
+      "id": "read_types-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "03-python-for-optimization/src/read_types.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "03-python-for-optimization/src/read_types.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "lines = text.splitlines()\nvegetation = \"\\n\".join([lines[0]] + [line for line in lines[1:] if \",vegetation,\" in line])\nonly_vegetation = pd.read_csv(io.StringIO(vegetation))"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "cost_profile, all eight rows:      str\ncost_profile, vegetation rows only: int64\n  .str.split fails: Can only use .str accessor with string values, not integer"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "With a `980;1490` in the column, pandas reads it as text (`str`). `.str` is how pandas applies a string method, here `split`, to every cell of a text column. Without one, every cell looks like a number, so the same column becomes `int64`, and the code that splits profiles on `;` breaks. The column's type depends on the data, not on the file's format."
+    },
+    {
+      "type": "para",
+      "text": "Blank cells have a second trap. pandas reads a blank as **NaN** (\"not a number\"), its marker for a missing value. NaN is a float, and every float but zero is true in an `if`:"
+    },
+    {
+      "type": "example",
+      "id": "read_types-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "03-python-for-optimization/src/read_types.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "03-python-for-optimization/src/read_types.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "print(\"children counted with `if parent`:\", sum(1 for parent in guessed[\"parent\"] if parent))\nprint(\"children counted with .notna():   \", guessed[\"parent\"].notna().sum())"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "children counted with `if parent`: 8\nchildren counted with .notna():    1"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The tiny portfolio has one child project, P004. The `if parent` test counts all eight, because the seven blanks are NaN. A model built that way would add a parent constraint for every project, with a parent called `nan`. Test for missing values with `.notna()` or `pd.isna()`, never with truthiness."
+    },
+    {
+      "type": "para",
+      "text": "The fix for the first trap is to say what each column is. `dtype=` takes a dict from column name to type, and the loader of this module keeps one:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "TYPES = {\"project_id\": str, \"region\": str, \"cost_profile\": str, \"parent\": str, \"alt_group\": str,\n         \"earliest_start\": \"int64\", \"latest_start\": \"int64\", \"must_do\": bool}"
+    },
+    {
+      "type": "para",
+      "text": "Read the vegetation rows again, the ones that broke `.str.split` above, this time with `dtype=TYPES`:"
+    },
+    {
+      "type": "example",
+      "id": "read_types-3",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "03-python-for-optimization/src/read_types.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "03-python-for-optimization/src/read_types.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "fixed = pd.read_csv(io.StringIO(vegetation), dtype=TYPES)\nprint(\"vegetation rows only, read with dtype=TYPES:\")\nprint(\"  cost_profile dtype:     \", fixed[\"cost_profile\"].dtype)\nprint(\"  cost_profile split on ;:\", fixed[\"cost_profile\"].str.split(\";\").tolist())\nprint(\"  must_do:                \", fixed[\"must_do\"].tolist())"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "vegetation rows only, read with dtype=TYPES:\n  cost_profile dtype:      str\n  cost_profile split on ;: [['250'], ['580']]\n  must_do:                 [False, False]"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Now `cost_profile` is text (`str`) even when every profile is one number, so `.str.split(\";\")` works: each of the two vegetation projects has a one-year profile, which splits into a list holding one string, `['250']` and `['580']`. And `must_do` is a real boolean, `False` for both, instead of the 0 in the file."
+    },
+    {
+      "type": "para",
+      "text": "The declared `\"int64\"` matters when a number is missing. Blank out P001's earliest start and read the file both ways:"
+    },
+    {
+      "type": "example",
+      "id": "read_types-4",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "03-python-for-optimization/src/read_types.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "03-python-for-optimization/src/read_types.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "blank_start = text.replace(\",2150,2028,\", \",2150,,\", 1)\nprint(\"blank earliest_start, guessed:\", pd.read_csv(io.StringIO(blank_start))[\"earliest_start\"].dtype)\ntry:\n    pd.read_csv(io.StringIO(blank_start), dtype=TYPES)\nexcept ValueError as error:\n    print(\"blank earliest_start, dtype=TYPES:\", error)"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "blank earliest_start, guessed: float64\nblank earliest_start, dtype=TYPES: Integer column has NA values in column 7"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "With guessed types the whole column quietly becomes floats; with `\"int64\"` declared, `read_csv` refuses the file. That is the failure you want, at the first line of the loader rather than inside the model."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Turn Each Table Into the Sets and Dicts the Model Indexes"
+    },
+    {
+      "type": "para",
+      "text": "Each row of a DataFrame also has a **label**, its *index*. `read_csv` numbers the rows 0, 1, 2, … in file order, and the code below uses those labels to find rows again."
+    },
+    {
+      "type": "para",
+      "text": "The model in lesson 1.1.1 talks about $`P`$, $`M`$, $`p(c)`$, $`\\mathcal{G}`$, $`\\text{capex}_i`$, $`\\text{npv}_i`$ and $`B`$. They come from three of the six files the export writes: `projects.csv`, `npv.csv`, and `portfolio.json` for the budget $`B`$ (its key `capital_budget`). The loader reads those three from `folder`, the folder the export was written to:"
+    },
+    {
+      "type": "example",
+      "id": "to_parameters-5",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "03-python-for-optimization/src/to_parameters.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "03-python-for-optimization/src/to_parameters.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "projects = pd.read_csv(folder / \"projects.csv\", dtype=TYPES)\nnpv = pd.read_csv(folder / \"npv.csv\")\nbudget = json.loads((folder / \"portfolio.json\").read_text(encoding=\"utf-8\"))[\"capital_budget\"]\nprint(\"the export:\", sorted(path.name for path in folder.iterdir()))"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "the export: ['assets.csv', 'budgets.csv', 'crews.csv', 'npv.csv', 'portfolio.json', 'projects.csv']"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`assets.csv`, `budgets.csv` and `crews.csv` feed later models (asset risk, yearly and regional budgets, crew capacity); the selection model does not need them. JSON is a text format for numbers, strings, lists and named fields, and `json.loads` turns a JSON text into Python dicts and lists."
+    },
+    {
+      "type": "para",
+      "text": "Each set or parameter is a Python set or a dict keyed by project id, and building them is the loader's job. DataFrames are the tool for reading and checking the files. Python sets and dicts are what the model code indexes, one entry per project, so the model never touches pandas."
+    },
+    {
+      "type": "example",
+      "id": "to_parameters-6",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "03-python-for-optimization/src/to_parameters.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "03-python-for-optimization/src/to_parameters.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "def parameters(projects: pd.DataFrame, npv: pd.DataFrame, budget: int) -> dict:\n    \"\"\"The model's sets and parameters, as plain Python sets and dicts keyed by project id.\"\"\"\n    capex = {pid: sum(int(c) for c in profile.split(\";\"))\n             for pid, profile in zip(projects[\"project_id\"], projects[\"cost_profile\"])}\n    npv_at = npv.set_index([\"project_id\", \"start_year\"])[\"npv\"].to_dict()\n    value = {pid: npv_at[pid, start] for pid, start in zip(projects[\"project_id\"], projects[\"earliest_start\"])}\n    children = projects[projects[\"parent\"].notna()]\n    grouped = projects[projects[\"alt_group\"].notna()]\n    return {\n        \"P\": list(projects[\"project_id\"]),\n        \"M\": set(projects.loc[projects[\"must_do\"], \"project_id\"]),\n        \"parent\": dict(zip(children[\"project_id\"], children[\"parent\"])),\n        \"G\": {g: sorted(ids) for g, ids in grouped.groupby(\"alt_group\")[\"project_id\"]},\n        \"capex\": capex,\n        \"npv\": value,\n        \"B\": budget,\n    }"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`npv.csv` is a **long** table: one row per project and start year, because a project's value depends on when it starts. `set_index([...])` makes the two key columns the row label, and `.to_dict()` turns the column into a dict keyed by `(project, year)` pairs, which is exactly how a model indexes a two-index parameter. The 1.1.1 model uses each project's value if it starts as early as it can, so `value` looks up the pair `(pid, earliest_start)`. `projects[\"must_do\"]` is a boolean column, and using it inside `.loc[...]` keeps only the rows where it is true. A boolean column used this way is a **mask**, and the next rule is built from them. `projects[projects[\"parent\"].notna()]` is the same idea without `.loc`: the rows that have a parent. Finally, `groupby(\"alt_group\")` splits the grouped rows by their group name, and iterating over it gives each name with the project ids in it, which is exactly an alternative group $`g \\in \\mathcal{G}`$."
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "npv.csv is long: one row per project and start year\nproject_id  start_year  npv\n      P001        2028 1386\n      P001        2029 1077\n      P002        2028  871\n      P002        2029  636"
+    },
+    {
+      "type": "para",
+      "text": "The same table pivoted (start years as columns) is easier for a person to read, and worse for a model:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "pivoted for a reader (start years as columns):\nstart_year   2027    2028    2029\nproject_id\nP001          NaN  1386.0  1077.0\nP002          NaN   871.0   636.0\nP003        576.0     NaN     NaN\nP004          NaN  2120.0     NaN"
+    },
+    {
+      "type": "para",
+      "text": "A start year outside a project's window has no row in the long table, so the wide table fills the hole with NaN, and a column holding NaN cannot be `int64`: the whole table turned into floats. The dicts the model gets:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "M       {'P002'}\nparent  {'P004': 'P003'}\nG       {'G006': ['P006', 'P007']}\ncapex   {'P001': 2150, 'P002': 2730, 'P003': 2470, 'P004': 3000, 'P005': 250, 'P006': 1970, 'P007': 290, 'P008': 580}\nnpv     {'P001': 1386, 'P002': 871, 'P003': 576, 'P004': 2120, 'P005': 123, 'P006': 1247, 'P007': 265, 'P008': 137}\nB       7390\n\ncapex and npv match generate('tiny'): True"
+    },
+    {
+      "type": "para",
+      "text": "The last line checks the loader against `gridcap.generate(\"tiny\")`, the portfolio the files were written from. A loader that reads back what was written is the cheapest test a data pipeline has."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Check Every Row Before the Model Sees It, One Mask per Rule"
+    },
+    {
+      "type": "para",
+      "text": "Now the export with the planner's six rows appended:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "the six rows appended to the export:\nproject_id region cost_profile  earliest_start  latest_start parent\n      P009 Plains        1,250            2027          2029    NaN\n      P010 Plains         -400            2027          2029    NaN\n      P011 Plains          580            2029          2027    NaN\n      P012  Hills          580            2027          2029    NaN\n      P008 Plains          580            2027          2029    NaN\n      P013 Plains          580            2027          2029   P099"
+    },
+    {
+      "type": "para",
+      "text": "None of these stops `read_csv`. Each one would reach the model as a wrong number or a broken rule: a cost the solver cannot read, a negative cost that makes a project look like income, a start window that holds no year, a region no budget covers, two variables for one project, and a parent constraint on a project that does not exist."
+    },
+    {
+      "type": "para",
+      "text": "Each rule the data must satisfy becomes one boolean mask, a column with one `True` or `False` per row. A mask is easy to read and to test on its own:"
+    },
+    {
+      "type": "example",
+      "id": "reject_rows-7",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "03-python-for-optimization/src/reject_rows.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "03-python-for-optimization/src/reject_rows.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "amounts = pd.to_numeric(projects[\"cost_profile\"].str.split(\";\").explode(), errors=\"coerce\")\nrules = {\n    \"cost is not a number\": amounts.isna().groupby(level=0).any(),\n    \"negative cost\": (amounts < 0).groupby(level=0).any(),\n    \"earliest start after latest\": projects[\"earliest_start\"] > projects[\"latest_start\"],\n    \"unknown region\": ~projects[\"region\"].isin(REGIONS),\n    \"duplicate id\": projects[\"project_id\"].duplicated(keep=False),\n    \"unknown parent\": projects[\"parent\"].notna() & ~projects[\"parent\"].isin(projects[\"project_id\"]),\n}\nfound = [projects.loc[mask, [\"project_id\"]].assign(reason=reason) for reason, mask in rules.items()]\nreport = pd.concat(found).sort_index()"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Three pandas tools carry it. `.explode()` puts each year of a profile on its own row, keeping the project's row label, so `\"980;1490\"` becomes two rows. `pd.to_numeric(..., errors=\"coerce\")` turns what is not a number into NaN instead of raising, so `\"1,250\"` is caught as a reason rather than as a crash. `.groupby(level=0).any()` folds the years back: a project is bad if any of its years is. `isin` tests membership in a list, `~` negates a mask, and `&` is \"and\" for two masks. The last two lines turn the masks into a report: for each rule, `.loc[mask, [\"project_id\"]]` keeps the marked rows and `.assign(reason=...)` adds a column naming the rule; `pd.concat` stacks the six small tables into one, and `sort_index()` puts it back in file order by row label. A row that broke two rules would appear twice, once per reason."
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": " line project_id                      reason\n    9       P008                duplicate id\n   10       P009        cost is not a number\n   11       P010               negative cost\n   12       P011 earliest start after latest\n   13       P012              unknown region\n   14       P008                duplicate id\n   15       P013              unknown parent\n\n14 rows read, 7 rejected, 7 kept: P001 P002 P003 P004 P005 P006 P007"
+    },
+    {
+      "type": "para",
+      "text": "The report gives the file's line number, so a planner can find the row: the header is line 1 and the row labelled 0 is line 2, so the line is the label plus 2. Both copies of P008 are rejected: `duplicated(keep=False)` marks every copy, because the loader cannot tell which one is right, and guessing would hand the model a project nobody checked. The good P008 goes back to the planners with its copy."
+    },
+    {
+      "type": "para",
+      "text": "`duplicated` takes `subset=[...]` when a row's key is more than one column. In `npv.csv` the key is the pair (`project_id`, `start_year`): P001 has one row per start year, and that is fine, but two rows for the same project *and* year are not. Here P001's 2028 value is typed in a second time, with a different number, and the mask finds both copies. `df.index[mask]` gives the row labels where a mask is `True`:"
+    },
+    {
+      "type": "example",
+      "id": "reject_rows-8",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "03-python-for-optimization/src/reject_rows.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "03-python-for-optimization/src/reject_rows.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "twice = pd.concat([npv, npv.head(1).assign(npv=1500)], ignore_index=True)\nsame_key = twice.duplicated(subset=[\"project_id\", \"start_year\"], keep=False)\nprint(\"labels of the rows sharing a (project_id, start_year):\", twice.index[same_key].tolist())\nprint(twice[same_key].to_string())\nprint(\"to_dict keeps one of them:\", twice.set_index([\"project_id\", \"start_year\"])[\"npv\"].to_dict()[\"P001\", 2028])"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "labels of the rows sharing a (project_id, start_year): [0, 13]\n   project_id  start_year   npv\n0        P001        2028  1386\n13       P001        2028  1500\nto_dict keeps one of them: 1500"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "(`pd.concat(..., ignore_index=True)` numbers the stacked rows afresh, so the copy gets label 13.) The last line is why the check matters: without it, `set_index(...).to_dict()` keeps one of the two values without a word, and the model gets a value nobody chose. Why not repair `\"1,250\"` to 1250? Because the loader cannot know whether it meant 1,250 or 1.25 written with a decimal comma, and a guessed cost is a wrong plan the model will defend as optimal."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The selection model of lesson 1.1.1, unchanged, with where each set and parameter comes from."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`P`$ the candidate projects; $`M \\subseteq P`$ the must-do projects; $`C \\subseteq P`$ the child projects, each with parent $`p(c) \\in P`$; $`\\mathcal{G}`$ the alternative groups, each a set of projects."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`\\text{capex}_i`$, the total cost of project $`i`$ ($k), the sum of its cost profile; $`\\text{npv}_i`$, its NPV if it starts in its earliest start year ($k); $`B`$, the capital budget ($k)."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_i \\in \\{0, 1\\}`$ for each $`i \\in P`$: 1 if project $`i`$ is funded."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{i \\in P} \\text{npv}_i\\, x_i"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{i \\in P} \\text{capex}_i\\, x_i &\\le B && && \\text{(budget)} \\\\\nx_i &= 1 && \\forall i \\in M && \\text{(must}_i) \\\\\nx_c &\\le x_{p(c)} && \\forall c \\in C && \\text{(parent}_c) \\\\\n\\sum_{i \\in g} x_i &\\le 1 && \\forall g \\in \\mathcal{G} && \\text{(alt}_g)\n\\end{aligned}"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Symbol",
+        "File and column",
+        "In `parameters`"
+      ],
+      "rows": [
+        [
+          "$`P`$",
+          "`projects.csv`, `project_id`",
+          "`\"P\"`"
+        ],
+        [
+          "$`M`$",
+          "`projects.csv`, rows with `must_do` 1",
+          "`\"M\"`"
+        ],
+        [
+          "$`C`$, $`p(c)`$",
+          "`projects.csv`, rows with a `parent`",
+          "`\"parent\"` (keys are $`C`$)"
+        ],
+        [
+          "$`\\mathcal{G}`$",
+          "`projects.csv`, `alt_group`",
+          "`\"G\"`"
+        ],
+        [
+          "$`\\text{capex}_i`$",
+          "`projects.csv`, `cost_profile`, summed",
+          "`\"capex\"`"
+        ],
+        [
+          "$`\\text{npv}_i`$",
+          "`npv.csv` at (`project_id`, `earliest_start`)",
+          "`\"npv\"`"
+        ],
+        [
+          "$`B`$",
+          "`portfolio.json`, `capital_budget`",
+          "`\"B\"`"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Every rejection rule above protects one part of this model: an unknown parent would make $`p(c) \\notin P`$, a duplicate id would give one project two variables, and a cost that is not a number has no place in the budget row."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Read each column with the type the model needs.** pandas guesses a column's dtype from its content, so pass `dtype=`, and test for blanks with `.notna()`, never with `if`.",
+        "**Turn each table into the sets and dicts the model indexes.** Long tables become dicts keyed by tuples with `set_index(...).to_dict()`; pivot tables are for people.",
+        "**Check every row before the model sees it, one mask per rule.** Collect every broken rule with its line number, reject the row, and never guess a repair."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Task",
+        "pandas"
+      ],
+      "rows": [
+        [
+          "Fix column types at read time",
+          "`pd.read_csv(path, dtype={\"col\": str, \"n\": \"int64\"})`"
+        ],
+        [
+          "Find blanks",
+          "`df[\"col\"].isna()`, `df[\"col\"].notna()`"
+        ],
+        [
+          "Long table to a dict keyed by pairs",
+          "`df.set_index([\"a\", \"b\"])[\"v\"].to_dict()`"
+        ],
+        [
+          "Keep rows where a mask is true",
+          "`df.loc[mask, cols]` or `df[mask]`"
+        ],
+        [
+          "Membership",
+          "`df[\"col\"].isin(values)`; negate with `~`"
+        ],
+        [
+          "Every copy of a repeated key",
+          "`df[\"col\"].duplicated(keep=False)`"
+        ],
+        [
+          "Every copy of a repeated two-column key",
+          "`df.duplicated(subset=[\"a\", \"b\"], keep=False)`"
+        ],
+        [
+          "Row labels where a mask is true",
+          "`df.index[mask]`; `.tolist()` for a list"
+        ],
+        [
+          "Parse numbers, NaN for the rest",
+          "`pd.to_numeric(s, errors=\"coerce\")`"
+        ],
+        [
+          "One row per list item",
+          "`s.str.split(\";\").explode()`"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [pandas `read_csv`](https://pandas.pydata.org/docs/reference/api/pandas.read_csv.html) (the `dtype=` dict, and the strings, the empty one included, read as missing); [pandas: working with missing data](https://pandas.pydata.org/docs/user_guide/missing_data.html) (which marker each dtype uses for a missing value, why `isna` and `notna` are the only safe tests, and why a missing value turns an `int64` column into `float64`); [pandas `DataFrame.duplicated`](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.duplicated.html) (`subset=` and the three `keep=` settings); [pandas `to_numeric`](https://pandas.pydata.org/docs/reference/api/pandas.to_numeric.html) (`errors=\"coerce\"` turns what is not a number into NaN)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "The medium portfolio's `budgets.csv` holds a year 0 row per region (the region's floor). Which rule would a check of that file need that `projects.csv` did not?",
+        "Write the mask for \"a project's latest start leaves too little time to finish inside the plan\". Which columns and which file does it need?",
+        "A planner asks for the rejected rows to be fixed and kept. Which of the six could a loader fix safely, if any?"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Reject Rows, Don't Repair Them"
+    },
+    {
+      "type": "para",
+      "text": "A loader that repairs data (\"treat 1,250 as 1250\", \"keep the first copy of P008\") makes a guess the planners never see, and the model then optimizes the guess. A loader that rejects a row with a reason sends the question back to the person who can answer it. It costs a round trip, and in return every number the model uses is one somebody wrote on purpose."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**read_types.py.** Reads `projects.csv` with pandas' guessed types, shows the two traps, and reads it again with `dtype=TYPES` (*Read Each Column With the Type the Model Needs*). *Try:* Remove `\"must_do\": bool` from `TYPES` in `export.py`. Predict what `fixed[\"must_do\"].tolist()` prints."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [read_types.py](src/read_types.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**to_parameters.py.** Builds the 1.1.1 model's sets and parameters from the CSV files and checks them against `generate(\"tiny\")` (*Turn Each Table Into the Sets and Dicts*). *Try:* Change `value` to look up each project's latest start instead of its earliest. Which projects' values change?"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [to_parameters.py](src/to_parameters.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**reject_rows.py.** Checks the export with the planner's six rows, one mask per rule, then finds a key repeated across two columns of `npv.csv` (*Check Every Row Before the Model Sees It*). *Try:* Change `keep=False` to `keep=\"first\"`. Predict which lines the report loses."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [reject_rows.py](src/reject_rows.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**export.py.** Writes the tiny portfolio's CSV files to a temporary folder, with or without the six bad rows, and holds `TYPES`."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [export.py](src/export.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 10,
+    "paras": 42,
+    "code": 9,
+    "tables": 2,
+    "lists": 6,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 8
+  },
+  "content_sha256": "66173c5d4744cb49d23053557397027bcd6766fe02c85a58b4fedffd906bf3a9"
+}

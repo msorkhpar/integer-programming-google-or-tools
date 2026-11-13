@@ -1,0 +1,154 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "25-knapsack-and-assignment"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "The cheapest storage sites that reach the target",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A transmission operator (not GridCap) must add at least `need` MWh of battery storage to its grid before next winter. Each candidate site can host one battery of a fixed size: site $`s`$ adds $`m_s`$ MWh, a whole number of at least 1, and costs $`c_s`$ ($k). A site is built once or not at all. The planners want the **cheapest** set of sites whose storage adds up to **at least** the need; more than the need is fine."
+    },
+    {
+      "type": "para",
+      "text": "Written as a model, with $`S`$ the candidate sites and $`N`$ the need, this is"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\min \\;& \\sum_{s \\in S} c_s\\, x_s \\\\\n\\text{s.t. }& \\sum_{s \\in S} m_s\\, x_s \\ge N && \\text{(need)} \\\\\n& x_s \\in \\{0, 1\\} && \\forall s \\in S\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "a knapsack turned around: minimize instead of maximize, and the row is \"at least\". You will not solve it with a MILP solver. Write `cheapest_cover(sites, need)` in `storage.py` as a dynamic program over MWh amounts, the way the lesson's table runs over budget amounts. It returns `(least cost, [names of one cheapest set])`, the names in the order the sites were given, or `None` when even every site together adds less than `need`. A need of 0 is met by building nothing, so it returns `(0, [])`."
+    },
+    {
+      "type": "para",
+      "text": "Before coding, decide on paper what one table entry means here (the lesson's `best[b]` was \"the most value within $`b`$\"), how a new site updates it, and what happens to an amount above the need."
+    },
+    {
+      "type": "para",
+      "text": "The tests use their own small sets of sites and check the cost and that the named sites really reach the need. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Site:\n    name: str\n    mwh: int          # storage the site adds, whole MWh (at least 1)\n    cost: int         # $k\n\n\ndef cheapest_cover(sites: list[Site], need: int) -> tuple[int, list[str]] | None:\n    \"\"\"The least total cost of a set of sites adding at least `need` MWh, and one such set.\n\n    None when even every site together adds less than `need`.\n    \"\"\"\n    inf = float(\"inf\")\n    cost = [0] + [inf] * need          # cost[c]: least cost of sites seen so far giving at least c MWh\n    took = []\n    for s in sites:\n        row = [False] * (need + 1)\n        for c in range(need, 0, -1):                    # downward: each site is bought at most once\n            src = max(0, c - s.mwh)                     # overshooting the need is fine\n            if cost[src] + s.cost < cost[c]:\n                cost[c] = cost[src] + s.cost\n                row[c] = True\n        took.append(row)\n    if cost[need] == inf:\n        return None\n    chosen, c = [], need\n    for s, row in zip(reversed(sites), reversed(took)):\n        if row[c]:\n            chosen.append(s.name)\n            c = max(0, c - s.mwh)\n    return int(cost[need]), chosen[::-1]\n\n\nif __name__ == \"__main__\":\n    print(cheapest_cover([Site(\"North\", 4, 30), Site(\"Quarry\", 6, 40), Site(\"Depot\", 3, 25)], 7))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Site:\n    name: str\n    mwh: int          # storage the site adds, whole MWh (at least 1)\n    cost: int         # $k\n\n\ndef cheapest_cover(sites: list[Site], need: int) -> tuple[int, list[str]] | None:\n    \"\"\"The least total cost of a set of sites adding at least `need` MWh, and one such set.\n\n    None when even every site together adds less than `need`.\n    \"\"\"\n    # TODO: a table over MWh amounts, then read one cheapest set back from it.\n    return 0, []\n\nif __name__ == \"__main__\":\n    print(cheapest_cover([Site(\"North\", 4, 30), Site(\"Quarry\", 6, 40), Site(\"Depot\", 3, 25)], 7))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "4d982e3736f2ae2955ccc292bd7b4a055f6b43aeb76c23700a0b672f3f8380b4",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Site:\n    name: str\n    mwh: int          # storage the site adds, whole MWh (at least 1)\n    cost: int         # $k\n\n\ndef cheapest_cover(sites: list[Site], need: int) -> tuple[int, list[str]] | None:\n    \"\"\"The least total cost of a set of sites adding at least `need` MWh, and one such set.\n\n    None when even every site together adds less than `need`.\n    \"\"\"\n    # TODO: a table over MWh amounts, then read one cheapest set back from it.\n    return 0, []\n\nif __name__ == \"__main__\":\n    print(cheapest_cover([Site(\"North\", 4, 30), Site(\"Quarry\", 6, 40), Site(\"Depot\", 3, 25)], 7))\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-01/practice-1/storage.py",
+    "test_path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-01/practice-1/test_storage.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-01/practice-1/storage.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-01/practice-1/target/report.xml",
+      "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-01/practice-1/test_storage.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_cheapest_set_reaching_the_need_is_found",
+        "kind": "main",
+        "says": "the least total cost of a set of sites adding at least the needed MWh is returned, with a set that achieves it"
+      },
+      {
+        "id": "test_the_answer_names_the_sites_it_pays_for",
+        "kind": "main",
+        "says": "the returned names are the sites whose costs add up to the returned cost"
+      },
+      {
+        "id": "test_a_need_no_set_can_reach_has_no_answer",
+        "kind": "main",
+        "says": "a need that no set of sites can reach returns None, and a reachable one returns its cost and sites"
+      },
+      {
+        "id": "test_each_site_is_bought_at_most_once",
+        "kind": "edge",
+        "says": "a site may not be counted twice, even when two copies of it would be cheapest"
+      },
+      {
+        "id": "test_overshooting_the_need_is_allowed",
+        "kind": "edge",
+        "says": "a set that adds more than the need is allowed when no set reaches it exactly for less"
+      },
+      {
+        "id": "test_a_need_of_zero_is_met_by_building_nothing",
+        "kind": "edge",
+        "says": "a need of 0 costs nothing and names no site, rather than having no answer"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "25-knapsack-and-assignment/README_6.3.1.md",
+      "section": "A Table Over Budget Amounts Finds the Best Plan"
+    },
+    "concepts": [
+      "with whole-number weights, a table over capacity amounts solves a one-row knapsack exactly"
+    ]
+  }
+}

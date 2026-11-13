@@ -1,0 +1,565 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "14-growing-real-projects",
+    "55-project-cipt-planner"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "The first request: fund projects within one budget",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "14.2.1 The First Request: Fund Projects Within One Budget"
+    },
+    {
+      "type": "para",
+      "text": "This module grows one program, the CIPT planner (Capital Investment Planning Tool), from a first small request into the system a capital-planning team runs every cycle. Each lesson takes one new request from the planners and changes the code to meet it. The project lives in complete snapshots: `steps/00` is the starting skeleton, and `steps/NN` is the project after lesson 14.2.NN. Every snapshot runs on its own and passes its own tests. The data is GridCap, the course's fictional utility; no number in it describes a real company."
+    },
+    {
+      "type": "para",
+      "text": "The capstone (lessons 13.1.1 to 13.1.6) built a similar system milestone by milestone, from finished parts. Here the code starts small and grows, and the subject is how a design changes when requirements arrive one at a time."
+    },
+    {
+      "type": "para",
+      "text": "The first request, as the planning lead wrote it:"
+    },
+    {
+      "type": "quote",
+      "blocks": [
+        {
+          "type": "para",
+          "text": "We have $38.39M of capital for the next five years and 40 candidate projects on GridCap small. Tell us which to fund to get the most value. Use the NPV finance quoted for each project. We'll worry about years later."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Skeleton Reads the Export and Prints a Plan, but Decides Nothing"
+    },
+    {
+      "type": "para",
+      "text": "`steps/00` is what the team had before anyone wrote a model. It has a package `cipt` with five files, a test folder, a demo export, an entry point and the report it prints:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "File",
+        "What it does in `steps/00`"
+      ],
+      "rows": [
+        [
+          "`cipt/data.py`",
+          "reads the planning export (JSON) into `Project` and `Request` records"
+        ],
+        [
+          "`cipt/plan.py`",
+          "`Plan`: a status, the funded projects with their start years, an objective"
+        ],
+        [
+          "`cipt/model.py`",
+          "`build(request)`: a stub that returns an empty model"
+        ],
+        [
+          "`cipt/solve.py`",
+          "`solve(request)`: a stub that returns \"not solved\"; `run_highs` and `read_plan`, stubs this lesson writes"
+        ],
+        [
+          "`cipt/report.py`, `cipt/__main__.py`",
+          "the report and the command line `python -m cipt EXPORT.json`"
+        ],
+        [
+          "`main.py`, `expected/report.txt`",
+          "plans `data/demo.json`, found from the file's own folder, and prints the report; the report it prints"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The **export** is the file the planning system hands over. It already carries every column the planners keep: each project's cost profile, its start window, its rules, its NPV for each start year and its asset's health. The skeleton's loader reads only what it uses. From `steps/00/cipt/data.py`:"
+    },
+    {
+      "type": "html",
+      "text": "<!-- snapshot: steps/00/cipt/data.py -->"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def load_request(raw: dict) -> Request:\n    \"\"\"Build a Request from the export's dictionary form, refusing duplicate project ids.\"\"\"\n    projects = tuple(\n        Project(\n            project_id=row[\"id\"],\n            name=row[\"name\"],\n            capex=sum(row[\"cost_profile\"]),\n            value=row[\"npv\"][str(row[\"earliest_start\"])],\n            earliest_start=row[\"earliest_start\"],\n        )\n        for row in raw[\"projects\"]\n    )"
+    },
+    {
+      "type": "para",
+      "text": "`capex` is the project's whole cost in $k (thousands of dollars), the sum of its cost profile. `value` is the NPV (net present value, lesson 7.2.1) finance quotes for a start in the project's earliest year. Every later lesson reads more columns of the same export; none changes the file."
+    },
+    {
+      "type": "para",
+      "text": "The command line already works. It just has nothing to say:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "$ python -m cipt data/demo.json    # steps/00\nGridCap tiny: not solved\nfunded 0 of 8 projects, capex $0k of $7,390k, value $0k"
+    },
+    {
+      "type": "para",
+      "text": "The stub in `steps/00/cipt/solve.py` returns a plan that funds nothing:"
+    },
+    {
+      "type": "html",
+      "text": "<!-- snapshot: steps/00/cipt/solve.py -->"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def solve(request: Request) -> Plan:\n    \"\"\"Stub: lesson 14.2.1 solves the model. Until then, nothing is funded.\"\"\"\n    return Plan(status=\"not solved\")"
+    },
+    {
+      "type": "para",
+      "text": "A stub returns a wrong answer instead of raising, so the tests of this lesson fail on what the planner answers, not on a crash. That is also the shape of this lesson's practice: you start from `steps/00` and the tests of `steps/01` grade you."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "One Envelope and Yes-or-No Choices Make a Knapsack"
+    },
+    {
+      "type": "para",
+      "text": "The request has one budget and one decision per project: fund it or not. That is the 0-1 knapsack of lesson 6.3.1. Nothing about years enters yet; the planners said so."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`P`$, the candidate projects."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`c_i`$, the capex of project $`i`$ ($k); $`v_i`$, its value, the NPV of a start in its earliest year ($k); $`B`$, the envelope ($k)."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_i \\in \\{0, 1\\}`$ for every $`i \\in P`$: 1 if project $`i`$ is funded."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{i \\in P} v_i\\, x_i"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{i \\in P} c_i\\, x_i &\\le B && && \\text{(budget)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The row's label is the name the code gives it, `budget`. Every later lesson keeps that habit: a row's name in the code is its label in the formulation."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Sort by Value per Dollar Is Not the Best Fill"
+    },
+    {
+      "type": "para",
+      "text": "Before writing a model, the team asked whether a spreadsheet would do: sort the projects by value per $k and take each one that still fits. `first_plan.py` compares that **greedy** fill with the model's answer for envelopes from $10M to the real $38.39M:"
+    },
+    {
+      "type": "example",
+      "id": "first_plan-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "55-project-cipt-planner/src/first_plan.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "55-project-cipt-planner/src/first_plan.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "for envelope in (10_000, 15_000, 20_000, 25_000, 30_000, 38_390):\n    sized = cipt.data.Request(request.name, envelope, request.projects)\n    best = cipt.solve.solve(sized).objective\n    quick = sum(p.value for p in greedy(request.projects, envelope))"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "envelope ($k)   model value   greedy value   greedy short by\n       10,000         8,898          8,893                 5\n       15,000        12,503         12,295               208\n       20,000        16,225         16,166                59\n       25,000        19,466         19,416                50\n       30,000        22,659         22,551               108\n       38,390        27,384         27,384                 0"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "At the real envelope the greedy fill happens to match the model, and at $15M it is $208k short. Greedy fails when the last good projects do not fit the money left and a different mix would have used it. Nothing in the data warns you when that happens, so the planner uses the model. At $38.39M the model funds 24 projects:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "model: 40 binary variables, 1 row (budget)\nGridCap small: optimal\nfunded 24 of 40 projects, capex $38,390k of $38,390k, value $27,384k"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model Lives in One File and the Solver in Another"
+    },
+    {
+      "type": "para",
+      "text": "The design decision of this step is where the formulation and the solver go. Three choices were on the table:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Choice",
+        "For",
+        "Against"
+      ],
+      "rows": [
+        [
+          "model and solve in one function",
+          "shortest code today",
+          "every later rule and every solver setting edits the same function"
+        ],
+        [
+          "`model.py` builds, `solve.py` solves and reads back (chosen)",
+          "a rule changes one file, a solver setting another; tests call `solve` and check behaviour",
+          "two files for twelve lines today"
+        ],
+        [
+          "CP-SAT instead of MathOpt and HiGHS",
+          "the knapsack has integer data",
+          "CP-SAT works in integers, so the fractional risk values of the lesson *Value: NPV by start year and risk reduction* would have to be scaled (lesson 4.4.3)"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The planner uses MathOpt with HiGHS (lesson 4.2.1) from the start, so the solver does not change when the objective does."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Change, File by File"
+    },
+    {
+      "type": "para",
+      "text": "**`cipt/model.py`.** Before: `build` returned an empty model. After, it is the model block above turned into MathOpt calls, and the page leaves its code to the practice. `build(request)` makes a `mathopt.Model` named after the request and returns `Built(request, model, x, rows)`, the record `steps/00` already defines:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`x` maps each project id to its binary variable $`x_i`$, named `x_<id>`, so reading the answer back needs no search.",
+        "`rows` maps the row's label to the row. It holds one row today, (budget): the capex $`c_i`$ of each project times its $`x_i`$, summed, at most the envelope `capital_budget`, under the name `budget`. The diagnostics of the lesson *Why it failed, why it was deferred: a diagnostics layer* find rows by these names.",
+        "The objective is the model block's: maximize the sum of each project's `value` $`v_i`$ times its $`x_i`$.",
+        "`mathopt.fast_sum` instead of `sum`: its docstring in the OR-Tools source says a row built from an empty list with `fast_sum` is safe, while `sum` of an empty list is the number 0 and the row becomes a Python `bool` that MathOpt refuses. An export with no projects then still builds."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**`cipt/solve.py`.** Before: three stubs, `solve` above, `run_highs` returning `None` and `read_plan` returning \"not solved\". After, in `steps/01/cipt/solve.py`, three parts. First the imports, the solver settings and the quiet solve:"
+    },
+    {
+      "type": "html",
+      "text": "<!-- snapshot: steps/01/cipt/solve.py -->"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "import ctypes\nimport os\nimport sys\n\nfrom ortools.math_opt.python import mathopt\nfrom ortools.math_opt.solvers import highs_pb2\n\nfrom .data import Request\nfrom .model import Built, build\nfrom .plan import Plan\n\n#: One thread, set in HiGHS's own options; the first HiGHS solve of a process fixes the count.\nPARAMS = mathopt.SolveParameters(highs=highs_pb2.HighsOptionsProto(int_options={\"threads\": 1}))\n\n\ndef run_highs(model: mathopt.Model) -> mathopt.SolveResult:\n    \"\"\"Solve with stdout pointed at /dev/null, so HiGHS's stray C output stays out of reports.\"\"\"\n    sys.stdout.flush()\n    saved, sink = os.dup(1), os.open(os.devnull, os.O_WRONLY)\n    os.dup2(sink, 1)\n    try:\n        return mathopt.solve(model, mathopt.SolverType.HIGHS, params=PARAMS)\n    finally:\n        ctypes.CDLL(None).fflush(None)\n        os.dup2(saved, 1)\n        os.close(saved)\n        os.close(sink)"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`highs_pb2` is the module of HiGHS's own options as MathOpt passes them on; `HighsOptionsProto` is its record, with one dictionary per option type (`int_options`, `bool_options`, ...). `solve.py` now imports `Built` and `build` from `model.py`.",
+        "`PARAMS` fixes HiGHS at one thread through its own options, because MathOpt's common `threads` parameter is refused by HiGHS (lesson 4.2.4). One thread also makes runs repeat, which the lesson *Trust at scale: determinism harness, golden tests, warm starts* relies on.",
+        [
+          "`run_highs` points the process's standard output at `/dev/null` during the solve, because the HiGHS bundled with OR-Tools can print a stray debug line on some MIP solves (lesson 4.2.1). A report that planners read must not carry it. Line by line:",
+          {
+            "type": "list",
+            "ordered": false,
+            "items": [
+              "`sys.stdout.flush()` writes out what Python has buffered so far, so no line of the report is lost into `/dev/null`.",
+              "`os.dup(1)` keeps a copy of the real standard output, file descriptor 1, and `os.dup2(sink, 1)` points descriptor 1 at `/dev/null`. Redirecting the descriptor, not `sys.stdout`, is what silences HiGHS: it is C++ code and writes to descriptor 1 without passing through Python.",
+              "`ctypes.CDLL(None).fflush(None)` flushes the C library's own output buffers. `CDLL(None)` opens the running process itself, whose symbols include the C library's `fflush`, and `fflush(NULL)` flushes every C stream. It runs while descriptor 1 still points at `/dev/null`, so text HiGHS left in a C buffer goes there, not into the report once the descriptor is restored.",
+              "`finally` restores descriptor 1 and closes the two spare descriptors, even when the solve raises."
+            ]
+          }
+        ]
+      ]
+    },
+    {
+      "type": "html",
+      "text": "<!-- snapshot: steps/01/cipt/solve.py -->"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def read_plan(built: Built, result: mathopt.SolveResult) -> Plan:\n    \"\"\"Turn a solver result into a Plan; a funded project starts in its earliest year.\"\"\"\n    status = result.termination.reason.name.lower()\n    if not result.has_primal_feasible_solution():\n        return Plan(status=status)\n    values = result.variable_values()\n    starts = {pid: built.request.project(pid).earliest_start\n              for pid, var in built.x.items() if values[var] > 0.5}\n    return Plan(status=status, starts=starts, objective=result.objective_value())"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`status` is MathOpt's termination reason in lower case: \"optimal\", \"infeasible\", and so on.",
+        "`values[var] > 0.5` reads a binary that the solver returns as a float such as 0.9999999.",
+        "A funded project \"starts in its earliest year\". The model has no years; the plan records the year the planners assumed, so `Plan` keeps one shape from this step to the last."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**`cipt/plan.py`, `report.py`, `__main__.py`.** Unchanged. **`cipt/data.py`** gains one stub for the next lesson, `Request.starts(project)`, which returns the earliest year alone; nothing calls it yet. The report that printed \"not solved\" now prints a plan:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "$ python -m cipt data/demo.json    # steps/01\nGridCap tiny: optimal\nfunded 4 of 8 projects, capex $7,370k of $7,390k, value $4,876k\n  P001  start 2028  capex  2,150  value  1,386  Ridge substation transformer replace (A001)\n  P004  start 2028  capex  3,000  value  2,120  Plains breaker bay replace (A004)\n  P005  start 2027  capex    250  value    123  Ridge circuit trim (A005)\n  P006  start 2028  capex  1,970  value  1,247  Valley substation transformer replace (A006)"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Each Test Checks What the Planners Asked, on Data Small Enough to Solve by Hand"
+    },
+    {
+      "type": "para",
+      "text": "The tests build their own exports with two helpers in `steps/01/tests/conftest.py`, `row` and `export`, which fill every column of the export with a default. They never use GridCap: a test's expected answer must be one a reader can check with a pencil. From `steps/01/tests/test_select.py`:"
+    },
+    {
+      "type": "html",
+      "text": "<!-- snapshot: steps/01/tests/test_select.py -->"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def test_best_combination_beats_best_ratio():\n    # A has the best value per $k, but taking it leaves no room for B and C together.\n    request = load_request(export([row(\"A\", (60,), 70), row(\"B\", (50,), 50), row(\"C\", (50,), 50)],\n                                  capital_budget=100))\n    plan = solve(request)\n    assert plan.funded == (\"B\", \"C\")\n    assert plan.objective == 100"
+    },
+    {
+      "type": "para",
+      "text": "`ledger.py` runs each step's new tests twice: against the code before the step (`steps/00` with the tests of `steps/01`, the practice's starting point) and against the code after it:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "14.2.1: 5 tests added; on step 00, 5 fail on an assertion; on step 01, 9 of 9 pass\n  test_plan_respects_the_budget\n    before: assert 'not solved' == 'optimal'\n    after:  passed\n  test_best_combination_beats_best_ratio\n    before: assert () == ('B', 'C')\n    after:  passed\n  test_funds_everything_when_the_budget_allows\n    before: assert () == ('A', 'B')\n    after:  passed\n  test_report_names_the_funded_projects\n    before: assert 'funded 2 of 3 projects, capex $100k of $100k, value $100k' in 'test: not solved\\\n    after:  passed\n  test_command_line_prints_the_report\n    before: assert 'test: not solved' == 'test: optimal'\n    after:  passed"
+    },
+    {
+      "type": "para",
+      "text": "The first test checks two things at once on purpose: an empty plan respects any budget, so a test that checked only the budget would pass on the stub. A test that cannot fail on the old code tests nothing about the change."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Step Added a Solver Layer and Nothing Else"
+    },
+    {
+      "type": "para",
+      "text": "`code_size.py` measures each snapshot: lines of the package (non-blank, not comments), functions, test functions, and the function with the most branches (1 plus its decision points: McCabe's cyclomatic number):"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "14.2.1: steps/00 -> steps/01\n  package lines 125 -> 154, functions 10 -> 11, tests 4 -> 9\n  most branches: report.render (5) -> report.render (5)\n  data.py        47 ->   51\n  model.py       15 ->   20\n  solve.py       15 ->   35"
+    },
+    {
+      "type": "para",
+      "text": "Twenty-nine lines: twenty in `solve.py`, most of them the quiet, one-thread solve, four in `data.py` for the next lesson's stub, and five in the model itself. That ratio is typical of the first step: the formulation is small, and the plumbing around a solver call is what takes code."
+    },
+    {
+      "type": "para",
+      "text": "**Practice.** This lesson's project practice starts from `steps/00`, the whole package. It is graded by the tests in the practice's `tests/` folder and by a check that `main.py`, which plans the demo export, prints what the practice's `expected/report.txt` holds."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**The skeleton reads the export and prints a plan, but decides nothing.** The export carries every column from the start; each version reads the ones it uses.",
+        "**One envelope and yes-or-no choices make a knapsack.** One binary per project, one row.",
+        "**A sort by value per dollar is not the best fill.** On GridCap small it came up $208k short at a $15M envelope, and matched the model at $38.39M.",
+        "**The model lives in one file and the solver in another.** `build` names every row; `solve` runs HiGHS quietly on one thread and reads a `Plan` back.",
+        "**Each test checks what the planners asked, on data small enough to solve by hand**, and fails on the code before the step."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Name",
+        "Meaning"
+      ],
+      "rows": [
+        [
+          "`steps/NN`",
+          "the project after lesson 14.2.NN; `steps/00` is the skeleton"
+        ],
+        [
+          "export",
+          "the planning system's file, every column from the start (JSON)"
+        ],
+        [
+          "`Built`",
+          "the model, its variables `x` and its rows by name"
+        ],
+        [
+          "`Plan`",
+          "status, `starts` (project to start year), `objective`"
+        ],
+        [
+          "`ledger.py`",
+          "each step's new tests on the code before and after the step"
+        ],
+        [
+          "`code_size.py`",
+          "lines, functions, tests and the most-branched function per snapshot"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [MathOpt `expressions.py` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/expressions.py) (`fast_sum`, and why it is safe on an empty list where `sum` is not); [MathOpt `parameters.py` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/parameters.py) (`SolveParameters` and the solver-specific `highs` options); [MathOpt `result.py` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/result.py) (`TerminationReason`, the source of the plan's status)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Find an envelope between $10M and $15M where greedy is short by more than $208k. What makes those envelopes bad for greedy?",
+        "The export has a project with an NPV of zero at its earliest start. Does the model fund it when the money is there? Should it?",
+        "Write a test that fails if `read_plan` used `values[var] == 1.0` instead of `> 0.5`. Can you, with HiGHS on these models?"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Read Only the Columns You Use"
+    },
+    {
+      "type": "para",
+      "text": "The loader could have refused an export with columns it does not know, or mapped every column into the records at once. It does neither. Reading only what the code uses keeps the first version small, and the planners never have to make a special export for it. The cost is that a column the planner should use but ignores goes unnoticed: in this version the must-do flag is in the export and nothing reads it. The tests of the lesson *Business rules: must-dos, bundles, parents and alternatives* are what catch that, not the loader."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each output above was printed by one of these programs. Open one to read it whole, change it, and run it again."
+    },
+    {
+      "type": "para",
+      "text": "**first_plan.py.** Runs `steps/01` on GridCap small and compares the model with a greedy fill by value per $k for six envelopes (*A Sort by Value per Dollar Is Not the Best Fill*). *Try:* sort the greedy fill by value alone instead of value per $k. Predict whether it does better or worse at $15M before you run it."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [first_plan.py](src/first_plan.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**cli_demo.py.** Runs `python -m cipt data/demo.json` in several snapshots, the skeleton's and step 01's among them. *Try:* add `(5, [])` to its list of runs and predict the first line."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [cli_demo.py](src/cli_demo.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**ledger.py.** Runs each step's new tests against the code before and after the step (*Each Test Checks What the Planners Asked*). *Try:* run `python3 ledger.py 1` alone."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [ledger.py](src/ledger.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**code_size.py.** Measures every snapshot (*The Step Added a Solver Layer and Nothing Else*). *Try:* change the branch count to leave out boolean operators and see which function leads."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [code_size.py](src/code_size.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**export.py and steps.py.** `export.py` writes GridCap as the planning export; `steps.py` loads one snapshot's package for a program."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [export.py](src/export.py)",
+        "Library: [steps.py](src/steps.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 14,
+    "paras": 37,
+    "code": 12,
+    "tables": 3,
+    "lists": 10,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 1,
+    "html": 6,
+    "disclosures": 0,
+    "examples": 1
+  },
+  "content_sha256": "75881c5be859634fb63a8eb2695dfc08a049e3f3cbc1d15156fd47d7ba8e41e3"
+}

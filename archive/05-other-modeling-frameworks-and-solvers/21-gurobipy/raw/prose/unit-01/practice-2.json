@@ -1,0 +1,144 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "05-other-modeling-frameworks-and-solvers",
+    "21-gurobipy"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "The spend and precedence matrices that addMConstr takes",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility models its projects with gurobipy's matrix API (`addMVar`, `addMConstr`). Its projects are given as a list of `(project_id, start_year, cost_profile)` triples: a project that starts in year $`s`$ spends `cost_profile[k]` in year $`s + k`$. Write two functions that build the arrays its rows need, with one column per project, in the order of the list."
+    },
+    {
+      "type": "para",
+      "text": "**`spend_matrix(projects, years)`** returns a NumPy array $`A`$ of shape `(len(years), len(projects))` with"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "A_{r,j} = \\text{cost\\_profile}_j[k] \\quad \\text{where } \\text{years}[r] = s_j + k"
+    },
+    {
+      "type": "para",
+      "text": "and 0 elsewhere. Spend that falls in a year not in `years` (after the horizon) is left out: it is not this plan's money. Then `addMConstr(A, x, \"<\", B)` is the yearly budget row $`\\sum_j A_{r,j}\\, x_j \\le B_r`$."
+    },
+    {
+      "type": "para",
+      "text": "**`needs_matrix(projects, parent_of)`** returns one row per entry of the dict `parent_of` (child id to parent id), in the dict's order, with $`+1`$ in the child's column and $`-1`$ in the parent's: then `addMConstr(N, x, \"<\", 0)` states $`x_c - x_{p(c)} \\le 0`$, \"a child is funded only with its parent\"."
+    },
+    {
+      "type": "para",
+      "text": "Both return `float` arrays. No Gurobi license is needed: the functions build arrays and never solve. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport numpy as np\n\n\ndef spend_matrix(projects: list[tuple[str, int, list[float]]], years: list[int]) -> np.ndarray:\n    \"\"\"A[r, j]: what project j spends in years[r].\"\"\"\n    row = {y: r for r, y in enumerate(years)}\n    A = np.zeros((len(years), len(projects)))\n    for j, (_, start, profile) in enumerate(projects):\n        for k, amount in enumerate(profile):\n            if start + k in row:\n                A[row[start + k], j] += amount\n    return A\n\n\ndef needs_matrix(projects: list[tuple[str, int, list[float]]], parent_of: dict[str, str]) -> np.ndarray:\n    \"\"\"One row per child: +1 in the child's column, -1 in its parent's.\"\"\"\n    col = {pid: j for j, (pid, _, _) in enumerate(projects)}\n    N = np.zeros((len(parent_of), len(projects)))\n    for r, (child, parent) in enumerate(parent_of.items()):\n        N[r, col[child]] = 1.0\n        N[r, col[parent]] = -1.0\n    return N\n\n\nif __name__ == \"__main__\":\n    projects = [(\"pump\", 2030, [400.0]), (\"main\", 2031, [250.0, 250.0])]\n    print(spend_matrix(projects, [2030, 2031, 2032]))\n    print(needs_matrix(projects, {\"main\": \"pump\"}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport numpy as np\n\n\ndef spend_matrix(projects: list[tuple[str, int, list[float]]], years: list[int]) -> np.ndarray:\n    \"\"\"A[r, j]: what project j spends in years[r].\"\"\"\n    # TODO: for each project j and each year of work k, find the row of year start + k, if any.\n    return np.zeros((len(years), len(projects)))\n\n\ndef needs_matrix(projects: list[tuple[str, int, list[float]]], parent_of: dict[str, str]) -> np.ndarray:\n    \"\"\"One row per child: +1 in the child's column, -1 in its parent's.\"\"\"\n    # TODO: map each project id to its column, then fill one row per child.\n    return np.zeros((len(parent_of), len(projects)))\n\n\nif __name__ == \"__main__\":\n    projects = [(\"pump\", 2030, [400.0]), (\"main\", 2031, [250.0, 250.0])]\n    print(spend_matrix(projects, [2030, 2031, 2032]))\n    print(needs_matrix(projects, {\"main\": \"pump\"}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "a3098c5aacf0ac06c04d764b6dd3a36e2d780b901b88709c65a455519685084a",
+  "starting_code": "from __future__ import annotations\n\nimport numpy as np\n\n\ndef spend_matrix(projects: list[tuple[str, int, list[float]]], years: list[int]) -> np.ndarray:\n    \"\"\"A[r, j]: what project j spends in years[r].\"\"\"\n    # TODO: for each project j and each year of work k, find the row of year start + k, if any.\n    return np.zeros((len(years), len(projects)))\n\n\ndef needs_matrix(projects: list[tuple[str, int, list[float]]], parent_of: dict[str, str]) -> np.ndarray:\n    \"\"\"One row per child: +1 in the child's column, -1 in its parent's.\"\"\"\n    # TODO: map each project id to its column, then fill one row per child.\n    return np.zeros((len(parent_of), len(projects)))\n\n\nif __name__ == \"__main__\":\n    projects = [(\"pump\", 2030, [400.0]), (\"main\", 2031, [250.0, 250.0])]\n    print(spend_matrix(projects, [2030, 2031, 2032]))\n    print(needs_matrix(projects, {\"main\": \"pump\"}))\n",
+  "exercise": {
+    "main_path": "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-01/practice-2/matrices.py",
+    "test_path": "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-01/practice-2/test_matrices.py",
+    "run_command": [
+      "python3",
+      "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-01/practice-2/matrices.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-01/practice-2/target/report.xml",
+      "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-01/practice-2/test_matrices.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_one_year_projects_fill_their_start_year",
+        "kind": "main",
+        "says": "projects that spend one year from the first year of the horizon put their cost in that row"
+      },
+      {
+        "id": "test_a_needs_row_has_plus_one_for_the_child_and_minus_one_for_the_parent",
+        "kind": "main",
+        "says": "each child gives one row with +1 in its column and -1 in its parent's"
+      },
+      {
+        "id": "test_a_later_start_spends_in_its_own_calendar_years",
+        "kind": "edge",
+        "says": "a project starting in a later year puts its k-th year of work in row start + k"
+      },
+      {
+        "id": "test_spend_past_the_horizon_is_left_out",
+        "kind": "edge",
+        "says": "spend falling after the last year of the horizon appears in no row"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "21-gurobipy/README_5.3.1.md",
+      "section": "The Matrix API Takes the Model as Arrays"
+    },
+    "concepts": [
+      "the spend and precedence arrays that addMConstr takes"
+    ]
+  }
+}

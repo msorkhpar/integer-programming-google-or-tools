@@ -1,0 +1,50 @@
+{
+ "title": "Detecting a GPU and falling back",
+ "questions": [
+  {
+   "id": "q-guard",
+   "heading": "Never Ask highspy for PDLP Without a GPU",
+   "stem": "A service on a laptop with no GPU loads the CUDA build of highspy and sets solver=\"pdlp\" inside a try/except that falls back to interior point. What happens when it runs?",
+   "options": [
+    {"id": "a", "text": "HiGHS runs PDLP on the CPU instead, a little slower", "correct": false,
+     "says": "The CUDA build's PDLP has no CPU path: without a GPU it kills the process instead of switching to the CPU."},
+    {"id": "b", "text": "HiGHS raises an error, and the except runs interior point", "correct": false,
+     "says": "No Python exception is raised: the process is killed by a segmentation fault, so the except never runs."},
+    {"id": "c", "text": "The process is killed, and the except clause never runs", "correct": true,
+     "says": "Right: it prints a CUDA context error and dies with SIGSEGV, which is why the check comes before the option is set."},
+    {"id": "d", "text": "HiGHS returns the status Unknown, and the service moves on", "correct": false,
+     "says": "There is no status to read: the process is gone before run() returns."}
+   ]
+  },
+  {
+   "id": "q-process",
+   "heading": "cuOpt Runs in a Process of Its Own",
+   "stem": "A new teammate proposes importing cuOpt directly in the planning service, to save the cost of starting a worker process. Which fact about the course's setup rules that out?",
+   "options": [
+    {"id": "a", "text": "Its log must reach the console, which only a worker can do", "correct": false,
+     "says": "The worker keeps cuOpt's log off the console on purpose, since its header names the card's UUID."},
+    {"id": "b", "text": "Its PDLP runs only on a machine where no GPU is found", "correct": false,
+     "says": "cuOpt needs a GPU: run_cuopt refuses to start without one."},
+    {"id": "c", "text": "Its solver cannot share a machine with HiGHS at any time", "correct": false,
+     "says": "cuOpt shares the machine, the GPU image and the card with HiGHS; lesson 11.4.3 runs both on the same GPU. Only the environment and the process are kept apart."},
+    {"id": "d", "text": "Its data library needs pandas and numpy older than the course's", "correct": true,
+     "says": "Right: cuDF needs older pandas and numpy than the course pins, so the two cannot share one environment, and cuOpt has its own environment and interpreter."}
+   ]
+  },
+  {
+   "id": "q-status",
+   "heading": "Fall Back When the GPU Is Missing or Its Answer Is Not Optimal",
+   "stem": "On a GPU machine, HiGHS's GPU PDLP returns the status Unknown for a portfolio LP, although its objective is within 3e-8 of the optimum. What should the service do with this answer?",
+   "options": [
+    {"id": "a", "text": "Use it, since its objective is already within 3e-8", "correct": false,
+     "says": "HiGHS did not stand behind it: its prices broke dual rows by up to 1,100, and the service never uses a result that is not Optimal."},
+    {"id": "b", "text": "Solve the LP on the CPU and use that answer instead", "correct": true,
+     "says": "Right: a GPU answer that is not Optimal is the second fallback trigger; the CPU interior point solved GridCap's LP."},
+    {"id": "c", "text": "Report the LP as infeasible, since no optimum was found", "correct": false,
+     "says": "Unknown is not infeasible: the CPU fallback solved the same LP to Optimal."},
+    {"id": "d", "text": "Use it if its plan keeps every row to within 1e-7", "correct": false,
+     "says": "The plan kept its rows to 9.2e-8 and HiGHS still refused it, because the prices were far from feasible."}
+   ]
+  }
+ ]
+}

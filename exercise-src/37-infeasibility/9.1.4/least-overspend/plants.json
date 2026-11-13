@@ -1,0 +1,12 @@
+{
+  "test_each_year_overspends_only_by_its_own_shortfall": [
+    ["    over = {y: model.add_variable(lb=0, name=f\"over_{y}\") for y in budget}", "    shared = model.add_variable(lb=0, name=\"over\")\n    over = {y: shared for y in budget}"],
+    ["    model.minimize(mathopt.fast_sum(over.values()))", "    model.minimize(shared)"]
+  ],
+  "test_money_left_in_one_year_does_not_pay_for_another": [
+    ["    for y, limit in budget.items():\n        spend = mathopt.fast_sum(cost.get(y, 0) * fund[p] for p, cost in projects.items())\n        model.add_linear_constraint(spend - over[y] <= limit, name=f\"budget_{y}\")", "    years = sorted(budget)\n    for i, y in enumerate(years):\n        spend = mathopt.fast_sum(cost.get(u, 0) * fund[p] for p, cost in projects.items() for u in years[:i + 1])\n        model.add_linear_constraint(spend - over[y] <= sum(budget[u] for u in years[:i + 1]), name=f\"budget_{y}\")"]
+  ],
+  "test_optional_projects_never_add_to_the_overspend": [
+    ["    for p in required:\n        model.add_linear_constraint(fund[p] == 1, name=f\"required_{p}\")", "    for p in projects:\n        model.add_linear_constraint(fund[p] == 1, name=f\"required_{p}\")"]
+  ]
+}

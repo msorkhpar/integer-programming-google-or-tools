@@ -1,0 +1,154 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "13-mathopt-core"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "One selection function for every MILP solver",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A city's parks department picks which playground renovations to fund this year. The candidates sit in a pandas DataFrame with the columns `project_id`, `cost` and `value` (both in $k) and `must_do` (a bool: safety work that must be funded). The department wants one function it can run on HiGHS, SCIP or CP-SAT and get the same answer."
+    },
+    {
+      "type": "para",
+      "text": "The model, with $`P`$ the rows of the DataFrame and $`B`$ the budget:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& \\sum_{i \\in P} \\text{value}_i\\, x_i \\\\\n\\text{s.t. }& \\sum_{i \\in P} \\text{cost}_i\\, x_i \\le B && && \\text{(budget)} \\\\\n& x_i = 1 && \\forall i \\in P \\text{ with must\\_do}_i && \\text{(must}_i) \\\\\n& x_i \\in \\{0, 1\\} && \\forall i \\in P\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Write `solve_selection(df, budget, solver)` in `selection.py`. It returns a pair: the objective value of the plan, and the sorted list of the `project_id`s it funds (those whose $`x_i`$ is above 0.5)."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`solver` is a `mathopt.SolverType`. If it is one of `LP_ONLY` (GLOP and PDLP, which refuse integer variables), raise `ValueError` with the solver's name in the message, before building or solving anything, so the caller never meets OR-Tools' own refusal.",
+        "If the solve ends with any reason other than `OPTIMAL`, raise `RuntimeError` with the reason's name in the message."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport pandas as pd\nfrom ortools.math_opt.python import mathopt\n\nLP_ONLY = (mathopt.SolverType.GLOP, mathopt.SolverType.PDLP)\n\n\ndef solve_selection(df: pd.DataFrame, budget: float, solver: mathopt.SolverType) -> tuple[float, list[str]]:\n    \"\"\"The best plan's value and its sorted project ids, on any MILP solver MathOpt drives.\"\"\"\n    if solver in LP_ONLY:\n        raise ValueError(f\"{solver.name} solves LPs only; this model has yes/no variables\")\n    model = mathopt.Model(name=\"selection\")\n    x = {row.project_id: model.add_binary_variable(name=f\"x_{row.project_id}\") for row in df.itertuples()}\n    model.add_linear_constraint(\n        mathopt.fast_sum(row.cost * x[row.project_id] for row in df.itertuples()) <= budget, name=\"budget\")\n    for row in df.itertuples():\n        if row.must_do:\n            model.add_linear_constraint(x[row.project_id] == 1, name=f\"must_{row.project_id}\")\n    model.maximize(mathopt.fast_sum(row.value * x[row.project_id] for row in df.itertuples()))\n    result = mathopt.solve(model, solver)\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        raise RuntimeError(f\"no optimal plan: {result.termination.reason.name}\")\n    chosen = sorted(pid for pid, var in x.items() if result.variable_values(var) > 0.5)\n    return result.objective_value(), chosen\n\n\nif __name__ == \"__main__\":\n    parks = pd.DataFrame({\"project_id\": [\"A\", \"B\", \"C\"], \"cost\": [40, 30, 50],\n                          \"value\": [55, 35, 60], \"must_do\": [False, True, False]})\n    print(solve_selection(parks, 80, mathopt.SolverType.HIGHS))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport pandas as pd\nfrom ortools.math_opt.python import mathopt\n\nLP_ONLY = (mathopt.SolverType.GLOP, mathopt.SolverType.PDLP)\n\n\ndef solve_selection(df: pd.DataFrame, budget: float, solver: mathopt.SolverType) -> tuple[float, list[str]]:\n    \"\"\"The best plan's value and its sorted project ids, on any MILP solver MathOpt drives.\"\"\"\n    # TODO: refuse LP-only solvers, build the model, solve with `solver`, check the reason, read the plan.\n    return 0.0, []\n\n\nif __name__ == \"__main__\":\n    parks = pd.DataFrame({\"project_id\": [\"A\", \"B\", \"C\"], \"cost\": [40, 30, 50],\n                          \"value\": [55, 35, 60], \"must_do\": [False, True, False]})\n    print(solve_selection(parks, 80, mathopt.SolverType.HIGHS))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "fd0f5938f5d68ce8c900cb56b7af3cf7a6d57c3276aff07aaee7aa4202ce05ec",
+  "starting_code": "from __future__ import annotations\n\nimport pandas as pd\nfrom ortools.math_opt.python import mathopt\n\nLP_ONLY = (mathopt.SolverType.GLOP, mathopt.SolverType.PDLP)\n\n\ndef solve_selection(df: pd.DataFrame, budget: float, solver: mathopt.SolverType) -> tuple[float, list[str]]:\n    \"\"\"The best plan's value and its sorted project ids, on any MILP solver MathOpt drives.\"\"\"\n    # TODO: refuse LP-only solvers, build the model, solve with `solver`, check the reason, read the plan.\n    return 0.0, []\n\n\nif __name__ == \"__main__\":\n    parks = pd.DataFrame({\"project_id\": [\"A\", \"B\", \"C\"], \"cost\": [40, 30, 50],\n                          \"value\": [55, 35, 60], \"must_do\": [False, True, False]})\n    print(solve_selection(parks, 80, mathopt.SolverType.HIGHS))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-1/selection.py",
+    "test_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-1/test_selection.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-1/selection.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-1/target/report.xml",
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-1/test_selection.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_every_milp_solver_returns_the_same_best_plan",
+        "kind": "main",
+        "says": "HiGHS, SCIP and CP-SAT each return the best plan's value and the same sorted project ids"
+      },
+      {
+        "id": "test_the_plan_fits_the_budget",
+        "kind": "main",
+        "says": "the returned projects cost no more than the budget"
+      },
+      {
+        "id": "test_must_do_projects_are_always_funded",
+        "kind": "edge",
+        "says": "a must-do project is in the plan even when its value per dollar is poor"
+      },
+      {
+        "id": "test_projects_are_funded_whole",
+        "kind": "edge",
+        "says": "the value is that of whole projects, not of a fractional plan worth more"
+      },
+      {
+        "id": "test_an_lp_only_solver_is_refused_with_a_value_error",
+        "kind": "edge",
+        "says": "GLOP or PDLP raises ValueError naming the solver, before any solve"
+      },
+      {
+        "id": "test_an_impossible_budget_raises_runtime_error",
+        "kind": "edge",
+        "says": "a budget below the must-do projects' cost raises RuntimeError naming the termination reason"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "13-mathopt-core/README_4.2.3.md",
+      "section": "CP-SAT Needs Integers, and Rounds a Continuous Model Without Warning"
+    },
+    "concepts": [
+      "the solver is the second argument of mathopt.solve and never part of the model"
+    ]
+  }
+}

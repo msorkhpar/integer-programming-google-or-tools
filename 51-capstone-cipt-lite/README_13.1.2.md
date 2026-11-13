@@ -1,0 +1,255 @@
+# 13.1.2 Model: Multi-Period Selection With All Section 6 Rules
+
+The snapshot of lesson 13.1.1 is accepted, and the planners ask the question CIPT exists for:
+which of GridCap medium's 400 projects should start, and in which of the ten years, to get the most
+NPV while every business rule holds? Section 6 wrote each rule on its own, often on a model that had
+only that rule. The milestone puts every rule GridCap's data carries into one model, gives every row
+the name the planners will read in a diagnosis, and then asks how anyone can trust what the model
+returns: the solve stops at a stated gap, the plan is checked by code that never sees the model, and
+hand-built plans test each rule from both sides. GridCap is a fictional utility's portfolio.
+
+## The Model
+
+**Sets.** $`P`$ the projects; $`Y`$ the plan years (2027 to 2036); $`T_i \subseteq Y`$ the start
+years of project $`i`$, those in its window whose every year of work falls inside $`Y`$ (lesson
+6.4.1); $`M \subseteq P`$ the must-do projects; $`\mathcal{G}`$ the alternative groups, each a set
+$`g \subseteq P`$ (lesson 6.5.3); $`C \subseteq P`$ the children, each with its parent $`p(c)`$;
+$`R`$ the regions and $`P_r`$ the projects in region $`r`$; $`K`$ the programs (transmission,
+distribution, vegetation) and $`P_k`$ the projects in program $`k`$; from the scenario, $`F`$ the
+projects forced in, $`O`$ the projects forced out, and $`S`$ the projects whose start year $`t_i`$
+is fixed (lesson 6.5.6).
+
+**Parameters.** $`\text{npv}_{i,t}`$ the NPV of project $`i`$ if it starts in $`t`$ ($k);
+$`c_{i,k}`$ what it spends in its $`k`$-th year of work ($k), with $`d_i`$ years of work and
+$`\text{capex}_i = \sum_k c_{i,k}`$; $`L_c`$ the lag between parent and child (years); $`B_y`$ the
+year's budget and $`B_{r,y}`$ the region's ($k); $`m_i`$ the crew-months project $`i`$ uses in each
+year of work and $`W_{k,y}`$ the crew-months program $`k`$ has in year $`y`$; $`\Phi_r`$ the least
+region $`r`$ must receive over the plan ($k), a rate-case commitment (lesson 6.5.5).
+
+**Variables.** $`x_{i,t} \in \{0, 1\}`$ for $`i \in P`$, $`t \in T_i`$: project $`i`$ starts in
+year $`t`$. Write $`s_i = \sum_{t \in T_i} x_{i,t}`$ (1 if the project is funded) and
+$`\text{spend}_{i,y} = \sum_{t \in T_i,\; 0 \le y - t < d_i} c_{i,\,y-t}\, x_{i,t}`$ (lesson 6.4.2).
+Overrides are bounds: $`x_{i,t} = 1`$ if $`t = t_i`$ and $`0`$ otherwise for $`i \in S`$, and
+$`x_{i,t} = 0`$ for $`i \in O`$.
+
+**Objective.**
+
+```math
+\max \; \sum_{i \in P} \sum_{t \in T_i} \text{npv}_{i,t}\, x_{i,t}
+```
+
+**Constraints.**
+
+```math
+\begin{aligned}
+s_i &\le 1 && \forall i \in P \setminus M && \text{(once}_i) \\
+s_i &= 1 && \forall i \in M && \text{(must}_i) \\
+s_i &\ge 1 && \forall i \in F && \text{(force}_i) \\
+\textstyle\sum_{i \in g} s_i &\le 1 && \forall g \in \mathcal{G} && \text{(alt}_g) \\
+\textstyle\sum_{u \in T_c,\, u \le t} x_{c,u} &\le \textstyle\sum_{s \in T_{p(c)},\, s \le t - L_c} x_{p(c),s} && \forall c \in C,\ t \in T_c && \text{(after}_{c,t}) \\
+\textstyle\sum_{i \in P} \text{spend}_{i,y} &\le B_y && \forall y \in Y && \text{(budget}_y) \\
+\textstyle\sum_{i \in P_r} \text{spend}_{i,y} &\le B_{r,y} && \forall r \in R,\ y \in Y && \text{(region}_{r,y}) \\
+\textstyle\sum_{i \in P_k} \sum_{t \in T_i,\; t \le y < t + d_i} m_i\, x_{i,t} &\le W_{k,y} && \forall k \in K,\ y \in Y && \text{(crews}_{k,y}) \\
+\textstyle\sum_{i \in P_r} \text{capex}_i\, s_i &\ge \Phi_r && \forall r \in R && \text{(floor}_r)
+\end{aligned}
+```
+
+The precedence row is the cumulative form of lesson 6.4.3: by every year $`t`$, the child may have
+started only if its parent started at least $`L_c`$ years earlier. Each row's code name is its label
+with the indices filled in: `must_P097`, `after_P012_2035`, `region_Coast_2031`,
+`crews_transmission_2029`.
+
+## Every Rule GridCap's Data Carries Is a Named Row
+
+The model has exactly the rules the snapshot has data for. Section 6 taught more forms (carry-over
+budgets in 6.4.4, piecewise costs in 6.6.1 to 6.6.3, symmetry rows in 6.7.3), and each needs data
+GridCap's export does not carry: a carry-over rate, a cost curve, identical assets. A rule without its data
+would be a row with invented numbers, so CIPT Lite leaves them out and says so.
+
+`build` writes each row with its name and keeps a map from name to row, so that milestone 4 can
+switch rows off by name and milestone 6 can report them. The precedence rows, for instance:
+
+```python
+    for c in portfolio.projects:                                          # (after_{c,t}), cumulative form
+        if c.parent:
+            parent = by_id[c.parent]
+            for t in c.starts():
+                b.add(f"after_{c.project_id}_{t}",
+                      mathopt.LinearExpression()
+                      + mathopt.fast_sum(x[c.project_id, u] for u in c.starts() if u <= t)
+                      - mathopt.fast_sum(x[parent.project_id, s] for s in parent.starts()
+                                         if s <= t - c.parent_lag) <= 0)
+```
+
+The sum starts from an empty `mathopt.LinearExpression()`, because a parent with no start early
+enough gives an empty sum, which is the number 0, and a comparison of plain numbers is a Python
+`bool` that MathOpt refuses as a row. The three money and crew families share one pass over the
+start variables, so each project's spread cost is computed once and every rule about money uses
+the same expression (lesson 6.4.2):
+
+```python
+    for p in portfolio.projects:
+        for t in p.starts():
+            v = x[p.project_id, t]
+            for year, amount in p.spend(t).items():
+                spend[year] += amount * v
+                region[p.region, year] += amount * v
+                crews[p.program, year] += p.crew_months * v
+```
+
+`model_medium.py` counts what GridCap medium becomes:
+
+```text
+887 start variables, 543 rows: after 41, alt 18, budget 10, crews 30, floor 4, must 39, once 361, region 40
+```
+
+39 must and 361 once rows make one per project; 41 precedence rows come from 18 children, one per
+start year each child has; 30 crew rows are three programs over ten years, and 40 regional rows are
+four regions over ten years.
+
+## A Run Stops at a Stated Gap, and Its Plan Is Checked Without the Model
+
+How long to let HiGHS search is a decision, and CIPT Lite states it once, as its **run setting**:
+a relative gap of 0.1% and one thread.
+
+```python
+def params(gap: float = 0.0, **common) -> mathopt.SolveParameters:
+    """HiGHS on one thread, with the given relative gap and any common parameter (node_limit, ...)."""
+    return mathopt.SolveParameters(relative_gap_tolerance=gap, highs=HIGHS, **common)
+```
+
+`HIGHS` sets `threads` to 1 in HiGHS's own options, because HiGHS through MathOpt refuses the common
+`threads` parameter and fixes its count at the first solve of a process (lesson 10.2.2). One thread
+is what lets milestone 5 promise the same plan on every run. The gap is the stopping rule of lesson
+3.4.2: stop once the plan is proved within 0.1% of the best possible. Here is the run, and the same
+model solved to a zero gap for comparison:
+
+```text
+run setting (gap 0.1%): OPTIMAL, NPV 219,054, bound 219,273, gap 0.1000%, 791 nodes, 209 projects
+NPV recomputed from the data: 219,054; rules broken: []
+zero gap (reference):   OPTIMAL, NPV 219,208, 26,516 nodes
+run within 0.1% of the reference: True (0.0703% below it)
+```
+
+`OPTIMAL` under a gap means "proved within the gap", not "the best plan" (lesson 3.4.3). The run
+setting's plan is $154k below the plan the zero-gap solve finds, and the zero-gap solve searched
+26,516 nodes against 791 to prove that last 0.07%. On a $219,000k portfolio whose inputs are
+forecasts, CIPT Lite takes the 0.1% and reports the bound beside the plan. So "the objective equals
+the reference within tolerance" has a precise meaning in this milestone: the run's NPV is at least
+the reference times $`(1 - 0.001)`$.
+
+The second line is the other half of trust. `check` reads only the snapshot, the scenario and the
+plan, and recomputes every rule from the data:
+
+```python
+def check(portfolio: Portfolio, scenario: Scenario, plan: dict[str, int]) -> list[str]:
+    """Every rule the plan breaks, by row name, computed from the data alone (no model, no solver)."""
+```
+
+It returns the names of the rows the plan breaks, in the model's own names. A wrong row in `build`
+cannot approve its own plan, because `check` never looks at the rows (lesson 12.3.2). Every
+milestone from here on runs `check` on every plan it reports, and the service of milestone 6 refuses
+to return a plan that fails it.
+
+<!-- practice 1 -->
+
+## Hand-Built Plans Test Each Rule From Both Sides
+
+A solve tests the model at one point: the plan it returned. Lesson 12.3.1 showed that a rule can be
+wrong and still leave that plan unchanged, so the model needs testing on plans chosen by hand. `allows`
+fixes every start variable by its bounds (1 for each start in the plan, 0 for every other) and asks
+HiGHS whether the fixed model is feasible. A start the model has no variable for is refused before
+any solve. `model_medium.py` starts from the solver's plan and changes it so that one rule breaks
+(the fewest rows it can, searched from the data), then asks both the model and the checker:
+
+```text
+the solver's plan                            model: allowed  checker: no rule broken
+P024 (must-do) left out                      model: refused  checker: must_P024
+P012 kept, its parent P011 left out          model: refused  checker: after_P012_2035
+P003 added beside its alternative            model: refused  checker: alt_G002, crews_distribution_2027
+P004 ($590k) added in 2035                   model: refused  checker: budget_2035
+P004 (1 crew-months) added in 2036           model: refused  checker: crews_distribution_2036
+```
+
+Read the table from both sides. The first row is the **allowed** side: a valid plan must pass, or a
+rule is too strict, which no check of the solver's own plans can reveal. The other rows are the
+**refused** side, each naming the rule it targets. A row made stricter still refuses every plan
+built to break it, so the refused side cannot catch a rule that is too strict. P003's row breaks
+two rules: of all the additions of one alternative in one start year that the program tried, none
+broke the alternative row alone, and this one, which also needs a distribution crew-month the plan
+has already used in 2027, was the best it found. The test is still sound: the model refuses, and
+the checker names the rule the row was built to break.
+
+The model and the checker agree on all six. They are two implementations of the same rules,
+written from the formulation independently, so their agreement on plans built to break each rule is
+the evidence that both are right. When they disagree, one of them has a bug, and the plan in that
+row is the smallest case to debug.
+
+<!-- practice 2 -->
+
+## Summary
+
+- **Every rule GridCap's data carries is a named row.** Once, must, force, alternatives,
+  cumulative precedence, yearly, regional and crew limits, and regional floors: 887 variables and
+  543 rows on GridCap medium, each row named by its label.
+- **A run stops at a stated gap, and its plan is checked without the model.** One thread and a 0.1%
+  gap: $219,054k proved within 0.1%, $154k below the zero-gap plan. `check` recomputes every rule
+  from the data and found nothing broken.
+- **Hand-built plans test each rule from both sides.** The solver's plan must be allowed; plans
+  built to break one rule must be refused; the model and the checker agree on all of them.
+
+## Reference
+
+| Row | Code name | Lesson |
+| --- | --- | --- |
+| at most once / exactly once | `once_P001`, `must_P024` | 6.4.1, 6.5.1 |
+| forced in / fixed / out | `force_P032`; bounds | 6.5.6 |
+| alternatives | `alt_G002` | 6.5.3 |
+| precedence with lag, cumulative | `after_P012_2035` | 6.4.3, 6.5.4 |
+| yearly, regional, crew limits | `budget_2029`, `region_Coast_2031`, `crews_transmission_2029` | 6.4.2, 6.5.5 |
+| regional floor | `floor_Ridge` | 6.5.5 |
+
+| Function | Does |
+| --- | --- |
+| `build(portfolio, scenario)` | the model, `rules` name to row, `npv` expression |
+| `params(gap, **common)` | HiGHS, one thread, the gap |
+| `solve(model, params, model_params)` | HiGHS with stray output kept off (lesson 4.2.1) |
+| `check(portfolio, scenario, plan)` | broken row names, from the data |
+| `allows(built, plan)` | the fixed plan's feasibility, asked of HiGHS |
+
+**Further reading:** [OR-Tools: MathOpt](https://developers.google.com/optimization/math_opt) (one model, several solvers including HiGHS; solver-independent parameters); [OR-Tools: solving a MIP problem](https://developers.google.com/optimization/mip/mip_example) (an integer solution set beside the LP relaxation's); [HiGHS options](https://ergo-code.github.io/HiGHS/dev/options/definitions/) (`threads`, `mip_rel_gap` with its default of 0.0001, `random_seed`).
+
+## Challenges
+
+1. Add the carry-over budget of lesson 6.4.4 with a rate of 50%. Which data must the snapshot gain,
+   which rows change, and which hand-built plan would show the new rule from its allowed side?
+2. P003's hand-built plan broke two rules. Build a plan by hand that breaks `alt_G002` alone. What
+   did you have to drop to make room?
+3. The run's plan and the reference plan both pass `check`. Which of them should the service report,
+   and what must it print beside it?
+
+## Design Note: Two Implementations of One Formulation
+
+`build` and `check` are written from the same formulation and share no code. That duplication is
+deliberate. A test that solves the model and checks the plan with the model's own rows can only
+confirm the model agrees with itself. A checker that recomputes spend, crews and precedence from
+the data is a second reading of the formulation, and the hand-built plans are where the two readings
+meet. The cost is keeping both in step when a rule changes; the formulation block is the contract
+both follow.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson
+shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy
+of the code, so the course's own files never change.
+
+**model_medium.py.** Builds GridCap medium, counts its rows, solves it with the run setting and to
+a zero gap, and puts hand-built plans to the model and the checker (every section). *Try:* Change
+the run's gap to 0.5%. Predict whether the plan still breaks no rule, and how far from the reference
+its NPV lands.
+
+- Program: [model_medium.py](src/model_medium.py)
+
+The milestone's library is `cipt_model.py`.
+
+- Library: [cipt_model.py](src/cipt_model.py)

@@ -1,0 +1,83 @@
+{
+  "project_api": 1,
+  "title": "Pay for substation outages and limit them per region",
+  "before": "../../../../56-project-transformer-renewal/steps/02",
+  "after": "../../../../56-project-transformer-renewal/steps/03",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the tiny fleet matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "renewal/model.py",
+      "signature": "def build(fleet: list[Transformer], request: Request) -> Built",
+      "contract": "As before, and when the request has outages (an outage_cost above 0 or an outages limit; Request.has_outages() answers it): one binary out[s, year] per candidate substation and plan year, named `out_<s>_<year>`; a row `outage_<s>_<year>` allowing replacements at s in that year only when out[s, year] is 1 (the sum of its candidates' x at most their count times out); when request.outages is set, a row `coord_<region>_<year>` for each region with candidate substations, keeping the region's outages within it; and request.outage_cost times each year's outages in that year's budget row. Built.out holds the outage variables, keyed by (substation, year), and is empty without outages.",
+      "idea": "A cost shared by several decisions gets its own binary, linked to the decisions that need it, and is paid from the budget row rather than scored in the objective.",
+      "lesson": {
+        "title": "14.3.3 Substation Bundles and Outage Coordination",
+        "href": "../../../../14-growing-real-projects/56-project-transformer-renewal/units/unit-03/14.3.3-substation-bundles-and-outage-coordination.unit.html"
+      }
+    },
+    {
+      "file": "renewal/report.py",
+      "signature": "def outages(fleet: list[Transformer], replace: dict[str, int]) -> set[tuple[str, int]]",
+      "contract": "The (substation, year) pairs a plan's replacements need: one per substation and year with at least one replacement.",
+      "idea": "An outage serves every replacement at its substation that year.",
+      "lesson": {
+        "title": "14.3.3 Substation Bundles and Outage Coordination",
+        "href": "../../../../14-growing-real-projects/56-project-transformer-renewal/units/unit-03/14.3.3-substation-bundles-and-outage-coordination.unit.html"
+      },
+      "stub": "return set()"
+    },
+    {
+      "file": "renewal/report.py",
+      "signature": "def spend_by_year(fleet: list[Transformer], replace: dict[str, int], outage_cost: int = 0) -> dict[int, int]",
+      "contract": "Each year's replacement cost plus outage_cost for each outage that year, $k, by year in order.",
+      "idea": "The report counts money the way the budget row does, each outage once.",
+      "lesson": {
+        "title": "14.3.3 Substation Bundles and Outage Coordination",
+        "href": "../../../../14-growing-real-projects/56-project-transformer-renewal/units/unit-03/14.3.3-substation-bundles-and-outage-coordination.unit.html"
+      }
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_outages.py::test_one_outage_serves_every_replacement_at_its_substation_that_year",
+      "main",
+      "one outage serves every replacement at its substation that year"
+    ],
+    [
+      "tests/test_outages.py::test_the_plan_bundles_replacements_at_one_substation",
+      "main",
+      "the plan bundles replacements at one substation to pay for one outage"
+    ],
+    [
+      "tests/test_outages.py::test_a_region_takes_a_limited_number_of_outages_a_year",
+      "edge",
+      "a region's outage limit holds even when outages cost nothing"
+    ],
+    [
+      "tests/test_outages.py::test_spend_counts_each_outage_once",
+      "main",
+      "the report's spend counts each outage once"
+    ]
+  ],
+  "plants": {
+    "tests/test_outages.py::test_a_region_takes_a_limited_number_of_outages_a_year": [
+      [
+        "renewal/request.py",
+        "        return self.outage_cost > 0 or self.outages is not None\n",
+        "        return self.outage_cost > 0\n"
+      ]
+    ]
+  },
+  "cites": {
+    "path": "56-project-transformer-renewal/README_14.3.3.md",
+    "section": null
+  }
+}

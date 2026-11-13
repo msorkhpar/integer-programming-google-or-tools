@@ -1,0 +1,428 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "10-numerics-and-determinism",
+    "41-determinism-and-reproducibility"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Where nondeterminism comes from: threads, time limits, ties",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "10.2.1 Where Nondeterminism Comes From: Threads, Time Limits, Ties"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's board asks a blunt question before the rate case: how many of the forty projects on the small portfolio can we start within the five yearly budgets? The planning team runs the model, gets 33, and sends the list. The next morning an analyst reruns the same code on the same data to attach the plan to the filing. The answer is still 33, but the list is different. Neither list breaks a rule; both fund 33 projects. Which one is the plan of record, and why did the same program give two?"
+    },
+    {
+      "type": "para",
+      "text": "Lesson 4.6.3 measured one part of this on CP-SAT, and lesson 7.1.3 locked a plan whose rerun matched while warning that a match is evidence, not a guarantee. This lesson names every source of a different answer, shows each with a program on the course's GridCap model, and gives each one a place to look. Lesson 10.2.2 then goes through the settings that control them, solver by solver; 10.2.3 deals with ties; 10.2.4 and 10.2.5 build the record and the test that catch a difference."
+    },
+    {
+      "type": "para",
+      "text": "GridCap is a fictional utility's portfolio; none of its numbers are real."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Run Repeats Only Relative to Everything It Read"
+    },
+    {
+      "type": "para",
+      "text": "A run is **deterministic** when solving the same inputs again gives the same outputs: the same status, the same objective, the same plan. The catch is in \"the same inputs\". A solve reads far more than the data file:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "the **data**, here the GridCap portfolio;",
+        "the **model as built**: which variables and rows exist, and also the order in which the code added them, because the solver receives them as numbered columns and rows;",
+        "the **solver and its version**;",
+        "the **parameters**: the seed, the thread count, the limits that stop the search, the tolerances that decide when a plan counts as optimal;",
+        "the **machine**: how many cores it has, and how busy it is while the solve runs."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Gurobi's own answer to \"is Gurobi deterministic?\" lists the same things: the same model, parameters, version and computer give the same result and the same path, and changing almost anything, down to the order of variables or constraints, can change it. That is true of every solver in this course. When a rerun differs, one of these inputs differed, and it is usually one of three: **threads** that race, a **clock** that stops the search, or **ties** between plans that are equally good, where any small change picks a different winner. The rest of the lesson shows each."
+    },
+    {
+      "type": "para",
+      "text": "To see a difference you have to look for it the right way. The programs of this lesson run every solve in a **fresh Python process** and compare the results field by field. A fresh process matters for two reasons this lesson and the next show: Python gives each process its own hash salt, and HiGHS fixes its thread count at the first solve of a process (lesson 4.2.4). Rerunning inside one process can hide both. `repeat.py` starts each run as a child process with its own `PYTHONHASHSEED` (the variable that sets Python's hash salt; more on it below):"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def child_env(seed: str) -> dict:\n    \"\"\"The environment of a child run: its own hash seed, and this module and GridCap importable.\"\"\"\n    return {**os.environ, \"PYTHONHASHSEED\": seed, \"PYTHONPATH\": PATH}\n\n\ndef repeat(config: dict, runs: int) -> list[dict]:\n    \"\"\"The run records of `runs` fresh processes solving `config`.\"\"\"\n    records = []\n    for k in range(runs):\n        env = child_env(str(k + 1))\n        done = subprocess.run([sys.executable, str(HERE / \"solve_once.py\"), json.dumps(config)],\n                              env=env, capture_output=True, text=True, check=True)\n        records.append(json.loads(done.stdout))\n    return records"
+    },
+    {
+      "type": "para",
+      "text": "Each child, `solve_once.py`, builds the model a config describes, solves it, and prints a record of the run as one line of JSON (lesson 10.2.4 calls this record a run manifest). `summary` then prints each field's value if all runs agreed, and `differs` if they did not:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def summary(label: str, records: list[dict], paths: list[str]) -> None:\n    \"\"\"One line per field: its value if every run gave the same one, `differs` if not.\"\"\"\n    print(f\"{label} ({len(records)} runs)\")\n    for path in paths:\n        values = {json.dumps(field(r, path), sort_keys=True) for r in records}\n        print(f\"  {path:<34} {shown(field(records[0], path)) if len(values) == 1 else 'differs'}\")"
+    },
+    {
+      "type": "para",
+      "text": "The plan is compared through `plan_digest`, a fingerprint: the first 12 hex digits of the SHA-256 hash of the plan's sorted (project, start year) pairs, so equal digests mean equal plans."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "Every program of this module solves the multi-period timing model of lesson 6.4.1, built by `plan_model.build` (MathOpt) and `plan_model.build_cpsat` (CP-SAT). It can answer two questions, which differ only in the objective's coefficients $`w_{i,t}`$: \"the most NPV\" (the question of sections 6 and 7) and \"the most projects\", the board's question above."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`P`$ the projects; $`Y`$ the plan's years; $`T_i \\subseteq Y`$ the start years project $`i`$ may use; $`M \\subseteq P`$ the must-do projects; $`\\mathcal{G}`$ the alternative groups, each a set of projects; $`C \\subseteq P`$ the child projects, with parent $`p(c)`$ and lag $`L_c`$ years."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`\\text{npv}_{i,t}`$, the NPV of project $`i`$ started in year $`t`$ ($k); $`c_{i,\\tau}`$, what project $`i`$ spends in its $`\\tau`$-th year of work ($k); $`B_y`$, the budget of year $`y`$ ($k); and the objective weight $`w_{i,t}`$, equal to $`\\text{npv}_{i,t}`$ for the NPV question and to 1 for the count question."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_{i,t} \\in \\{0, 1\\}`$ for every $`i \\in P`$ and $`t \\in T_i`$: project $`i`$ starts in year $`t`$."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{i \\in P} \\sum_{t \\in T_i} w_{i,t}\\, x_{i,t}"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{t \\in T_i} x_{i,t} &\\le 1 && \\forall i \\in P \\setminus M && \\text{(once}_i) \\\\\n\\sum_{t \\in T_i} x_{i,t} &= 1 && \\forall i \\in M && \\text{(must}_i) \\\\\n\\sum_{i \\in g} \\sum_{t \\in T_i} x_{i,t} &\\le 1 && \\forall g \\in \\mathcal{G} && \\text{(alt}_g) \\\\\n\\sum_{u \\in T_c,\\, u \\le t} x_{c,u} &\\le \\sum_{s \\in T_{p(c)},\\, s \\le t - L_c} x_{p(c),s} && \\forall c \\in C,\\ t \\in T_c && \\text{(after}_{c,t}) \\\\\n\\sum_{i \\in P} \\sum_{t \\in T_i,\\, t \\le y} c_{i,\\,y-t}\\, x_{i,t} &\\le B_y && \\forall y \\in Y && \\text{(budget}_y)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The code names the rows `once_P017`, `must_P002`, `alt_G001`, `after_P023_2029` and `budget_2029`. The weight is one function, so both questions share every row:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def weight(project, start: int, objective: str) -> int:\n    \"\"\"The objective coefficient of x[i, t]: its NPV in $k, or 1 for every start when counting.\"\"\"\n    if objective == \"npv\":\n        return project.npv[start]\n    if objective == \"count\":\n        return 1\n    raise ValueError(objective)"
+    },
+    {
+      "type": "para",
+      "text": "One more argument matters in this module: `order`, the order in which `build` adds the projects' columns and rows. Any order gives the same set of rows, so the same feasible plans and the same optimum; whether it gives the same *plan* is the subject of the last section."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Parallel Workers Race, So the Plan Can Change Between Runs"
+    },
+    {
+      "type": "para",
+      "text": "A solver with several threads splits its work between them. CP-SAT runs a portfolio of different searches at once (lesson 4.6.1), and they pass plans and bounds to one another as they find them. How fast each thread runs is decided by the operating system, not by the solver, so which search finds which plan first, and what the others then build on, changes from run to run. Four workers, the same seed, and a deterministic limit of 2 (a limit on CP-SAT's own count of work, which lesson 4.6.3 introduced), on GridCap medium:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "CP-SAT, 4 workers, seed 7, deterministic limit 2, GridCap medium (5 runs)\n  result.status                      FEASIBLE\n  result.objective                   differs\n  result.plan_digest                 differs"
+    },
+    {
+      "type": "para",
+      "text": "All five runs stopped at the limit with a feasible plan, and the plans they stopped with differ in value. Nothing in the inputs changed between the runs; only the timing of four threads did. Lesson 4.6.3 found the same with eight workers and showed the two ways out (one worker, or interleaved search); lesson 10.2.2 shows what HiGHS and Gurobi do with threads."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Clock Limit Stops the Search Wherever the Clock Says"
+    },
+    {
+      "type": "para",
+      "text": "A **time limit** stops the search when a given number of seconds has passed on the clock. The search is the same sequence of steps each time, but how many steps fit in 3 seconds depends on how busy the machine is. HiGHS on GridCap medium, which it cannot prove optimal in a few seconds, stopped by a 3-second limit and then by a limit of 300 branch-and-bound nodes:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "HiGHS, time limit 3 s, GridCap medium (3 runs)\n  result.status                      FEASIBLE\n  result.stats.simplex_iterations    differs\nHiGHS, node limit 300, GridCap medium (3 runs)\n  result.status                      FEASIBLE\n  result.objective                   226,748\n  result.plan_digest                 2faf0a36247a\n  result.stats.simplex_iterations    57,269\n  result.stats.nodes                 300"
+    },
+    {
+      "type": "para",
+      "text": "Under the clock the number of simplex iterations (the LP solver's steps) differs from run to run: each run stopped at a different point of the same path. Whether the plan differs too depends on whether a better plan turned up between those stopping points, so the program prints only the two fields above. While this lesson was written, some runs of it returned one plan three times and others returned different plans; nothing about a clock limit makes either outcome reliable. Under the node limit, a count of work rather than of seconds, every number repeats, iterations included. A **work limit** of this kind stops at the same point on every run, so it is the limit to use when a run must repeat; a time limit is the one to use when a planner is waiting (lesson 3.4.2 compares the stopping rules)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "When Plans Tie, Input Order Picks the Winner"
+    },
+    {
+      "type": "para",
+      "text": "The board's question has many answers. Counting projects gives every start the same weight, 1, so any two plans that fund 33 projects are equally good, and the solver may return any of them. Lesson 10.2.3 counts them; here the question is which one comes back."
+    },
+    {
+      "type": "para",
+      "text": "Suppose the code collects the project ids in a Python `set` before building the model, a common habit (a set removes duplicates). A set's iteration order depends on the hashes of its items, and Python **salts** the hashes of strings: each process mixes a random value into `hash()` of every `str` and `bytes`, so the hash of the same string is the same within one process but different in the next. The salt is set by the environment variable `PYTHONHASHSEED`: unset or `random` means a new salt per process; an integer fixes it; `0` turns the salting off. Two fixed seeds stand in for two ordinary runs:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "PYTHONHASHSEED=1\n  hash('P017') = 2484719976365774587\n  list(set(ids))[:5] = ['P002', 'P028', 'P032', 'P010', 'P020']\n  sorted(set(ids))[:5] = ['P001', 'P002', 'P003', 'P004', 'P005']\n  sha256('P017')[:12] = b61214da6d3c\nPYTHONHASHSEED=2\n  hash('P017') = 2902032399187268530\n  list(set(ids))[:5] = ['P016', 'P040', 'P034', 'P027', 'P003']\n  sorted(set(ids))[:5] = ['P001', 'P002', 'P003', 'P004', 'P005']\n  sha256('P017')[:12] = b61214da6d3c\nhash('P017') in 5 processes with a random salt: 5 different values"
+    },
+    {
+      "type": "para",
+      "text": "`hash()` and the set's order change with the salt; `sorted()` and a SHA-256 digest from `hashlib` do not, because they depend only on the characters. With the default random salt, five processes gave five different hashes for the same string."
+    },
+    {
+      "type": "para",
+      "text": "`solve_once.py` has an `order` option that builds the model from such a set:"
+    },
+    {
+      "type": "example",
+      "id": "solve_once-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "41-determinism-and-reproducibility/src/solve_once.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "41-determinism-and-reproducibility/src/solve_once.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "    order = list(set(portfolio.project_ids)) if config.get(\"order\") == \"set\" else None"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The count question, solved four times with the projects in the portfolio's order and four times in a set's order, on HiGHS (with a zero gap tolerance, so each run proves its plan optimal) and on CP-SAT (one worker, a fixed seed):"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "highs, most projects, projects in given order, GridCap small (4 runs)\n  result.status                      OPTIMAL\n  result.objective                   33\n  result.plan_digest                 e47f42d78207\nhighs, most projects, projects in set order, GridCap small (4 runs)\n  result.status                      OPTIMAL\n  result.objective                   33\n  result.plan_digest                 differs\ncpsat, most projects, projects in given order, GridCap small (4 runs)\n  result.status                      OPTIMAL\n  result.objective                   33\n  result.plan_digest                 7485409b35c7\ncpsat, most projects, projects in set order, GridCap small (4 runs)\n  result.status                      OPTIMAL\n  result.objective                   33\n  result.plan_digest                 differs"
+    },
+    {
+      "type": "para",
+      "text": "Every run proves 33 optimal. With the projects in a fixed order, each solver returns the same plan every time, and with them in a set's order it does not, on either solver. The rows are the same in every run; only their order changed, and the order was enough to pick another of the tied plans. This is the morning analyst's story: two processes, two salts, two orders, two lists of 33."
+    },
+    {
+      "type": "para",
+      "text": "Two more facts in that output matter. HiGHS and CP-SAT, each perfectly repeatable in the given order, return *different* plans from each other (`e47f42d78207` and `7485409b35c7`): a change of solver is a change of inputs too. And the NPV question, built in a set's order the same way, gives one plan in every run:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "highs, highest NPV, projects in set order, GridCap small (4 runs)\n  result.status                      OPTIMAL\n  result.objective                   24,260\n  result.plan_digest                 092777a3fdd1"
+    },
+    {
+      "type": "para",
+      "text": "On GridCap small that question has a single best plan, so there is nothing for the order to pick between. Ties are a property of the question and the data, not of the solver."
+    },
+    {
+      "type": "para",
+      "text": "So a set in model-building code is harmless when the model has one optimal plan and a source of irreproducible plans when it has several. The fix is cheap: build from a sorted or otherwise fixed order, never from a set's iteration order or from `hash()`. Gurobi's determinism article names Python sets as a cause of exactly this."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**A run repeats only relative to everything it read.** Data, the model's build order, the solver and its version, the parameters and the machine are all inputs. Compare reruns in fresh processes.",
+        "**Parallel workers race, so the plan can change between runs.** Four CP-SAT workers under a deterministic limit did not give one plan in five runs.",
+        "**A clock limit stops the search wherever the clock says.** A time limit stopped HiGHS at a different iteration each run; a node limit repeated every number.",
+        "**When plans tie, input order picks the winner.** Python salts string hashes per process, so a model built from a set's order returned a different one of the tied optimal plans in each process."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Source of a different answer",
+        "Shows up as",
+        "Where it is controlled"
+      ],
+      "rows": [
+        [
+          "threads racing",
+          "plan, objective, bound differ under the same limit",
+          "10.2.2 (workers, interleaving, fixed thread count)"
+        ],
+        [
+          "a clock limit",
+          "iterations, nodes, then plan differ",
+          "10.2.2 (work limits: deterministic time, nodes, Gurobi `WorkLimit`)"
+        ],
+        [
+          "ties with a changed input (order, seed, solver, version)",
+          "same objective, different plan",
+          "10.2.3 (tie-breaking), 10.2.4 (record the inputs)"
+        ],
+        [
+          "Python's hash salt",
+          "a set's order and `hash()` differ per process",
+          "build from sorted ids; digest with `hashlib`"
+        ],
+        [
+          "the solver's tolerance",
+          "\"OPTIMAL\" plans whose values differ a little",
+          "10.2.3, and lesson 10.1.1 on tolerances"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Python",
+        "Behaviour"
+      ],
+      "rows": [
+        [
+          "`hash(s)` for `str`, `bytes`",
+          "salted per process unless `PYTHONHASHSEED` is a fixed integer"
+        ],
+        [
+          "`PYTHONHASHSEED`",
+          "unset or `random`: a random salt; an integer in [0, 4294967295]: fixed; `0`: no salting"
+        ],
+        [
+          "`set` iteration order",
+          "depends on the hashes, so on the salt; Python promises no order"
+        ],
+        [
+          "`sorted(...)`, `hashlib.sha256(...)`",
+          "the same in every process"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [CP-SAT parameters proto (OR-Tools)](https://github.com/google/or-tools/blob/stable/ortools/sat/sat_parameters.proto) (`num_workers` and the parallel portfolio, `max_deterministic_time` against `max_time_in_seconds`); [MathOpt `SolveParameters` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/parameters.py) (`time_limit`, `node_limit`, `random_seed`, `threads`); [HiGHS options](https://ergo-code.github.io/HiGHS/dev/options/definitions/) (`time_limit` in seconds, `mip_max_nodes`, `random_seed`, `threads`); [Is Gurobi deterministic? (Gurobi support)](https://support.gurobi.com/hc/en-us/articles/360031636051) (what must stay the same for a rerun to repeat, time limits as a cause, Python sets changing the order of variables and constraints); [Python data model, `object.__hash__`](https://docs.python.org/3/reference/datamodel.html#object.__hash__) (the note on salted `str` and `bytes` hashes and on set iteration order) and [`PYTHONHASHSEED`](https://docs.python.org/3/using/cmdline.html#envvar-PYTHONHASHSEED) (the values it takes)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "In `three_sources.py`, raise the HiGHS time limit from 3 to 20 seconds. Predict which fields of the time-limited runs can still differ, and whether the plan is now more or less likely to.",
+        "Run the count question with `order` set to `\"set\"` but `PYTHONHASHSEED=0` in every child. Predict whether the four plans agree, and say why that does not fix the bug for a production service.",
+        "A colleague says: \"Our model has a unique optimum, so building from a set is fine.\" What would you check before agreeing, and what change to the model could make them wrong next quarter?"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Compare Runs in Fresh Processes"
+    },
+    {
+      "type": "para",
+      "text": "A loop that solves the same model five times in one Python process hides two of the sources above: every solve shares one hash salt, so a set has the same order each time, and HiGHS keeps the thread count its first solve chose. The loop then reports \"repeatable\" for code that is not. Start every run you compare in its own process, with its own hash seed, as `repeat.py` does; lesson 10.2.5 builds the harness on that rule."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**three_sources.py.** Reruns one config several times for each source: CP-SAT's parallel workers, HiGHS under a time limit and under a node limit, and the count question built in a fixed order and in a set's order (*Parallel Workers Race*, *A Clock Limit Stops the Search*, *When Plans Tie*). *Try:* Change the CP-SAT config to one worker. Predict which lines change from `differs` to a value."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [three_sources.py](src/three_sources.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**hash_salt.py.** Prints `hash()`, a set's order, `sorted()` and a SHA-256 digest in processes with different hash seeds (*When Plans Tie, Input Order Picks the Winner*). *Try:* Add a line printing `hash(2027)`. Predict whether an integer's hash changes with the seed."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [hash_salt.py](src/hash_salt.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**solve_once.py** builds, solves and records one config in a fresh process; **repeat.py** runs it several times and prints what repeated; **plan_model.py** holds the model in MathOpt and CP-SAT; **manifest.py** writes records as canonical JSON."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [solve_once.py](src/solve_once.py)",
+        "Library: [repeat.py](src/repeat.py)",
+        "Library: [plan_model.py](src/plan_model.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 11,
+    "paras": 35,
+    "code": 10,
+    "tables": 2,
+    "lists": 6,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 1
+  },
+  "content_sha256": "60a87432eea2a906e5c2fdd3abc3f08b0eeeb256b88536367ed504cd0c1ef398"
+}

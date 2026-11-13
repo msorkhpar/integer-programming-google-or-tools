@@ -1,0 +1,145 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "49-cloud-deployment"
+  ],
+  "variant": "prose",
+  "unit": 5,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "A plan gate with counts and exceptions",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The vegetation team's Terraform puts its buckets inside a module and sometimes has to delete a scratch bucket on purpose. Their CI needs a gate that reports what a plan does and blocks only the deletes nobody approved."
+    },
+    {
+      "type": "para",
+      "text": "In `plan_gate.py`, write `gate(plan, protected, allowed=frozenset())`. `plan` is the JSON of `terraform show -json` (this lesson): a `resource_changes` list whose entries have an `address`, a `type`, a `mode` (`\"managed\"`, or `\"data\"` for a data source) and `change.actions`. Return a pair:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "the **sorted** addresses to block: every change whose `type` is in `protected`, whose actions delete it (a plain delete, or a replacement in either order), and whose address is not in `allowed`. A resource inside a module has an address such as `module.storage.aws_s3_bucket.runs`; its `type` is still `aws_s3_bucket`.",
+        "a dict counting the changes by verb, from `VERBS`: `[\"delete\", \"create\"]` and `[\"create\", \"delete\"]` are one `replace` each. Every change counts, data-source reads included. Verbs with no change are left out."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`VERBS` is given; about 8 lines remain."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom collections import Counter\n\nVERBS = {(\"no-op\",): \"no-op\", (\"create\",): \"create\", (\"read\",): \"read\", (\"update\",): \"update\",\n         (\"delete\",): \"delete\", (\"delete\", \"create\"): \"replace\", (\"create\", \"delete\"): \"replace\"}\n\n\ndef gate(plan: dict, protected: set[str], allowed: set[str] = frozenset()) -> tuple[list[str], dict[str, int]]:\n    \"\"\"(addresses blocked, sorted; count of changes by verb) for a `terraform show -json` plan.\"\"\"\n    blocked, counts = [], Counter()\n    for change in plan.get(\"resource_changes\", []):\n        actions = change[\"change\"][\"actions\"]\n        counts[VERBS[tuple(actions)]] += 1\n        if change[\"type\"] in protected and \"delete\" in actions and change[\"address\"] not in allowed:\n            blocked.append(change[\"address\"])\n    return sorted(blocked), dict(counts)\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom collections import Counter  # noqa: F401\n\nVERBS = {(\"no-op\",): \"no-op\", (\"create\",): \"create\", (\"read\",): \"read\", (\"update\",): \"update\",\n         (\"delete\",): \"delete\", (\"delete\", \"create\"): \"replace\", (\"create\", \"delete\"): \"replace\"}\n\n\ndef gate(plan: dict, protected: set[str], allowed: set[str] = frozenset()) -> tuple[list[str], dict[str, int]]:\n    \"\"\"(addresses blocked, sorted; count of changes by verb) for a `terraform show -json` plan.\"\"\"\n    # TODO: count each change's verb, and block deletes of protected types not in `allowed`.\n    return [], {}\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "ba70e0f63bd74910da7af96bd4ee46f4638a30afae51cb8d932b9df503bf749b",
+  "starting_code": "from __future__ import annotations\n\nfrom collections import Counter  # noqa: F401\n\nVERBS = {(\"no-op\",): \"no-op\", (\"create\",): \"create\", (\"read\",): \"read\", (\"update\",): \"update\",\n         (\"delete\",): \"delete\", (\"delete\", \"create\"): \"replace\", (\"create\", \"delete\"): \"replace\"}\n\n\ndef gate(plan: dict, protected: set[str], allowed: set[str] = frozenset()) -> tuple[list[str], dict[str, int]]:\n    \"\"\"(addresses blocked, sorted; count of changes by verb) for a `terraform show -json` plan.\"\"\"\n    # TODO: count each change's verb, and block deletes of protected types not in `allowed`.\n    return [], {}\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-05/practice-2/plan_gate.py",
+    "test_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-05/practice-2/test_plan_gate.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-05/practice-2/plan_gate.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-05/practice-2/target/report.xml",
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-05/practice-2/test_plan_gate.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_plan_is_counted_and_a_protected_delete_blocked",
+        "kind": "main",
+        "says": "each change is counted by its verb, and the delete of a protected type is blocked"
+      },
+      {
+        "id": "test_a_replacement_is_one_change_and_blocked_in_either_order",
+        "kind": "edge",
+        "says": "a replacement counts once, and is blocked whether it destroys first or creates first"
+      },
+      {
+        "id": "test_a_protected_resource_inside_a_module_is_still_protected",
+        "kind": "edge",
+        "says": "a protected resource is recognised by its type, also inside a module"
+      },
+      {
+        "id": "test_an_allowed_address_may_be_deleted",
+        "kind": "edge",
+        "says": "an address on the allowed list may be deleted; others of its type may not"
+      },
+      {
+        "id": "test_unprotected_deletes_pass_and_data_reads_are_counted",
+        "kind": "edge",
+        "says": "deleting an unprotected type passes, and a data source read is counted as a read"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-05/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "49-cloud-deployment/README_12.5.5.md",
+      "section": "A Plan Is Data: Stop the Ones That Destroy History"
+    },
+    "concepts": [
+      "plan to a file, read it as JSON, apply that file",
+      "blocking plans that delete resources holding history"
+    ]
+  }
+}

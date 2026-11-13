@@ -1,0 +1,149 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "47-testing-optimization-code"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Ask a hospital's model about several plans",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A hospital plans its equipment renewals with a small model, and its engineers want unit tests of the form \"this plan must be allowed, that one refused\". They need one helper first: `verdicts(model, x, plans)`, which says, for each plan in a list, whether the model accepts it."
+    },
+    {
+      "type": "para",
+      "text": "The model the tests build, for projects $`i`$ with start windows $`T_i`$ and a cost $`c_i`$ paid in the start year:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& x_{i,t} \\in \\{0,1\\} \\ \\ \\forall i,\\ t \\in T_i, \\qquad 0 \\le o_t \\le 30 \\ \\ \\forall t \\in \\{2027, 2028\\} \\\\\n& \\sum_{t \\in T_i} x_{i,t} \\le 1 && \\forall i && \\text{(once}_i) \\\\\n& x_{\\text{boiler},2027} = 1 && && \\text{(must\\_boiler)} \\\\\n& \\sum_{i:\\, t \\in T_i} c_i\\, x_{i,t} \\le 80 + o_t && \\forall t && \\text{(budget}_t)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "$`o_t`$ is overtime spending, which the hospital may use when a year runs over. It has no objective; any plan that meets the rows is acceptable."
+    },
+    {
+      "type": "para",
+      "text": "Write `verdicts(model, x, plans)`. `x` maps each `(project, year)` to its start variable, and each plan maps each started project to its start year; every project not in a plan is not started. Return one answer per plan, in order: `True` when the model accepts exactly that plan, `False` when it refuses it. A plan that starts a project in a year the project has no variable for is refused. Solve with HiGHS through MathOpt."
+    },
+    {
+      "type": "para",
+      "text": "The engineers share one model between many questions, and a planner may already have fixed a start by its bounds (an override). While a plan is being asked, the plan alone decides every start: fix each start variable to 1 or 0 as the plan says, replacing whatever bounds it had, an override's included. When `verdicts` returns, put the bounds back, so every start variable has the bounds it had when the function was called. About twelve lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef verdicts(model: mathopt.Model, x: dict[tuple[str, int], mathopt.Variable], plans: list[dict[str, int]]) -> list[bool]:\n    \"\"\"For each plan (project -> start year), does `model` accept it? Every bound is left as found.\"\"\"\n    found = {key: (var.lower_bound, var.upper_bound) for key, var in x.items()}\n    answers = []\n    for plan in plans:\n        if any((name, year) not in x for name, year in plan.items()):\n            answers.append(False)\n            continue\n        for (name, year), var in x.items():\n            var.lower_bound = var.upper_bound = 1.0 if plan.get(name) == year else 0.0\n        result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n        answers.append(result.termination.reason == mathopt.TerminationReason.OPTIMAL)\n    for key, (low, high) in found.items():\n        x[key].lower_bound, x[key].upper_bound = low, high\n    return answers\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = {(\"boiler\", 2027): model.add_binary_variable(name=\"x_boiler_2027\")}\n    model.add_linear_constraint(x[\"boiler\", 2027] == 1, name=\"must_boiler\")\n    print(verdicts(model, x, [{\"boiler\": 2027}, {}]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef verdicts(model: mathopt.Model, x: dict[tuple[str, int], mathopt.Variable], plans: list[dict[str, int]]) -> list[bool]:\n    \"\"\"For each plan (project -> start year), does `model` accept it? Every bound is left as found.\"\"\"\n    # TODO: fix each plan into the model, solve, read the answer, and leave the model as found.\n    return [True for plan in plans]\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = {(\"boiler\", 2027): model.add_binary_variable(name=\"x_boiler_2027\")}\n    model.add_linear_constraint(x[\"boiler\", 2027] == 1, name=\"must_boiler\")\n    print(verdicts(model, x, [{\"boiler\": 2027}, {}]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "351197b7dfcff448c20916d82eddae2fac8cceff6766832d5597a161575f14ea",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef verdicts(model: mathopt.Model, x: dict[tuple[str, int], mathopt.Variable], plans: list[dict[str, int]]) -> list[bool]:\n    \"\"\"For each plan (project -> start year), does `model` accept it? Every bound is left as found.\"\"\"\n    # TODO: fix each plan into the model, solve, read the answer, and leave the model as found.\n    return [True for plan in plans]\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = {(\"boiler\", 2027): model.add_binary_variable(name=\"x_boiler_2027\")}\n    model.add_linear_constraint(x[\"boiler\", 2027] == 1, name=\"must_boiler\")\n    print(verdicts(model, x, [{\"boiler\": 2027}, {}]))\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-01/practice-1/verdict.py",
+    "test_path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-01/practice-1/test_verdict.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-01/practice-1/verdict.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-01/practice-1/target/report.xml",
+      "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-01/practice-1/test_verdict.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_plan_within_the_money_is_allowed_and_one_over_it_refused",
+        "kind": "main",
+        "says": "a plan whose yearly cost fits the budget is allowed, and one that needs more than budget and overtime together is refused"
+      },
+      {
+        "id": "test_a_plan_without_the_must_do_is_refused",
+        "kind": "edge",
+        "says": "a plan that leaves out the must-do is refused, because nothing the plan does not start may be started for it"
+      },
+      {
+        "id": "test_overtime_stays_the_models_to_choose",
+        "kind": "edge",
+        "says": "a plan that fits only with overtime is allowed, because overtime is not a start decision"
+      },
+      {
+        "id": "test_a_start_outside_the_window_is_refused",
+        "kind": "edge",
+        "says": "a plan that starts a project in a year it has no variable for is refused, not read as some other plan"
+      },
+      {
+        "id": "test_the_model_is_left_as_it_was_found",
+        "kind": "edge",
+        "says": "a start already fixed by a planner's override keeps its bounds afterwards, not the 0-to-1 bounds of an unfixed start"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "47-testing-optimization-code/README_12.3.1.md",
+      "section": "Fix the Plan, Then Ask the Solver: Allowed or Refused"
+    },
+    "concepts": [
+      "a unit test fixes every start decision by its bounds, leaves helper variables free, and reads the termination reason"
+    ]
+  }
+}

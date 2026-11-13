@@ -1,0 +1,42 @@
+{
+  "Comment": "One GridCap solve run: the solve on Batch, and a failed result written if the job itself fails.",
+  "StartAt": "Solve",
+  "States": {
+    "Solve": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::batch:submitJob.sync",
+      "Parameters": {
+        "JobName.$": "$.run_id",
+        "JobQueue": "gridcap-solves",
+        "JobDefinition": "gridcap-solve",
+        "ContainerOverrides": {
+          "Environment": [
+            {"Name": "RUN_ID", "Value.$": "$.run_id"},
+            {"Name": "SNAPSHOT_DIGEST", "Value.$": "$.snapshot_digest"},
+            {"Name": "TIME_LIMIT_S", "Value.$": "$.time_limit_s"}
+          ]
+        }
+      },
+      "ResultPath": "$.batch",
+      "Catch": [
+        {"ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "RecordFailure"}
+      ],
+      "Next": "Solved"
+    },
+    "RecordFailure": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "gridcap-record-failure",
+        "Payload.$": "$"
+      },
+      "Retry": [
+        {"ErrorEquals": ["Lambda.ServiceException", "Lambda.SdkClientException"], "IntervalSeconds": 2,
+         "MaxAttempts": 3, "BackoffRate": 2.0}
+      ],
+      "Next": "Failed"
+    },
+    "Solved": {"Type": "Succeed"},
+    "Failed": {"Type": "Fail", "Error": "SolveJobFailed", "Cause": "the Batch job failed; a failed result was written"}
+  }
+}

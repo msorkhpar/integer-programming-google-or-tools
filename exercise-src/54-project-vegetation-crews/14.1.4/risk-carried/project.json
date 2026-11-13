@@ -1,0 +1,112 @@
+{
+  "project_api": 1,
+  "title": "Order the work by the risk each circuit carries",
+  "before": "../../../../54-project-vegetation-crews/steps/03",
+  "after": "../../../../54-project-vegetation-crews/steps/04",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the tiny season matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "vegcrew/planner.py",
+      "signature": "def build(season: Season) -> TrimModel",
+      "contract": "As before, and also: per circuit a literal `t_<cid>` (one crew or none) and an end week, from the circuit's weeks to the horizon when trimmed (start plus weeks on its crew) and horizon + DEFER_WEEKS when it waits for next season; the risk it carries is Circuit.carried(end), looked up in a table indexed by the end week; the objective is the summed risk carried, to minimize. Circuit.carried(end) is round(risk / 52 * end + growth * end * (end - 1) / 2). TrimModel loses its trimmed method and gains three dicts keyed by circuit id: `trimmed` (the literals t), `end` (the end weeks) and `carried` (the risk each carries), declared after `model`, `trimmed` first and `end` and `carried` after `work`. A circuit longer than the season gets no crew options; the reference still writes its end domain as Domain.from_intervals([[weeks, horizon], [horizon + DEFER_WEEKS, horizon + DEFER_WEEKS]]), and from_intervals drops the empty first piece, so the end can only be horizon + DEFER_WEEKS.",
+      "idea": "Risk carried is a table indexed by the week a trim ends, and an element constraint reads it.",
+      "lesson": {
+        "title": "4.5.3 Element, Table and Allowed-Assignment Constraints",
+        "href": "../../../../04-google-or-tools-in-depth/16-cpsat-scheduling/units/unit-03/4.5.3-element-table-and-allowed-assignment-constraints.unit.html"
+      }
+    },
+    {
+      "file": "vegcrew/planner.py",
+      "signature": "def make_plan(season: Season) -> Plan",
+      "contract": "As before, and the Plan's risk_carried is the objective value, rounded.",
+      "idea": "Once order matters, the objective is a sum over time, and a better plan may take longer to prove.",
+      "lesson": {
+        "title": "4.5.4 Scheduling Vegetation Crews Across Circuits",
+        "href": "../../../../04-google-or-tools-in-depth/16-cpsat-scheduling/units/unit-04/4.5.4-scheduling-vegetation-crews-across-circuits.unit.html"
+      }
+    },
+    {
+      "file": "vegcrew/data.py",
+      "signature": "def season_from_dict(raw: dict) -> Season",
+      "contract": "Also reads each circuit's growth ($k a week by which its weekly risk grows).",
+      "idea": "Read the columns the model needs now, and only those.",
+      "lesson": {
+        "title": "14.1.4 Risk Grows While a Circuit Waits: The Objective Changes",
+        "href": "../../../../14-growing-real-projects/54-project-vegetation-crews/units/unit-04/14.1.4-risk-grows-while-a-circuit-waits-the-objective-changes.unit.html"
+      }
+    },
+    {
+      "file": "vegcrew/generate.py",
+      "signature": "def scenario(size: str = \"small\", seed: int = 54) -> dict",
+      "contract": "Also gives each circuit its growth, round(risk / 52 * u, 2) with u drawn by uniform(0.02, 0.10) from its own stream named 'growth', one draw per circuit in order after the weeks.",
+      "idea": "A column drawn from its own stream leaves the values of every earlier column as they were.",
+      "lesson": {
+        "title": "14.1.4 Risk Grows While a Circuit Waits: The Objective Changes",
+        "href": "../../../../14-growing-real-projects/54-project-vegetation-crews/units/unit-04/14.1.4-risk-grows-while-a-circuit-waits-the-objective-changes.unit.html"
+      }
+    },
+    {
+      "file": "vegcrew/report.py",
+      "signature": "def format_plan(season: Season, plan: Plan) -> str",
+      "contract": "The status line ends `risk carried $<risk_carried>k` instead of the risk removed a year.",
+      "idea": "The report states the number the plan is chosen by.",
+      "lesson": {
+        "title": "14.1.4 Risk Grows While a Circuit Waits: The Objective Changes",
+        "href": "../../../../14-growing-real-projects/54-project-vegetation-crews/units/unit-04/14.1.4-risk-grows-while-a-circuit-waits-the-objective-changes.unit.html"
+      }
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_data.py::test_the_loader_ignores_columns_it_does_not_use",
+      "kept",
+      "the loader ignores columns it does not use"
+    ],
+    [
+      "tests/test_planner.py::test_the_plan_never_spends_more_than_the_budget",
+      "kept",
+      "the plan never spends more than the budget"
+    ],
+    [
+      "tests/test_planner.py::test_the_plan_matches_every_subset_and_order_of_the_tiny_season",
+      "main",
+      "the plan carries as little risk as the best subset and order of the tiny season"
+    ],
+    [
+      "tests/test_risk.py::test_the_fast_growing_circuit_goes_first",
+      "main",
+      "the circuit whose risk grows fast is trimmed first"
+    ],
+    [
+      "tests/test_risk.py::test_the_risk_carried_is_each_circuits_risk_until_its_trim_ends",
+      "main",
+      "the risk carried is each circuit's risk until its trim ends, or until next season"
+    ],
+    [
+      "tests/test_risk.py::test_waiting_risk_can_change_which_circuit_is_trimmed",
+      "edge",
+      "with room for one trim that fills the season, the circuit that grows fast is the one trimmed"
+    ]
+  ],
+  "plants": {
+    "tests/test_risk.py::test_waiting_risk_can_change_which_circuit_is_trimmed": [
+      [
+        "vegcrew/planner.py",
+        "options = crew_ids(season) if c.weeks <= h else []",
+        "options = crew_ids(season) if c.weeks < h else []"
+      ]
+    ]
+  },
+  "cites": {
+    "path": "54-project-vegetation-crews/README_14.1.4.md",
+    "section": null
+  }
+}

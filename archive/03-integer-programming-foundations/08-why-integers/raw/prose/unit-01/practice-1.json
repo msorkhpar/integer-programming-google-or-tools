@@ -1,0 +1,141 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "03-integer-programming-foundations",
+    "08-why-integers"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Name the rows a rounded plan breaks",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility rounds the LP relaxation of its main-replacement model and wants to know, before anyone reads the rounded plan, which of the model's rows it breaks. Each candidate is a `Project` with a cost and a value ($k), a `must_do` flag, an optional `parent` (the project it depends on) and an optional `group` (a set of alternatives, at most one of which may be funded)."
+    },
+    {
+      "type": "para",
+      "text": "Write `broken_rows(plan, projects, budget)` in `rows.py`. `plan` is the set of funded project ids. With $`P`$ the projects, $`M`$ the must-do ones, $`C`$ the ones with a parent $`p(c)`$, and $`\\mathcal{G}`$ the groups, the rows are:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{i \\in P} \\text{cost}_i\\, x_i &\\le B && && \\text{(budget)} \\\\\nx_i &= 1 && \\forall i \\in M && \\text{(must}_i) \\\\\nx_c &\\le x_{p(c)} && \\forall c \\in C && \\text{(parent}_c) \\\\\n\\sum_{i \\in g} x_i &\\le 1 && \\forall g \\in \\mathcal{G} && \\text{(alt}_g)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "where $`x_i`$ is 1 if $`i`$ is in `plan` and 0 otherwise. Return the set of labels of the rows the plan breaks: `\"budget\"`, `\"must_<pid>\"`, `\"parent_<pid>\"` (the child's id) and `\"alt_<group>\"`. An allowed plan returns an empty set."
+    },
+    {
+      "type": "para",
+      "text": "About a dozen lines: one check per row, in the model's order."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    must_do: bool = False\n    parent: str | None = None\n    group: str | None = None\n\n\ndef broken_rows(plan: set[str], projects: list[Project], budget: int) -> set[str]:\n    \"\"\"The labels of the rows a 0/1 plan breaks: budget, must_<pid>, parent_<pid>, alt_<group>.\"\"\"\n    broken = set()\n    if sum(p.cost for p in projects if p.pid in plan) > budget:\n        broken.add(\"budget\")\n    funded_in_group: dict[str, int] = {}\n    for p in projects:\n        if p.must_do and p.pid not in plan:\n            broken.add(f\"must_{p.pid}\")\n        if p.parent and p.pid in plan and p.parent not in plan:\n            broken.add(f\"parent_{p.pid}\")\n        if p.group and p.pid in plan:\n            funded_in_group[p.group] = funded_in_group.get(p.group, 0) + 1\n    broken |= {f\"alt_{g}\" for g, n in funded_in_group.items() if n > 1}\n    return broken\n\n\nif __name__ == \"__main__\":\n    mains = [Project(\"M1\", 40, 55, must_do=True), Project(\"M2\", 30, 42), Project(\"M3\", 30, 36, parent=\"M2\"),\n             Project(\"M4\", 20, 26, group=\"G1\"), Project(\"M5\", 15, 24, group=\"G1\")]\n    print(broken_rows({\"M1\", \"M2\", \"M3\", \"M4\", \"M5\"}, mains, 100))\n    print(broken_rows({\"M2\", \"M3\"}, mains, 100))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    must_do: bool = False\n    parent: str | None = None\n    group: str | None = None\n\n\ndef broken_rows(plan: set[str], projects: list[Project], budget: int) -> set[str]:\n    \"\"\"The labels of the rows a 0/1 plan breaks: budget, must_<pid>, parent_<pid>, alt_<group>.\"\"\"\n    # TODO: check each row of the model and collect the label of every row the plan breaks.\n    return set()\n\n\nif __name__ == \"__main__\":\n    mains = [Project(\"M1\", 40, 55, must_do=True), Project(\"M2\", 30, 42), Project(\"M3\", 30, 36, parent=\"M2\"),\n             Project(\"M4\", 20, 26, group=\"G1\"), Project(\"M5\", 15, 24, group=\"G1\")]\n    print(broken_rows({\"M1\", \"M2\", \"M3\", \"M4\", \"M5\"}, mains, 100))\n    print(broken_rows({\"M2\", \"M3\"}, mains, 100))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "13e3c7ae64561cb938cb6ad7fbf730762e636071dd3ef3291f62b44730aef6e4",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    must_do: bool = False\n    parent: str | None = None\n    group: str | None = None\n\n\ndef broken_rows(plan: set[str], projects: list[Project], budget: int) -> set[str]:\n    \"\"\"The labels of the rows a 0/1 plan breaks: budget, must_<pid>, parent_<pid>, alt_<group>.\"\"\"\n    # TODO: check each row of the model and collect the label of every row the plan breaks.\n    return set()\n\n\nif __name__ == \"__main__\":\n    mains = [Project(\"M1\", 40, 55, must_do=True), Project(\"M2\", 30, 42), Project(\"M3\", 30, 36, parent=\"M2\"),\n             Project(\"M4\", 20, 26, group=\"G1\"), Project(\"M5\", 15, 24, group=\"G1\")]\n    print(broken_rows({\"M1\", \"M2\", \"M3\", \"M4\", \"M5\"}, mains, 100))\n    print(broken_rows({\"M2\", \"M3\"}, mains, 100))\n",
+  "exercise": {
+    "main_path": "practice/03-integer-programming-foundations/08-why-integers/prose/unit-01/practice-1/rows.py",
+    "test_path": "practice/03-integer-programming-foundations/08-why-integers/prose/unit-01/practice-1/test_rows.py",
+    "run_command": [
+      "python3",
+      "practice/03-integer-programming-foundations/08-why-integers/prose/unit-01/practice-1/rows.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/03-integer-programming-foundations/08-why-integers/prose/unit-01/practice-1/target/report.xml",
+      "practice/03-integer-programming-foundations/08-why-integers/prose/unit-01/practice-1/test_rows.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_each_broken_row_is_named_by_its_label",
+        "kind": "main",
+        "says": "a plan that breaks the budget, a must-do, a parent or an alternative row gets that row's label"
+      },
+      {
+        "id": "test_a_plan_that_spends_the_budget_exactly_is_within_it",
+        "kind": "edge",
+        "says": "spending exactly the budget breaks nothing, since the row is at most"
+      },
+      {
+        "id": "test_a_parent_without_its_child_is_allowed_and_a_child_without_its_parent_is_not",
+        "kind": "edge",
+        "says": "the parent row is one-way: a parent alone is fine, a child alone is not"
+      },
+      {
+        "id": "test_one_project_of_an_alternative_group_is_allowed_and_two_are_not",
+        "kind": "edge",
+        "says": "an alternative group allows one funded project and refuses two"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/03-integer-programming-foundations/08-why-integers/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "08-why-integers/README_3.1.1.md",
+      "section": "Rounding Up, or to the Nearest Whole, Can Break the Budget"
+    },
+    "concepts": [
+      "a rounded plan is checked row by row, and each broken row is named by its label",
+      "the parent row is one-way and an alternative group allows one funded project"
+    ]
+  }
+}

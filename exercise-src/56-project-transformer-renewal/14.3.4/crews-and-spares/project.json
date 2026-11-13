@@ -1,0 +1,57 @@
+{
+  "project_api": 1,
+  "title": "Keep each region's crews and the spares in stock",
+  "before": "../../../../56-project-transformer-renewal/steps/03",
+  "after": "../../../../56-project-transformer-renewal/steps/04",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the tiny fleet matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "renewal/model.py",
+      "signature": "def build(fleet: list[Transformer], request: Request) -> Built",
+      "contract": "As before, plus: when request.crew_weeks is set, a row `crews_<region>_<year>` for each region with candidates, keeping the summed crew-weeks (KINDS[kind].crew_weeks) of its replacements that year within crew_weeks; when request.lead_times is set, a row `spares_<kind>` for each kind with candidates and plan years before FIRST_YEAR + KINDS[kind].lead_years, keeping the replacements of that kind in those years within request.spares.get(kind, 0).",
+      "idea": "Each resource is one more knapsack row over the same start-year variables; a lead time turns early replacements into draws on a stock.",
+      "lesson": {
+        "title": "14.3.4 Crews, Lead Times and Spare Units",
+        "href": "../../../../14-growing-real-projects/56-project-transformer-renewal/units/unit-04/14.3.4-crews-lead-times-and-spare-units.unit.html"
+      }
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_crews_and_spares.py::test_a_region_has_only_its_crew_weeks_each_year",
+      "main",
+      "a region has only its crew-weeks each year"
+    ],
+    [
+      "tests/test_crews_and_spares.py::test_short_crews_push_work_into_later_years",
+      "main",
+      "short crews push work into later years"
+    ],
+    [
+      "tests/test_crews_and_spares.py::test_a_unit_needed_before_its_lead_time_must_be_a_spare",
+      "edge",
+      "a unit needed before its lead time must be a spare, and no spares listed means none in stock"
+    ]
+  ],
+  "plants": {
+    "tests/test_crews_and_spares.py::test_a_unit_needed_before_its_lead_time_must_be_a_spare": [
+      [
+        "renewal/model.py",
+        "            if early:\n                model.add_linear_constraint(sum(early) <= request.spares.get(kind, 0), name=f\"spares_{kind}\")\n",
+        "            if early and kind in request.spares:\n                model.add_linear_constraint(sum(early) <= request.spares[kind], name=f\"spares_{kind}\")\n"
+      ]
+    ]
+  },
+  "cites": {
+    "path": "56-project-transformer-renewal/README_14.3.4.md",
+    "section": null
+  }
+}

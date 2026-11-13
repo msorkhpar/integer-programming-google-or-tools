@@ -1,0 +1,99 @@
+{
+  "project_api": 1,
+  "title": "Fund the most value within one budget",
+  "before": "../../../../55-project-cipt-planner/steps/00",
+  "after": "../../../../55-project-cipt-planner/steps/01",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the demo export matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "cipt/model.py",
+      "signature": "def build(request: Request) -> Built",
+      "contract": "Takes a Request. Returns a Built holding a MathOpt model with one binary variable per project (named `x_<id>`), one row named budget that keeps the summed capex of the funded projects within capital_budget, and the summed value of the funded projects as the objective to maximize.",
+      "idea": "A yes-or-no choice per project under one budget is a 0-1 knapsack: the best fill is a combination, which no sort by value per dollar finds in general.",
+      "lesson": {
+        "title": "6.3.1 0-1 and Multi-Dimensional Knapsack",
+        "href": "../../../../06-formulation-craft/25-knapsack-and-assignment/units/unit-01/6.3.1-0-1-and-multi-dimensional-knapsack.unit.html"
+      }
+    },
+    {
+      "file": "cipt/solve.py",
+      "signature": "def run_highs(model: mathopt.Model) -> mathopt.SolveResult",
+      "contract": "Solves the model with HiGHS through MathOpt, on one thread, and returns the SolveResult. Nothing HiGHS prints may reach the program's standard output.",
+      "idea": "The solver is a call with parameters; its log is not the planner's report.",
+      "lesson": {
+        "title": "4.2.1 Model, Variables, Constraints, Objective",
+        "href": "../../../../04-google-or-tools-in-depth/13-mathopt-core/units/unit-01/4.2.1-model-variables-constraints-objective.unit.html"
+      },
+      "stub": "return None"
+    },
+    {
+      "file": "cipt/solve.py",
+      "signature": "def read_plan(built: Built, result: mathopt.SolveResult) -> Plan",
+      "contract": "Turns a SolveResult into a Plan: the status in lower case, each project whose variable is 1 mapped to its earliest start year, and the objective value. With no feasible solution, a Plan with the status alone.",
+      "idea": "Read the termination first, then the variable values; a binary is 1 when its value is above 0.5.",
+      "lesson": {
+        "title": "4.2.2 Reading `SolveResult`: Termination, Primal and Dual Solutions, Statistics",
+        "href": "../../../../04-google-or-tools-in-depth/13-mathopt-core/units/unit-02/4.2.2-reading-solveresult-termination-primal-and-dual-solutions-statistics.unit.html"
+      },
+      "stub": "return Plan(status=\"not solved\")"
+    },
+    {
+      "file": "cipt/solve.py",
+      "signature": "def solve(request: Request) -> Plan",
+      "contract": "Builds the model for a Request, solves it and returns the Plan.",
+      "idea": "Keep building, solving and reading back in separate functions, so each can be tested and changed alone.",
+      "lesson": {
+        "title": "14.2.1 The First Request: Fund Projects Within One Budget",
+        "href": "../../../../14-growing-real-projects/55-project-cipt-planner/units/unit-01/14.2.1-the-first-request-fund-projects-within-one-budget.unit.html"
+      }
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_select.py::test_plan_respects_the_budget",
+      "main",
+      "the funded projects cost no more than the budget"
+    ],
+    [
+      "tests/test_select.py::test_best_combination_beats_best_ratio",
+      "main",
+      "the plan is the best combination, not the best value per dollar taken in order"
+    ],
+    [
+      "tests/test_select.py::test_funds_everything_when_the_budget_allows",
+      "main",
+      "every project is funded when the budget holds them all"
+    ],
+    [
+      "tests/test_select.py::test_report_names_the_funded_projects",
+      "main",
+      "the report counts the funded projects and totals their capex and value"
+    ],
+    [
+      "tests/test_select.py::test_command_line_prints_the_report",
+      "edge",
+      "the command line plans the export file it is given"
+    ]
+  ],
+  "plants": {
+    "tests/test_select.py::test_command_line_prints_the_report": [
+      [
+        "cipt/__main__.py",
+        "    raise SystemExit(main())",
+        "    raise SystemExit(main([\"data/demo.json\"]))"
+      ]
+    ]
+  },
+  "cites": {
+    "path": "55-project-cipt-planner/README_14.2.1.md",
+    "section": null
+  }
+}

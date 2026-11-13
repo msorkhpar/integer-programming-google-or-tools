@@ -1,0 +1,142 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "01-foundations",
+    "01-optimization-mindset"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Solve the model and read its answer",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A harbor authority keeps its quay repairs in a list of `Project` records: a cost, a value (both in $k) and a `must_do` flag for repairs an inspector has ordered. Its analysts want one function that builds the selection model, solves it and hands back an answer they can trust, including the day the budget cannot even cover the ordered repairs."
+    },
+    {
+      "type": "para",
+      "text": "Write `solve_plan(projects, budget)` in `solve.py`. It builds and solves this model with HiGHS, with $`P`$ the projects, $`M \\subseteq P`$ the must-do ones and $`B`$ the budget:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& \\sum_{i \\in P} \\text{value}_i\\, x_i \\\\\n\\text{s.t. }& \\sum_{i \\in P} \\text{cost}_i\\, x_i \\le B && && \\text{(budget)} \\\\\n& x_i = 1 && \\forall i \\in M && \\text{(must}_i) \\\\\n& x_i \\in \\{0, 1\\} && \\forall i \\in P\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "It returns a tuple `(status, value, plan)`. `status` is the name of the solve's termination reason (`\"OPTIMAL\"`, `\"INFEASIBLE\"`, ...). When the status is `OPTIMAL`, `value` is the objective value and `plan` the frozenset of funded project ids; otherwise both are `None`, because a solve that found no plan has no value to report."
+    },
+    {
+      "type": "para",
+      "text": "About fifteen lines: the five parts of the lesson's program, in order."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    must_do: bool = False\n\n\ndef solve_plan(projects: list[Project], budget: int) -> tuple[str, float | None, frozenset[str] | None]:\n    \"\"\"Build the selection model, solve it with HiGHS, and read the answer status first.\"\"\"\n    model = mathopt.Model(name=\"selection\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in projects) <= budget, name=\"budget\")\n    for p in projects:\n        if p.must_do:\n            model.add_linear_constraint(x[p.pid] == 1, name=f\"must_{p.pid}\")\n    model.maximize(sum(p.value * x[p.pid] for p in projects))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    status = result.termination.reason.name\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return status, None, None\n    plan = frozenset(pid for pid, var in x.items() if result.variable_values(var) > 0.5)\n    return status, result.objective_value(), plan\n\n\nif __name__ == \"__main__\":\n    demo = [Project(\"A\", 50, 80, must_do=True), Project(\"B\", 30, 40), Project(\"C\", 20, 35)]\n    print(solve_plan(demo, 90))\n    print(solve_plan(demo, 40))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    must_do: bool = False\n\n\ndef solve_plan(projects: list[Project], budget: int) -> tuple[str, float | None, frozenset[str] | None]:\n    \"\"\"Build the selection model, solve it with HiGHS, and read the answer status first.\"\"\"\n    # TODO: a model, one binary per project, the budget and must-do rows, the objective,\n    # then mathopt.solve(..., mathopt.SolverType.HIGHS) and its status before any value.\n    return \"NOT_SOLVED\", None, None\n\n\nif __name__ == \"__main__\":\n    demo = [Project(\"A\", 50, 80, must_do=True), Project(\"B\", 30, 40), Project(\"C\", 20, 35)]\n    print(solve_plan(demo, 90))\n    print(solve_plan(demo, 40))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "63dca90b22c2553627288cdd8d96815362ccbdd09e65eb4e12e1cf0183e27a75",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    must_do: bool = False\n\n\ndef solve_plan(projects: list[Project], budget: int) -> tuple[str, float | None, frozenset[str] | None]:\n    \"\"\"Build the selection model, solve it with HiGHS, and read the answer status first.\"\"\"\n    # TODO: a model, one binary per project, the budget and must-do rows, the objective,\n    # then mathopt.solve(..., mathopt.SolverType.HIGHS) and its status before any value.\n    return \"NOT_SOLVED\", None, None\n\n\nif __name__ == \"__main__\":\n    demo = [Project(\"A\", 50, 80, must_do=True), Project(\"B\", 30, 40), Project(\"C\", 20, 35)]\n    print(solve_plan(demo, 90))\n    print(solve_plan(demo, 40))\n",
+  "exercise": {
+    "main_path": "practice/01-foundations/01-optimization-mindset/prose/unit-03/practice-1/solve.py",
+    "test_path": "practice/01-foundations/01-optimization-mindset/prose/unit-03/practice-1/test_solve.py",
+    "run_command": [
+      "python3",
+      "practice/01-foundations/01-optimization-mindset/prose/unit-03/practice-1/solve.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/01-foundations/01-optimization-mindset/prose/unit-03/practice-1/target/report.xml",
+      "practice/01-foundations/01-optimization-mindset/prose/unit-03/practice-1/test_solve.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_best_plan_and_its_value_come_back_with_status_optimal",
+        "kind": "main",
+        "says": "an allowed budget returns status OPTIMAL, the best value and the plan"
+      },
+      {
+        "id": "test_a_budget_below_the_must_do_cost_is_infeasible_with_no_value_and_no_plan",
+        "kind": "edge",
+        "says": "a budget no plan fits returns INFEASIBLE with no value and no plan, not an empty plan worth 0"
+      },
+      {
+        "id": "test_the_must_do_project_is_funded_even_when_others_are_worth_more",
+        "kind": "edge",
+        "says": "the must-do project is in the plan though leaving it out would be worth more"
+      },
+      {
+        "id": "test_each_project_is_funded_whole_or_not_at_all",
+        "kind": "edge",
+        "says": "the value is the sum of whole projects, so the variables are binary rather than fractions"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/01-foundations/01-optimization-mindset/prose/unit-03/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "01-optimization-mindset/README_1.1.3.md",
+      "section": "Every MathOpt Program Has the Same Five Parts"
+    },
+    "concepts": [
+      "is_integer turns the LP's fractions into whole projects, which is what makes the model a MILP",
+      "a MathOpt program is a model, variables with their domains, named rows, one objective and a solve",
+      "a solve's status is read before its values, and INFEASIBLE means no plan satisfies every rule"
+    ]
+  }
+}

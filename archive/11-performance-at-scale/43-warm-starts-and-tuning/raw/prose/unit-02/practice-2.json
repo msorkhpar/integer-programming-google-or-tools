@@ -1,0 +1,146 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "11-performance-at-scale",
+    "43-warm-starts-and-tuning"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Adopt, reject, or a trade-off",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "An airline's crew-pairing team tries one solver setting at a time on a fixed set of models and seeds, and records two measures per run, paired with the default's run on the same model and seed: the work until a good plan was found, and the work to prove optimality. They want one word per setting, decided by a written rule, not by whoever reads the table."
+    },
+    {
+      "type": "para",
+      "text": "For one measure, with paired work $`a_k`$ (new setting) and $`b_k`$ (default), $`k = 1..n`$, let $`r = \\text{SGM}_s(a) / \\text{SGM}_s(b)`$ (the shifted geometric mean of lesson 5.4.2, given in the starter as `sgm`), $`W`$ the number of $`k`$ with $`a_k < b_k`$ and $`L`$ the number with $`a_k > b_k`$. Before you code, write the rule as inequalities on $`r`$, $`W`$, $`L`$ and a margin $`m`$: a measure is *better* when the ratio is at least $`m`$ below 1 and the wins outnumber the losses, *worse* in the mirror case, and *same* otherwise. \"At least\" includes the edge: a ratio of exactly $`1 - m`$ can be *better* (the test is $`r \\le 1 - m`$, not $`<`$), and a ratio of exactly $`1 + m`$ can be *worse* ($`r \\ge 1 + m`$). Then write how two judgements combine: better and worse is a *trade-off*; better with no worse is *adopt*; worse with no better is *reject*; anything else is *no effect*."
+    },
+    {
+      "type": "para",
+      "text": "Write `judge(new, old, shift, margin)` (returns `\"better\"`, `\"worse\"` or `\"same\"`) and `verdict(plan_new, plan_old, proof_new, proof_old, shift, margin=0.05)` (returns `\"adopt\"`, `\"reject\"`, `\"trade-off\"` or `\"no effect\"`) in `verdict.py`. The tests pass lists of numbers; no solver runs. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport math\n\n\ndef sgm(values: list[float], shift: float) -> float:\n    \"\"\"The shifted geometric mean of lesson 5.4.2: exp(mean of ln(max(1, v + shift))) - shift.\"\"\"\n    return math.exp(sum(math.log(max(1.0, v + shift)) for v in values) / len(values)) - shift\n\n\ndef judge(new: list[float], old: list[float], shift: float, margin: float) -> str:\n    \"\"\"'better', 'worse' or 'same' for one measure, from paired work with the new and the old setting.\"\"\"\n    ratio = sgm(new, shift) / sgm(old, shift)\n    wins = sum(a < b for a, b in zip(new, old))\n    losses = sum(a > b for a, b in zip(new, old))\n    if ratio <= 1 - margin and wins > losses:\n        return \"better\"\n    if ratio >= 1 + margin and losses > wins:\n        return \"worse\"\n    return \"same\"\n\n\ndef verdict(plan_new: list[float], plan_old: list[float], proof_new: list[float], proof_old: list[float],\n            shift: float, margin: float = 0.05) -> str:\n    \"\"\"'adopt', 'reject', 'trade-off' or 'no effect' for a setting, from both measures.\"\"\"\n    marks = {judge(plan_new, plan_old, shift, margin), judge(proof_new, proof_old, shift, margin)}\n    if marks == {\"better\", \"worse\"}:\n        return \"trade-off\"\n    if \"better\" in marks:\n        return \"adopt\"\n    if \"worse\" in marks:\n        return \"reject\"\n    return \"no effect\"\n\n\nif __name__ == \"__main__\":\n    print(verdict([300, 200], [600, 500], [9000, 8000], [9100, 8100], shift=100))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport math\n\n\ndef sgm(values: list[float], shift: float) -> float:\n    \"\"\"The shifted geometric mean of lesson 5.4.2: exp(mean of ln(max(1, v + shift))) - shift.\"\"\"\n    return math.exp(sum(math.log(max(1.0, v + shift)) for v in values) / len(values)) - shift\n\n\ndef judge(new: list[float], old: list[float], shift: float, margin: float) -> str:\n    \"\"\"'better', 'worse' or 'same' for one measure, from paired work with the new and the old setting.\"\"\"\n    # TODO: the ratio of shifted geometric means, the wins and the losses, then the rule.\n    return \"\"\n\n\ndef verdict(plan_new: list[float], plan_old: list[float], proof_new: list[float], proof_old: list[float],\n            shift: float, margin: float = 0.05) -> str:\n    \"\"\"'adopt', 'reject', 'trade-off' or 'no effect' for a setting, from both measures.\"\"\"\n    # TODO: judge each measure, then combine the two judgements.\n    return \"undecided\"\n\n\nif __name__ == \"__main__\":\n    print(verdict([300, 200], [600, 500], [9000, 8000], [9100, 8100], shift=100))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "2cdc5a12b5e91c87400753121a5b70caceb8999664a171b98ad4233bfe92237a",
+  "starting_code": "from __future__ import annotations\n\nimport math\n\n\ndef sgm(values: list[float], shift: float) -> float:\n    \"\"\"The shifted geometric mean of lesson 5.4.2: exp(mean of ln(max(1, v + shift))) - shift.\"\"\"\n    return math.exp(sum(math.log(max(1.0, v + shift)) for v in values) / len(values)) - shift\n\n\ndef judge(new: list[float], old: list[float], shift: float, margin: float) -> str:\n    \"\"\"'better', 'worse' or 'same' for one measure, from paired work with the new and the old setting.\"\"\"\n    # TODO: the ratio of shifted geometric means, the wins and the losses, then the rule.\n    return \"\"\n\n\ndef verdict(plan_new: list[float], plan_old: list[float], proof_new: list[float], proof_old: list[float],\n            shift: float, margin: float = 0.05) -> str:\n    \"\"\"'adopt', 'reject', 'trade-off' or 'no effect' for a setting, from both measures.\"\"\"\n    # TODO: judge each measure, then combine the two judgements.\n    return \"undecided\"\n\n\nif __name__ == \"__main__\":\n    print(verdict([300, 200], [600, 500], [9000, 8000], [9100, 8100], shift=100))\n",
+  "exercise": {
+    "main_path": "practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-02/practice-2/verdict.py",
+    "test_path": "practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-02/practice-2/test_verdict.py",
+    "run_command": [
+      "python3",
+      "practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-02/practice-2/verdict.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-02/practice-2/target/report.xml",
+      "practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-02/practice-2/test_verdict.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_setting_better_on_both_measures_is_adopted_and_one_worse_is_rejected",
+        "kind": "main",
+        "says": "a setting better on the measures is adopted, and one worse is rejected"
+      },
+      {
+        "id": "test_a_setting_better_on_one_measure_and_worse_on_the_other_is_a_trade_off",
+        "kind": "main",
+        "says": "better on one measure and worse on the other is a trade-off"
+      },
+      {
+        "id": "test_a_lower_mean_carried_by_one_run_while_most_runs_lose_is_no_gain",
+        "kind": "edge",
+        "says": "a lower mean that most runs contradict is not a gain"
+      },
+      {
+        "id": "test_a_change_inside_the_margin_is_no_effect",
+        "kind": "edge",
+        "says": "a ratio within the margin of 1 is no effect"
+      },
+      {
+        "id": "test_the_shift_keeps_tiny_differences_from_counting",
+        "kind": "edge",
+        "says": "the shift keeps big ratios on tiny values from outweighing a loss on a large one"
+      },
+      {
+        "id": "test_ties_count_as_neither_a_win_nor_a_loss",
+        "kind": "edge",
+        "says": "a run with equal work is neither a win nor a loss"
+      },
+      {
+        "id": "test_a_ratio_exactly_at_the_margin_counts",
+        "kind": "edge",
+        "says": "a ratio exactly the margin away from 1 counts as better or worse, not same"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "43-warm-starts-and-tuning/README_11.2.2.md",
+      "section": "Focus Says Which Side of the Gap to Work On"
+    },
+    "concepts": [
+      "a setting is judged on the work to a good plan and the work to proof, and a trade between them is named as one"
+    ]
+  }
+}

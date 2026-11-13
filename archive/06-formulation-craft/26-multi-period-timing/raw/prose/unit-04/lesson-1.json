@@ -1,0 +1,500 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "26-multi-period-timing"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Carry-over budgets and multi-year caps",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "6.4.4 Carry-Over Budgets and Multi-Year Caps"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's finance team has good news and a condition. Money left unspent at the end of a year may roll into the next one, but the regulator caps how much: at most 10% of a year's budget. The rate case also caps total spend in 2030 and 2031 together. The model of lesson 6.4.2 treats every year's budget as a wall. This lesson adds the two rules, one trap to avoid while writing them, and a third rule: the money comes from separate pots, each with its own budget."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Carry-Over Is a Variable Linking Each Year to the Next"
+    },
+    {
+      "type": "para",
+      "text": "Unspent money is an amount the plan chooses, so it gets a continuous variable: $`r_y \\ge 0`$, the money carried out of year $`y`$. Each year may spend its budget plus what came in, less what it carries out:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\text{spend}_y + r_y \\;\\le\\; B_y + r_{y-1}, \\qquad r_{y_0 - 1} = 0"
+    },
+    {
+      "type": "example",
+      "id": "carry_over-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "26-multi-period-timing/src/carry_over.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "26-multi-period-timing/src/carry_over.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "tm.model.delete_linear_constraint(tm.budget[y])\ncarry[y] = tm.model.add_variable(lb=0, name=f\"carry_{y}\")      # unspent at the end of y"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "example",
+      "id": "carry_over-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "26-multi-period-timing/src/carry_over.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "26-multi-period-timing/src/carry_over.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "incoming = carry[small.years[i - 1]] if i else 0\n# <=, not ==: money neither spent nor carried lapses at the end of the year.\nflow = tm.spend[y] + carry[y] - small.budget[y] - incoming\ntm.model.add_linear_constraint((flow <= 0) if lapse else (flow == 0), name=f\"cash_{y}\")"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The budget rows of lesson 6.4.2 are deleted and replaced by these cash rows, one per year. With every $`r_y = 0`$ they are the old rows again, so carry-over can only add plans:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "no carry-over          NPV $24,260k\nunlimited carry-over   NPV $26,149k  carried {2027: 80, 2028: 670, 2029: 390, 2030: 1480, 2031: 0}"
+    },
+    {
+      "type": "para",
+      "text": "Rolling money forward is worth $1,889k of NPV on the small portfolio, because a project whose big spending year collides with a tight budget can now be paid from an earlier year's leftovers. The carried amounts are one of many equally good choices; another solver run may move money between years and keep the same NPV, so never report them as \"the\" carry-over without fixing a rule for ties (section 10)."
+    },
+    {
+      "type": "para",
+      "text": "Unlimited carry-over is the same as a cumulative budget: spend up to year $`y`$ is at most the budgets up to year $`y`$. Money only moves forward, never back."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Cap on Carry-Over and a Cap on a Window Are More Rows on the Same Expressions"
+    },
+    {
+      "type": "para",
+      "text": "The regulator's 10% rule bounds each carry variable, and the rate case bounds a sum of two years' spend, written with the same `spend` expressions:"
+    },
+    {
+      "type": "example",
+      "id": "carry_over-3",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "26-multi-period-timing/src/carry_over.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "26-multi-period-timing/src/carry_over.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "if max_share is not None:\n    tm.model.add_linear_constraint(carry[y] <= max_share * small.budget[y], name=f\"carry_cap_{y}\")"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "example",
+      "id": "carry_over-4",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "26-multi-period-timing/src/carry_over.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "26-multi-period-timing/src/carry_over.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "tm.model.add_linear_constraint(sum(tm.spend[y] for y in years) <= cap, name=\"window_cap\")"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The carry cap is a row here so that it has a name, `carry_cap_2029`, to find when a scenario misbehaves. Written as the variable's upper bound, `add_variable(lb=0, ub=max_share * budget)`, it allows exactly the same plans; the formulation below writes it as the bounds $`0 \\le r_y \\le \\alpha B_y`$, which say the same thing."
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "carry-over <= 10%      NPV $24,443k  carried {2027: 70, 2028: 250, 2029: 200, 2030: 0, 2031: 0}\nplus 2030-31 cap       NPV $24,081k  carried {2027: 120, 2028: 270, 2029: 60, 2030: 0, 2031: 0}\nbudgets: {2027: 8890, 2028: 8120, 2029: 8760, 2030: 8610, 2031: 7850} 2030-31 cap: 14,810"
+    },
+    {
+      "type": "para",
+      "text": "The 10% cap keeps $183k of the $1,889k gain. The window cap, 90% of the two years' budgets, then costs more than the carry-over gave: the plan ends below the no-carry-over plan. That is a normal result, and the kind a planner needs to see as a table of scenarios rather than as one number, which is what section 12's scenario workflow produces."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Unspent Money Lapses, So the Cash Row Is an Inequality"
+    },
+    {
+      "type": "para",
+      "text": "The trap is writing the cash row as an equation: \"what came in is spent or carried\". With a cap on carry-over, an equation forces the plan to spend at least 90% of each year's money, whether there is anything worth funding or not. Under the window cap that cannot be done:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "== instead of <=       INFEASIBLE"
+    },
+    {
+      "type": "para",
+      "text": "The model is not wrong about the money; it is wrong about the world. Budget that is neither spent nor carried returns to the utility at year end, so the row is $`\\le`$, and the gap between the two sides is the lapsed amount. An \"infeasible\" answer from a model that has a perfectly good plan is one of the most common bugs in this kind of work. Section 9 shows how to find which rows are responsible; here, the habit is to ask of every equality \"does the world really force this?\"."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Each Pot of Money Gets Its Own Row per Year, and the Pooled Total Cannot Stand In for It"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's finance team has one more condition. The money does not come from one pot. Capital work is paid from the CapEx budget, maintenance work from the OpEx (operating) budget, and the regulator has set up a dedicated resilience fund for undergrounding. Each pot has its own amount each year, and money in one pot cannot pay for work charged to another. So a plan has to fit every pot in every year, not only the total."
+    },
+    {
+      "type": "para",
+      "text": "The rule needs two new pieces of data. A project's cost profile is split by pot: $`c_{i,k,\\tau}`$ is what project $`i`$ draws from pot $`k`$ in its $`\\tau`$-th year of work, and the pots' shares add up to the project's cost, $`\\sum_k c_{i,k,\\tau} = c_{i,\\tau}`$. Each pot has a budget per year, $`B_{k,y}`$. The row for pot $`k`$ in year $`y`$ is the spend row of lesson 6.4.2 with the pot's profile in place of the whole one:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_{i \\in P} \\sum_{t \\in T_i,\\, t \\le y} c_{i,k,\\,y-t}\\; x_{i,t} \\;\\le\\; B_{k,y} \\qquad \\forall k \\in K,\\ y \\in Y"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's data has no pots, so the program `categories.py` invents a split for this lesson (GridCap itself is fictional): vegetation work is all OpEx, a repair is 40% OpEx, the resilience fund pays half of every undergrounding project, and everything else is CapEx. Each year's budget is split 65% CapEx, 25% OpEx and 10% fund, so the three pots add up to the year's budget $`B_y`$:"
+    },
+    {
+      "type": "example",
+      "id": "categories-5",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "26-multi-period-timing/src/categories.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "26-multi-period-timing/src/categories.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "def profile(p) -> dict[str, tuple[int, ...]]:\n    \"\"\"c[i,k,tau]: what project p draws from pot k in its tau-th year of work, in $k.\"\"\"\n    opex = tuple(10 * round(c * OPEX_SHARE.get(p.intervention, 0) / 10) for c in p.cost_profile)\n    fund = tuple(10 * round(c * FUND_SHARE.get(p.intervention, 0) / 10) for c in p.cost_profile)\n    capex = tuple(c - o - f for c, o, f in zip(p.cost_profile, opex, fund))\n    return {\"capex\": capex, \"opex\": opex, \"fund\": fund}"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "P017 repair      c[k,tau]: capex (3190,), opex (2120,), fund (0,)\nP034 underground c[k,tau]: capex (1070,), opex (0,), fund (1060,)\nP039 underground c[k,tau]: capex (590, 440), opex (0, 0), fund (580, 440)\nP035 widen       c[k,tau]: capex (0,), opex (580,), fund (0,)\npot budgets 2027: capex 5,780  opex 2,220  fund 890 (sum 8,890 = B_2027)"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "P039 works for two years, so it has a profile per pot over both: it draws $580k and then $440k from the fund. The pot rows are added to the timing model of lesson 6.4.2, one per pot and year, each built from that pot's spend expressions (`draw_by_year` is `spend_by_year` with the pot's profile):"
+    },
+    {
+      "type": "example",
+      "id": "categories-6",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "26-multi-period-timing/src/categories.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "26-multi-period-timing/src/categories.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "for k in POTS:\n    draw = draw_by_year(tm, k)\n    for y in small.years:\n        if f\"{k}_{y}\" != drop:\n            tm.model.add_linear_constraint(draw[y] <= B[k, y], name=f\"{k}_{y}\")"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The pooled rows $`\\text{spend}_y \\le B_y`$ stay in the model, but they can no longer refuse anything: the pots add up to $`B_y`$, so a plan that fits every pot fits the total. The reverse is false. The optimum of lesson 6.4.2, solved with one pooled budget, fits every `budget_y` row and breaks seven pot rows:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "one pooled budget  NPV $24,260k, fits every budget_y row, but breaks:\n  capex_2028 6,420 > 5,280, capex_2029 6,850 > 5,690, capex_2030 5,680 > 5,600, capex_2031 5,700 > 5,110\n  opex_2027 2,990 > 2,220, opex_2030 2,880 > 2,150\n  fund_2027 1,060 > 890\nwith pots          NPV $20,613k (-3,647k)"
+    },
+    {
+      "type": "para",
+      "text": "In 2027, for example, the pooled plan spends $2,990k of maintenance work against an OpEx pot of $2,220k. The total has room, but that room is CapEx money, which cannot pay for maintenance. With the pot rows the best plan is worth $20,613k, $3,647k less. A pooled budget is a relaxation of the pots: it allows every plan the pots allow and more, so its NPV is never lower, and a model that pools money the utility keeps apart reports value it cannot deliver, as the lump model of lesson 6.4.2 did."
+    },
+    {
+      "type": "para",
+      "text": "Which pot row costs the most? In a linear program a row binds when it holds with equality at the optimum. In an integer program that test misleads, because a row can have slack and still keep out a whole project. The direct test is to leave one row out, solve again, and see what the NPV gains:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "drop one row alone, NPV gain: fund_2027 +1,682k, opex_2027 +1,597k, opex_2029 +927k, capex_2028 +588k\nfund_2027 slack with pots: 310\nP034 starts in 2027 without fund_2027, never with it; window 2027-2027, NPV by start {2027: 2123}"
+    },
+    {
+      "type": "para",
+      "text": "The fund's 2027 row costs the most, and it has $310k of slack at the optimum. The reason is P034, an undergrounding project that may start only in 2027: half its cost, $1,060k, falls on the fund, whose 2027 budget is $890k. With that row in the model P034 can never be funded, however the rest of the plan is arranged. Without it P034 starts and the NPV rises by $1,682k, less than P034's own $2,123k because P034 also draws $1,070k from 2027's CapEx pot, and the rest of the plan gives way. The table above shows the four costliest rows of the fifteen; each gain is measured with every other row in place, so the gains do not add up."
+    },
+    {
+      "type": "para",
+      "text": "The program solves the pots without carry-over or the window cap ($`\\alpha = 0`$, no $`W`$), so the cash rows are the budget rows of lesson 6.4.2 and only the pots differ. The model below keeps both rules together. One consequence follows from the rows: when the pots add up to $`B_y`$ and none of them carries money, the pooled carry-over $`r_y`$ buys nothing, because the pot rows already hold each year's spend to $`B_y`$. A utility whose pots do carry over gives each pot its own carry variable $`r_{k,y}`$ and its own cash row (Challenge 4)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The model with carry-over and budget pots, whole. New are the parameters $`\\alpha`$ (the share of a year's budget that may roll over), $`W`$ and $`C_W`$ (the capped window and its cap), the continuous variables $`r_y \\ge 0`$, the money carried out of year $`y`$ (with $`r_{y_0 - 1} = 0`$ before the first year), and the pots $`K`$ with their profiles $`c_{i,k,\\tau}`$ and budgets $`B_{k,y}`$. The budget rows are replaced by the marked rows. The year of work is written $`\\tau`$ here, so that $`k`$ can name a pot."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`P`$ the projects; $`Y`$ the plan's years; $`T_i \\subseteq Y`$ the start years project $`i`$ may use (its window, cut so the work ends inside $`Y`$); $`M \\subseteq P`$ the must-do projects; $`\\mathcal{G}`$ the alternative groups, each a set of projects; $`C \\subseteq P`$ the child projects, with parent $`p(c)`$ and lag $`L_c`$ years; $`K`$ the budget pots (here CapEx, OpEx and the resilience fund)."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`\\text{npv}_{i,t}`$, the NPV of project $`i`$ started in year $`t`$ ($k); $`c_{i,\\tau}`$, what project $`i`$ spends in its $`\\tau`$-th year of work, $`\\tau = 0, 1, \\dots`$ ($k); $`c_{i,k,\\tau}`$, the part of it drawn from pot $`k`$, with $`\\sum_{k \\in K} c_{i,k,\\tau} = c_{i,\\tau}`$ ($k); $`B_y`$, the budget of year $`y`$ ($k); $`B_{k,y}`$, the budget of pot $`k`$ in year $`y`$, with $`\\sum_{k \\in K} B_{k,y} = B_y`$ ($k); $`\\alpha`$, the share of a year's budget that may be carried out of it; $`W \\subseteq Y`$, the capped window of years, and $`C_W`$, its cap ($k)."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_{i,t} \\in \\{0, 1\\}`$ for every $`i \\in P`$ and $`t \\in T_i`$: project $`i`$ starts in year $`t`$; and $`r_y \\ge 0`$ for every $`y \\in Y`$, the money carried out of year $`y`$, continuous, with $`r_{y_0 - 1} = 0`$ before the first year."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{i \\in P} \\sum_{t \\in T_i} \\text{npv}_{i,t}\\, x_{i,t}"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{t \\in T_i} x_{i,t} &\\le 1 && \\forall i \\in P \\setminus M && \\text{(once}_i) \\\\\n\\sum_{t \\in T_i} x_{i,t} &= 1 && \\forall i \\in M && \\text{(must}_i) \\\\\n\\sum_{i \\in g} \\sum_{t \\in T_i} x_{i,t} &\\le 1 && \\forall g \\in \\mathcal{G} && \\text{(alt}_g) \\\\\n\\sum_{u \\in T_c,\\, u \\le t} x_{c,u} &\\le \\sum_{s \\in T_{p(c)},\\, s \\le t - L_c} x_{p(c),s} && \\forall c \\in C,\\ t \\in T_c && \\text{(after}_{c,t}) \\\\\n\\sum_{i \\in P} \\sum_{t \\in T_i,\\, t \\le y} c_{i,\\,y-t}\\, x_{i,t} + r_y &\\le B_y + r_{y-1} && \\forall y \\in Y && \\text{(cash}_y) \\quad \\leftarrow \\text{this lesson} \\\\\n0 \\le r_y &\\le \\alpha B_y && \\forall y \\in Y && \\text{(carry\\_cap}_y) \\quad \\leftarrow \\text{this lesson} \\\\\n\\sum_{y \\in W} \\sum_{i \\in P} \\sum_{t \\in T_i,\\, t \\le y} c_{i,\\,y-t}\\, x_{i,t} &\\le C_W && && \\text{(window\\_cap)} \\quad \\leftarrow \\text{this lesson} \\\\\n\\sum_{i \\in P} \\sum_{t \\in T_i,\\, t \\le y} c_{i,k,\\,y-t}\\, x_{i,t} &\\le B_{k,y} && \\forall k \\in K,\\ y \\in Y && \\text{(pot}_{k,y}) \\quad \\leftarrow \\text{this lesson}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "In the code the row $`\\text{pot}_{k,y}`$ is named `{k}_{y}`, as in `opex_2027` or `fund_2027`."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Carry-over is a variable linking each year to the next.** Cash rows replace budget rows, and with every carry at zero they are the old model.",
+        "**A cap on carry-over and a cap on a window are more rows on the same expressions.** Their cost is visible only by solving each scenario.",
+        "**Unspent money lapses, so the cash row is an inequality.** An equation here turns a feasible plan into an infeasible model.",
+        "**Each pot of money gets its own row per year, and the pooled total cannot stand in for it.** One pooled budget allows plans the pots refuse; to find which pot row costs the most in an integer program, drop it and solve again, since a row with slack can still keep out a whole project."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Rule",
+        "Constraint"
+      ],
+      "rows": [
+        [
+          "cash balance with carry-over",
+          "$`\\text{spend}_y + r_y \\le B_y + r_{y-1}`$, $`r_y \\ge 0`$"
+        ],
+        [
+          "carry-over cap (share $`\\alpha`$)",
+          "$`r_y \\le \\alpha B_y`$"
+        ],
+        [
+          "unlimited carry-over, equivalently",
+          "$`\\sum_{u \\le y} \\text{spend}_u \\le \\sum_{u \\le y} B_u`$"
+        ],
+        [
+          "multi-year cap on years $`W`$",
+          "$`\\sum_{y \\in W} \\text{spend}_y \\le C_W`$"
+        ],
+        [
+          "no carry-over",
+          "$`\\text{spend}_y \\le B_y`$"
+        ],
+        [
+          "budget pots $`k \\in K`$ (CapEx, OpEx, a fund), one row per pot and year",
+          "$`\\sum_i \\sum_{t \\le y} c_{i,k,\\,y-t}\\, x_{i,t} \\le B_{k,y}`$"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [MathOpt `Model` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/model.py) (`delete_linear_constraint`, which removes the budget rows before the cash rows replace them, and `add_variable` with bounds, the other way to write the carry cap); [MathOpt (OR-Tools)](https://developers.google.com/optimization/math_opt) (MathOpt models mix integer and continuous variables, as the carry-over model does); [The Knapsack Problem (OR-Tools)](https://developers.google.com/optimization/pack/knapsack) (the knapsack solver takes the weights as a list of lists, each paired with one entry of the capacities, and names a multidimension solver: an item using several limited resources, as a project draws on several pots); [Integer Programming, Chapter 9 of Applied Mathematical Programming (MIT 15.053)](https://web.mit.edu/15.053/www/AMP-Chapter-09.pdf) (section 9.1: cash-flow rows by period, where the funds an investment needs may come from funds made available in that period or generated earlier, the money that moves forward in a cash row; and the general capital-budgeting form, in which each investment uses an amount of every resource, such as cash or manpower, and each resource has its own limit, as each pot has its own row)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Finance offers 3% interest on carried money. Change one coefficient and predict whether the NPV rises.",
+        "The regulator replaces the 10% cap with \"at most $500k carried in total over the plan\". Which rows change, and is the new rule weaker or stronger than the old one on the small portfolio's budgets?",
+        "A program director asks for the \"carry-over plan\". What would you give them, given that the carried amounts are not unique?",
+        "The OpEx pot may carry up to 10% of its budget into the next year, but CapEx and the fund may not. Which variables and rows do you add, and which pot rows become cash rows?"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Spend Stays an Expression, Carry-Over Is a Variable"
+    },
+    {
+      "type": "para",
+      "text": "Spend is fully decided by the start variables, so lesson 6.4.2 keeps it as an expression. Carry-over is not decided by anything else: the same schedule can carry different amounts, and the model has to choose. That is the test for adding a variable: a variable for something the model must choose, an expression for something it only computes."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**carry_over.py.** Builds the cash rows with carry-over, the 10% cap and the 2030–31 window cap, and the `==` version that fails (*the first three sections*). *Try:* Raise the carry-over cap from 10% to 50%. Predict whether NPV moves toward the unlimited case."
+    },
+    {
+      "type": "para",
+      "text": "**categories.py.** Splits each project's cost and each year's budget into CapEx, OpEx and a fund (an invented split; GridCap is fictional), adds one row per pot and year, compares the result with one pooled budget, and drops each pot row in turn to find the costliest (*Each Pot of Money Gets Its Own Row per Year*). *Try:* Raise the fund's share of each year's budget from 10% to 13%, so that the fund's 2027 pot covers P034. Predict which row tops the list then."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [carry_over.py](src/carry_over.py)",
+        "Program: [categories.py](src/categories.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 11,
+    "paras": 31,
+    "code": 9,
+    "tables": 1,
+    "lists": 3,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 6
+  },
+  "content_sha256": "67a926ad175e5774565533b74a5694ba2cf21b3a8a2dcd11d7b8d8cc0e9c5059"
+}

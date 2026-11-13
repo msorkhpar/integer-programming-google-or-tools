@@ -1,0 +1,131 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "08-multi-objective-optimization",
+    "34-weighted-sum"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Price a tonne of CO2 in riders",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A city transit agency can upgrade some of its bus depots this year. Each upgrade costs money and brings two benefits: more daily riders (better service from the depot) and less CO2 a year (electric buses charged there). The data team stores CO2 in kilograms a year, as the meters report it. After a long meeting the agency's board settled its trade-off in one sentence: \"cutting one tonne of CO2 a year is worth as much to us as `riders_per_tonne` extra daily riders.\""
+    },
+    {
+      "type": "para",
+      "text": "Write `weighted_choice(upgrades, budget, riders_per_tonne)` in `depots.py`: the set of upgrade names to fund, at most once each, with total cost within `budget`, that is best by the board's own trade-off. The model's variables and the budget row are written; the objective is yours."
+    },
+    {
+      "type": "para",
+      "text": "Write the objective first, in notation: with $`U`$ the upgrades, $`x_u \\in \\{0, 1\\}`$ whether upgrade $`u`$ is funded, $`r_u`$ its riders, $`g_u`$ its CO2 cut in kg and $`\\pi`$ the board's price, what are the two weights, and in which units is each term? Then code it."
+    },
+    {
+      "type": "para",
+      "text": "About one line."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Upgrade:\n    name: str\n    cost: int          # $k\n    riders: int        # daily riders gained\n    co2_kg: int        # kg of CO2 cut per year\n\n\ndef weighted_choice(upgrades: list[Upgrade], budget: int, riders_per_tonne: float) -> set[str]:\n    \"\"\"The upgrades to fund: the most riders plus CO2 cut, priced at `riders_per_tonne`, within budget.\"\"\"\n    model = mathopt.Model(name=\"depots\")\n    x = {u.name: model.add_binary_variable(name=f\"x_{u.name}\") for u in upgrades}\n    model.add_linear_constraint(sum(u.cost * x[u.name] for u in upgrades) <= budget, name=\"budget\")\n    model.maximize(sum((u.riders + riders_per_tonne * u.co2_kg / 1000) * x[u.name] for u in upgrades))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    return {name for name, var in x.items() if result.variable_values(var) > 0.5}\n\n\nif __name__ == \"__main__\":\n    depots = [Upgrade(\"D1\", 4, 300, 2000), Upgrade(\"D2\", 3, 100, 9000), Upgrade(\"D3\", 3, 250, 1000)]\n    print(sorted(weighted_choice(depots, 6, 50)))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Upgrade:\n    name: str\n    cost: int          # $k\n    riders: int        # daily riders gained\n    co2_kg: int        # kg of CO2 cut per year\n\n\ndef weighted_choice(upgrades: list[Upgrade], budget: int, riders_per_tonne: float) -> set[str]:\n    \"\"\"The upgrades to fund: the most riders plus CO2 cut, priced at `riders_per_tonne`, within budget.\"\"\"\n    model = mathopt.Model(name=\"depots\")\n    x = {u.name: model.add_binary_variable(name=f\"x_{u.name}\") for u in upgrades}\n    model.add_linear_constraint(sum(u.cost * x[u.name] for u in upgrades) <= budget, name=\"budget\")\n    # TODO: the objective, both measures in one sum.\n    model.maximize(mathopt.LinearExpression())\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    return {name for name, var in x.items() if result.variable_values(var) > 0.5}\n\n\nif __name__ == \"__main__\":\n    depots = [Upgrade(\"D1\", 4, 300, 2000), Upgrade(\"D2\", 3, 100, 9000), Upgrade(\"D3\", 3, 250, 1000)]\n    print(sorted(weighted_choice(depots, 6, 50)))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "0c6e28fe0284e9287f691f261e1230061a43798a4de44f156d5e2ba9a21f6dfd",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Upgrade:\n    name: str\n    cost: int          # $k\n    riders: int        # daily riders gained\n    co2_kg: int        # kg of CO2 cut per year\n\n\ndef weighted_choice(upgrades: list[Upgrade], budget: int, riders_per_tonne: float) -> set[str]:\n    \"\"\"The upgrades to fund: the most riders plus CO2 cut, priced at `riders_per_tonne`, within budget.\"\"\"\n    model = mathopt.Model(name=\"depots\")\n    x = {u.name: model.add_binary_variable(name=f\"x_{u.name}\") for u in upgrades}\n    model.add_linear_constraint(sum(u.cost * x[u.name] for u in upgrades) <= budget, name=\"budget\")\n    # TODO: the objective, both measures in one sum.\n    model.maximize(mathopt.LinearExpression())\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    return {name for name, var in x.items() if result.variable_values(var) > 0.5}\n\n\nif __name__ == \"__main__\":\n    depots = [Upgrade(\"D1\", 4, 300, 2000), Upgrade(\"D2\", 3, 100, 9000), Upgrade(\"D3\", 3, 250, 1000)]\n    print(sorted(weighted_choice(depots, 6, 50)))\n",
+  "exercise": {
+    "main_path": "practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-01/practice-1/depots.py",
+    "test_path": "practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-01/practice-1/test_depots.py",
+    "run_command": [
+      "python3",
+      "practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-01/practice-1/depots.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-01/practice-1/target/report.xml",
+      "practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-01/practice-1/test_depots.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_plan_best_on_both_measures_is_chosen",
+        "kind": "main",
+        "says": "when one choice is best for riders and for CO2 alike, it is chosen at any price"
+      },
+      {
+        "id": "test_the_price_is_per_tonne_not_per_kilogram",
+        "kind": "edge",
+        "says": "the CO2 data in kilograms is converted to the tonnes the price is quoted in"
+      },
+      {
+        "id": "test_the_price_multiplies_the_co2_not_the_riders",
+        "kind": "edge",
+        "says": "the price turns tonnes into riders, so it multiplies the CO2 term"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "34-weighted-sum/README_8.1.1.md",
+      "section": "The Ratio Is a Price, So It Depends on the Units"
+    },
+    "concepts": [
+      "a weighted sum of two linear objectives is one linear objective on the same model",
+      "the weight ratio is an exchange rate whose meaning depends on each objective's unit"
+    ]
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "project_api": 1,
+  "title": "Tighten the outage rows, check a plan, and roll the horizon",
+  "before": "../../../../56-project-transformer-renewal/steps/05",
+  "after": "../../../../56-project-transformer-renewal/steps/06",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the tiny fleet matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "renewal/model.py",
+      "signature": "def build(fleet: list[Transformer], request: Request) -> Built",
+      "contract": "As before, except the outage rows: with request.link == \"aggregated\" the row `outage_<s>_<year>` of the step before; otherwise (\"per-unit\", now Request's default) a row `outage_<tid>_<year>` per candidate and year, x[tid, year] <= out[s, year].",
+      "idea": "Each aggregated row is the sum of the per-unit rows, so the per-unit form allows less in the LP relaxation and gives a tighter bound with the same integer plans.",
+      "lesson": {
+        "title": "6.7.1 Comparing Formulations by Their LP Bound",
+        "href": "../../../../06-formulation-craft/29-strong-formulations/units/unit-01/6.7.1-comparing-formulations-by-their-lp-bound.unit.html"
+      }
+    },
+    {
+      "file": "renewal/model.py",
+      "signature": "def relax(built: Built) -> Built",
+      "contract": "The LP relaxation, in place: every variable of the model made continuous within its bounds; returns the same Built.",
+      "idea": "Relaxing integrality gives the bound a branch-and-bound search starts from.",
+      "lesson": {
+        "title": "6.7.1 Comparing Formulations by Their LP Bound",
+        "href": "../../../../06-formulation-craft/29-strong-formulations/units/unit-01/6.7.1-comparing-formulations-by-their-lp-bound.unit.html"
+      },
+      "stub": "return built"
+    },
+    {
+      "file": "renewal/plan.py",
+      "signature": "def lp_bound(fleet: list[Transformer], request: Request) -> float",
+      "contract": "Builds the model, relaxes it, solves it, and returns the objective value: an upper bound on the risk any plan removes.",
+      "idea": "Compare two formulations of one problem by their LP bounds: the lower the bound of a maximization, the stronger the form.",
+      "lesson": {
+        "title": "6.7.1 Comparing Formulations by Their LP Bound",
+        "href": "../../../../06-formulation-craft/29-strong-formulations/units/unit-01/6.7.1-comparing-formulations-by-their-lp-bound.unit.html"
+      }
+    },
+    {
+      "file": "renewal/check.py",
+      "signature": "def violations(fleet: list[Transformer], request: Request, replace: dict[str, int]) -> list[str]",
+      "contract": "One line per broken rule, each starting with its rule's name and the offending key, in this order. First, per replaced unit in id order: `<tid>: <year> is outside the plan` when the year is not a plan year, and `<tid>: younger than <min_age>, not a candidate` when the unit is under the age screen. Then, per year in year order: `budget <year>: <spend> > <budget>`, with the spend of report.spend_by_year including the outage cost. Then, when request.outages is set, sorted by region and then year: `outages <region> <year>: <count> > <outages>`, where <count> is the number of the region's substations with an outage that year (report.outages). Then, when request.crew_weeks is set, sorted by region and then year: `crews <region> <year>: <weeks> > <crew_weeks>`, where <weeks> is the summed crew-weeks of the region's replacements that year. Last, when request.lead_times is set, per kind in KINDS order: `spares <kind>: <early> > <stock>`, a kind with no spares listed having a stock of 0. Every number is printed as a plain integer. An empty list when the plan keeps every rule.",
+      "idea": "A checker that shares no code with the model catches a row the model lost.",
+      "lesson": {
+        "title": "12.3.1 Unit-Testing One Constraint at a Time",
+        "href": "../../../../12-engineering-the-optimization-service/47-testing-optimization-code/units/unit-01/12.3.1-unit-testing-one-constraint-at-a-time.unit.html"
+      }
+    },
+    {
+      "file": "renewal/rolling.py",
+      "signature": "def rolling(fleet: list[Transformer], request: Request, window: int = 3, keep: int = 1) -> Plan",
+      "contract": "Builds the model once; from the first plan year, solves the years [a, a + window) with earlier years' replacement and outage variables fixed to their kept values and later years' fixed to 0, keeps the first `keep` years (every year of the last window), and moves on by `keep` years. Returns the last solve's Plan, or the first failed solve's.",
+      "idea": "A rolling horizon trades the bound for speed: each window is a small model, and every row still counts what earlier windows decided.",
+      "lesson": {
+        "title": "11.3.5 Rolling Horizon and LNS Heuristics",
+        "href": "../../../../11-performance-at-scale/44-decomposition-and-heuristics/units/unit-05/11.3.5-rolling-horizon-and-lns-heuristics.unit.html"
+      }
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_check.py::test_the_checker_names_each_broken_rule_and_passes_a_good_plan",
+      "edge",
+      "the checker names each broken rule, spares of a kind with none listed included, and passes a good plan"
+    ],
+    [
+      "tests/test_rolling.py::test_a_rolling_plan_keeps_every_rule_and_most_of_the_value",
+      "main",
+      "a rolling plan keeps every rule and at least 90% of the full plan's value"
+    ],
+    [
+      "tests/test_rolling.py::test_one_window_over_the_whole_plan_is_the_full_model",
+      "main",
+      "one window over the whole plan is the full model"
+    ],
+    [
+      "tests/test_strong.py::test_per_unit_outage_rows_tighten_the_lp_bound_and_keep_the_optimum",
+      "main",
+      "per-unit outage rows tighten the LP bound and keep the optimum"
+    ]
+  ],
+  "plants": {
+    "tests/test_check.py::test_the_checker_names_each_broken_rule_and_passes_a_good_plan": [
+      [
+        "renewal/check.py",
+        "            if early > request.spares.get(kind, 0):\n",
+        "            if kind in request.spares and early > request.spares[kind]:\n"
+      ]
+    ]
+  },
+  "cites": {
+    "path": "56-project-transformer-renewal/README_14.3.6.md",
+    "section": null
+  }
+}

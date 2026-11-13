@@ -1,0 +1,144 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "29-strong-formulations"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Reformulating an inherited depot model",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A transmission operator (not GridCap) keeps spare parts in depots. Each substation draws $`d_i`$ parts a year and is served by exactly one open depot; depot $`j`$ holds at most $`U_j`$ parts and costs $`\\phi_j`$ a year to keep open; serving substation $`i`$ from depot $`j`$ costs $`h_{i,j}`$ a year in hauling. `build` in `depots.py` has the variables ($`x_{i,j} \\in \\{0,1\\}`$: $`i`$ is served by $`j`$; $`y_j \\in \\{0,1\\}`$: $`j`$ is open), the \"served once\" rows and the objective"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\min \\; \\sum_j \\phi_j\\, y_j + \\sum_{i,j} h_{i,j}\\, x_{i,j}"
+    },
+    {
+      "type": "para",
+      "text": "The model you inherit (`add_inherited_rules`) states the rules \"only an open depot serves\" and \"a depot holds at most its capacity\" as"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_i x_{i,j} \\le |I|\\, y_j \\quad \\text{(open}_j), \\qquad \\sum_i d_i\\, x_{i,j} \\le U_j \\quad \\text{(cap}_j)"
+    },
+    {
+      "type": "para",
+      "text": "It allows exactly the right plans, and its LP bound is $42.13k against a best plan of $77k."
+    },
+    {
+      "type": "para",
+      "text": "Audit it as the lesson did: solve its LP relaxation and look at the $`y_j`$. Then write `add_rules(model, x, y, d)` with the same two rules in their strongest form. Write your rows with labels and quantifiers first, and for each one show on paper (a) that with whole numbers it allows the same plans as the colleague's, and (b) which fractional point of the colleague's LP it refuses."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix whole plans and ask whether each is allowed, and compare your LP bound with what the strongest rows give. Since this model minimizes, a higher LP bound is a tighter one. About six lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Depots:\n    demand: dict             # substation -> spare parts it draws per year\n    capacity: dict           # depot -> spare parts it can hold\n    fee: dict                # depot -> yearly cost of keeping it open ($k)\n    haul: dict               # (substation, depot) -> yearly hauling cost ($k)\n\n\ndef add_inherited_rules(model, x, y, d: Depots) -> None:\n    \"\"\"The colleague's rows: correct for whole plans, weak for the LP.\"\"\"\n    subs, depots = list(d.demand), list(d.capacity)\n    for j in depots:\n        model.add_linear_constraint(sum(x[i, j] for i in subs) <= len(subs) * y[j], name=f\"open_{j}\")\n        model.add_linear_constraint(sum(d.demand[i] * x[i, j] for i in subs) <= d.capacity[j], name=f\"cap_{j}\")\n\n\ndef add_rules(model, x, y, d: Depots) -> None:\n    \"\"\"The same rules, reformulated: as strong as you can make them.\"\"\"\n    subs, depots = list(d.demand), list(d.capacity)\n    for j in depots:\n        for i in subs:\n            model.add_linear_constraint(x[i, j] <= y[j], name=f\"open_{i}_{j}\")\n        model.add_linear_constraint(sum(d.demand[i] * x[i, j] for i in subs) <= d.capacity[j] * y[j],\n                                    name=f\"cap_{j}\")\n\n\ndef build(d: Depots, rules, *, integer: bool = True) -> tuple[mathopt.Model, dict, dict]:\n    \"\"\"Serve every substation from one open depot at the least yearly cost.\"\"\"\n    model = mathopt.Model(name=\"depots\")\n    x = {(i, j): model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{i}_{j}\")\n         for i in d.demand for j in d.capacity}\n    y = {j: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"y_{j}\") for j in d.capacity}\n    for i in d.demand:\n        model.add_linear_constraint(sum(x[i, j] for j in d.capacity) == 1, name=f\"served_{i}\")\n    rules(model, x, y, d)\n    model.minimize(sum(d.fee[j] * y[j] for j in d.capacity) + sum(d.haul[k] * x[k] for k in x))\n    return model, x, y\n\n\nif __name__ == \"__main__\":\n    d = Depots({\"S1\": 4, \"S2\": 3}, {\"D1\": 8, \"D2\": 8}, {\"D1\": 10, \"D2\": 12},\n               {(\"S1\", \"D1\"): 1, (\"S1\", \"D2\"): 2, (\"S2\", \"D1\"): 2, (\"S2\", \"D2\"): 1})\n    for rules in (add_inherited_rules, add_rules):\n        model, _, _ = build(d, rules, integer=False)\n        print(rules.__name__, mathopt.solve(model, mathopt.SolverType.GLOP).objective_value())\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Depots:\n    demand: dict             # substation -> spare parts it draws per year\n    capacity: dict           # depot -> spare parts it can hold\n    fee: dict                # depot -> yearly cost of keeping it open ($k)\n    haul: dict               # (substation, depot) -> yearly hauling cost ($k)\n\n\ndef add_inherited_rules(model, x, y, d: Depots) -> None:\n    \"\"\"The colleague's rows: correct for whole plans, weak for the LP.\"\"\"\n    subs, depots = list(d.demand), list(d.capacity)\n    for j in depots:\n        model.add_linear_constraint(sum(x[i, j] for i in subs) <= len(subs) * y[j], name=f\"open_{j}\")\n        model.add_linear_constraint(sum(d.demand[i] * x[i, j] for i in subs) <= d.capacity[j], name=f\"cap_{j}\")\n\n\ndef add_rules(model, x, y, d: Depots) -> None:\n    \"\"\"The same rules, reformulated: as strong as you can make them.\"\"\"\n    # TODO: the open and capacity rules, in their strongest form.\n    return None\n\ndef build(d: Depots, rules, *, integer: bool = True) -> tuple[mathopt.Model, dict, dict]:\n    \"\"\"Serve every substation from one open depot at the least yearly cost.\"\"\"\n    model = mathopt.Model(name=\"depots\")\n    x = {(i, j): model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{i}_{j}\")\n         for i in d.demand for j in d.capacity}\n    y = {j: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"y_{j}\") for j in d.capacity}\n    for i in d.demand:\n        model.add_linear_constraint(sum(x[i, j] for j in d.capacity) == 1, name=f\"served_{i}\")\n    rules(model, x, y, d)\n    model.minimize(sum(d.fee[j] * y[j] for j in d.capacity) + sum(d.haul[k] * x[k] for k in x))\n    return model, x, y\n\n\nif __name__ == \"__main__\":\n    d = Depots({\"S1\": 4, \"S2\": 3}, {\"D1\": 8, \"D2\": 8}, {\"D1\": 10, \"D2\": 12},\n               {(\"S1\", \"D1\"): 1, (\"S1\", \"D2\"): 2, (\"S2\", \"D1\"): 2, (\"S2\", \"D2\"): 1})\n    for rules in (add_inherited_rules, add_rules):\n        model, _, _ = build(d, rules, integer=False)\n        print(rules.__name__, mathopt.solve(model, mathopt.SolverType.GLOP).objective_value())\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 3,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "f2ed1cb561f5f9b5fadfa71f796b5e81943ac0096bf8c7f37ee071f7d6d2a988",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Depots:\n    demand: dict             # substation -> spare parts it draws per year\n    capacity: dict           # depot -> spare parts it can hold\n    fee: dict                # depot -> yearly cost of keeping it open ($k)\n    haul: dict               # (substation, depot) -> yearly hauling cost ($k)\n\n\ndef add_inherited_rules(model, x, y, d: Depots) -> None:\n    \"\"\"The colleague's rows: correct for whole plans, weak for the LP.\"\"\"\n    subs, depots = list(d.demand), list(d.capacity)\n    for j in depots:\n        model.add_linear_constraint(sum(x[i, j] for i in subs) <= len(subs) * y[j], name=f\"open_{j}\")\n        model.add_linear_constraint(sum(d.demand[i] * x[i, j] for i in subs) <= d.capacity[j], name=f\"cap_{j}\")\n\n\ndef add_rules(model, x, y, d: Depots) -> None:\n    \"\"\"The same rules, reformulated: as strong as you can make them.\"\"\"\n    # TODO: the open and capacity rules, in their strongest form.\n    return None\n\ndef build(d: Depots, rules, *, integer: bool = True) -> tuple[mathopt.Model, dict, dict]:\n    \"\"\"Serve every substation from one open depot at the least yearly cost.\"\"\"\n    model = mathopt.Model(name=\"depots\")\n    x = {(i, j): model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{i}_{j}\")\n         for i in d.demand for j in d.capacity}\n    y = {j: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"y_{j}\") for j in d.capacity}\n    for i in d.demand:\n        model.add_linear_constraint(sum(x[i, j] for j in d.capacity) == 1, name=f\"served_{i}\")\n    rules(model, x, y, d)\n    model.minimize(sum(d.fee[j] * y[j] for j in d.capacity) + sum(d.haul[k] * x[k] for k in x))\n    return model, x, y\n\n\nif __name__ == \"__main__\":\n    d = Depots({\"S1\": 4, \"S2\": 3}, {\"D1\": 8, \"D2\": 8}, {\"D1\": 10, \"D2\": 12},\n               {(\"S1\", \"D1\"): 1, (\"S1\", \"D2\"): 2, (\"S2\", \"D1\"): 2, (\"S2\", \"D2\"): 1})\n    for rules in (add_inherited_rules, add_rules):\n        model, _, _ = build(d, rules, integer=False)\n        print(rules.__name__, mathopt.solve(model, mathopt.SolverType.GLOP).objective_value())\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-1/depots.py",
+    "test_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-1/test_depots.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-1/depots.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-1/target/report.xml",
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-1/test_depots.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_same_plans_are_allowed_and_the_best_costs_the_same",
+        "kind": "main",
+        "says": "your rows allow exactly the plans the colleague's allow: a substation at a closed depot or an overfull depot is refused, and the best plan costs 77 either way"
+      },
+      {
+        "id": "test_each_substation_is_tied_to_its_own_depot_switch",
+        "kind": "edge",
+        "says": "the LP bound reaches the 72.625 the strongest rows give"
+      },
+      {
+        "id": "test_an_open_depot_is_needed_for_any_capacity",
+        "kind": "edge",
+        "says": "the LP cannot use a depot's capacity while it is barely open"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "29-strong-formulations/README_6.7.4.md",
+      "section": "The LP Point Shows Where a Formulation Is Weak"
+    },
+    "concepts": [
+      "fractional values in the LP solution point at the rows to strengthen"
+    ]
+  }
+}

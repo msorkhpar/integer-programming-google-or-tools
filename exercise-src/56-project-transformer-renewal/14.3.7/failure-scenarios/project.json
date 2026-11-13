@@ -1,0 +1,88 @@
+{
+  "project_api": 1,
+  "title": "Plan under versions of the failure curves",
+  "before": "../../../../56-project-transformer-renewal/steps/06",
+  "after": "../../../../56-project-transformer-renewal/steps/07",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the tiny fleet matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "renewal/risk.py",
+      "signature": "def curve(kind: str, scenario: Scenario = BASE) -> tuple[float, float]",
+      "contract": "(beta, eta) of a kind's failure curve under a scenario: KINDS[kind].beta times scenario.beta, and KINDS[kind].eta times scenario.eta.",
+      "idea": "A scenario is a version of the model's data, here the curves every coefficient comes from.",
+      "lesson": {
+        "title": "14.3.7 Uncertain Failure Curves: Scenarios and What Changes",
+        "href": "../../../../14-growing-real-projects/56-project-transformer-renewal/units/unit-07/14.3.7-uncertain-failure-curves-scenarios-and-what-changes.unit.html"
+      },
+      "stub": "return KINDS[kind].beta, KINDS[kind].eta"
+    },
+    {
+      "file": "renewal/risk.py",
+      "signature": "def risk_removed(t: Transformer, start: int, request: Request, scenario: Scenario = BASE) -> float",
+      "contract": "As before, with both the old unit's and the new unit's PoF taken from the scenario's curve (pof_next and risk_table take the scenario too, with the base curves by default).",
+      "idea": "Under another curve the failures move, so every coefficient moves with them.",
+      "lesson": {
+        "title": "14.3.7 Uncertain Failure Curves: Scenarios and What Changes",
+        "href": "../../../../14-growing-real-projects/56-project-transformer-renewal/units/unit-07/14.3.7-uncertain-failure-curves-scenarios-and-what-changes.unit.html"
+      }
+    },
+    {
+      "file": "renewal/risk.py",
+      "signature": "def evaluate(fleet: list[Transformer], request: Request, replace: dict[str, int], scenario: Scenario) -> float",
+      "contract": "What a finished plan removes if the scenario is how the fleet fails: the sum of risk_removed under the scenario over its replacements, $k.",
+      "idea": "Value a plan outside the model, so any plan can be scored under any scenario.",
+      "lesson": {
+        "title": "14.3.7 Uncertain Failure Curves: Scenarios and What Changes",
+        "href": "../../../../14-growing-real-projects/56-project-transformer-renewal/units/unit-07/14.3.7-uncertain-failure-curves-scenarios-and-what-changes.unit.html"
+      }
+    },
+    {
+      "file": "renewal/model.py",
+      "signature": "def build(fleet: list[Transformer], request: Request) -> Built",
+      "contract": "As before, with the objective over request.scenarios (the base curves alone when there are none): for objective \"expected\", the sum over scenarios of weight / total weight times that scenario's coefficients; for \"worst\", a continuous variable `worst` (0 to an upper bound you derive), a row `worst_<name>` per scenario keeping it at most what the plan removes under that scenario, and `worst` maximized.",
+      "idea": "A weighted mean of linear objectives is one linear objective; a max-min is a variable bounded by each scenario's objective, maximized.",
+      "lesson": {
+        "title": "14.3.7 Uncertain Failure Curves: Scenarios and What Changes",
+        "href": "../../../../14-growing-real-projects/56-project-transformer-renewal/units/unit-07/14.3.7-uncertain-failure-curves-scenarios-and-what-changes.unit.html"
+      }
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_scenarios.py::test_a_curve_that_fails_younger_makes_a_replacement_worth_more",
+      "main",
+      "a curve that fails younger makes a replacement worth more, and a scenario of no change changes nothing"
+    ],
+    [
+      "tests/test_scenarios.py::test_the_expected_objective_is_the_weighted_mean_over_scenarios",
+      "edge",
+      "the expected objective is the mean over scenarios weighted by their weights, not the plain mean"
+    ],
+    [
+      "tests/test_scenarios.py::test_the_worst_case_plan_does_best_in_its_worst_scenario",
+      "main",
+      "the worst-case plan's value is its worst scenario's, and no lower than the expected plan's worst"
+    ]
+  ],
+  "plants": {
+    "tests/test_scenarios.py::test_the_expected_objective_is_the_weighted_mean_over_scenarios": [
+      [
+        "renewal/model.py",
+        "        model.maximize(removed(sum(s.weight / total * rr for s, rr in zip(scenarios, tables))))\n",
+        "        model.maximize(removed(sum(rr / len(tables) for rr in tables)))\n"
+      ]
+    ]
+  },
+  "cites": {
+    "path": "56-project-transformer-renewal/README_14.3.7.md",
+    "section": null
+  }
+}

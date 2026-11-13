@@ -1,0 +1,160 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "46-input-data-quality"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A canonical digest for a pipe-inspection survey",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility's inspection team sends pipe surveys to a planning service, and both teams must be able to name a survey by its digest: the same survey content gives the same digest on either side, whatever order the keys or records arrive in. A survey has scalar fields, a list of `tags`, and a list of `segments`, each with an `id`, a `material`, a length and a list of wall-thickness `readings` taken in order along the pipe."
+    },
+    {
+      "type": "para",
+      "text": "In `survey.py`, write `digest(doc)`: the SHA-256 hex digest of the survey's canonical bytes, defined by both teams as follows."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "The records of `segments` are in `id` order, and `tags` are sorted. These are the lists named in `UNORDERED`. The rule goes by the key a list sits under, at any depth: a list held under a key named in `UNORDERED`, in any object of the document, is sorted the same way. Every other list, `readings` included, keeps its order.",
+        "Every float is cut to 3 decimals by fixed-point formatting, so `0.1 + 0.2` and `0.3` agree; `-0.0` becomes `0.0`; a NaN or an infinity raises `ValueError`.",
+        "The bytes are `json.dumps` of the result with sorted keys, separators `(\",\", \":\")`, `ensure_ascii=True` and `allow_nan=False`, encoded as ASCII."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "One segment's material is written with a non-ASCII letter, so the last rule matters: the other team has pinned the digest of the test survey, and only exactly these bytes give it. About twenty lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport hashlib\nimport json\nimport math\n\n#: Lists whose order means nothing, with the field that sorts their records (None: sort the values).\nUNORDERED = {\"segments\": \"id\", \"tags\": None}\nPLACES = 3\n\n\ndef fixed(value: float) -> float:\n    if not math.isfinite(value):\n        raise ValueError(f\"{value} has no canonical form\")\n    return float(f\"{value:.{PLACES}f}\") + 0.0\n\n\ndef normalize(value, key: str | None = None):\n    if isinstance(value, float):\n        return fixed(value)\n    if isinstance(value, dict):\n        return {k: normalize(v, k) for k, v in value.items()}\n    if isinstance(value, list):\n        items = [normalize(v) for v in value]\n        if key in UNORDERED:\n            field = UNORDERED[key]\n            items.sort(key=(lambda r: r[field]) if field else None)\n        return items\n    return value\n\n\ndef digest(doc: dict) -> str:\n    \"\"\"sha256 of the survey's canonical bytes.\"\"\"\n    text = json.dumps(normalize(doc), sort_keys=True, separators=(\",\", \":\"), ensure_ascii=True, allow_nan=False)\n    return hashlib.sha256(text.encode(\"ascii\")).hexdigest()\n\n\nif __name__ == \"__main__\":\n    print(digest({\"version\": 1, \"tags\": [\"b\", \"a\"], \"rate\": 0.05}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport hashlib\nimport json\nimport math\n\n#: Lists whose order means nothing, with the field that sorts their records (None: sort the values).\nUNORDERED = {\"segments\": \"id\", \"tags\": None}\nPLACES = 3\n\n\ndef digest(doc: dict) -> str:\n    \"\"\"sha256 of the survey's canonical bytes.\"\"\"\n    # TODO: build the canonical form the statement describes, then hash it.\n    return hashlib.sha256(json.dumps(doc).encode(\"utf-8\")).hexdigest()\n\n\nif __name__ == \"__main__\":\n    print(digest({\"version\": 1, \"tags\": [\"b\", \"a\"], \"rate\": 0.05}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "eb511f81933449afd2877f73aa0b81603ba6699806db09aa0cd4918eb0f61f46",
+  "starting_code": "from __future__ import annotations\n\nimport hashlib\nimport json\nimport math\n\n#: Lists whose order means nothing, with the field that sorts their records (None: sort the values).\nUNORDERED = {\"segments\": \"id\", \"tags\": None}\nPLACES = 3\n\n\ndef digest(doc: dict) -> str:\n    \"\"\"sha256 of the survey's canonical bytes.\"\"\"\n    # TODO: build the canonical form the statement describes, then hash it.\n    return hashlib.sha256(json.dumps(doc).encode(\"utf-8\")).hexdigest()\n\n\nif __name__ == \"__main__\":\n    print(digest({\"version\": 1, \"tags\": [\"b\", \"a\"], \"rate\": 0.05}))\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-03/practice-1/survey.py",
+    "test_path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-03/practice-1/test_survey.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-03/practice-1/survey.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-03/practice-1/target/report.xml",
+      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-03/practice-1/test_survey.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_key_order_and_layout_do_not_matter_but_a_reading_does",
+        "kind": "main",
+        "says": "the same survey with its keys in another order and another layout has the same digest; one changed reading changes it"
+      },
+      {
+        "id": "test_segments_in_another_order_are_the_same_survey",
+        "kind": "edge",
+        "says": "segments listed in another order are the same survey"
+      },
+      {
+        "id": "test_tags_in_another_order_are_the_same_survey",
+        "kind": "edge",
+        "says": "tags listed in another order are the same survey"
+      },
+      {
+        "id": "test_readings_keep_their_order",
+        "kind": "edge",
+        "says": "readings are taken in order along the pipe, so reversing them is a different survey"
+      },
+      {
+        "id": "test_floats_equal_to_three_decimals_are_the_same",
+        "kind": "edge",
+        "says": "0.1 + 0.2 and 0.3 are the same rate at three decimals"
+      },
+      {
+        "id": "test_minus_zero_is_zero",
+        "kind": "edge",
+        "says": "a rate of -0.0 is the rate 0.0"
+      },
+      {
+        "id": "test_nan_is_refused",
+        "kind": "edge",
+        "says": "a rate of NaN has no canonical form and is refused with ValueError"
+      },
+      {
+        "id": "test_the_digest_is_the_documented_one",
+        "kind": "edge",
+        "says": "the bytes are exactly the documented form, so the digest matches the one the other team pinned"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-03/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "46-input-data-quality/README_12.2.3.md",
+      "section": "Hash the Validated Content in Canonical Form, Not the File"
+    },
+    "concepts": [
+      "a digest of content in canonical form: sorted keys, only the order-free lists sorted, floats at a fixed precision, NaN refused, one documented byte form"
+    ]
+  }
+}

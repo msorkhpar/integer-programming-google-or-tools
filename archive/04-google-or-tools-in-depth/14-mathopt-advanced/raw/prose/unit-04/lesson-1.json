@@ -1,0 +1,554 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "14-mathopt-advanced"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Incremental solving: edit the model, re-solve",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "4.3.4 Incremental Solving: Edit the Model, Re-Solve"
+    },
+    {
+      "type": "para",
+      "text": "Finance is preparing for a budget meeting and wants GridCap's planners ready for any outcome: what does the plan lose if 2029 is cut by 5%, by 10%, by 20%? And what if the board rules out P032, a $5,680k transmission project? Each question changes one or two numbers of a model that is otherwise the same. This lesson answers them all with one model and one solver: edit the model, re-solve, put the edit back. It also shows which edits a solver applies in place and which make MathOpt quietly start the solver over, and the two mistakes that make scenario code give wrong answers. GridCap is a fictional utility."
+    },
+    {
+      "type": "para",
+      "text": "Lesson 2.4.3 introduced `mathopt.IncrementalSolver` on an LP and measured its warm start in simplex iterations. This lesson is about MIPs, where the solvers differ more, and about scenario code that stays correct."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The multi-period timing model of lesson 4.3.1, with the data each scenario changes marked. Its decisions are start-time variables: $`x_{i,t}= 1`$ if project $`i`$ starts in year $`t`$ of its window $`T_i`$; a project starts at most once and spends its cost profile from its start year on. (Lesson 6.4.1, in section 6, builds this model step by step.)"
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`P`$ the projects; $`Y`$ the years; $`T_i \\subseteq Y`$ the start years of project $`i`$; $`M \\subseteq P`$ the must-do projects; $`\\mathcal{G}`$ the alternative groups; $`C`$ the child projects, with parent $`p(c)`$ and lag $`L_c`$."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`\\text{npv}_{i,t}`$ ($k); $`c_{i,k}`$, project $`i`$'s spend in its $`k`$-th year of work ($k); $`B_y`$, the budget of year $`y`$ ($k), **with $`B_{2029}`$ cut by a share $`s \\in \\{5\\%, 10\\%, 20\\%\\}`$ in the cut scenarios**."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_{i,t} \\in \\{0, 1\\}`$ for $`i \\in P`$, $`t \\in T_i`$, **with $`x_{\\text{P032},t} \\le 0`$ for every $`t`$ in the \"without P032\" scenario** (an upper bound of 0, so the project cannot start)."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{i \\in P} \\sum_{t \\in T_i} \\text{npv}_{i,t}\\, x_{i,t}"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints**, with $`\\text{spend}_y = \\sum_{i \\in P} \\sum_{t \\in T_i,\\, t \\le y} c_{i,\\,y-t}\\, x_{i,t}`$:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{t \\in T_i} x_{i,t} &\\le 1 && \\forall i \\in P \\setminus M && \\text{(once}_i) \\\\\n\\sum_{t \\in T_i} x_{i,t} &= 1 && \\forall i \\in M && \\text{(must}_i) \\\\\n\\sum_{i \\in g} \\sum_{t \\in T_i} x_{i,t} &\\le 1 && \\forall g \\in \\mathcal{G} && \\text{(alt}_g) \\\\\n\\sum_{u \\in T_c,\\, u \\le t} x_{c,u} &\\le \\sum_{s \\in T_{p(c)},\\, s \\le t - L_c} x_{p(c),s} && \\forall c \\in C,\\ t \\in T_c && \\text{(after}_{c,t}) \\\\\n\\text{spend}_y &\\le B_y && \\forall y \\in Y && \\text{(budget}_y) \\quad \\leftarrow (1 - s)\\, B_{2029} \\text{ for } y = 2029\n\\end{aligned}"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Keep a Handle on What a Scenario Changes, and Put It Back"
+    },
+    {
+      "type": "para",
+      "text": "A scenario is an edit of the model, and an edit needs a handle on the thing it changes. That is why `plan_model.build` returns a `PlanModel` holding the start variables `x[pid, t]` and the budget rows `budget[y]` by key, not just the model. With handles, every kind of change is one call:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Change",
+        "Call",
+        "Lesson"
+      ],
+      "rows": [
+        [
+          "a row's limit",
+          "`row.upper_bound = ...`, `row.lower_bound = ...`",
+          "2.4.3"
+        ],
+        [
+          "a coefficient in a row or in the objective",
+          "`row.set_coefficient(v, a)`, `model.objective.set_linear_coefficient(v, c)`",
+          "2.4.3"
+        ],
+        [
+          "a variable's bounds",
+          "`v.lower_bound = ...`, `v.upper_bound = ...`",
+          "this one"
+        ],
+        [
+          "a variable's type",
+          "`v.integer = False` (or `True`)",
+          "4.3.3"
+        ],
+        [
+          "a new row or variable",
+          "`model.add_linear_constraint(...)`, `model.add_variable(...)`",
+          "2.4.3"
+        ],
+        [
+          "remove a row or variable",
+          "`model.delete_linear_constraint(row)`, `model.delete_variable(v)`",
+          "this one"
+        ],
+        [
+          "an indicator constraint's row",
+          "delete it and add it again; it cannot be edited",
+          "4.3.1"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "An edit stays in the model for every solve that follows, so a scenario must put back what it changed before the next one runs. `budget_cut.py` does that with a small **context manager**, a function used in a `with` block that runs code on the way in and, thanks to `finally`, on the way out, even if the block raises an error:"
+    },
+    {
+      "type": "example",
+      "id": "budget_cut-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "14-mathopt-advanced/src/budget_cut.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "14-mathopt-advanced/src/budget_cut.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "@contextlib.contextmanager\ndef edited(obj, attr: str, value: float):\n    \"\"\"Set obj.attr for the length of a `with` block, then put the old value back, even on errors.\"\"\"\n    old = getattr(obj, attr)\n    setattr(obj, attr, value)\n    try:\n        yield\n    finally:\n        setattr(obj, attr, old)"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`edited(row, \"upper_bound\", 7_000)` sets the bound for the block and restores the old one after it. It works for any attribute with a setter: a row's bounds, a variable's bounds, `integer`."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "One IncrementalSolver Answers Every Scenario"
+    },
+    {
+      "type": "para",
+      "text": "`mathopt.IncrementalSolver(model, solver_type)` keeps one solver alive across solves. Each call to its `solve()` sends the solver only what changed in the model since the last call. Used as a context manager, it frees the solver when the block ends (its docstring recommends it; `close()` does the same by hand). The budget scenarios, all on one model built once:"
+    },
+    {
+      "type": "example",
+      "id": "budget_cut-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "14-mathopt-advanced/src/budget_cut.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "14-mathopt-advanced/src/budget_cut.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "with quiet(), mathopt.IncrementalSolver(pm.model, mathopt.SolverType.GSCIP) as solver:\n    base = solver.solve(params=EXACT)\n    base_plan = plan(pm, base.variable_values())"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "example",
+      "id": "budget_cut-3",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "14-mathopt-advanced/src/budget_cut.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "14-mathopt-advanced/src/budget_cut.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "for share in (0.05, 0.10, 0.20):\n    row = pm.budget[2029]\n    with edited(row, \"upper_bound\", (1 - share) * small.budget[2029]):\n        result = solver.solve(params=EXACT)\n        cut_plan = plan(pm, result.variable_values())\n        dropped = sorted(set(base_plan) - set(cut_plan))\n        moved = sorted(p for p in cut_plan if p in base_plan and cut_plan[p] != base_plan[p])"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "base           NPV 24,260\n2029 cut   5%  NPV 24,070  dropped ['P005']  moved ['P008', 'P011', 'P018', 'P020']\n2029 cut  10%  NPV 24,053  dropped ['P005', 'P016']  moved ['P008', 'P011', 'P012']\n2029 cut  20%  NPV 23,645  dropped ['P005']  moved ['P010', 'P015', 'P020']\n2029 bound after the loop: 8,760"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Each cut is taken from the original budget, 8,760, because `edited` put the bound back after the scenario before. The last line checks it. The NPV falls with every deeper cut: $190k at 5%, $207k at 10%, $615k at 20%. The lists say how the plan absorbs it: a few projects dropped, more **moved** to another start year. They are one optimal plan per scenario, not the only one: where two plans tie on NPV, another solver, or another version, may return the other. That is also why the 20% plan can keep P016 while the 10% plan drops it."
+    },
+    {
+      "type": "para",
+      "text": "Ruling out a project is a scenario too. Its start variables get an upper bound of 0 for the length of the block; `contextlib.ExitStack` enters several `edited` blocks at once and leaves them all:"
+    },
+    {
+      "type": "example",
+      "id": "budget_cut-4",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "14-mathopt-advanced/src/budget_cut.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "14-mathopt-advanced/src/budget_cut.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "with contextlib.ExitStack() as stack:\n    for t in small.project(\"P032\").starts():\n        stack.enter_context(edited(pm.x[\"P032\", t], \"upper_bound\", 0.0))\n    result = solver.solve(params=EXACT)\n    rows.append(f\"without P032   NPV {result.objective_value():,.0f}\")\nagain = solver.solve(params=EXACT)\nrows.append(f\"all restored   NPV {again.objective_value():,.0f}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "without P032   NPV 24,148\nall restored   NPV 24,260"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "P032 is worth $112k of NPV to the plan, and once its bounds are back the model solves to the base NPV again: the edits left no trace."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Whether the Solver Updates in Place Depends on the Solver and the Edit"
+    },
+    {
+      "type": "para",
+      "text": "What does `IncrementalSolver.solve()` do with the changes? Its source in `solve.py` answers: it asks the solver it holds to apply them. If the solver says it cannot, MathOpt throws that solver away and builds a new one from the whole model, without telling you. Either way the result is right; what differs is whether the solver kept its copy of the model, and with it any state it could reuse."
+    },
+    {
+      "type": "para",
+      "text": "`update_or_rebuild.py` makes six edits in a row, solving after each, and checks whether the object the `IncrementalSolver` holds is still the same one. It reads a private attribute, `_proto_solver`, so treat it as a diagnostic for learning, not as code to ship:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "held = solver._proto_solver                       # private: diagnostic only\napply()\nresult = solver.solve()\nreport.append(f\"{name}: {'in place' if solver._proto_solver is held else 'REBUILT'}\")"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "GSCIP  final NPV 27,514 | budget bound: in place, objective coef: in place, new row: in place, delete row: in place, new variable: in place, integer -> continuous: REBUILT\nHIGHS  final NPV 27,514 | budget bound: REBUILT, objective coef: REBUILT, new row: REBUILT, delete row: REBUILT, new variable: REBUILT, integer -> continuous: REBUILT\nCP_SAT final NPV 27,514 | budget bound: REBUILT, objective coef: REBUILT, new row: REBUILT, delete row: REBUILT, new variable: REBUILT, integer -> continuous: REBUILT"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**SCIP** applied five of the six edits in place, and rebuilt only when a variable stopped being integer.",
+        "**HiGHS and CP-SAT** rebuilt after every edit. Through MathOpt in OR-Tools 9.15, an `IncrementalSolver` on either is a fresh solve each time, the same finding lesson 2.4.3 made for HiGHS on an LP.",
+        "**All three end at the same NPV**, 27,514 (high, because the edits included deleting the 2031 budget row). A rebuild costs time, never correctness."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "\"In place\" means the solver kept its model; it does not by itself mean the MIP search starts from where the last one ended. This program measures no speed, and for a MIP the gain depends on the solver and the edit. What the table does settle is the choice of tool: for many scenarios of one model, an `IncrementalSolver` is never worse than a fresh `mathopt.solve`, and on SCIP it avoids rebuilding the solver's model; on HiGHS and CP-SAT it gives nothing, and editing the model in place is still worth it, because it saves rebuilding *your* model."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Undo Every Edit, and Never Delete What a Scenario Only Switches Off"
+    },
+    {
+      "type": "para",
+      "text": "Two mistakes make scenario code quietly wrong. The first is a relative edit that is never undone:"
+    },
+    {
+      "type": "example",
+      "id": "budget_cut-5",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "14-mathopt-advanced/src/budget_cut.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "14-mathopt-advanced/src/budget_cut.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "for scenario in (\"5% cut\", \"another 5% cut\"):\n    pm.budget[2029].upper_bound *= 0.95"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "5% cut          2029 bound 8,322.00  (budget 8,760, cut 5.00%)\nanother 5% cut  2029 bound 7,905.90  (budget 8,760, cut 9.75%)"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The second scenario was meant to be \"a 5% cut\" and ran as a 9.75% one, and nothing failed. Either compute each scenario from the original data, as the loop with `edited` does with `(1 - share) * small.budget[2029]`, or restore after each scenario, and best both."
+    },
+    {
+      "type": "para",
+      "text": "The second mistake is deleting what a scenario only needs to switch off. Deletion cannot be put back with an assignment, and every reference to a deleted variable stops working:"
+    },
+    {
+      "type": "example",
+      "id": "budget_cut-6",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "14-mathopt-advanced/src/budget_cut.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "14-mathopt-advanced/src/budget_cut.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "spare = pm.x[\"P040\", 2028]\npm.model.delete_variable(spare)\ntry:\n    spare.upper_bound = 1.0\nexcept Exception as error:\n    print(\"using a deleted variable:\", type(error).__name__, \"|\", error)"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "using a deleted variable: ValueError | no element with id 79 for element type variable"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The `Variable` object still exists in Python, but the model no longer has the element it points to (id 79, the last of the 80 start variables). Deleting a variable also removes it from every row and the objective, so adding it back would mean rebuilding all of those. To take a project out of one scenario, bound its variables to 0, as the \"without P032\" scenario did; delete only what is gone for good. The upper bound is the one that matters: a lower bound of 1 would do the opposite and force the project in. Setting its NPV to 0 in the objective is not the same thing: the project could still start and spend budget for no value, which is a different scenario from \"without\". Indicator constraints are the one exception, because they cannot be edited at all (lesson 4.3.1): to change one, delete it and add a new one, and replace your handle."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 3 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Keep a handle on what a scenario changes, and put it back.** A builder that returns rows and variables by key makes each scenario one edit; a context manager restores it even on errors.",
+        "**One IncrementalSolver answers every scenario.** Three 2029 cuts and a ruled-out project, on one model built once; the cuts cost $190k, $207k and $615k of NPV.",
+        "**Whether the solver updates in place depends on the solver and the edit.** In OR-Tools 9.15, SCIP applied bound, coefficient, row and variable edits in place; HiGHS and CP-SAT rebuilt after every edit, silently and correctly.",
+        "**Undo every edit, and never delete what a scenario only switches off.** Relative edits pile up; a deleted variable's references raise `ValueError`."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Task",
+        "Code"
+      ],
+      "rows": [
+        [
+          "one solver for many solves",
+          "`with mathopt.IncrementalSolver(model, solver_type) as solver: solver.solve(params=...)`"
+        ],
+        [
+          "a temporary edit",
+          "`with edited(row, \"upper_bound\", value): ...` (`budget_cut.py`)"
+        ],
+        [
+          "several temporary edits",
+          "`contextlib.ExitStack()` and `stack.enter_context(edited(...))`"
+        ],
+        [
+          "rule a project out",
+          "`v.upper_bound = 0` for its start variables, then restore"
+        ],
+        [
+          "relax integrality in place",
+          "`v.integer = False`"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Solver (OR-Tools 9.15)",
+        "Edits applied in place by `IncrementalSolver`"
+      ],
+      "rows": [
+        [
+          "SCIP",
+          "bounds, objective coefficients, new and deleted rows, new variables; rebuilt on an integrality change"
+        ],
+        [
+          "HiGHS, CP-SAT",
+          "none: rebuilt on every edit"
+        ],
+        [
+          "GLOP (LP, lesson 2.4.3)",
+          "warm-starts from the last basis"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading.** OR-Tools, [MathOpt](https://developers.google.com/optimization/math_opt): incremental solving among MathOpt's features. `IncrementalSolver` in [`solve.py`](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/solve.py): its docstring (the `with` form, `close`, thread safety) and its `solve` method, which rebuilds the solver when an update is refused. The samples [`facility_lp_benders.py`](https://github.com/google/or-tools/blob/stable/ortools/math_opt/samples/python/facility_lp_benders.py), which keeps two incremental solvers through a Benders loop and edits bounds and adds rows between solves, and [`cutting_stock.py`](https://github.com/google/or-tools/blob/stable/ortools/math_opt/samples/python/cutting_stock.py), which re-solves a growing LP with an incremental GLOP solver."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Add a fourth scenario: 2029 cut by 10% *and* P032 ruled out. Is its NPV loss the sum of the two losses alone? Predict, then run.",
+        "In `update_or_rebuild.py`, add an edit that adds an indicator constraint, and run it on SCIP. Does SCIP keep its solver?",
+        "A colleague writes `pm.budget[2029].upper_bound -= 438` for a 5% cut and `+= 438` to undo it. When could that leave the bound different from where it started?"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Scenarios Are Data, Edits Are Code"
+    },
+    {
+      "type": "para",
+      "text": "`budget_cut.py` lists its scenarios as numbers (`0.05, 0.10, 0.20`) and has one piece of code that turns a number into an edit and back. Adding a scenario is adding a number. The same split scales to the scenario tables planners ask for: a list of scenarios, each a set of (handle, attribute, value) edits, and one loop that applies, solves, records and restores. Section 12 builds that loop into a service."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**budget_cut.py.** The 2029 cut scenarios and the \"without P032\" scenario on one `IncrementalSolver`, then the two mistakes: piled-up relative edits and a deleted variable (*Keep a Handle*, *One IncrementalSolver Answers Every Scenario*, *Undo Every Edit*). *Try:* Replace the SCIP solver with HiGHS and predict whether any number in the table changes."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [budget_cut.py](src/budget_cut.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**update_or_rebuild.py.** Six edits on SCIP, HiGHS and CP-SAT, and whether each was applied in place (*Whether the Solver Updates in Place*). *Try:* Move the integrality edit to the front and predict what SCIP reports for the edits after it."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [update_or_rebuild.py](src/update_or_rebuild.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 11,
+    "paras": 27,
+    "code": 4,
+    "tables": 3,
+    "lists": 5,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 3,
+    "disclosures": 0,
+    "examples": 6
+  },
+  "content_sha256": "6ed6d288aa792c483c272f0900e92980716571ff861dc2874762d0f334a5d0d9"
+}

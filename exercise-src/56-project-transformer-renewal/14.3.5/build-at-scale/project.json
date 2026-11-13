@@ -1,0 +1,87 @@
+{
+  "project_api": 1,
+  "title": "Build the model for thousands of units, and show it is the same model",
+  "before": "../../../../56-project-transformer-renewal/steps/04",
+  "after": "../../../../56-project-transformer-renewal/steps/05",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the tiny fleet matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "renewal/model.py",
+      "signature": "def build(fleet: list[Transformer], request: Request) -> Built",
+      "contract": "Makes the reference builder's model, with the same variables in the same order, the same row names, bounds and coefficients, and the same objective coefficients to 1e-9, in time that grows with the fleet: group the candidates by substation, region and kind once, build each sum with mathopt.fast_sum, and take the objective's coefficients from risk_table.",
+      "idea": "Index once and never scan the fleet inside a loop over groups; build sums in one call.",
+      "lesson": {
+        "title": "11.1.2 Vectorized Model Building From DataFrames",
+        "href": "../../../../11-performance-at-scale/42-model-building-at-scale/units/unit-02/11.1.2-vectorized-model-building-from-dataframes.unit.html"
+      }
+    },
+    {
+      "file": "renewal/risk.py",
+      "signature": "def risk_table(units: list[Transformer], request: Request) -> np.ndarray",
+      "contract": "An array with a row per unit and a column per plan year, entry [i, j] equal to risk_removed(units[i], the j-th plan year, request), computed with numpy arrays one kind at a time.",
+      "idea": "A coefficient that is a sum over years is a matrix product over arrays of ages and years.",
+      "lesson": {
+        "title": "11.1.2 Vectorized Model Building From DataFrames",
+        "href": "../../../../11-performance-at-scale/42-model-building-at-scale/units/unit-02/11.1.2-vectorized-model-building-from-dataframes.unit.html"
+      }
+    },
+    {
+      "file": "renewal/reference.py",
+      "signature": "def build_reference(fleet: list[Transformer], request: Request) -> Built",
+      "contract": "The builder of the step before, unchanged: one plain loop per row family, and risk_removed for each coefficient.",
+      "idea": "A faster builder is right only if it makes the same model as a slow one you trust, so keep the slow one and compare.",
+      "lesson": {
+        "title": "14.3.5 From 500 to 5,000 Transformers: Building the Model at Scale",
+        "href": "../../../../14-growing-real-projects/56-project-transformer-renewal/units/unit-05/14.3.5-from-500-to-5-000-transformers-building-the-model-at-scale.unit.html"
+      }
+    },
+    {
+      "file": "renewal/request.py",
+      "signature": "def scaled(self, factor: int) -> Request",
+      "contract": "The same request for a fleet factor times larger: budget, outages, crew_weeks and each kind's spares times factor (a limit that is None stays None); everything else, the outage cost included, unchanged.",
+      "idea": "A limit is a quantity of the fleet's resources and grows with it; a price or a rate does not.",
+      "lesson": {
+        "title": "14.3.5 From 500 to 5,000 Transformers: Building the Model at Scale",
+        "href": "../../../../14-growing-real-projects/56-project-transformer-renewal/units/unit-05/14.3.5-from-500-to-5-000-transformers-building-the-model-at-scale.unit.html"
+      }
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_scale.py::test_the_fast_builder_makes_the_reference_model",
+      "main",
+      "the fast builder makes the reference builder's model, row for row"
+    ],
+    [
+      "tests/test_scale.py::test_the_risk_table_matches_the_coefficient_function",
+      "main",
+      "the risk table matches the coefficient function for every unit and year"
+    ],
+    [
+      "tests/test_scale.py::test_a_scaled_request_grows_every_limit_with_the_fleet",
+      "edge",
+      "a scaled request grows every limit with the fleet and keeps the outage price"
+    ]
+  ],
+  "plants": {
+    "tests/test_scale.py::test_a_scaled_request_grows_every_limit_with_the_fleet": [
+      [
+        "renewal/request.py",
+        "        return replace(self, budget=self.budget * factor,\n",
+        "        return replace(self, budget=self.budget * factor, outage_cost=self.outage_cost * factor,\n"
+      ]
+    ]
+  },
+  "cites": {
+    "path": "56-project-transformer-renewal/README_14.3.5.md",
+    "section": null
+  }
+}

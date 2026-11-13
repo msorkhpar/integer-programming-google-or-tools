@@ -1,0 +1,155 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "15-mock-interviews",
+    "53-mock-interviews"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "One inspection crew",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "This is the mock's whiteboard, coded for CP-SAT. A substation inspection crew does one job at a time. `crew.py` already has one integer start week per job, from its release week to the last start that ends by the horizon, and the objective (the sum of the jobs' end weeks). A job of `duration` weeks started in week $`s`$ works weeks $`s`$ to $`s + \\text{duration} - 1`$ and ends at $`s + \\text{duration}`$. Three rules are missing:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**One crew.** No two jobs work in the same week.",
+        "**Blocked periods.** Each pair `(first, last)` in `blocked` is a block of weeks, both ends included, in which the crew does no work.",
+        "**Deadlines.** Each job's end is at most its `deadline`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Write `add_rules(model, start, jobs, blocked)`. Write the formulation first (variables with their domains, then each constraint with a label), and use CP-SAT's native constraints for the crew rule."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix every start week and ask CP-SAT, with one worker, whether the model accepts the schedule, so any correct formulation passes. About eight lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    duration: int        # whole weeks; started in week s, it works weeks s .. s + duration - 1\n    release: int         # it may not start before this week\n    deadline: int        # its end, start + duration, is at most this week\n\n\ndef start_variables(model: cp_model.CpModel, jobs: list[Job], horizon: int) -> dict[str, cp_model.IntVar]:\n    \"\"\"Given: one integer start week per job, from its release to the last start that ends by the horizon.\"\"\"\n    return {j.name: model.new_int_var(j.release, horizon - j.duration, f\"start_{j.name}\") for j in jobs}\n\n\ndef add_rules(model: cp_model.CpModel, start: dict, jobs: list[Job], blocked: list[tuple[int, int]]) -> None:\n    \"\"\"One crew: no two jobs at once, no work in a blocked period (first, last week), every deadline met.\"\"\"\n    intervals = [model.new_fixed_size_interval_var(start[j.name], j.duration, f\"work_{j.name}\") for j in jobs]\n    for first, last in blocked:\n        intervals.append(model.new_fixed_size_interval_var(first, last - first + 1, f\"blocked_{first}_{last}\"))\n    model.add_no_overlap(intervals)\n    for j in jobs:\n        model.add(start[j.name] + j.duration <= j.deadline)\n\n\ndef build(jobs: list[Job], blocked: list[tuple[int, int]], horizon: int) -> tuple[cp_model.CpModel, dict]:\n    model = cp_model.CpModel()\n    start = start_variables(model, jobs, horizon)\n    add_rules(model, start, jobs, blocked)\n    model.minimize(sum(start[j.name] + j.duration for j in jobs))\n    return model, start\n\n\nif __name__ == \"__main__\":\n    model, start = build([Job(\"A\", 2, 0, 6), Job(\"B\", 1, 0, 6)], [(2, 3)], 10)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    print(solver.status_name(solver.solve(model)), {n: solver.value(v) for n, v in start.items()})\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    duration: int        # whole weeks; started in week s, it works weeks s .. s + duration - 1\n    release: int         # it may not start before this week\n    deadline: int        # its end, start + duration, is at most this week\n\n\ndef start_variables(model: cp_model.CpModel, jobs: list[Job], horizon: int) -> dict[str, cp_model.IntVar]:\n    \"\"\"Given: one integer start week per job, from its release to the last start that ends by the horizon.\"\"\"\n    return {j.name: model.new_int_var(j.release, horizon - j.duration, f\"start_{j.name}\") for j in jobs}\n\n\ndef add_rules(model: cp_model.CpModel, start: dict, jobs: list[Job], blocked: list[tuple[int, int]]) -> None:\n    \"\"\"One crew: no two jobs at once, no work in a blocked period (first, last week), every deadline met.\"\"\"\n    # TODO: the crew's intervals, the blocked periods and the deadlines.\n    return None\n\n\ndef build(jobs: list[Job], blocked: list[tuple[int, int]], horizon: int) -> tuple[cp_model.CpModel, dict]:\n    model = cp_model.CpModel()\n    start = start_variables(model, jobs, horizon)\n    add_rules(model, start, jobs, blocked)\n    model.minimize(sum(start[j.name] + j.duration for j in jobs))\n    return model, start\n\n\nif __name__ == \"__main__\":\n    model, start = build([Job(\"A\", 2, 0, 6), Job(\"B\", 1, 0, 6)], [(2, 3)], 10)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    print(solver.status_name(solver.solve(model)), {n: solver.value(v) for n, v in start.items()})\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "a154b9d0e70e9f8d679fabbc46c21ae52c2638faaa57a5f1f00f1349268e83ff",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    duration: int        # whole weeks; started in week s, it works weeks s .. s + duration - 1\n    release: int         # it may not start before this week\n    deadline: int        # its end, start + duration, is at most this week\n\n\ndef start_variables(model: cp_model.CpModel, jobs: list[Job], horizon: int) -> dict[str, cp_model.IntVar]:\n    \"\"\"Given: one integer start week per job, from its release to the last start that ends by the horizon.\"\"\"\n    return {j.name: model.new_int_var(j.release, horizon - j.duration, f\"start_{j.name}\") for j in jobs}\n\n\ndef add_rules(model: cp_model.CpModel, start: dict, jobs: list[Job], blocked: list[tuple[int, int]]) -> None:\n    \"\"\"One crew: no two jobs at once, no work in a blocked period (first, last week), every deadline met.\"\"\"\n    # TODO: the crew's intervals, the blocked periods and the deadlines.\n    return None\n\n\ndef build(jobs: list[Job], blocked: list[tuple[int, int]], horizon: int) -> tuple[cp_model.CpModel, dict]:\n    model = cp_model.CpModel()\n    start = start_variables(model, jobs, horizon)\n    add_rules(model, start, jobs, blocked)\n    model.minimize(sum(start[j.name] + j.duration for j in jobs))\n    return model, start\n\n\nif __name__ == \"__main__\":\n    model, start = build([Job(\"A\", 2, 0, 6), Job(\"B\", 1, 0, 6)], [(2, 3)], 10)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    print(solver.status_name(solver.solve(model)), {n: solver.value(v) for n, v in start.items()})\n",
+  "exercise": {
+    "main_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-02/practice-2/crew.py",
+    "test_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-02/practice-2/test_crew.py",
+    "run_command": [
+      "python3",
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-02/practice-2/crew.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/15-mock-interviews/53-mock-interviews/prose/unit-02/practice-2/target/report.xml",
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-02/practice-2/test_crew.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_two_jobs_at_once_are_refused",
+        "kind": "main",
+        "says": "a schedule with the jobs apart is allowed, and one with two jobs in the same week refused"
+      },
+      {
+        "id": "test_no_work_in_a_blocked_period",
+        "kind": "main",
+        "says": "a job that runs through a blocked period is refused"
+      },
+      {
+        "id": "test_a_job_that_ends_after_its_deadline_is_refused",
+        "kind": "main",
+        "says": "a job that ends after its deadline is refused"
+      },
+      {
+        "id": "test_jobs_may_run_back_to_back",
+        "kind": "edge",
+        "says": "a job may start in the week after the previous job's last week"
+      },
+      {
+        "id": "test_a_job_may_end_exactly_at_its_deadline",
+        "kind": "edge",
+        "says": "a job whose end equals its deadline is allowed"
+      },
+      {
+        "id": "test_the_deadline_is_on_the_end_not_the_start",
+        "kind": "edge",
+        "says": "a job that starts before its deadline but ends after it is refused"
+      },
+      {
+        "id": "test_the_last_week_of_a_blocked_period_is_blocked_too",
+        "kind": "edge",
+        "says": "a job working only the last week of a blocked period is refused"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "53-mock-interviews/README_15.1.2.md",
+      "section": "Whiteboard: One Inspection Crew, Release Weeks and Blocked Weeks"
+    },
+    "concepts": [
+      "schedule one crew's jobs as CP-SAT intervals, with release weeks, blocked weeks and deadlines"
+    ]
+  }
+}

@@ -1,0 +1,487 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "49-cloud-deployment"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Containerizing a solver service",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "12.5.1 Containerizing a Solver Service"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's job API from lesson 12.4.2 runs on one developer's laptop. Operations want it on AWS, next to the data, and the first question they ask is \"what exactly do we run?\" On the laptop the answer is \"whatever is installed\": a Python version, an OR-Tools wheel, a FastAPI release, and the HiGHS build that OR-Tools bundles. Install them again on another machine a month later and any of them may have moved, and a solver that moved can return a different plan for the same snapshot (lesson 10.2.4). This lesson packages the service as a **container image**: one file that holds the operating system layer, the Python interpreter, every library at a fixed version and the course's code. Every machine that runs the image runs the same thing. (GridCap is fictional; no number in it is real.)"
+    },
+    {
+      "type": "para",
+      "text": "**This lesson is read-along for its Docker parts.** The course's runner has no Docker and no network, so the Dockerfile and compose file below were never built or run; they are shown as text, in fences marked as read-along. Every Python program the lesson quotes did run, in the runner, and its output is printed under it."
+    },
+    {
+      "type": "para",
+      "text": "A few words first. An **image** is a read-only template for a container; a **container** is one running instance of an image, with its own processes, file system and environment variables. A **Dockerfile** is the recipe that builds an image, one instruction per line. A **registry** stores images by name and tag; on AWS it is ECR (Elastic Container Registry)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The container runs the planning model unchanged; lesson 12.5.2 restates it whole, because that is where the solve worker runs it. This lesson adds one small model of its own, to show how a solver decides how many threads to use: pick at most three of eight crew jobs, most value first."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`J = \\{0, \\dots, 7\\}`$, the crew jobs."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`v_j`$, the value of job $`j`$: $`v = (7, 5, 9, 4, 6, 8, 3, 2)`$; at most 3 crews."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`\\text{pick}_j \\in \\{0, 1\\}`$ for every $`j \\in J`$."
+    },
+    {
+      "type": "para",
+      "text": "**Objective and constraint.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& \\sum_{j \\in J} v_j\\, \\text{pick}_j \\\\\n\\text{s.t. } & \\sum_{j \\in J} \\text{pick}_j \\le 3 && \\text{(crews)}\n\\end{aligned}"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "An Image Pins the Solver, Its Python and Every Library"
+    },
+    {
+      "type": "para",
+      "text": "A solve depends on more than the model. It depends on the solver's version (OR-Tools 9.15 bundles its own HiGHS), on the Python that loads it, on the C library under that Python, and on every package the code imports. The OR-Tools installation guide recommends installing the Python package with `pip`, and PyPI publishes OR-Tools 9.15.6755 as prebuilt wheels only. So the image installs exactly that version, from a requirements file with every direct dependency pinned:"
+    },
+    {
+      "type": "code",
+      "lang": "requirements",
+      "text": "# Read-along: the service's direct dependencies, at the versions the course's runner image holds.\nortools==9.15.6755\nfastapi[standard]==0.162.0\npydantic==2.14.1\nboto3==1.43.121"
+    },
+    {
+      "type": "para",
+      "text": "(`deploy/requirements.txt`.) A version range such as `ortools>=9.15` would let the next build pick up 9.16 without anyone deciding to. A pinned file still leaves the dependencies of these packages free; a lock file that lists every package with its hash (`pip install --require-hashes`) closes that gap, and is the next step for a production service."
+    },
+    {
+      "type": "para",
+      "text": "The course's own runner is an example of the idea: every program in this course runs in one pinned image, which is why the output printed on these pages is the output you get."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "One Image, Two Commands: the API and the Solve Worker"
+    },
+    {
+      "type": "para",
+      "text": "The Dockerfile builds in two **stages**. The first installs the pinned packages; the second starts from a clean base, copies in only the installed packages and the code, and is the image that ships. Build tools and caches stay behind in the first stage. The files are laid out as they would sit at the root of the service's repository:"
+    },
+    {
+      "type": "code",
+      "lang": "dockerfile",
+      "text": "# Read-along: never built in this course. The build context is the service's repository root.\nFROM python:3.14.7-slim AS build\nWORKDIR /build\nCOPY requirements.txt .\nRUN pip install --no-cache-dir --prefix=/install -r requirements.txt\n\nFROM python:3.14.7-slim\nRUN useradd --system --no-create-home --home-dir /srv/app --uid 10001 solver \\\n && mkdir -p /srv/data && chown solver /srv/data\nCOPY --from=build /install /usr/local\nWORKDIR /srv/app\nCOPY src/ ./\nUSER solver\nENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1\nEXPOSE 8000\nCMD [\"fastapi\", \"run\", \"job_api.py\", \"--port\", \"8000\"]"
+    },
+    {
+      "type": "para",
+      "text": "The decisions in it:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**The base image names an exact Python**, `3.14.7`, the runner's version. Docker's best-practice guide goes one step further, pinning the base by its digest (`FROM image:tag@sha256:...`), at the price of updating the pin by hand when the base gets security fixes.",
+        "**`CMD` is in exec form**, a JSON list. The Dockerfile reference explains that the shell form (`CMD fastapi run ...`) runs the command under `/bin/sh -c`, so the program is not process 1 and does not receive the stop signal Docker sends; the exec form runs the program itself.",
+        "**The default command starts the API** of lessons 12.4.1 and 12.4.2 (lesson 12.4.1 showed `fastapi run`). The solve worker is in the same image, under a different command. One image means the API and the worker can never disagree about a library version."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The worker's command is set where the worker is started. In AWS Batch (lesson 12.5.2) the job definition replaces `CMD` with:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "            \"command\": [\"python\", \"-c\", \"import solve_worker; raise SystemExit(solve_worker.main())\"],"
+    },
+    {
+      "type": "para",
+      "text": "`main` is the worker's entry point: it reads its settings, solves one snapshot, writes one result, and returns the process's exit code. Batch, like any container platform, reads that code: 0 means the job succeeded, anything else means it failed."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Settings Come From the Environment, All Checked Before the Solve"
+    },
+    {
+      "type": "para",
+      "text": "The same image runs in a test, in staging and in production. What changes between them is the **environment**: the variables the container is started with (`docker run -e NAME=value`, or a Batch job's `environment`). So nothing environment-specific is written into the image: not the bucket, not the run, not the time limit. `Settings.from_env` reads them, checks every one, and collects the problems before refusing:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "    @classmethod\n    def from_env(cls, env: Mapping[str, str]) -> \"Settings\":\n        problems = [f\"{name} is not set\" for name in (\"RESULT_BUCKET\", \"RUN_ID\", \"SNAPSHOT_DIGEST\")\n                    if not env.get(name)]\n        digest = env.get(\"SNAPSHOT_DIGEST\", \"\")\n        if digest and not DIGEST.match(digest):\n            problems.append(\"SNAPSHOT_DIGEST is not 64 lowercase hex characters\")\n        limit = number(env.get(\"TIME_LIMIT_S\", \"600\"), float, \"TIME_LIMIT_S\", problems)\n        if problems:\n            raise BadSettings(\"; \".join(problems))\n        return cls(env[\"RESULT_BUCKET\"], env[\"RUN_ID\"], digest, limit)"
+    },
+    {
+      "type": "para",
+      "text": "`container_settings.py` starts it with three environments, the way three containers would be started:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "as Batch starts it  run run-0007, bucket gridcap-runs-example, limit 120 s\nno time limit set   run run-0008, bucket gridcap-runs-example, limit 600 s\nthree mistakes      refused: RESULT_BUCKET is not set; SNAPSHOT_DIGEST is not 64 lowercase hex characters; TIME_LIMIT_S='ten' is not a number"
+    },
+    {
+      "type": "para",
+      "text": "All three mistakes are reported at once. A container that stopped at the first one would be fixed, redeployed and started three times to find all three. `SNAPSHOT_DIGEST` is the snapshot's SHA-256 digest of lesson 12.2.3, so its shape (64 lowercase hex characters) is checked before any S3 call."
+    },
+    {
+      "type": "para",
+      "text": "`main` wraps the settings and the solve. `worker_main.py` calls it twice against moto's fake S3 (lesson 12.5.4 explains moto): once with every setting, once without the bucket:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def main(environ: Mapping[str, str] = os.environ, s3=None) -> int:\n    \"\"\"The container's entry point. Exit code 0 when a result was written, 2 on bad settings.\"\"\"\n    try:\n        settings = Settings.from_env(environ)\n    except BadSettings as error:\n        print(f\"solve worker refused to start: {error}\")\n        return 2"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "run run-0007: result written to s3://gridcap-runs-example/results/730c8b40b1ebdabec854a5b7157ef9dd9208c223e73c7f18020d15f5a00bf520/run-0007.json\nexit code 0\nsolve worker refused to start: RESULT_BUCKET is not set\nexit code 2"
+    },
+    {
+      "type": "para",
+      "text": "The refusal comes before any snapshot is read or any solve starts, no result is written, and its exit code tells Batch the job failed. The digest in the key, `730c8b40b1eb…`, is the one lesson 12.2.3 computed for GridCap small: the snapshot keeps its id wherever it is stored."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Image Runs as a Non-Root User and Holds No Credentials"
+    },
+    {
+      "type": "para",
+      "text": "Two rules keep a leaked or misused image from doing much harm:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Run as an ordinary user.** Unless a Dockerfile says otherwise, the container's processes run as root. The `useradd` line creates a system user `solver` (with no home directory, and `/srv/data` as the one folder it may write), and `USER solver` makes every later instruction, and the container's command, run as that user. Docker's best-practice guide recommends exactly this.",
+        "**Put no secret in the image.** Anyone who can pull an image can read every file and every `ENV` in it. So the image holds no AWS keys and no `.env` file. On AWS, a Batch job's **job role** (`jobRoleArn`) gives the container temporary credentials at run time, which boto3 finds on its own; lesson 12.5.5 writes that role's policy. The build context, the folder Docker sends to the builder, is filtered by `.dockerignore`, so local files that must never ship cannot be copied by accident:"
+      ]
+    },
+    {
+      "type": "code",
+      "lang": "ignore",
+      "text": "# Read-along: what never enters the build context, so it can never reach the image.\n.git\n.venv\n**/__pycache__\n.pytest_cache\ntests/\n*.db\n.env\ndeploy/terraform/\n**/*.tfstate*"
+    },
+    {
+      "type": "para",
+      "text": "`*.db` keeps a developer's SQLite index (lesson 12.5.3) out; `*.tfstate*` keeps Terraform's state, which can hold resource details, out (lesson 12.5.5)."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Tell the Solver How Many CPUs the Container Has"
+    },
+    {
+      "type": "para",
+      "text": "A Batch job on Fargate asks for a number of vCPUs, 2 in this module's job definition. A process inside the container may still see more. Python's documentation says `os.cpu_count()` returns the number of logical CPUs in the system, and `os.process_cpu_count()` the number this process may use by CPU affinity; neither is defined as the container's share. Python 3.13 added an override, the `PYTHON_CPU_COUNT` variable, which both functions then report. `cpu_count.py` asks a child Python without and with it:"
+    },
+    {
+      "type": "example",
+      "id": "cpu_count-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "49-cloud-deployment/src/cpu_count.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "49-cloud-deployment/src/cpu_count.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "ASK = \"import os; print(os.cpu_count(), os.process_cpu_count())\"\nplain = subprocess.run([sys.executable, \"-c\", ASK], capture_output=True, text=True).stdout.split()\ntold = subprocess.run([sys.executable, \"-c\", ASK], capture_output=True, text=True,\n                      env={**os.environ, \"PYTHON_CPU_COUNT\": \"2\"}).stdout.split()"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "no override:          cpu_count == process_cpu_count: True\nPYTHON_CPU_COUNT=2:   cpu_count, process_cpu_count = 2, 2"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The runner's own count is not printed: it is whatever machine runs the course. With the override, both functions say 2. The job definition sets `PYTHON_CPU_COUNT` to the job's vCPU count, so any library that sizes a thread pool from `os.cpu_count()` sizes it to the job."
+    },
+    {
+      "type": "para",
+      "text": "Solvers decide their own thread counts. CP-SAT's `num_workers` parameter defaults to 0, which the parameter file of OR-Tools describes as trying to use all cores on the machine; 1 means no parallelism. Inside a container, \"the machine\" may be the host. `PYTHON_CPU_COUNT` does not help here: it changes what Python's own functions report, and CP-SAT counts cores in its C++ code, not through Python. So set `num_workers` from the job's size:"
+    },
+    {
+      "type": "example",
+      "id": "cpu_count-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "49-cloud-deployment/src/cpu_count.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "49-cloud-deployment/src/cpu_count.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "solver = cp_model.CpSolver()\nsolver.parameters.num_workers = 2            # from the container's vCPU count, never left at 0"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "CP-SAT: OPTIMAL value 24 | 2 workers."
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The last part is from CP-SAT's own log line (\"Starting search ... with 2 workers\"), read through a log callback. The plan picks jobs 2, 5 and 0, worth 9 + 8 + 7 = 24. HiGHS through MathOpt is different: lesson 4.2.4 showed that MathOpt refuses its `threads` option, so the planning worker leaves HiGHS at its default, and sizes the job instead."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Local Stack: the Image Beside moto's Server"
+    },
+    {
+      "type": "para",
+      "text": "Before anything reaches AWS, a developer can run the image locally. The compose file starts the API next to moto's server (the same fake AWS the course's programs use, as a container), with moto's fake credentials and the SQLite index on a named volume:"
+    },
+    {
+      "type": "code",
+      "lang": "yaml",
+      "text": "# Read-along: never run in this course. A local stack: the API, and moto's server standing in for AWS.\nservices:\n  api:\n    build:\n      context: .\n      labels:\n        com.local.compose.project: integer-programming-course\n    image: gridcap-solver:dev\n    ports:\n      - \"127.0.0.1:8000:8000\"\n    environment:\n      AWS_ENDPOINT_URL: http://moto:5000\n      AWS_ACCESS_KEY_ID: testing\n      AWS_SECRET_ACCESS_KEY: testing\n      AWS_DEFAULT_REGION: us-east-1\n      RESULT_BUCKET: gridcap-runs-local\n      RUN_INDEX: /srv/data/runs.db\n    volumes:\n      - run-index:/srv/data\n    depends_on:\n      - moto\n  moto:\n    image: motoserver/moto:5.2.5\n    ports:\n      - \"127.0.0.1:5000:5000\"\n\nvolumes:\n  run-index:"
+    },
+    {
+      "type": "para",
+      "text": "`AWS_ENDPOINT_URL` sends every boto3 call to moto's server instead of AWS. The ports are bound to `127.0.0.1`, so nothing outside the developer's machine can reach them. The build carries a project label, so old images of this project can be pruned by label without touching any other project's."
+    },
+    {
+      "type": "para",
+      "text": "`AWS_SECRET_ACCESS_KEY: testing` looks like what the Dockerfile check above refuses, and it is not the same thing. `testing` is the dummy value moto's getting-started guide tells you to set, so that boto3 finds a credential and never reaches for a real one; it is no key to any AWS account. It also lives in the compose file on the developer's machine, not in the image: the image carries no credentials, and in AWS the job gets them from its role."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**An image pins the solver, its Python and every library.** Pin versions in a requirements file; a hashed lock file pins the rest.",
+        "**One image, two commands.** The API is the default `CMD`; Batch's job definition runs the worker from the same image. Exec-form commands receive the stop signal.",
+        "**Settings come from the environment, all checked before the solve.** The worker reports every problem at once and exits 2; a written result exits 0.",
+        "**The image runs as a non-root user and holds no credentials.** `USER`, a `.dockerignore`, and a job role at run time.",
+        "**Tell the solver how many CPUs the container has.** `PYTHON_CPU_COUNT` for Python, `num_workers` for CP-SAT; never leave a solver to count the host."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Dockerfile instruction",
+        "What it does"
+      ],
+      "rows": [
+        [
+          "`FROM image:tag AS name`",
+          "start a stage from a base image"
+        ],
+        [
+          "`COPY --from=name src dst`",
+          "copy files out of an earlier stage"
+        ],
+        [
+          "`RUN cmd`",
+          "run a command while building, adding a layer"
+        ],
+        [
+          "`USER name`",
+          "the user for later instructions and for the container's command"
+        ],
+        [
+          "`ENV NAME=value`",
+          "a variable baked into the image (never a secret)"
+        ],
+        [
+          "`CMD [\"prog\", \"arg\"]`",
+          "the default command, exec form"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Worker variable",
+        "Meaning",
+        "Default"
+      ],
+      "rows": [
+        [
+          "`RESULT_BUCKET`",
+          "bucket for snapshots and results",
+          "required"
+        ],
+        [
+          "`RUN_ID`",
+          "the run this container solves",
+          "required"
+        ],
+        [
+          "`SNAPSHOT_DIGEST`",
+          "the snapshot's SHA-256 digest, 64 hex",
+          "required"
+        ],
+        [
+          "`TIME_LIMIT_S`",
+          "the solver's time limit, seconds",
+          "600"
+        ],
+        [
+          "`PYTHON_CPU_COUNT`",
+          "what `os.cpu_count()` reports (Python 3.13+)",
+          "unset"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** OR-Tools, [Installing OR-Tools for Python](https://developers.google.com/optimization/install/python) (installing with pip) and the CP-SAT parameter file [`sat_parameters.proto`](https://github.com/google/or-tools/blob/stable/ortools/sat/sat_parameters.proto) (`num_workers`, and what 0 and 1 mean); the [ortools package on PyPI](https://pypi.org/project/ortools/) (9.15.6755, wheels only); Docker, the [Dockerfile reference](https://docs.docker.com/reference/dockerfile/) (`USER`, exec and shell forms, `FROM` with a digest) and [Building best practices](https://docs.docker.com/build/building/best-practices/) (multi-stage builds, `.dockerignore`, a non-root user, pinning base images); Python, [`os` — Miscellaneous operating system interfaces](https://docs.python.org/3/library/os.html) (`cpu_count`, `process_cpu_count`, `PYTHON_CPU_COUNT`); AWS Batch, [Job definition parameters](https://docs.aws.amazon.com/batch/latest/userguide/job_definition_parameters.html) (`command`, `jobRoleArn`, `environment`); moto, [Getting started](https://docs.getmoto.org/en/latest/docs/getting_started.html)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Only the API writes to `/srv/data` (its SQLite index); the worker writes nothing to disk. Could the worker's image drop that folder? Say what you would change, if anything, and why.",
+        "Add `MAX_MEMORY_MB` to the worker's settings, refuse values above the job's memory, and decide which of the two should win when they disagree.",
+        "Write the `docker run` command that starts the worker locally against the compose file's moto server. Which variables must it set, and which must it never set?"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Why Not One Container per Request"
+    },
+    {
+      "type": "para",
+      "text": "A simpler design runs the solve inside the API's container, as lesson 12.4.2 did with a thread pool. It works until two large solves arrive at once and share the API's CPUs, or a solver crash ends the API's process (lesson 12.4.2 showed one). Putting the solve in its own container, started per run, gives each solve its own CPUs, memory and time limit, and leaves the API small. The cost is start-up time: a container must be scheduled and its image pulled before the solve begins, which is why short requests stay in the API and only solves go to Batch (lesson 12.5.2)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**container_settings.py.** The worker's settings from three environments (*Settings Come From the Environment*). *Try:* Set `TIME_LIMIT_S` to `\"-5\"` in the first environment. Predict the message."
+    },
+    {
+      "type": "para",
+      "text": "**worker_main.py.** The container's entry point, called with and without its bucket, against moto (*Settings Come From the Environment*). *Try:* Pass a digest of 64 zeros. Predict the exit code and the status written."
+    },
+    {
+      "type": "para",
+      "text": "**cpu_count.py.** What Python reports with `PYTHON_CPU_COUNT`, and CP-SAT with two workers (*Tell the Solver How Many CPUs the Container Has*). *Try:* Set `PYTHON_CPU_COUNT` to `1` and `num_workers` to `1`. Predict the log's worker count."
+    },
+    {
+      "type": "para",
+      "text": "**settings.py** reads and checks the variables; **solve_worker.py** is the worker; **fake_aws.py** starts moto with fake credentials; **snapshot.py**, **canonical.py** and **plan_model.py** are module 46's snapshot schema, canonical form and model."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [container_settings.py](src/container_settings.py)",
+        "Program: [worker_main.py](src/worker_main.py)",
+        "Program: [cpu_count.py](src/cpu_count.py)",
+        "Library: [settings.py](src/settings.py)",
+        "Library: [solve_worker.py](src/solve_worker.py)",
+        "Library: [fake_aws.py](src/fake_aws.py)",
+        "Library: [snapshot.py](src/snapshot.py)",
+        "Library: [canonical.py](src/canonical.py)",
+        "Library: [plan_model.py](src/plan_model.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 13,
+    "paras": 36,
+    "code": 10,
+    "tables": 2,
+    "lists": 5,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 2
+  },
+  "content_sha256": "f4db9f75ccf3f8638e8311963a1427ebd16e3fa715181997dd14384e9a449c8c"
+}

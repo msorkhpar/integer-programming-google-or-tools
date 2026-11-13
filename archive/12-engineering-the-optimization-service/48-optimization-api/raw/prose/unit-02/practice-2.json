@@ -1,0 +1,174 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "48-optimization-api"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "CP-SAT statuses for the job service",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The crew-roster service solves with CP-SAT (lesson 4.4.1), not MathOpt, and CP-SAT has its own status codes. The job service still promises its callers the same four finished statuses as the lesson's: `optimal`, `time_limit`, `infeasible` and `failed`. Something has to translate."
+    },
+    {
+      "type": "para",
+      "text": "Write `outcome(status, objective, bound, limit_s)` in `roster_outcome.py`. The roster model maximizes; `objective` and `bound` are the solver's `objective_value` and `best_objective_bound`, and `limit_s` is the time limit the job ran with (the only limit the service sets). Return a dict with `status`, `value` (the roster's value, or `None` when there is no roster), `gap` (or `None`) and a one-sentence `message` for the planner."
+    },
+    {
+      "type": "para",
+      "text": "CP-SAT's statuses, as lesson 4.4.1 teaches them:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "CP-SAT status",
+        "What it says"
+      ],
+      "rows": [
+        [
+          "`cp_model.OPTIMAL`",
+          "a roster was found and proven best"
+        ],
+        [
+          "`cp_model.FEASIBLE`",
+          "a roster was found; a limit stopped the search before the proof"
+        ],
+        [
+          "`cp_model.INFEASIBLE`",
+          "proven: no roster meets every rule"
+        ],
+        [
+          "`cp_model.UNKNOWN`",
+          "a limit stopped the search before any roster was found or any proof"
+        ],
+        [
+          "`cp_model.MODEL_INVALID`",
+          "the model itself was refused"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Map each to the service status that tells a planner the truth, as lesson 9.1.1's distinctions do. The gap is the distance from the roster's value to the bound, as a share of the roster's value (with 1 as the smallest divisor, so a roster worth 0 does not divide by zero). A roster proven best has a gap of exactly `0.0`, whatever the two numbers say; a roster stopped by the limit has the gap computed from them, never below 0; a job with no roster has `None`. The tests use two real CP-SAT solves and three hand-made statuses, so any correct mapping passes."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef outcome(status: int, objective: float, bound: float, limit_s: float) -> dict:\n    \"\"\"Map a CP-SAT status of a maximization solve to the job service's status, value, gap and message.\n\n    `objective` and `bound` are `solver.objective_value` and `solver.best_objective_bound`; the\n    service sets only a time limit, so a FEASIBLE or UNKNOWN status means that limit stopped it.\n    \"\"\"\n    if status == cp_model.OPTIMAL:\n        return {\"status\": \"optimal\", \"value\": objective, \"gap\": 0.0,\n                \"message\": f\"Best roster found and proven: value {objective:g}.\"}\n    if status == cp_model.FEASIBLE:\n        gap = max(0.0, bound - objective) / max(abs(objective), 1.0)\n        return {\"status\": \"time_limit\", \"value\": objective, \"gap\": gap,\n                \"message\": f\"Stopped at the {limit_s:g} s limit with a roster worth {objective:g}; \"\n                           f\"none is worth more than {bound:g}.\"}\n    if status == cp_model.UNKNOWN:\n        return {\"status\": \"time_limit\", \"value\": None, \"gap\": None,\n                \"message\": f\"No roster found within the {limit_s:g} s limit; that does not mean none exists.\"}\n    if status == cp_model.INFEASIBLE:\n        return {\"status\": \"infeasible\", \"value\": None, \"gap\": None,\n                \"message\": \"No roster meets every rule.\"}\n    return {\"status\": \"failed\", \"value\": None, \"gap\": None,\n            \"message\": \"The solver refused the model; the request was not judged.\"}\n\n\nif __name__ == \"__main__\":\n    print(outcome(cp_model.FEASIBLE, 80.0, 100.0, 30))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model  # noqa: F401\n\n\ndef outcome(status: int, objective: float, bound: float, limit_s: float) -> dict:\n    \"\"\"Map a CP-SAT status of a maximization solve to the job service's status, value, gap and message.\n\n    `objective` and `bound` are `solver.objective_value` and `solver.best_objective_bound`; the\n    service sets only a time limit, so a FEASIBLE or UNKNOWN status means that limit stopped it.\n    \"\"\"\n    # TODO: one branch per CP-SAT status: OPTIMAL, FEASIBLE, UNKNOWN, INFEASIBLE, MODEL_INVALID.\n    return {\"status\": \"pending\", \"value\": None, \"gap\": None, \"message\": \"\"}\n\n\nif __name__ == \"__main__\":\n    print(outcome(cp_model.FEASIBLE, 80.0, 100.0, 30))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 1,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "746b916bc6084264ae938003a45ac0c7f6659c0b329af28d106a91e96a519e44",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model  # noqa: F401\n\n\ndef outcome(status: int, objective: float, bound: float, limit_s: float) -> dict:\n    \"\"\"Map a CP-SAT status of a maximization solve to the job service's status, value, gap and message.\n\n    `objective` and `bound` are `solver.objective_value` and `solver.best_objective_bound`; the\n    service sets only a time limit, so a FEASIBLE or UNKNOWN status means that limit stopped it.\n    \"\"\"\n    # TODO: one branch per CP-SAT status: OPTIMAL, FEASIBLE, UNKNOWN, INFEASIBLE, MODEL_INVALID.\n    return {\"status\": \"pending\", \"value\": None, \"gap\": None, \"message\": \"\"}\n\n\nif __name__ == \"__main__\":\n    print(outcome(cp_model.FEASIBLE, 80.0, 100.0, 30))\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-02/practice-2/roster_outcome.py",
+    "test_path": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-02/practice-2/test_roster_outcome.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-02/practice-2/roster_outcome.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-02/practice-2/target/report.xml",
+      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-02/practice-2/test_roster_outcome.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_proven_roster_is_optimal_with_no_gap",
+        "kind": "main",
+        "says": "a roster CP-SAT proves best is optimal, with its value and a zero gap"
+      },
+      {
+        "id": "test_a_roster_stopped_by_the_limit_is_time_limit_with_its_gap",
+        "kind": "edge",
+        "says": "a roster found before the time limit, but not proven, is time_limit with its value"
+      },
+      {
+        "id": "test_the_gap_is_measured_against_the_roster_found",
+        "kind": "edge",
+        "says": "the gap divides the distance to the bound by the roster's value, not by the bound"
+      },
+      {
+        "id": "test_no_roster_within_the_limit_is_not_infeasible",
+        "kind": "edge",
+        "says": "no roster within the time limit is time_limit with no value, never infeasible"
+      },
+      {
+        "id": "test_an_impossible_roster_is_infeasible",
+        "kind": "edge",
+        "says": "a model with no roster is infeasible"
+      },
+      {
+        "id": "test_a_refused_model_is_failed",
+        "kind": "edge",
+        "says": "a model CP-SAT refuses is failed"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "48-optimization-api/README_12.4.2.md",
+      "section": "Every Way a Solve Ends Has Its Own Status"
+    },
+    "concepts": [
+      "optimal, time limit, infeasible and failed each get their own status and message"
+    ]
+  }
+}

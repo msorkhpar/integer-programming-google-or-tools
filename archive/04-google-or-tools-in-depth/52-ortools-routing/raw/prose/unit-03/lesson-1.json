@@ -1,0 +1,600 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "52-ortools-routing"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Time windows and service times (VRPTW)",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "4.8.3 Time Windows and Service Times (VRPTW)"
+    },
+    {
+      "type": "para",
+      "text": "The lesson 4.8.2 plan routed three crews by drive minutes and kits. Then the Valley's field supervisor reads it and asks two questions. First: where is the inspection itself? Each one takes 30 to 60 minutes on site (longer for older transformers), and the plan behaves as if the crews never stop. Second: some substations can only be entered at certain hours. Five need a switching outage that operations books for the morning (crews must arrive between 08:00 and 11:00), four need one booked for the afternoon (arrive between 12:00 and 15:00), and the shift runs from 08:00 to 16:00."
+    },
+    {
+      "type": "para",
+      "text": "A VRP in which each visit must start inside a given interval is a **VRP with time windows (VRPTW)**. The routing library models it with the tool of lesson 4.8.2, a dimension, this time one whose cumul is the clock. With inspection time counted, the planner gives the day four crews, each with a smaller van that carries 9 kits. All times are minutes after 08:00, and the drive times are fictional."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Time Is a Dimension Whose Transit Is Service Plus Travel"
+    },
+    {
+      "type": "para",
+      "text": "Make the clock a dimension: the cumul at a stop is the time the crew **arrives** there. Lesson 4.8.2's rule says the cumul at the next stop is this stop's cumul plus the transit (plus slack). So the transit of the arc from stop $`a`$ to stop $`b`$ must be everything that happens between arriving at $`a`$ and arriving at $`b`$: the inspection at $`a`$, then the drive."
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\text{transit}(a \\to b) = \\text{service}_a + c_{ab}"
+    },
+    {
+      "type": "para",
+      "text": "The OR-Tools VRPTW guide's example has no service time, so its callback returns the travel time only. The Valley callback adds the inspection at the stop being left:"
+    },
+    {
+      "type": "example",
+      "id": "valley_windows-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "52-ortools-routing/src/valley_windows.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "52-ortools-routing/src/valley_windows.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "def busy(from_index, to_index):\n    \"\"\"Time from arriving at one stop to arriving at the next: inspect it, then drive.\"\"\"\n    here = manager.IndexToNode(from_index)\n    service = places[here].service if count_service else 0\n    return service + minutes[here][manager.IndexToNode(to_index)]\nbusy_index = routing.RegisterTransitCallback(busy)"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The time callback feeds the Time dimension only. The arc cost (the objective) stays the drive minutes: inspection time is the same whatever the order, so adding it to the objective would change nothing but the number."
+    },
+    {
+      "type": "para",
+      "text": "What happens if you forget the service time? `valley_windows.py` solves the day both ways, then replays the travel-only plan with the real inspection times:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "travel only, inspection time forgotten:\nobjective (drive minutes) 290\n  crew 0: YARD 08:00-08:00 > A106 09:58-10:23 > A091 12:00-12:00 > A308 12:07-12:07 > A305 12:22-12:22 > YARD 12:30-12:30  (waits 215 min)\n           with real inspection times: back at 14:45, windows missed: none\n  crew 1: YARD 08:00-08:00 > A344 08:16-08:16 > A378 08:31-08:31 > A157 08:32-08:32 > A064 09:13-09:13 > A096 09:19-09:19 > A302 09:54-09:54 > A281 09:57-09:57 > YARD 10:21-10:21  (waits 0 min)\n           with real inspection times: back at 14:21, windows missed: ['A064', 'A302']\n  crew 2: YARD 08:00-08:00 > A348 09:52-10:14 > A136 12:00-12:00 > A149 12:11-12:11 > A183 12:25-12:25 > A133 12:29-12:29 > YARD 12:45-12:45  (waits 218 min)\n           with real inspection times: back at 15:30, windows missed: none\n  crew 3: YARD 08:00-08:00 > A087 09:56-10:10 > A230 12:00-12:00 > YARD 12:13-12:13  (waits 226 min)\n           with real inspection times: back at 13:13, windows missed: none"
+    },
+    {
+      "type": "para",
+      "text": "All four crews are printed; only crew 1's replay misses a window. The model thinks crew 1 inspects seven substations and is back by 10:21. Driven with real inspections, it is back at 14:21 and arrives at A064 and A302 after their morning windows have closed, so two outages booked for nothing. The model was solved correctly; it was the wrong model."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Time Window Is a Range on the Arrival Cumul"
+    },
+    {
+      "type": "para",
+      "text": "A window says \"arrive between $`a_i`$ and $`b_i`$\", and the arrival time is the cumul, so the window is a bound on one variable: `time_dimension.CumulVar(index).SetRange(a, b)`. The VRPTW guide's example:"
+    },
+    {
+      "type": "example",
+      "id": "vrp_time_windows-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "52-ortools-routing/src/vrp_time_windows.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "52-ortools-routing/src/vrp_time_windows.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "routing.AddDimension(\n    transit_callback_index,\n    30,     # slack: up to 30 minutes of waiting at each location\n    30,     # capacity: no cumul (clock time) above 30\n    False,  # don't force the start cumul to zero: a vehicle may leave the depot later\n    \"Time\",\n)\ntime_dimension = routing.GetDimensionOrDie(\"Time\")\nfor location_idx, (open_, close) in enumerate(time_windows):\n    if location_idx == depot:\n        continue\n    time_dimension.CumulVar(manager.NodeToIndex(location_idx)).SetRange(open_, close)\nfor vehicle_id in range(num_vehicles):   # the depot's window applies to each vehicle's start\n    time_dimension.CumulVar(routing.Start(vehicle_id)).SetRange(*time_windows[depot])"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Two details carry over to every time-window model:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**`NodeToIndex` turns your node into the solver's index** before you take its cumul. The loop skips the depot, because the depot is not one index but a start and an end per vehicle; its window goes on each vehicle's start index instead.",
+        "**The capacity is the horizon.** No cumul may exceed it, the ends included, so a capacity of 30 means every vehicle is back by minute 30. The Valley model uses the shift: capacity 480, back by 16:00."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The Valley model sets each site's window the same way, and leaves the yard's start and end to the capacity:"
+    },
+    {
+      "type": "example",
+      "id": "valley_windows-3",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "52-ortools-routing/src/valley_windows.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "52-ortools-routing/src/valley_windows.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "routing.AddDimension(busy_index, MAX_WAIT, SHIFT, False, \"Time\")\ntime_dim = routing.GetDimensionOrDie(\"Time\")\nfor node in range(1, len(places)):\n    time_dim.CumulVar(manager.NodeToIndex(node)).SetRange(*places[node].window)"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "A window that cannot be met makes the model infeasible, like a capacity that is too small. The search can then only report that it found no routes (lesson 4.8.2); it never proves why, so check windows against drive times from the yard before you blame the solver."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Slack Is Waiting, and the Start Time Is Left Free"
+    },
+    {
+      "type": "para",
+      "text": "A crew that arrives at A230 at 10:00 when its window opens at 12:00 must wait two hours. In the dimension rule, that wait is the **slack**: cumul at the next stop = cumul + transit + slack. The second argument of `AddDimension` bounds it; the guide allows 30 minutes, the Valley model 120 (`MAX_WAIT`). A slack bound of 0 forbids waiting anywhere on the route."
+    },
+    {
+      "type": "para",
+      "text": "The fourth argument is `False` in both models. For distance and load (lesson 4.8.2) the start was fixed at 0; for time it is left free, so the solver may also choose **when each crew leaves**, between the yard window's bounds. A crew that would only wait at its first stop can leave later instead."
+    },
+    {
+      "type": "para",
+      "text": "The guide then calls `AddVariableMinimizedByFinalizer` on every start and end cumul. The routing search fixes the successors first and the dimension values last, in what its docstring calls the solution finalizer; this call asks the finalizer to pick the smallest feasible value for those variables, so each crew leaves and returns as early as its route allows:"
+    },
+    {
+      "type": "example",
+      "id": "valley_windows-4",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "52-ortools-routing/src/valley_windows.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "52-ortools-routing/src/valley_windows.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "for crew in range(CREWS):\n    routing.AddVariableMinimizedByFinalizer(time_dim.CumulVar(routing.Start(crew)))\n    routing.AddVariableMinimizedByFinalizer(time_dim.CumulVar(routing.End(crew)))"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The Valley plan with inspection time counted:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "with inspection time in the time callback:\nobjective (drive minutes) 287\n  crew 0: YARD 08:00-08:00 > A064 08:30-08:31 > A106 09:16-09:17 > A302 10:40-10:41 > A281 11:13-11:14 > A308 12:00-12:00 > YARD 13:17-13:17  (waits 1 min)\n  crew 1: YARD 08:00-08:00 > A087 08:56-10:10 > A230 12:00-12:00 > YARD 13:13-13:13  (waits 166 min)\n  crew 2: YARD 08:00-08:00 > A344 08:16-08:16 > A133 08:54-08:54 > A378 09:47-09:47 > A157 10:33-10:33 > A149 11:34-11:34 > A183 12:18-12:18 > YARD 13:04-13:04  (waits 0 min)\n  crew 3: YARD 08:00-08:00 > A348 09:07-10:14 > A136 12:00-12:00 > A096 13:14-13:14 > A091 13:55-13:55 > A305 15:00-15:00 > YARD 15:38-15:38  (waits 173 min)"
+    },
+    {
+      "type": "para",
+      "text": "Crew 1 waits 166 minutes, more than the 120 that `MAX_WAIT` allows at one stop. That is not a contradiction: the bound is per stop. A087 opens at 08:00, but its arrival range starts at 08:56. The crew inspects A087 for 60 minutes and drives 4 to A230, which opens at 12:00; arriving at A087 before 08:56 would mean waiting more than 120 minutes there. So the crew waits 46 minutes at the yard (slack at its start) and 120 at A087. The program computes the waits from the arrival times ($`\\text{cumul}_{\\text{next}} - \\text{cumul} - \\text{transit}`$) rather than reading the slack variables."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Each Stop Gets an Arrival Range, Not One Time"
+    },
+    {
+      "type": "para",
+      "text": "The plan prints two times per stop, such as `A087 08:56-10:10`. A time dimension's cumul is not fixed by the routes: any arrival between `solution.Min(cumul)` and `solution.Max(cumul)` keeps the whole route feasible, given the windows and waits around it. The VRPTW guide calls this range the **solution window**: it lies inside the stop's own window, and when its two ends differ the crew has room to wait there. The guide prints it as `Time(min,max)`:"
+    },
+    {
+      "type": "example",
+      "id": "vrp_time_windows-5",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "52-ortools-routing/src/vrp_time_windows.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "52-ortools-routing/src/vrp_time_windows.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "time_var = time_dimension.CumulVar(index)\nlegs.append(f\"{manager.IndexToNode(index)} Time({solution.Min(time_var)},{solution.Max(time_var)})\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "Objective: 71\nvehicle 0: 0 Time(0,0) -> 9 Time(2,3) -> 14 Time(7,8) -> 16 Time(11,11) -> 0 Time(18,18)\nvehicle 1: 0 Time(0,0) -> 7 Time(2,4) -> 1 Time(7,11) -> 4 Time(10,13) -> 3 Time(16,16) -> 0 Time(24,24)\nvehicle 2: 0 Time(0,0) -> 12 Time(4,4) -> 13 Time(6,6) -> 15 Time(11,11) -> 11 Time(14,14) -> 0 Time(20,20)\nvehicle 3: 0 Time(0,0) -> 5 Time(3,3) -> 8 Time(5,5) -> 6 Time(7,7) -> 2 Time(10,10) -> 10 Time(14,14) -> 0 Time(20,20)\nTotal time of all routes: 82min"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Two numbers, two meanings. The objective, 71, is the arc cost: the sum of travel times. The total time of all routes, 82 minutes, is the sum of each vehicle's arrival back at the depot, which also counts waiting. Vehicle 1 shows where waiting enters: it can reach node 1 four minutes after node 7, but node 1's window opens at 7, so a vehicle that left node 7 at minute 2 waits."
+    },
+    {
+      "type": "para",
+      "text": "For a planner, the earliest time is the schedule, and the range is the room the crew has if something runs late. At `A087 08:56-10:10` the crew can arrive anywhere in a 74-minute range and still make A230 at 12:00; at `A136 12:00-12:00` it has none."
+    },
+    {
+      "type": "para",
+      "text": "Where do the two ends of A087's range come from? Both neighbours of the stop limit it, and `arrival_range.py` reads each limit from the solved plan:"
+    },
+    {
+      "type": "example",
+      "id": "arrival_range-6",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "52-ortools-routing/src/arrival_range.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "52-ortools-routing/src/arrival_range.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "start = time_dim.CumulVar(routing.Start(1))\nleave = (solution.Min(start), solution.Max(start))\nreach_a230 = arrival(a230)"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "crew 1 leaves the yard 08:00-08:00, drives 10 min to A087, may wait at most 120 min at a stop\n  from the yard: A087 between 08:10 and 10:10\nA230 is reached 12:00-12:00; A087 takes 60 min of inspection and 4 of driving before it\n  from A230: A087 between 08:56 and 10:56\nsolver's range at A087: 08:56-10:10"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Seen from A230 alone, any arrival at A087 up to 10:56 still reaches A230 at 12:00 (10:56 plus 64 minutes), and none before 08:56, which would mean waiting more than 120 minutes at A087. But the finalizer fixed crew 1's departure at 08:00, the minimum of its start cumul, and the slack at the yard is bounded by `MAX_WAIT` like any other: leaving at 08:00 and driving 10 minutes, the crew reaches A087 at 10:10 at the latest. The range is the overlap of the two sides, 08:56 to 10:10, so its upper end comes from the yard, not from A230."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Soft Upper Bound Charges for Lateness Instead of Forbidding It"
+    },
+    {
+      "type": "para",
+      "text": "A window is hard: the model refuses a plan that breaks it. Some limits are preferences. The supervisor would like every crew back by 14:30 so the afternoon paperwork gets done, but a crew back at 15:00 is not a disaster. A **soft upper bound** on a cumul adds a cost for each unit above the bound instead of forbidding it. Its docstring states it exactly: cost 0 while the cumul is at most the bound, and coefficient × (cumul − bound) above it."
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "if finish_by is not None:\n    time_dim.SetCumulVarSoftUpperBound(routing.End(crew), finish_by, late_cost)"
+    },
+    {
+      "type": "para",
+      "text": "`valley_model.py` puts it on each crew's end, the return to the yard, with 5 drive-minutes of cost for each minute after 14:30:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "no finish time: objective 287, minutes after 14:30: 68\n  crew 0: A064 > A106 > A302 > A281 > A308  back 13:17\n  crew 1: A087 > A230  back 13:13\n  crew 2: A344 > A133 > A378 > A157 > A149 > A183  back 13:04\n  crew 3: A348 > A136 > A096 > A091 > A305  back 15:38\nsoft finish 14:30: objective 261, minutes after 14:30: 0\n  crew 0: A305 > A281 > A302 > A308 > A087  back 14:17\n  crew 1: A348 > A149 > A136 > A096  back 14:08\n  crew 2: A344 > A133 > A157 > A378 > A183  back 12:12\n  crew 3: A064 > A106 > A091 > A230  back 14:06"
+    },
+    {
+      "type": "para",
+      "text": "The first plan has crew 3 back at 15:38, 68 minutes after 14:30. With the soft bound, every crew is back by 14:17, and no lateness is charged, so the objective, 261, is all driving. Look at that number again: 261 drive minutes is *less* than the first plan's 287, even though the second model has an extra cost and no extra freedom. So the first plan was not the best the first model could do; it was where that search stopped. The extra cost pushed the search down a different path that happened to end lower. That is what a heuristic search does, and lesson 4.8.5 shows how to search harder and what you can and cannot conclude."
+    },
+    {
+      "type": "para",
+      "text": "Soft bounds work on any cumul: a site's arrival (a preferred visit time) or a load. A soft *lower* bound exists too (`SetCumulVarSoftLowerBound`; its docstring suggests it for earliness costs). Choose the coefficient in the objective's units: here 5 means \"one minute late is as bad as five minutes of driving\"."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The Valley model with time `valley_model.build` makes, in one place. Lessons 4.8.1 and 4.8.2 gave the routes, the Kits dimension and the drive-minute objective; this lesson added the Time dimension, the windows, waiting and the soft finish. It is a vehicle routing model, searched by the routing library's heuristics."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`N`$ the nodes, node 0 the yard and 1 to 18 the Valley sites; $`V`$ the crews, $`|V| = 4`$; $`I`$ the indices: one per site, a start $`s_v`$ and an end $`e_v`$ per crew."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`c_{ab}`$ drive minutes (integers, fictional); $`\\text{service}_a`$ inspection minutes at site $`a`$ ($`\\text{service}_0 = 0`$); $`[a_i, b_i]`$ the arrival window of site $`i`$; $`H = 480`$ the shift's end; $`W = 120`$ the most waiting at one stop; $`k_a`$ kits, $`K = 9`$ per van; $`F = 390`$ the preferred return (14:30) and $`\\gamma = 5`$ the cost per late minute (0 when there is no finish time)."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`\\text{next}_i`$ and $`\\text{vehicle}_i`$ as in lesson 4.8.1; $`0 \\le \\text{time}_i \\le H`$, the arrival time at index $`i`$ (the Time cumul); $`0 \\le \\text{wait}_i \\le W`$, the waiting at index $`i`$ (the Time slack); $`0 \\le \\text{load}_i \\le K`$ (the Kits cumul). All integer."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\min \\; \\sum_{i \\in I \\setminus \\{e_v\\}} c_{\\text{node}(i),\\, \\text{node}(\\text{next}_i)}\n\\; + \\; \\gamma \\sum_{v \\in V} \\max(0,\\ \\text{time}_{e_v} - F)"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& \\text{next}, \\text{vehicle} \\text{ form one route per crew, every site on one route} && && \\text{(routes)} \\\\\n& \\text{time}_{\\text{next}_i} = \\text{time}_i + \\text{service}_{\\text{node}(i)} + c_{\\text{node}(i),\\, \\text{node}(\\text{next}_i)} + \\text{wait}_i && \\forall i \\in I \\setminus \\{e_v\\} && \\text{(Time dimension)} \\quad \\leftarrow \\text{this lesson} \\\\\n& a_i \\le \\text{time}_i \\le b_i && \\forall i \\text{ a site index} && \\text{(window}_i) \\quad \\leftarrow \\text{this lesson} \\\\\n& \\text{time}_i \\le H && \\forall i \\in I && \\text{(shift)} \\quad \\leftarrow \\text{this lesson} \\\\\n& \\text{load}_{s_v} = 0, \\quad \\text{load}_{\\text{next}_i} = \\text{load}_i + k_{\\text{node}(i)} && \\forall v,\\ \\forall i && \\text{(Kits, lesson 4.8.2)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The start times $`\\text{time}_{s_v}`$ are free in $`[0, H]`$; the finalizer picks the earliest."
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Label",
+        "Code in `valley_model.py`"
+      ],
+      "rows": [
+        [
+          "Time dimension, wait, shift",
+          "`AddDimension(busy_index, MAX_WAIT, SHIFT, False, \"Time\")`"
+        ],
+        [
+          "window$`_i`$",
+          "`time_dim.CumulVar(manager.NodeToIndex(node)).SetRange(*places[node].window)`"
+        ],
+        [
+          "$`\\gamma \\max(0, \\text{time}_{e_v} - F)`$",
+          "`time_dim.SetCumulVarSoftUpperBound(routing.End(crew), finish_by, late_cost)`"
+        ],
+        [
+          "earliest start and end",
+          "`routing.AddVariableMinimizedByFinalizer(...)` on each start and end cumul"
+        ]
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Time is a dimension whose transit is service plus travel.** The cumul is the arrival time; the callback adds the inspection at the stop being left, then the drive. Forget the service time and the plan is wrong, not merely worse.",
+        "**A time window is a range on the arrival cumul:** `CumulVar(NodeToIndex(node)).SetRange(a, b)`. The dimension's capacity is the horizon, so it also bounds the return to the depot.",
+        "**Slack is waiting, and the start time is left free.** The slack bound limits waiting at each stop; `fix_start_cumul_to_zero=False` lets crews leave later; the finalizer picks the earliest times.",
+        "**Each stop gets an arrival range, not one time:** `solution.Min` and `solution.Max` of its cumul. The objective counts travel; route times also count waiting.",
+        "**A soft upper bound charges for lateness instead of forbidding it:** coefficient × minutes over the bound, added to the objective."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Call",
+        "What it does"
+      ],
+      "rows": [
+        [
+          "`dimension.CumulVar(manager.NodeToIndex(node)).SetRange(a, b)`",
+          "a hard window on a node's cumul"
+        ],
+        [
+          "`dimension.CumulVar(routing.Start(v))`, `routing.End(v)`",
+          "a vehicle's departure and return"
+        ],
+        [
+          "`routing.AddDimension(h, slack_max, horizon, False, \"Time\")`",
+          "waiting up to `slack_max` per stop, a free start"
+        ],
+        [
+          "`routing.AddVariableMinimizedByFinalizer(var)`",
+          "the finalizer picks the smallest feasible value"
+        ],
+        [
+          "`solution.Min(cumul)`, `solution.Max(cumul)`",
+          "the solution window: arrival times that keep the route feasible"
+        ],
+        [
+          "`dimension.SetCumulVarSoftUpperBound(i, bound, coefficient)`",
+          "cost coefficient × (cumul − bound) above the bound"
+        ],
+        [
+          "`dimension.SetCumulVarSoftLowerBound(i, bound, coefficient)`",
+          "the same below a bound"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [OR-Tools: VRP with time windows](https://developers.google.com/optimization/routing/vrptw), [VRP with resource constraints](https://developers.google.com/optimization/routing/cvrptw_resources) (load and unload times at the depot as intervals, with a cumulative limit on docks), and the sample [vrp_time_windows.py](https://github.com/google/or-tools/blob/v9.15/ortools/constraint_solver/samples/vrp_time_windows.py)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Set `MAX_WAIT` to 30 in `valley_windows.py`. Which crew's route must change, and why?",
+        "Fix every crew's start cumul to 0 (`True` as the fourth argument). Predict which waits move from the yard to the first stop.",
+        "Give A305 a soft upper bound on its *arrival* instead of the crews' return. What does the coefficient mean now?"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Time Windows in a MIP and in the Routing Library"
+    },
+    {
+      "type": "para",
+      "text": "A MIP states a time window with continuous arrival times and one big-M row per arc: \"if the vehicle drives from $`i`$ to $`j`$, then $`t_j \\ge t_i + \\text{service}_i + c_{ij}`$\", relaxed by a large constant $`M`$ when it does not, so that the row holds whatever the two times are. Those rows are many, one per arc, and the larger $`M`$ is, the less the LP relaxation, where the arc's 0/1 variable may be fractional, says about the arrival times. Two lessons later in the course treat this in depth: lesson 6.2.1 derives such constants from bounds, and lesson 6.2.2 shows what loose ones do to the LP bound. The routing library needs none of them: the Time dimension computes arrival times along each route as the search builds it, and a move that breaks a window is refused before it is ever priced. The resource-constraints guide shows how far the same idea goes: a depot with two loading docks becomes an interval per vehicle at its start and end cumul, under a cumulative limit of 2, the same kind of constraint lesson 4.5.2 builds in CP-SAT."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**vrp_time_windows.py.** The OR-Tools VRPTW guide's example, adapted with attribution (*A Time Window Is a Range on the Arrival Cumul*, *Each Stop Gets an Arrival Range, Not One Time*). *Try:* Lower the slack bound from 30 to 2. Predict which vehicle's route changes first."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [vrp_time_windows.py](src/vrp_time_windows.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**valley_windows.py.** Four Valley crews with inspection time, windows and waiting, and the travel-only model replayed with real inspections (*Time Is a Dimension Whose Transit Is Service Plus Travel*, *Slack Is Waiting, and the Start Time Is Left Free*). *Try:* Move A230's window to 08:00-11:00. Predict crew 1's wait."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [valley_windows.py](src/valley_windows.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**arrival_range.py.** Solves `valley_windows.py`'s model with inspection time and reads the two limits on crew 1's arrival at A087, from the yard and from A230 (*Each Stop Gets an Arrival Range, Not One Time*). *Try:* Set `MAX_WAIT` to 180 in `valley_windows.py`. Predict the new range at A087."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [arrival_range.py](src/arrival_range.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**soft_finish.py.** The Valley day with and without a soft 14:30 finish (*A Soft Upper Bound Charges for Lateness Instead of Forbidding It*). *Try:* Set `FINISH_BY` to 13:30 (330 minutes) and predict whether any crew is late."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [soft_finish.py](src/soft_finish.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**valley_model.py.** The whole Valley model in one builder (drive cost, Time with windows and service, Kits, soft finish, optional visits), with readers for routes and dropped visits. Lessons 4.8.3 to 4.8.5 import it. It runs nothing itself."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [valley_model.py](src/valley_model.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 12,
+    "paras": 40,
+    "code": 7,
+    "tables": 2,
+    "lists": 8,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 6
+  },
+  "content_sha256": "0c7878d3227309fac4a2d73dbd7e7c6002f5cfe5b6322594538171f54704f805"
+}

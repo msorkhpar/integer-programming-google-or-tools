@@ -1,0 +1,155 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "46-input-data-quality"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "A strict, versioned fleet contract",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The transit agency's fleet export is read by another program, and two versions of it are in use. Version 3, the current one, gives each bus an id, a `depot`, a `cost` in $k and a `must_replace` flag (the model's $`\\text{replace}_b`$ row is an equality only for such buses). Version 2, still sent by one older depot system, called the depot `garage` and had no `must_replace` at all: in version 2 no replacement was mandatory."
+    },
+    {
+      "type": "para",
+      "text": "In `contract.py`, make the schema a contract for documents sent by a program, and bring version 2 documents forward:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`Contract` refuses keys the schema does not declare and refuses values in the wrong JSON type (a number sent as text, a flag sent as text), and its objects cannot be changed after loading.",
+        "`Fleet` accepts version 3 only.",
+        "`upgrade(raw)` turns a version 2 document into the version 3 document it means, and leaves any other document as it is, for the schema to accept or refuse. It must not drop keys it does not know: a key that is wrong in version 2 is still wrong after the upgrade. `depot` and `must_replace` are such keys: version 2 never had them, so a version 2 document whose buses carry either one (a `must_replace` flag, or a `depot` beside the `garage`) is left as it is, still at version 2, and the schema refuses it. Guessing which depot or flag was meant would hide the sender's mistake."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`parse(text)` is written; it returns `None` for any document the contract refuses. About ten lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport json\nfrom typing import Literal\n\nfrom pydantic import BaseModel, ConfigDict, ValidationError\n\n\nclass Contract(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\", strict=True, frozen=True)\n\n\nclass Bus(Contract):\n    bus_id: str\n    depot: str\n    cost: int                                   # $k\n    must_replace: bool\n\n\nclass Fleet(Contract):\n    schema_version: Literal[3]\n    buses: tuple[Bus, ...]\n\n\ndef upgrade(raw: dict) -> dict:\n    \"\"\"Version 2 called the depot `garage` and had no `must_replace`: nothing was mandatory then.\"\"\"\n    if raw.get(\"schema_version\") == 2:\n        if any(\"depot\" in b or \"must_replace\" in b for b in raw[\"buses\"]):\n            return raw                          # keys version 2 never had: left for the schema to refuse\n        buses = [{**{(\"depot\" if k == \"garage\" else k): v for k, v in b.items()}, \"must_replace\": False}\n                 for b in raw[\"buses\"]]\n        raw = {**raw, \"buses\": buses, \"schema_version\": 3}\n    return raw\n\n\ndef parse(text: str) -> Fleet | None:\n    \"\"\"The fleet if the document is valid in version 3 (after upgrading version 2), else None.\"\"\"\n    try:\n        return Fleet.model_validate_json(json.dumps(upgrade(json.loads(text))))\n    except ValidationError:\n        return None\n\n\nif __name__ == \"__main__\":\n    print(parse('{\"schema_version\": 2, \"buses\": [{\"bus_id\": \"B7\", \"garage\": \"North\", \"cost\": 400}]}'))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport json\n\nfrom pydantic import BaseModel, ValidationError\n\n\nclass Contract(BaseModel):\n    # TODO: the policy for a document sent by another program.\n    pass\n\n\nclass Bus(Contract):\n    bus_id: str\n    depot: str\n    cost: int                                   # $k\n    must_replace: bool\n\n\nclass Fleet(Contract):\n    schema_version: int                         # TODO: only version 3 is valid here\n    buses: tuple[Bus, ...]\n\n\ndef upgrade(raw: dict) -> dict:\n    \"\"\"Version 2 called the depot `garage` and had no `must_replace`: nothing was mandatory then.\"\"\"\n    # TODO: bring a version-2 document up to version 3; leave every other document alone.\n    return raw\n\n\ndef parse(text: str) -> Fleet | None:\n    \"\"\"The fleet if the document is valid in version 3 (after upgrading version 2), else None.\"\"\"\n    try:\n        return Fleet.model_validate_json(json.dumps(upgrade(json.loads(text))))\n    except ValidationError:\n        return None\n\n\nif __name__ == \"__main__\":\n    print(parse('{\"schema_version\": 2, \"buses\": [{\"bus_id\": \"B7\", \"garage\": \"North\", \"cost\": 400}]}'))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "c66eae316a07e8dc4bc3c24e28858edae29de5641ca020c269c9d2ec45584d0e",
+  "starting_code": "from __future__ import annotations\n\nimport json\n\nfrom pydantic import BaseModel, ValidationError\n\n\nclass Contract(BaseModel):\n    # TODO: the policy for a document sent by another program.\n    pass\n\n\nclass Bus(Contract):\n    bus_id: str\n    depot: str\n    cost: int                                   # $k\n    must_replace: bool\n\n\nclass Fleet(Contract):\n    schema_version: int                         # TODO: only version 3 is valid here\n    buses: tuple[Bus, ...]\n\n\ndef upgrade(raw: dict) -> dict:\n    \"\"\"Version 2 called the depot `garage` and had no `must_replace`: nothing was mandatory then.\"\"\"\n    # TODO: bring a version-2 document up to version 3; leave every other document alone.\n    return raw\n\n\ndef parse(text: str) -> Fleet | None:\n    \"\"\"The fleet if the document is valid in version 3 (after upgrading version 2), else None.\"\"\"\n    try:\n        return Fleet.model_validate_json(json.dumps(upgrade(json.loads(text))))\n    except ValidationError:\n        return None\n\n\nif __name__ == \"__main__\":\n    print(parse('{\"schema_version\": 2, \"buses\": [{\"bus_id\": \"B7\", \"garage\": \"North\", \"cost\": 400}]}'))\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-2/contract.py",
+    "test_path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-2/test_contract.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-2/contract.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-2/target/report.xml",
+      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-2/test_contract.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_current_document_is_accepted_and_an_unknown_key_refused",
+        "kind": "main",
+        "says": "a version 3 document is accepted, and one with a key the schema does not declare is refused"
+      },
+      {
+        "id": "test_a_number_sent_as_text_is_refused",
+        "kind": "edge",
+        "says": "a cost sent as the text \"450\" is refused, not converted"
+      },
+      {
+        "id": "test_a_flag_sent_as_text_is_refused",
+        "kind": "edge",
+        "says": "a flag sent as the text \"yes\" is refused, not converted"
+      },
+      {
+        "id": "test_a_version_2_document_is_upgraded",
+        "kind": "edge",
+        "says": "a version 2 document is upgraded: its garage becomes the depot and no bus is mandatory"
+      },
+      {
+        "id": "test_an_unknown_key_in_a_version_2_document_is_still_refused",
+        "kind": "edge",
+        "says": "upgrading renames what it knows and keeps everything else, so an unknown key is still refused"
+      },
+      {
+        "id": "test_a_version_2_document_with_version_3_keys_is_refused",
+        "kind": "edge",
+        "says": "a version 2 document that already carries must_replace, or both garage and depot, is refused, not silently overwritten"
+      },
+      {
+        "id": "test_a_version_1_document_is_refused",
+        "kind": "edge",
+        "says": "a version 1 document is refused: there is no upgrade from it"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "46-input-data-quality/README_12.2.1.md",
+      "section": "The Schema Is a Versioned Contract, Published as JSON Schema"
+    },
+    "concepts": [
+      "a document sent by a program is validated with unknown keys forbidden and conversions off, against one schema version, and older versions are brought forward by an explicit upgrade"
+    ]
+  }
+}

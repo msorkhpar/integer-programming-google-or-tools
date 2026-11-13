@@ -1,0 +1,364 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "09-diagnostics-and-explainability",
+    "38-sensitivity-for-mip"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "The marginal value of the next dollar",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "9.2.4 The Marginal Value of the Next Dollar"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's finance partner has read lessons 9.2.1 to 9.2.3 and asks the question once more, more carefully: \"If the board adds money to the capital budget, what does the next dollar buy? And if I use the LP's shadow price anyway, how wrong am I?\" This lesson answers with the exact step points of lesson 9.2.3: it puts the MILP's real gain for the next $1k, $10k, $100k and $1,000k beside what the LP relaxation's price predicts, at six budgets, and ends with the sentence to give finance. GridCap is fictional."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The selection model of lesson 9.2.1 at budget $`B`$, its value $`V(B)`$, and its LP relaxation. Nothing in the model changes; this lesson compares two ways of reading it."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`P`$ the projects; $`M \\subseteq P`$ the must-do projects; $`C \\subseteq P`$ the child projects, each with parent $`p(c)`$; $`\\mathcal{G}`$ the alternative groups."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`v_i`$, project $`i`$'s NPV ($k); $`c_i`$, its cost ($k); $`B`$, the budget ($k); $`d`$, an increase of the budget ($k)."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_i \\in \\{0, 1\\}`$ for the MILP, $`0 \\le x_i \\le 1`$ for its LP relaxation."
+    },
+    {
+      "type": "para",
+      "text": "**Objective and constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\nV(B) = \\max\\; & \\sum_{i \\in P} v_i\\, x_i \\\\\n\\text{s.t.}\\; & \\sum_{i \\in P} c_i\\, x_i \\le B && && \\text{(budget)} \\\\\n& x_i = 1 && \\forall i \\in M && \\text{(must}_i) \\\\\n& x_c \\le x_{p(c)} && \\forall c \\in C && \\text{(parent}_c) \\\\\n& \\sum_{i \\in g} x_i \\le 1 && \\forall g \\in \\mathcal{G} && \\text{(alt}_g)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "**The two answers to \"what is $`d`$ more worth?\"**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\text{MILP gain: } \\; V(B + d) - V(B) \\qquad\\qquad \\text{LP prediction: } \\; p(B)\\, d"
+    },
+    {
+      "type": "para",
+      "text": "where $`p(B)`$ is the dual value of the LP relaxation's budget row at $`B`$ (lesson 2.3.3). The gain is read off the step points: $`V(B + d)`$ is the value of the last step at or below $`B + d`$."
+    },
+    {
+      "type": "example",
+      "id": "next_dollar-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "38-sensitivity-for-mip/src/next_dollar.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "38-sensitivity-for-mip/src/next_dollar.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "def value_at(points: list[tuple[int, int]], budget: int) -> int:\n    \"\"\"V(budget) from step points: the value of the last step at or below the budget.\"\"\"\n    return points[bisect_right([b for b, _ in points], budget) - 1][1]"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`bisect_right` finds the first step point above the budget; the one before it is the step the budget stands on. A budget exactly at a step point gets that step's value, because $`V`$ jumps *at* the step's budget, not after it."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Next $1k Is Worth Nothing at Most Budgets, and a Jump at a Few"
+    },
+    {
+      "type": "para",
+      "text": "For each budget the program finds the step points in $`[B, B + 1{,}000]`$ (lesson 9.2.3) and the LP relaxation's price at $`B`$:"
+    },
+    {
+      "type": "example",
+      "id": "next_dollar-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "38-sensitivity-for-mip/src/next_dollar.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "38-sensitivity-for-mip/src/next_dollar.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "for B in (20000, 30000, 38390, 45000, 50000, 60000):\n    points = step_points(small, B, B + 1000)\n    p = lp_price(B)\n    gain = {d: value_at(points, B + d) - points[0][1] for d in (1, 10, 100, 1000)}"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "B       price | gain gain  gain   p x  gain   p x |   next rise\n            p |   +1  +10  +100   100 +1000  1000 |   step\n20000  0.7222 |    0   18    71    72   693   722 |  20010   18\n30000  0.6475 |    0    0    82    65   668   648 |  30020    8\n38390  0.5867 |    0    0    93    59   636   587 |  38410    8\n45000  0.5201 |    0    0    83    52   586   520 |  45060   20\n50000  0.3867 |    0    0   112    39   371   387 |  50030   75\n60000  0.2996 |    0   31    31    30   271   300 |  60010   31"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The next $1k is worth nothing at every one of the six budgets, where the LP price says $0.30k to $0.72k. That is not luck. Every GridCap project costs a whole multiple of $10k, so every plan does too, and $`V`$ can only step at a multiple of $10k. From a budget that is itself a multiple of $10k, no extra amount below $10k can buy anything. The next $10k is worth either nothing (four budgets) or a whole step ($18k at $20,000k, $31k at $60,000k), never $10k × price. A fixed-integer price does not rescue it: with no continuous variable left, the fixed plan has no use for money, and its price is 0 (lesson 9.2.2)."
+    },
+    {
+      "type": "para",
+      "text": "\"The marginal value of the next dollar\" is the slope of $`V`$, and a step function's slope is 0 almost everywhere and undefined at its steps. For a MILP the honest units are steps: where the next one is, and how high."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Over $1,000k the LP Price Is About Right; Over $100k It Is Not"
+    },
+    {
+      "type": "para",
+      "text": "Read the two right-hand pairs of columns. Over $1,000k the LP's prediction lands within 12% of the MILP's real gain at all six budgets: 722 against 693, 520 against 586. A change that size crosses dozens of steps (28 of them from $38,390k, as the last line of output says), and the steps average out to roughly the relaxation's smooth slope."
+    },
+    {
+      "type": "para",
+      "text": "Over $100k the prediction is off by up to a factor of three, and at five of the six budgets the MILP gains more than the price predicts. At $50,000k the MILP gains $112k where the price predicts $39k. At $38,390k it gains $93k against $59k. At $20,000k the two happen to agree. A $100k change crosses only a few steps, so the gain depends on which steps happen to lie in the window, and the price has no way to know."
+    },
+    {
+      "type": "para",
+      "text": "So the LP price is a fair answer to \"roughly what is a large change worth?\" and a wrong answer to \"what is the next increment worth?\". And the price itself moves: from 0.72 at $20,000k to 0.30 at $60,000k: the relaxation's value is concave in the budget (lesson 9.2.1), so its price can only fall as the budget grows. Even as a rough rate, it holds only near the budget it was read at."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Fixed-Integer Price Is a Floor Inside Its Range, and Silent Outside It"
+    },
+    {
+      "type": "para",
+      "text": "The other price finance may be handed is the fixed-integer price of lesson 9.2.2, from the model with routine line clearance. Its output at $38,390k, repeated here:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "budget 38,390, clearance 0 of 800: with the plan fixed the price holds for d in [0, 800]\n     d price x d fixed plan     MILP\n  -100     -25.0 infeasible    -30.5\n   -10      -2.5 infeasible     -4.0\n   +10       2.5        2.5      2.5\n  +100      25.0       25.0     98.0\n  +500     125.0      125.0    329.5\n  +800     200.0      200.0    524.0\n +1000     250.0      200.0    648.5"
+    },
+    {
+      "type": "para",
+      "text": "A sentence like \"+$1,000k of budget gives +$250k\" is built from that price, 0.25 × 1,000. It is a local, conditional statement, and here all three of its parts fail. It is conditional on the plan: the MILP re-chooses projects and gains $648.5k, not $250k. It is local: the range ends at +800, so even with the plan fixed the last $200k buys nothing. And it is one-sided: the plan buys no clearance, so the price says nothing about a cut, which costs the MILP 4.0 for the first $10k. Inside its range and for an increase, the fixed-integer price is a floor: the MILP gains at least that much, because the fixed plan with more clearance is still a plan. Outside, it is silent."
+    },
+    {
+      "type": "para",
+      "text": "The same holds for any \"+$X gives +$Y\" read off a price, whoever states it. Ask three questions before repeating it: for which plan, over what range, and in which direction?"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Tell Finance the Steps, Not a Rate"
+    },
+    {
+      "type": "para",
+      "text": "The step points answer finance's question directly, in a sentence anyone can check against the curve:"
+    },
+    {
+      "type": "example",
+      "id": "next_dollar-3",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "38-sensitivity-for-mip/src/next_dollar.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "38-sensitivity-for-mip/src/next_dollar.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "def sentence(budget: int, points: list[tuple[int, int]], window: int) -> str:\n    \"\"\"What the next dollars are worth, in words a planner can check against the step points.\"\"\"\n    (b0, v0), (b1, v1) = points[0], points[1]\n    gain = value_at(points, budget + window) - v0"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "At $38,390k the plan is worth $25,336k. Extra budget buys nothing until $38,410k, where the value rises by $8k. $1,000k more is worth $636k in all, over 28 separate steps."
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "It gives three numbers: where the next step is, how high it is, and what a round amount buys. None of them is a rate, and each is exact. If finance needs one rate for a budget memo, give the average over a stated window ($636k per $1,000k from $38,390k, 0.64 per $k) and name the window. The LP price, 0.5867, is a different number, and it says nothing about where the steps are. Lesson 9.3.4 turns sentences like this into reports for planners, finance and auditors."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**The next $1k is worth nothing at most budgets, and a jump at a few.** GridCap's costs are multiples of $10k, so the next $1k never buys anything; the next $10k buys nothing or a whole step.",
+        "**Over $1,000k the LP price is about right; over $100k it is not.** Within 12% over $1,000k at the six budgets, off by up to a factor of three over $100k, because few steps do not average out.",
+        "**A fixed-integer price is a floor inside its range, and silent outside it.** \"+$X gives +$Y\" from a price needs its plan, its range and its direction.",
+        "**Tell finance the steps, not a rate.** Where the next step is, how high, and what a round amount buys; if a rate is needed, an average over a named window."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Finance asks",
+        "Answer with"
+      ],
+      "rows": [
+        [
+          "what does the next $1k buy?",
+          "the next step: its budget and rise, from the step points"
+        ],
+        [
+          "what does +$X buy?",
+          "$`V(B + X) - V(B)`$, read off the step points"
+        ],
+        [
+          "one number per $k",
+          "the average over a named window, with the window"
+        ],
+        [
+          "the LP relaxation's price",
+          "a rough rate for large changes near $`B`$; never the next increment"
+        ],
+        [
+          "a fixed-integer price",
+          "a floor on the gain, for its plan, inside its range, for increases"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [MathOpt `result.py` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/result.py) (`dual_values`, the LP relaxation's budget price in the table); [Python `bisect`](https://docs.python.org/3/library/bisect.html) (`bisect_right` returns the insertion point after any equal entries, which is why a budget exactly at a step gets that step's value); [Güzelsoy and Ralphs, Duality for Mixed Integer Linear Programs](https://coral.ise.lehigh.edu/%7Eted/files/papers/MILPD06.pdf) (section 2, Example 2 and Figure 2: the LP relaxation's value function is the best convex function bounding the MILP's from one side, a smooth line under a sawtooth, which is why a relaxation price tracks large changes and misses small ones; the survey states every MILP as a minimization, so there the relaxation's value lies below and is convex, while for this lesson's maximization the same result puts it above $`V`$ and makes it concave: the least concave function over the steps, a smooth line over a staircase)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "A scenario adds a $5k project worth $4k with no rules attached. Which row of the table changes in its \"+1\" column, and which in its \"+10\" column?",
+        "Finance asks for the value of a $250k cut from $38,390k. Which program would you run, and why not the LP price?",
+        "At $50,000k the next step is worth $75k for $30k more. Write the sentence for that budget."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Report the Curve, Derive the Numbers"
+    },
+    {
+      "type": "para",
+      "text": "Every answer in this lesson is read from one data structure, the list of step points. Store it with the scenario (section 12), and every later question about budget changes in its window is a lookup, not a solve, and every answer can be checked against the same list."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**next_dollar.py.** For six budgets, the LP relaxation's price beside the MILP's real gain for the next $1k to $1,000k, read off exact step points, and the sentence for finance (*the first two sections and the last*). *Try:* Add the budget 38,395 to the list. Predict its \"+10\" and \"+100\" gains before you run it."
+    },
+    {
+      "type": "para",
+      "text": "**fixed_duals.py.** The fixed-integer price at $38,390k against the fixed plan's and the MILP's real gains (*A Fixed-Integer Price Is a Floor Inside Its Range*; lesson 9.2.2 explains it in full). *Try:* Add $`d`$ = 700 and 900 to its list. Predict the fixed plan's gain for each."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [next_dollar.py](src/next_dollar.py)",
+        "Program: [fixed_duals.py](src/fixed_duals.py)",
+        "Program: [step_points.py](src/step_points.py)",
+        "Library: [selection.py](src/selection.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 11,
+    "paras": 25,
+    "code": 3,
+    "tables": 1,
+    "lists": 3,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 3
+  },
+  "content_sha256": "5e84636e0d0ebc1375d13840db836aa260b8c10ad2a3dfa77b2e7c3828ecdf93"
+}

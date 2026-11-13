@@ -1,0 +1,66 @@
+# Read-along: never run in this course. In the service's repository it lives at .github/workflows/ci.yml.
+# Every action is pinned to a full commit SHA. The all-zero SHAs here are placeholders: replace each
+# with the commit of the release named in its comment.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: 123456789012.dkr.ecr.us-east-1.amazonaws.com
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@0000000000000000000000000000000000000000  # v5
+      - uses: actions/setup-python@0000000000000000000000000000000000000000  # v6
+        with:
+          python-version: "3.14"
+      - run: pip install -r requirements.txt
+      - run: python -m pytest       # moto only: this job has no AWS credentials at all
+
+  image:
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@0000000000000000000000000000000000000000  # v5
+      - uses: aws-actions/configure-aws-credentials@0000000000000000000000000000000000000000  # v5
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/gridcap-ci-push
+          aws-region: us-east-1
+      - run: aws ecr get-login-password | docker login --username AWS --password-stdin "$REGISTRY"
+      - run: docker build -t "$REGISTRY/gridcap-solver:${{ github.sha }}" .
+      - run: docker push "$REGISTRY/gridcap-solver:${{ github.sha }}"
+
+  deploy:
+    needs: [test, image]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@0000000000000000000000000000000000000000  # v5
+      - uses: aws-actions/configure-aws-credentials@0000000000000000000000000000000000000000  # v5
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/gridcap-ci-deploy
+          aws-region: us-east-1
+      - uses: hashicorp/setup-terraform@0000000000000000000000000000000000000000  # v3
+      - run: terraform -chdir=deploy/terraform init -input=false
+      - run: >-
+          terraform -chdir=deploy/terraform plan -input=false -out=tfplan
+          -var "image=$REGISTRY/gridcap-solver:${{ github.sha }}"
+      - run: terraform -chdir=deploy/terraform show -json tfplan > plan.json
+      - run: python plan_guard.py plan.json      # the plan gate: refuses a plan that destroys history
+      - run: terraform -chdir=deploy/terraform apply -input=false tfplan

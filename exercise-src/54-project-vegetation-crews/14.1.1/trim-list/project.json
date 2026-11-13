@@ -1,0 +1,73 @@
+{
+  "project_api": 1,
+  "title": "Pick the circuits to trim within the budget",
+  "before": "../../../../54-project-vegetation-crews/steps/00",
+  "after": "../../../../54-project-vegetation-crews/steps/01",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the tiny season matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "vegcrew/planner.py",
+      "signature": "def build(season: Season) -> tuple[mathopt.Model, dict[str, mathopt.Variable]]",
+      "contract": "Takes a Season. Returns a MathOpt model and its variables: one binary variable per circuit (named `x_<cid>`, keyed by the circuit id), one row named budget that keeps the summed cost of the trimmed circuits within the season's budget, and the summed yearly risk of the trimmed circuits as the objective to maximize.",
+      "idea": "A yes-or-no choice per circuit under one budget is a 0-1 knapsack: the best list is a combination, which no ranking by risk per dollar finds in general.",
+      "lesson": {
+        "title": "6.3.1 0-1 and Multi-Dimensional Knapsack",
+        "href": "../../../../06-formulation-craft/25-knapsack-and-assignment/units/unit-01/6.3.1-0-1-and-multi-dimensional-knapsack.unit.html"
+      },
+      "stub": "return None, {}"
+    },
+    {
+      "file": "vegcrew/planner.py",
+      "signature": "def make_plan(season: Season) -> Plan",
+      "contract": "Builds the model, solves it with HiGHS through MathOpt with a relative gap of zero, and returns a Plan: the status (OPTIMAL, FEASIBLE, INFEASIBLE, or the name of any other termination reason), one Trim per circuit whose variable is above 0.5, and their summed cost and risk removed. With no feasible solution, a Plan with the status alone. A budget too small for any circuit is an OPTIMAL plan with no trims.",
+      "idea": "Read the termination first, then the variable values; a binary is 1 when its value is above 0.5.",
+      "lesson": {
+        "title": "4.2.1 Model, Variables, Constraints, Objective",
+        "href": "../../../../04-google-or-tools-in-depth/13-mathopt-core/units/unit-01/4.2.1-model-variables-constraints-objective.unit.html"
+      }
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_planner.py::test_the_plan_beats_ranking_by_risk_per_dollar",
+      "main",
+      "the plan is the best combination, not the best risk per dollar taken in order"
+    ],
+    [
+      "tests/test_planner.py::test_the_plan_never_spends_more_than_the_budget",
+      "main",
+      "the trimmed circuits of the small season cost no more than the budget"
+    ],
+    [
+      "tests/test_planner.py::test_the_plan_matches_every_subset_of_the_tiny_season",
+      "main",
+      "the plan removes as much risk as the best subset of the tiny season"
+    ],
+    [
+      "tests/test_planner.py::test_a_zero_budget_is_an_answer_with_no_trims",
+      "edge",
+      "a budget of zero is an optimal plan with no trims, not a failure"
+    ]
+  ],
+  "plants": {
+    "tests/test_planner.py::test_a_zero_budget_is_an_answer_with_no_trims": [
+      [
+        "vegcrew/planner.py",
+        "    chosen = [c for c in season.circuits if result.variable_values(x[c.cid]) > 0.5]\n",
+        "    chosen = [c for c in season.circuits if result.variable_values(x[c.cid]) > 0.5]\n    if not chosen:\n        return Plan(\"INFEASIBLE\")\n"
+      ]
+    ]
+  },
+  "cites": {
+    "path": "54-project-vegetation-crews/README_14.1.1.md",
+    "section": null
+  }
+}

@@ -1,0 +1,140 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "16-cpsat-scheduling"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 3,
+  "ingested": "2026-11-13",
+  "title": "Two inspection teams share the jobs",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility has inspection teams that can each do any job, one job at a time. Some teams are away on some days, given as `(first_day, last_day)` pairs, both days included. Days are numbered from 0."
+    },
+    {
+      "type": "para",
+      "text": "Write `split_work(jobs, teams, away, horizon)` in `teams.py`. `jobs` maps a job to its days of work, `teams` lists the team names, `away` maps a team to its absences (a team with none may be missing from it), and all work must end by day `horizon`. Return, for each job, the pair `(team, start_day)`, chosen so that the last job ends as early as possible."
+    },
+    {
+      "type": "para",
+      "text": "The model, with $`J`$ the jobs, $`d_j`$ their days, $`T`$ the teams, $`A_t`$ team $`t`$'s absences with first and last days $`f_a`$ and $`l_a`$, and $`H`$ the horizon:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& s_j \\in \\{0, \\dots, H - d_j\\} && \\forall j \\in J && \\text{(start day)} \\\\\n& x_{j,t} \\in \\{0, 1\\} && \\forall j \\in J,\\ t \\in T && \\text{(team } t \\text{ does job } j\\text{)} \\\\\n& C \\in \\{0, \\dots, H\\} \\\\\n& \\min \\; C \\\\\n& \\textstyle\\sum_{t \\in T} x_{j,t} = 1 && \\forall j \\in J && \\text{(one\\_team}_j) \\\\\n& \\text{NoOverlap}\\big(\\{[s_j, s_j + d_j) \\text{ present iff } x_{j,t} = 1 : j \\in J\\} \\cup \\{[f_a, l_a + 1) : a \\in A_t\\}\\big) && \\forall t \\in T && \\text{(team}_t) \\\\\n& C = \\max_{j \\in J} (s_j + d_j) && && \\text{(makespan)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The interval \"present iff $`x_{j,t} = 1`$\" is an optional interval with presence literal $`x_{j,t}`$; job $`j`$ has one per team, all on the same $`s_j`$. The tests check the plan you return and how early it ends, so any optimal plan passes. About twenty lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef split_work(jobs: dict[str, int], teams: list[str], away: dict[str, list[tuple[int, int]]],\n               horizon: int) -> dict[str, tuple[str, int]]:\n    \"\"\"(team, start day) for each job, so the last job ends as early as possible.\"\"\"\n    model = cp_model.CpModel()\n    start, does = {}, {}\n    on_team = {t: [] for t in teams}\n    for j, days in jobs.items():\n        start[j] = model.new_int_var(0, horizon - days, f\"start_{j}\")\n        for t in teams:\n            does[j, t] = model.new_bool_var(f\"{t}_does_{j}\")\n            on_team[t].append(model.new_optional_fixed_size_interval_var(start[j], days, does[j, t], f\"{j}_by_{t}\"))\n        model.add_exactly_one(does[j, t] for t in teams)\n    for t in teams:\n        for first, last in away.get(t, []):\n            on_team[t].append(model.new_fixed_size_interval_var(first, last - first + 1, f\"{t}_away_{first}\"))\n        model.add_no_overlap(on_team[t])\n\n    makespan = model.new_int_var(0, horizon, \"makespan\")\n    model.add_max_equality(makespan, [start[j] + days for j, days in jobs.items()])\n    model.minimize(makespan)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.solve(model)\n    return {j: (next(t for t in teams if solver.boolean_value(does[j, t])), solver.value(start[j])) for j in jobs}\n\n\nif __name__ == \"__main__\":\n    print(split_work({\"main_st\": 3, \"mill_rd\": 2, \"dam\": 4}, [\"red\", \"blue\"], {\"blue\": [(0, 1)]}, 20))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef split_work(jobs: dict[str, int], teams: list[str], away: dict[str, list[tuple[int, int]]],\n               horizon: int) -> dict[str, tuple[str, int]]:\n    \"\"\"(team, start day) for each job, so the last job ends as early as possible.\"\"\"\n    # TODO: a start per job, a Boolean and an optional interval per job and team, exactly one team\n    # per job, a NoOverlap per team with its absences, and minimize the latest end.\n    # Every pair below is a placeholder.\n    return {j: (\"nobody\", -1) for j in jobs}\n\n\nif __name__ == \"__main__\":\n    print(split_work({\"main_st\": 3, \"mill_rd\": 2, \"dam\": 4}, [\"red\", \"blue\"], {\"blue\": [(0, 1)]}, 20))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "695e2ede214bfbff821f26d3dc3f7ee54035124e9ee94cd6ad4c3d2eeed00773",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef split_work(jobs: dict[str, int], teams: list[str], away: dict[str, list[tuple[int, int]]],\n               horizon: int) -> dict[str, tuple[str, int]]:\n    \"\"\"(team, start day) for each job, so the last job ends as early as possible.\"\"\"\n    # TODO: a start per job, a Boolean and an optional interval per job and team, exactly one team\n    # per job, a NoOverlap per team with its absences, and minimize the latest end.\n    # Every pair below is a placeholder.\n    return {j: (\"nobody\", -1) for j in jobs}\n\n\nif __name__ == \"__main__\":\n    print(split_work({\"main_st\": 3, \"mill_rd\": 2, \"dam\": 4}, [\"red\", \"blue\"], {\"blue\": [(0, 1)]}, 20))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-3/teams.py",
+    "test_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-3/test_teams.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-3/teams.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-3/target/report.xml",
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-3/test_teams.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_every_job_goes_to_a_listed_team",
+        "kind": "main",
+        "says": "every job is given to one of the listed teams, with a whole-number start day"
+      },
+      {
+        "id": "test_one_team_does_everything_in_turn",
+        "kind": "main",
+        "says": "with one team, the jobs run one after another and end as early as possible"
+      },
+      {
+        "id": "test_two_teams_work_at_the_same_time",
+        "kind": "edge",
+        "says": "two teams work on different jobs at the same time, so the work ends sooner than with one team"
+      },
+      {
+        "id": "test_a_team_away_does_not_stop_the_other",
+        "kind": "edge",
+        "says": "days one team is away are blocked for that team only"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-3/target/report.xml"
+    },
+    "origin": {
+      "path": "16-cpsat-scheduling/README_4.5.1.md",
+      "section": "Optional Intervals Let a Job Choose Its Crew"
+    },
+    "concepts": [
+      "one optional interval per crew with exactly one present lets a job choose its crew"
+    ]
+  }
+}

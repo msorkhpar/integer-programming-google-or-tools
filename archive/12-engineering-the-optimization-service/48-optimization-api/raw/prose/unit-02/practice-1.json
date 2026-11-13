@@ -1,0 +1,158 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "48-optimization-api"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A job endpoint for crew rosters",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The crew-roster optimizer assigns line crews to weeks of work, and on a full season it runs for several minutes. The scheduling tool cannot hold an HTTP request open that long, so it needs a job API: submit a roster request, poll its status, fetch the result when it is done."
+    },
+    {
+      "type": "para",
+      "text": "In `crew_jobs.py`, write `create_app(solve, workers=1)`. `solve` is given to you by the caller (the tests pass small stand-ins); it takes a `RosterRequest`, may take minutes, returns a dict with a `\"status\"` key, and may raise. The API:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`POST /jobs` with a `RosterRequest` body answers **202** at once with `{\"job_id\": ..., \"status\": \"queued\"}`. The solve runs on one of `workers` worker threads, never inside the request.",
+        "`GET /jobs/{job_id}` answers `{\"job_id\", \"status\", \"message\", \"ahead\"}`. For a queued job, `ahead` is how many queued jobs were submitted before it, so the tool can say \"2 jobs ahead of yours\"; the job being solved is not counted, and `ahead` is 0 for any job not queued. The status is `\"queued\"` until a worker starts the job, `\"running\"` while it solves, then the `\"status\"` of the dict `solve` returned. If `solve` raises, the status is `\"failed\"` and the message carries the exception's text; the worker goes on to the next job.",
+        "`GET /jobs/{job_id}/result` answers 200 with the dict `solve` returned (or `{\"status\": \"failed\", \"message\": ...}` for a failed job), and **409** while the job is queued or running.",
+        "An id the API never gave out gets **404** on both GET paths."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Unlike the lesson's store, this one keeps each job's status in a record the worker updates itself, so the status says what the worker has done rather than what the executor reports. Guard the shared dict with a lock: the endpoints and the worker threads touch it at the same time. The job record, the lock, the pool, the submission order and a `find` that answers 404 are written; about 30 lines remain."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport threading\nimport uuid\nfrom concurrent.futures import ThreadPoolExecutor\nfrom dataclasses import dataclass\nfrom typing import Callable\n\nfrom fastapi import FastAPI, HTTPException\nfrom pydantic import BaseModel, ConfigDict, Field\n\n\nclass RosterRequest(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\")\n\n    crews: int = Field(ge=1)\n    weeks: int = Field(ge=1, le=52)\n\n\n@dataclass\nclass Job:\n    status: str = \"queued\"           # queued -> running -> the solve's own status, or failed\n    result: dict | None = None\n    message: str = \"\"\n\n\ndef create_app(solve: Callable[[RosterRequest], dict], workers: int = 1) -> FastAPI:\n    \"\"\"A job API around `solve`, which takes minutes and returns a dict with a \"status\" key.\"\"\"\n    app = FastAPI(title=\"Crew roster jobs\")\n    jobs: dict[str, Job] = {}\n    order: list[str] = []            # job ids in the order they were submitted\n    lock = threading.Lock()\n    pool = ThreadPoolExecutor(max_workers=workers)\n\n    def work(job_id: str, request: RosterRequest) -> None:\n        with lock:\n            jobs[job_id].status = \"running\"\n        try:\n            result = solve(request)\n        except Exception as error:\n            with lock:\n                jobs[job_id].status, jobs[job_id].message = \"failed\", f\"the solve failed: {error}\"\n            return\n        with lock:\n            jobs[job_id].status, jobs[job_id].result = result[\"status\"], result\n\n    def find(job_id: str) -> Job:\n        with lock:\n            job = jobs.get(job_id)\n        if job is None:\n            raise HTTPException(status_code=404, detail=f\"no job {job_id}\")\n        return job\n\n    @app.post(\"/jobs\", status_code=202)\n    def submit(request: RosterRequest) -> dict:\n        job_id = uuid.uuid4().hex\n        with lock:\n            jobs[job_id] = Job()\n            order.append(job_id)\n        pool.submit(work, job_id, request)\n        return {\"job_id\": job_id, \"status\": \"queued\"}\n\n    @app.get(\"/jobs/{job_id}\")\n    def poll(job_id: str) -> dict:\n        job = find(job_id)\n        with lock:\n            earlier = order[:order.index(job_id)]\n            ahead = sum(1 for other in earlier if jobs[other].status == \"queued\") if job.status == \"queued\" else 0\n        return {\"job_id\": job_id, \"status\": job.status, \"message\": job.message, \"ahead\": ahead}\n\n    @app.get(\"/jobs/{job_id}/result\")\n    def fetch(job_id: str) -> dict:\n        job = find(job_id)\n        if job.status in (\"queued\", \"running\"):\n            raise HTTPException(status_code=409, detail=f\"job {job_id} is {job.status}\")\n        return job.result if job.result is not None else {\"status\": job.status, \"message\": job.message}\n\n    return app\n\n\nif __name__ == \"__main__\":\n    app = create_app(lambda request: {\"status\": \"optimal\", \"crews_used\": request.crews})\n    print(sorted(app.openapi()[\"paths\"]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport threading\nimport uuid  # noqa: F401\nfrom concurrent.futures import ThreadPoolExecutor\nfrom dataclasses import dataclass\nfrom typing import Callable\n\nfrom fastapi import FastAPI, HTTPException\nfrom pydantic import BaseModel, ConfigDict, Field\n\n\nclass RosterRequest(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\")\n\n    crews: int = Field(ge=1)\n    weeks: int = Field(ge=1, le=52)\n\n\n@dataclass\nclass Job:\n    status: str = \"queued\"           # queued -> running -> the solve's own status, or failed\n    result: dict | None = None\n    message: str = \"\"\n\n\ndef create_app(solve: Callable[[RosterRequest], dict], workers: int = 1) -> FastAPI:\n    \"\"\"A job API around `solve`, which takes minutes and returns a dict with a \"status\" key.\"\"\"\n    app = FastAPI(title=\"Crew roster jobs\")\n    jobs: dict[str, Job] = {}\n    order: list[str] = []            # job ids in the order they were submitted\n    lock = threading.Lock()\n    pool = ThreadPoolExecutor(max_workers=workers)\n\n    def work(job_id: str, request: RosterRequest) -> None:\n        # TODO: mark the job running, solve, and record the result, or the failure and its reason.\n        pass\n\n    def find(job_id: str) -> Job:\n        with lock:\n            job = jobs.get(job_id)\n        if job is None:\n            raise HTTPException(status_code=404, detail=f\"no job {job_id}\")\n        return job\n\n    # TODO: submit must answer 202 at once and leave the solve to the pool; fetch must answer 409 early.\n    @app.post(\"/jobs\")\n    def submit(request: RosterRequest) -> dict:\n        return {\"job_id\": \"\", \"status\": \"queued\"}\n\n    @app.get(\"/jobs/{job_id}\")\n    def poll(job_id: str) -> dict:\n        return {\"job_id\": job_id, \"status\": \"queued\", \"message\": \"\", \"ahead\": 0}\n\n    @app.get(\"/jobs/{job_id}/result\")\n    def fetch(job_id: str) -> dict:\n        return {}\n\n    return app\n\n\nif __name__ == \"__main__\":\n    app = create_app(lambda request: {\"status\": \"optimal\", \"crews_used\": request.crews})\n    print(sorted(app.openapi()[\"paths\"]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "cf31e70e5b8e52ce35ca109a56edf187a228b12aad8165a41aee9f8417941a6e",
+  "starting_code": "from __future__ import annotations\n\nimport threading\nimport uuid  # noqa: F401\nfrom concurrent.futures import ThreadPoolExecutor\nfrom dataclasses import dataclass\nfrom typing import Callable\n\nfrom fastapi import FastAPI, HTTPException\nfrom pydantic import BaseModel, ConfigDict, Field\n\n\nclass RosterRequest(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\")\n\n    crews: int = Field(ge=1)\n    weeks: int = Field(ge=1, le=52)\n\n\n@dataclass\nclass Job:\n    status: str = \"queued\"           # queued -> running -> the solve's own status, or failed\n    result: dict | None = None\n    message: str = \"\"\n\n\ndef create_app(solve: Callable[[RosterRequest], dict], workers: int = 1) -> FastAPI:\n    \"\"\"A job API around `solve`, which takes minutes and returns a dict with a \"status\" key.\"\"\"\n    app = FastAPI(title=\"Crew roster jobs\")\n    jobs: dict[str, Job] = {}\n    order: list[str] = []            # job ids in the order they were submitted\n    lock = threading.Lock()\n    pool = ThreadPoolExecutor(max_workers=workers)\n\n    def work(job_id: str, request: RosterRequest) -> None:\n        # TODO: mark the job running, solve, and record the result, or the failure and its reason.\n        pass\n\n    def find(job_id: str) -> Job:\n        with lock:\n            job = jobs.get(job_id)\n        if job is None:\n            raise HTTPException(status_code=404, detail=f\"no job {job_id}\")\n        return job\n\n    # TODO: submit must answer 202 at once and leave the solve to the pool; fetch must answer 409 early.\n    @app.post(\"/jobs\")\n    def submit(request: RosterRequest) -> dict:\n        return {\"job_id\": \"\", \"status\": \"queued\"}\n\n    @app.get(\"/jobs/{job_id}\")\n    def poll(job_id: str) -> dict:\n        return {\"job_id\": job_id, \"status\": \"queued\", \"message\": \"\", \"ahead\": 0}\n\n    @app.get(\"/jobs/{job_id}/result\")\n    def fetch(job_id: str) -> dict:\n        return {}\n\n    return app\n\n\nif __name__ == \"__main__\":\n    app = create_app(lambda request: {\"status\": \"optimal\", \"crews_used\": request.crews})\n    print(sorted(app.openapi()[\"paths\"]))\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-02/practice-1/crew_jobs.py",
+    "test_path": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-02/practice-1/test_crew_jobs.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-02/practice-1/crew_jobs.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-02/practice-1/target/report.xml",
+      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-02/practice-1/test_crew_jobs.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_submit_poll_and_fetch_a_finished_job",
+        "kind": "main",
+        "says": "a submitted job gets 202 and an id, its poll reaches the solve's status, and its fetch returns the solve's result"
+      },
+      {
+        "id": "test_submit_answers_before_the_solve_finishes",
+        "kind": "edge",
+        "says": "submit answers at once while the solve is still running"
+      },
+      {
+        "id": "test_a_second_job_waits_in_the_queue",
+        "kind": "edge",
+        "says": "with one worker busy, a second job polls as queued, not running"
+      },
+      {
+        "id": "test_an_unknown_job_is_404",
+        "kind": "edge",
+        "says": "an id the API never gave out gets 404 on poll and on fetch"
+      },
+      {
+        "id": "test_fetching_before_the_end_is_409",
+        "kind": "edge",
+        "says": "fetching a job that has not finished gets 409, and 200 once it has"
+      },
+      {
+        "id": "test_a_solve_that_raises_ends_failed_and_the_next_job_still_runs",
+        "kind": "edge",
+        "says": "a solve that raises leaves its job failed with the reason, and the next job still runs"
+      },
+      {
+        "id": "test_a_queued_job_says_how_many_jobs_wait_ahead_of_it",
+        "kind": "edge",
+        "says": "a queued job's poll counts the queued jobs submitted before it, not the running one"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "48-optimization-api/README_12.4.2.md",
+      "section": "Submit Returns 202 and an Id, Poll Returns a Status, Fetch Returns the Result"
+    },
+    "concepts": [
+      "a job store keeps each job by id and an executor runs the solves on worker threads",
+      "a solve that can outlast an HTTP request runs as a job, not inside the request",
+      "submit answers 202 with an id, poll answers a status, fetch answers the result or 409"
+    ]
+  }
+}

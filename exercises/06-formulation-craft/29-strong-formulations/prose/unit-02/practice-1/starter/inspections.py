@@ -1,0 +1,34 @@
+from __future__ import annotations
+
+from ortools.math_opt.python import mathopt
+
+
+def tighten(cost: dict, budget: int, hours: dict, need: dict) -> tuple[set, set]:
+    """Inspections every allowed plan must include, and inspections no allowed plan can include.
+
+    `hours[d][j]` is what inspection j gives district d, `need[d]` the hours district d must get.
+    Each row is used on its own, and the pass repeats until nothing changes.
+    """
+    # TODO: fix what the rows force, one row at a time, until nothing changes.
+    return set(), set()
+
+
+def build(cost: dict, budget: int, hours: dict, need: dict, value: dict, *, integer: bool = True,
+          fixings: tuple[set, set] | None = None) -> tuple[mathopt.Model, dict]:
+    model = mathopt.Model(name="inspections")
+    x = {j: model.add_variable(lb=0, ub=1, is_integer=integer, name=f"x_{j}") for j in cost}
+    model.add_linear_constraint(sum(cost[j] * x[j] for j in cost) <= budget, name="budget")
+    for d, gives in hours.items():
+        model.add_linear_constraint(sum(h * x[j] for j, h in gives.items()) >= need[d], name=f"cover_{d}")
+    if fixings is not None:
+        ones, zeros = fixings
+        for j in ones:
+            x[j].lower_bound = 1
+        for j in zeros:
+            x[j].upper_bound = 0
+    model.maximize(sum(value[j] * x[j] for j in cost))
+    return model, x
+
+
+if __name__ == "__main__":
+    print(tighten({"A": 3, "B": 2}, 4, {"north": {"A": 5, "B": 1}}, {"north": 4}))

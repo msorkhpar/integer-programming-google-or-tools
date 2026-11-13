@@ -1,0 +1,130 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "29-strong-formulations"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Identical poles, counted instead of named",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A distribution company (not GridCap) must replace a feeder's wooden poles within four years. The poles are identical: same age, same type, same risk. Replacing one in year $`y`$ costs $`c_y`$; at the end of each year, every pole not yet replaced adds a risk cost $`r_y`$; and the crew can replace at most $`K_y`$ poles in year $`y`$. Every pole must be replaced by the end of the last year."
+    },
+    {
+      "type": "para",
+      "text": "A first draft, `build_named` in `poles.py`, gives each pole a name: $`x_{p,y} = 1`$ if pole $`p`$ is replaced in year $`y`$. With 30 poles and four years that is 120 binaries, and every plan appears once for each way of handing its yearly numbers to the 30 named poles."
+    },
+    {
+      "type": "para",
+      "text": "Write `build_counted(poles, cost, risk, crew)`: the same plans, with the poles counted instead of named. It returns `(model, n)`, where `n` maps each year to its one variable. Before coding, write the formulation: each variable's domain and bounds, the row that says every pole is replaced, and the objective, in which the number of poles still waiting at the end of year $`y`$ is an expression in your variables. Check on paper that a plan of the named model and its counts have the same cost."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix the counts of whole plans and ask whether each is allowed and what it costs, and compare your best plan with the named model's. About six lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef build_named(poles: int, cost: dict, risk: dict, crew: dict, *, integer: bool = True):\n    \"\"\"One binary per pole and year: the model a first draft writes. x[p, y] = 1: pole p replaced in y.\"\"\"\n    years = sorted(cost)\n    model = mathopt.Model(name=\"poles, named\")\n    x = {(p, y): model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{p}_{y}\")\n         for p in range(poles) for y in years}\n    for p in range(poles):\n        model.add_linear_constraint(sum(x[p, y] for y in years) == 1, name=f\"replaced_{p}\")\n    for y in years:\n        model.add_linear_constraint(sum(x[p, y] for p in range(poles)) <= crew[y], name=f\"crew_{y}\")\n    waiting = {y: poles - sum(x[p, u] for p in range(poles) for u in years if u <= y) for y in years}\n    model.minimize(sum(cost[y] * x[p, y] for p in range(poles) for y in years)\n                   + sum(risk[y] * waiting[y] for y in years))\n    return model, x\n\n\ndef build_counted(poles: int, cost: dict, risk: dict, crew: dict, *, integer: bool = True):\n    \"\"\"The same plan with the identical poles counted: n[y] poles are replaced in year y.\"\"\"\n    years = sorted(cost)\n    model = mathopt.Model(name=\"poles, counted\")\n    n = {y: model.add_variable(lb=0, ub=min(crew[y], poles), is_integer=integer, name=f\"n_{y}\") for y in years}\n    model.add_linear_constraint(sum(n.values()) == poles, name=\"all_replaced\")\n    waiting = {y: poles - sum(n[u] for u in years if u <= y) for y in years}\n    model.minimize(sum(cost[y] * n[y] for y in years) + sum(risk[y] * waiting[y] for y in years))\n    return model, n\n\n\nif __name__ == \"__main__\":\n    cost = {2027: 9, 2028: 10, 2029: 11, 2030: 12}\n    risk = {2027: 3, 2028: 3, 2029: 4, 2030: 0}\n    crew = {2027: 8, 2028: 10, 2029: 10, 2030: 12}\n    for build in (build_named, build_counted):\n        model, v = build(30, cost, risk, crew)\n        print(build.__name__, len(v), \"variables\", mathopt.solve(model, mathopt.SolverType.HIGHS).objective_value())\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef build_named(poles: int, cost: dict, risk: dict, crew: dict, *, integer: bool = True):\n    \"\"\"One binary per pole and year: the model a first draft writes. x[p, y] = 1: pole p replaced in y.\"\"\"\n    years = sorted(cost)\n    model = mathopt.Model(name=\"poles, named\")\n    x = {(p, y): model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{p}_{y}\")\n         for p in range(poles) for y in years}\n    for p in range(poles):\n        model.add_linear_constraint(sum(x[p, y] for y in years) == 1, name=f\"replaced_{p}\")\n    for y in years:\n        model.add_linear_constraint(sum(x[p, y] for p in range(poles)) <= crew[y], name=f\"crew_{y}\")\n    waiting = {y: poles - sum(x[p, u] for p in range(poles) for u in years if u <= y) for y in years}\n    model.minimize(sum(cost[y] * x[p, y] for p in range(poles) for y in years)\n                   + sum(risk[y] * waiting[y] for y in years))\n    return model, x\n\n\ndef build_counted(poles: int, cost: dict, risk: dict, crew: dict, *, integer: bool = True):\n    \"\"\"The same plan with the identical poles counted: n[y] poles are replaced in year y.\"\"\"\n    # TODO: variables, rows and objective of the counted model.\n    return mathopt.Model(name=\"poles, counted\"), {}\n\n\nif __name__ == \"__main__\":\n    cost = {2027: 9, 2028: 10, 2029: 11, 2030: 12}\n    risk = {2027: 3, 2028: 3, 2029: 4, 2030: 0}\n    crew = {2027: 8, 2028: 10, 2029: 10, 2030: 12}\n    for build in (build_named, build_counted):\n        model, v = build(30, cost, risk, crew)\n        print(build.__name__, len(v), \"variables\", mathopt.solve(model, mathopt.SolverType.HIGHS).objective_value())\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "e182882814a1ed6cc6c559cc0922c978af7f1469dc9155b22dc29cc522d7bec3",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef build_named(poles: int, cost: dict, risk: dict, crew: dict, *, integer: bool = True):\n    \"\"\"One binary per pole and year: the model a first draft writes. x[p, y] = 1: pole p replaced in y.\"\"\"\n    years = sorted(cost)\n    model = mathopt.Model(name=\"poles, named\")\n    x = {(p, y): model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{p}_{y}\")\n         for p in range(poles) for y in years}\n    for p in range(poles):\n        model.add_linear_constraint(sum(x[p, y] for y in years) == 1, name=f\"replaced_{p}\")\n    for y in years:\n        model.add_linear_constraint(sum(x[p, y] for p in range(poles)) <= crew[y], name=f\"crew_{y}\")\n    waiting = {y: poles - sum(x[p, u] for p in range(poles) for u in years if u <= y) for y in years}\n    model.minimize(sum(cost[y] * x[p, y] for p in range(poles) for y in years)\n                   + sum(risk[y] * waiting[y] for y in years))\n    return model, x\n\n\ndef build_counted(poles: int, cost: dict, risk: dict, crew: dict, *, integer: bool = True):\n    \"\"\"The same plan with the identical poles counted: n[y] poles are replaced in year y.\"\"\"\n    # TODO: variables, rows and objective of the counted model.\n    return mathopt.Model(name=\"poles, counted\"), {}\n\n\nif __name__ == \"__main__\":\n    cost = {2027: 9, 2028: 10, 2029: 11, 2030: 12}\n    risk = {2027: 3, 2028: 3, 2029: 4, 2030: 0}\n    crew = {2027: 8, 2028: 10, 2029: 10, 2030: 12}\n    for build in (build_named, build_counted):\n        model, v = build(30, cost, risk, crew)\n        print(build.__name__, len(v), \"variables\", mathopt.solve(model, mathopt.SolverType.HIGHS).objective_value())\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-03/practice-2/poles.py",
+    "test_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-03/practice-2/test_poles.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-03/practice-2/poles.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/29-strong-formulations/prose/unit-03/practice-2/target/report.xml",
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-03/practice-2/test_poles.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_plan_within_the_crews_is_allowed_and_one_over_a_crew_is_not",
+        "kind": "main",
+        "says": "the counted model has one variable per year; a plan within every year's crew is allowed and one over a crew is refused"
+      },
+      {
+        "id": "test_every_pole_is_replaced_by_the_end",
+        "kind": "edge",
+        "says": "a plan that leaves a pole unreplaced at the end is refused, even when waiting is costly"
+      },
+      {
+        "id": "test_the_cost_counts_every_pole_still_waiting_at_each_year_end",
+        "kind": "edge",
+        "says": "a plan's cost counts the risk of every pole still waiting at the end of each year, and the best plan costs what the named model's does"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-03/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "29-strong-formulations/README_6.7.3.md",
+      "section": "Identical Jobs Are Symmetric Too: Count Them Instead of Naming Them"
+    },
+    "concepts": [
+      "identical items that are decided get one integer count instead of a binary each"
+    ]
+  }
+}

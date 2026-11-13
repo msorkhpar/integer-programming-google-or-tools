@@ -1,0 +1,146 @@
+{
+  "project_api": 1,
+  "title": "Say why a plan failed and why a project waits",
+  "before": "../../../../55-project-cipt-planner/steps/05",
+  "after": "../../../../55-project-cipt-planner/steps/06",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the demo export matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "cipt/diagnose.py",
+      "signature": "def deletion_filter(built: Built, keep: tuple[str, ...] = ()) -> list[str]",
+      "contract": "Returns, sorted, the names of an irreducible set of rows that cannot all hold: relax each row in name order, keep it relaxed while the model stays infeasible, restore it when relaxing it makes the model feasible. Rows named in keep are never relaxed.",
+      "idea": "The deletion filter: the rows you cannot relax without the clash disappearing form a conflict, and dropping any one of them gives a plan.",
+      "lesson": {
+        "title": "9.1.3 IIS With MathOpt, gurobipy and Pyomo",
+        "href": "../../../../09-diagnostics-and-explainability/37-infeasibility/units/unit-03/9.1.3-iis-with-mathopt-gurobipy-and-pyomo.unit.html"
+      },
+      "stub": "return []"
+    },
+    {
+      "file": "cipt/diagnose.py",
+      "signature": "def feasible(built: Built) -> bool",
+      "contract": "True unless HiGHS reports the model infeasible: only the termination INFEASIBLE counts as no plan, and INFEASIBLE_OR_UNBOUNDED counts as feasible (every variable is binary, so the model is never unbounded).",
+      "idea": "The filter only asks one question of each solve: does a plan exist?",
+      "lesson": {
+        "title": "9.1.1 Infeasible, Unbounded, or the Solver Can't Tell",
+        "href": "../../../../09-diagnostics-and-explainability/37-infeasibility/units/unit-01/9.1.1-infeasible-unbounded-or-the-solver-cant-tell.unit.html"
+      },
+      "stub": "return True"
+    },
+    {
+      "file": "cipt/diagnose.py",
+      "signature": "def describe(request: Request, name: str) -> str",
+      "contract": "Returns one row in the planners' words, read from its name: `spend in <y> within $<b>k`, `<id> is a must-do`, `<id> is forced in`, `at most one of <ids>` (the group's members in id order, joined by a comma and a space), `<a> and <b> are funded together or not at all`, `<child> started by <t> needs <parent> started by <t - lag>`, `remove at least $<floor>k of risk` (one decimal, thousands commas) for the risk floor; the name itself for any other row. The kind is the part of the name before its first underscore.",
+      "idea": "A conflict is only useful in the names people can change.",
+      "lesson": {
+        "title": "9.1.6 Turning an IIS Into a Planner Message",
+        "href": "../../../../09-diagnostics-and-explainability/37-infeasibility/units/unit-06/9.1.6-turning-an-iis-into-a-planner-message.unit.html"
+      },
+      "stub": "return name"
+    },
+    {
+      "file": "cipt/diagnose.py",
+      "signature": "def explain(request: Request, rows: list[str]) -> Conflict",
+      "contract": "Returns a Conflict with the rows and a message: `No plan meets these <n> rules together; drop or change any one of them:` then one line `  <row>: <description>` per row.",
+      "idea": "Turn the IIS into a message that says what to change.",
+      "lesson": {
+        "title": "9.1.6 Turning an IIS Into a Planner Message",
+        "href": "../../../../09-diagnostics-and-explainability/37-infeasibility/units/unit-06/9.1.6-turning-an-iis-into-a-planner-message.unit.html"
+      },
+      "stub": "return Conflict(rows, \"\")"
+    },
+    {
+      "file": "cipt/diagnose.py",
+      "signature": "def why_infeasible(request: Request) -> Conflict | None",
+      "contract": "None when the request has a plan; otherwise the Conflict of the rows that clash.",
+      "idea": "Run the filter only when the model is infeasible.",
+      "lesson": {
+        "title": "9.1.3 IIS With MathOpt, gurobipy and Pyomo",
+        "href": "../../../../09-diagnostics-and-explainability/37-infeasibility/units/unit-03/9.1.3-iis-with-mathopt-gurobipy-and-pyomo.unit.html"
+      }
+    },
+    {
+      "file": "cipt/diagnose.py",
+      "signature": "def why_deferred(request: Request, plan, project_id: str) -> Deferral",
+      "contract": "Forces the project in with a row `force_<id>`. When that is feasible, returns the NPV the plan gives up and the funded projects it drops; when it is not, the Conflict of the rows that block it, the force row kept.",
+      "idea": "Forcing a decision in and re-solving prices it; when no plan exists, the conflict says why.",
+      "lesson": {
+        "title": "9.3.2 Why Selected, Why Deferred: Forcing In and Out",
+        "href": "../../../../09-diagnostics-and-explainability/39-explaining-decisions/units/unit-02/9.3.2-why-selected-why-deferred-forcing-in-and-out.unit.html"
+      }
+    },
+    {
+      "file": "cipt/__main__.py",
+      "signature": "def main(argv: list[str] | None = None) -> int",
+      "contract": "Prints the report; for an infeasible request also prints the conflict message and returns 1. With --why PROJECT for a project the plan leaves out, prints `<id> cannot be funded. <message>` or `Funding <id> costs $<cost>k of NPV and drops <ids or nothing>.` (cost in whole $k, ids joined by a comma and a space); for a project the plan funds, nothing more.",
+      "idea": "The command line is where the planners read the diagnostics.",
+      "lesson": {
+        "title": "14.2.6 Why It Failed, Why It Was Deferred: A Diagnostics Layer",
+        "href": "../../../../14-growing-real-projects/55-project-cipt-planner/units/unit-06/14.2.6-why-it-failed-why-it-was-deferred-a-diagnostics-layer.unit.html"
+      }
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_diagnose.py::test_conflict_names_the_clashing_rules",
+      "main",
+      "an infeasible request names exactly the rules that clash"
+    ],
+    [
+      "tests/test_diagnose.py::test_conflict_leaves_out_rules_that_do_not_clash",
+      "edge",
+      "a budget row that plays no part in the clash is left out of the conflict"
+    ],
+    [
+      "tests/test_diagnose.py::test_message_states_each_rule_in_planners_words",
+      "main",
+      "the message states each clashing rule in the planners' words"
+    ],
+    [
+      "tests/test_diagnose.py::test_deferral_prices_forcing_a_project_in",
+      "main",
+      "a deferred project's cost is the NPV given up and the projects dropped"
+    ],
+    [
+      "tests/test_diagnose.py::test_deferral_names_the_rows_that_block_it",
+      "main",
+      "a project that cannot be funded is explained by the rows that block it"
+    ],
+    [
+      "tests/test_diagnose.py::test_command_line_explains_an_infeasible_request",
+      "main",
+      "the command line explains an infeasible request"
+    ],
+    [
+      "tests/test_diagnose.py::test_message_words_alternatives_and_the_risk_floor",
+      "main",
+      "a conflict names an alternative group by its members and states the risk floor in $k"
+    ],
+    [
+      "tests/test_diagnose.py::test_why_adds_nothing_for_a_funded_project",
+      "main",
+      "asking why about a project the plan funds prints the report and nothing more"
+    ]
+  ],
+  "plants": {
+    "tests/test_diagnose.py::test_conflict_leaves_out_rules_that_do_not_clash": [
+      [
+        "cipt/diagnose.py",
+        "    return explain(request, deletion_filter(built))",
+        "    return explain(request, sorted(n for n in built.rows if n.startswith((\"must_\", \"budget_\"))))"
+      ]
+    ]
+  },
+  "cites": {
+    "path": "55-project-cipt-planner/README_14.2.6.md",
+    "section": null
+  }
+}

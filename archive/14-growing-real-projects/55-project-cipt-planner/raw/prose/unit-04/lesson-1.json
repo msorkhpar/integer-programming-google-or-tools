@@ -1,0 +1,443 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "14-growing-real-projects",
+    "55-project-cipt-planner"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Value: NPV by start year and risk reduction",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "14.2.4 Value: NPV by Start Year and Risk Reduction"
+    },
+    {
+      "type": "para",
+      "text": "Finance and the asset team both had comments on the step-03 plan:"
+    },
+    {
+      "type": "quote",
+      "blocks": [
+        {
+          "type": "para",
+          "text": "Finance: you value every project at its earliest-start NPV, whatever year you start it. A project started in 2030 is worth less than the same project started in 2027; we sent you the NPV for every start year. Use it."
+        },
+        {
+          "type": "para",
+          "text": "Asset management: NPV is not why we replace old equipment. Each project lowers the failure risk of one asset. We want to see how much risk a plan removes, and a plan that removes the most of it."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Step-03 Plan Claims Value Its Starts Don't Have"
+    },
+    {
+      "type": "para",
+      "text": "`value_by_start.py` takes the step-03 plan of GridCap small (a fictional utility) and prices each funded project at finance's NPV for the year it actually starts:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "step 03 plan: claims $26,108k; its starts are worth $23,909k (11 projects start after their earliest year)"
+    },
+    {
+      "type": "para",
+      "text": "The model claimed $2,199k that the plan does not have. The lesson *Many years: start years, windows and cash-flow spreading* left this gap open: $`v_i`$ did not depend on $`t`$, so a late start cost the model nothing and eleven projects drifted late. The code cannot do better because `Project` keeps one number, `value`, and the export's NPV by year is never read. Risk is not in the code at all."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Coefficient per Variable Prices Each Start Year"
+    },
+    {
+      "type": "para",
+      "text": "The model already has one variable per project and start year, so the fix is a coefficient per variable: $`\\text{npv}_{i,t}`$ from finance (lesson 7.2.4) on $`x_{i,t}`$. Risk gets the same shape: $`r_{i,t}`$, the risk a start in year $`t`$ removes. Both are computed before the model is built, in a new file, because they are data about projects, not rows."
+    },
+    {
+      "type": "para",
+      "text": "For $`r_{i,t}`$ the design question was where risk comes from:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Choice",
+        "For",
+        "Against"
+      ],
+      "rows": [
+        [
+          "a risk score column in the export",
+          "no code",
+          "someone else's formula, untestable here; the asset team would have to rerun it for every start year"
+        ],
+        [
+          "the asset's predicted RUL as a hard deadline",
+          "simple",
+          "a deadline throws away how fast risk grows (lesson 7.3.2)"
+        ],
+        [
+          "PoF from the asset's Weibull curve times CoF, summed over the years after the work (chosen)",
+          "every number traceable to the export's asset columns; lessons 7.3.1 to 7.3.4",
+          "a formula the planner owns and must test"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The annual probability of failure (PoF) of an asset aged $`a`$ at the start of a year, given it has not failed yet, from its Weibull shape $`\\beta`$ and scale $`\\eta`$ (lesson 7.3.1):"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\text{pof}(a) = 1 - \\exp\\!\\left( \\left(\\tfrac{a}{\\eta}\\right)^{\\beta} - \\left(\\tfrac{a+1}{\\eta}\\right)^{\\beta} \\right)"
+    },
+    {
+      "type": "para",
+      "text": "Its risk in year $`y`$ is $`\\text{pof}(a_0 + y - y_0) \\times \\text{CoF}`$, with $`a_0`$ the asset's age in the plan's first year $`y_0`$ (the export's `age` column, read as `Asset.age`) and CoF its consequence of failure in $k (lesson 7.3.3). A start in $`t`$ finishes the work at the end of year $`t + d_i - 1`$, so it removes the risk of every year from $`t + d_i`$ to the plan's last year (lesson 7.3.4). Risk after the plan's last year is not counted: the planner compares plans over the same years."
+    },
+    {
+      "type": "para",
+      "text": "For P022, a three-year tower set repair on a 35-year-old asset:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "P022 (A022, age 35, beta 3.56, eta 49.1, CoF $458k), 3 years of work:\n  start 2027: NPV $1,496k, risk removed $36.1k  (PoF 2030: 0.038, 2031: 0.041)\n  start 2028: NPV $1,287k, risk removed $18.6k  (PoF 2031: 0.041)\n  start 2029: NPV $1,102k, risk removed $0.0k  (PoF no year left in the plan)"
+    },
+    {
+      "type": "para",
+      "text": "A 2029 start finishes in 2031 and leaves no year inside the plan to remove risk from. NPV and risk both fall with a later start, but not in the same proportion, and that difference is what the next lesson trades."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The model of the lesson *Business rules: must-dos, bundles, parents and alternatives*, with the objective changed. The planners choose which measure to maximize with a setting in the request, `objective`, \"npv\" (the default) or \"risk\"."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`P`$, $`Y`$, $`T_i`$, $`M`$, $`\\mathcal{G}`$, $`\\mathcal{B}`$, $`C`$ as in the lesson *Business rules: must-dos, bundles, parents and alternatives*."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`c_{i,k}`$, $`B_y`$ as before ($k); $`\\text{npv}_{i,t}`$, the NPV of project $`i`$ started in $`t`$ ($k), from the export; $`r_{i,t}`$, the risk it removes, computed as above ($k); $`L_c`$, the lags."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_{i,t} \\in \\{0, 1\\}`$ for every $`i \\in P`$, $`t \\in T_i`$."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.** One of"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{i \\in P} \\sum_{t \\in T_i} \\text{npv}_{i,t}\\, x_{i,t}\n\\qquad\\text{or}\\qquad\n\\max \\; \\sum_{i \\in P} \\sum_{t \\in T_i} r_{i,t}\\, x_{i,t}\n\\qquad \\leftarrow \\text{was } \\textstyle\\sum v_i\\, x_{i,t}"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.** Unchanged:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\text{started}(i) &\\le 1 && \\forall i \\in P \\setminus M && \\text{(once}_i) \\\\\n\\text{started}(i) &= 1 && \\forall i \\in M && \\text{(must}_i) \\\\\n\\textstyle\\sum_{i \\in g} \\text{started}(i) &\\le 1 && \\forall g \\in \\mathcal{G} && \\text{(alt}_g) \\\\\n\\text{started}(j) - \\text{started}(b_1) &= 0 && \\forall B \\in \\mathcal{B},\\ j \\in B \\setminus \\{b_1\\} && \\text{(bundle}_{b_1,j}) \\\\\n\\text{started\\_by}(c, t) - \\text{started\\_by}(p(c), t - L_c) &\\le 0 && \\forall c \\in C,\\ t \\in T_c && \\text{(after}_{c,t}) \\\\\n\\sum_{i \\in P} \\sum_{t \\in T_i,\\; t \\le y < t + d_i} c_{i,\\,y-t}\\, x_{i,t} &\\le B_y && \\forall y \\in Y && \\text{(budget}_y)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Whatever is maximized, the plan's NPV and risk are both reported."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Change, File by File"
+    },
+    {
+      "type": "para",
+      "text": "**`cipt/value.py`.** Before: the stub of the lesson *Business rules: must-dos, bundles, parents and alternatives*, every function returning 0.0. After, from `steps/04/cipt/value.py`:"
+    },
+    {
+      "type": "html",
+      "text": "<!-- snapshot: steps/04/cipt/value.py -->"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def annual_pof(beta: float, eta: float, age: float) -> float:\n    \"\"\"The chance an asset of this age fails within the next year, given that it has not failed yet.\"\"\"\n    return 1.0 - math.exp((age / eta) ** beta - ((age + 1) / eta) ** beta)"
+    },
+    {
+      "type": "para",
+      "text": "The rest of `value.py` turns that curve into the coefficient $`r_{i,t}`$ of every start, and the page leaves its code to the practice. Three functions, each one step of the section *A Coefficient per Variable Prices Each Start Year* above:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`annual_risk(request, project, year)` is the risk of the project's asset in one calendar year if nothing is done: $`\\text{pof}(a_0 + y - y_0) \\times \\text{CoF}`$, in $k. The asset is `project.asset` (the `Asset` record below), $`a_0`$ is its `age` and $`y_0`$ is the plan's first year, `request.years[0]`.",
+        "`risk_reduction(request, project, start)` is $`r_{i,t}`$, and its docstring says what it counts: \"Risk removed by a start in `start`: every year after the work ends, to the plan's last year.\" That is the annual risks of every year from $`t + d_i`$ to the plan's last year, `request.years[-1]`, added up. A start whose work ends in the plan's last year removes no risk inside the plan, so it is 0.0.",
+        "`coefficients(request)` prices every start before the model is built: a dict whose key is `(project_id, t)` for every project and every `t` in `request.starts(p)`, and whose value is the pair ($`\\text{npv}_{i,t}`$, $`r_{i,t}`$), with the NPV read from `p.npv[t]`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`coefficients` is keyed exactly like `built.x`, so the model can zip them without a lookup that might miss."
+    },
+    {
+      "type": "para",
+      "text": "**`cipt/data.py`.** A new `Asset` record (`age`, `weibull_beta`, `weibull_eta`, `cof`); `Project` replaces the field `value` with `npv`, a dict by start year, and an `asset`. `value` survives as a property, the earliest-start NPV, because the tests of the lesson *The first request: fund projects within one budget* read it. From `steps/04/cipt/data.py`:"
+    },
+    {
+      "type": "html",
+      "text": "<!-- snapshot: steps/04/cipt/data.py -->"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "    @property\n    def value(self) -> int:\n        \"\"\"The NPV of a start in the earliest year: what the planner used before lesson 14.2.4.\"\"\"\n        return self.npv[self.earliest_start]"
+    },
+    {
+      "type": "para",
+      "text": "`Request` gains `objective`; the loader refuses any value but \"npv\" and \"risk\", so a typo in a planner's setting fails at load time instead of maximizing the wrong thing."
+    },
+    {
+      "type": "para",
+      "text": "**`cipt/model.py`.** `Built` keeps both measures as expressions, and the objective picks one. From `steps/04/cipt/model.py`:"
+    },
+    {
+      "type": "html",
+      "text": "<!-- snapshot: steps/04/cipt/model.py -->"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "    value = coefficients(request)\n    built.npv = mathopt.fast_sum(value[key][0] * v for key, v in x.items())\n    built.risk = mathopt.fast_sum(value[key][1] * v for key, v in x.items())\n    model.maximize(built.npv if request.objective == \"npv\" else built.risk)"
+    },
+    {
+      "type": "para",
+      "text": "Keeping both on `Built` is what the next lesson needs: a second goal is then one row on an expression that already exists."
+    },
+    {
+      "type": "para",
+      "text": "**`cipt/solve.py` and `cipt/plan.py`.** `Plan` gains `npv` and `risk`, and `read_plan` evaluates both expressions at the solution. `LinearSum` has no `evaluate` method; MathOpt's `evaluate_expression` does the work. From `steps/04/cipt/solve.py`:"
+    },
+    {
+      "type": "html",
+      "text": "<!-- snapshot: steps/04/cipt/solve.py -->"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "    return Plan(status=status, starts=starts, objective=result.objective_value(),\n                npv=mathopt.evaluate_expression(built.npv, values),\n                risk=mathopt.evaluate_expression(built.risk, values))"
+    },
+    {
+      "type": "para",
+      "text": "**`cipt/report.py`.** Three changes. The funded line's `value` is now the plan's objective, what the model maximized: the NPV of the actual starts when the objective is \"npv\", the risk removed when it is \"risk\". A new line after it gives both measures. And each project line's column label changes from `value` to `npv`, with the NPV of the year the project actually starts instead of the earliest-start value. **`cipt/goals.py`** is new and is the stub for the lesson *Two goals: risk against NPV*. No code of this step imports it, and in this lesson's practice it is already this stub."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Maximizing NPV and Maximizing Risk Give Different Plans"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "maximize npv : NPV $ 24,260k, risk removed $3,709.1k, 27 projects funded\nmaximize risk: NPV $ 18,559k, risk removed $6,827.9k, 31 projects funded"
+    },
+    {
+      "type": "para",
+      "text": "The NPV plan is worth $351k more than the step-03 plan's starts were ($23,909k), with the same rules and budgets: starting the right projects early is worth money the old objective could not see. The risk plan removes 84% more risk and gives up $5,701k of NPV. It funds four more projects within the same budgets. Neither plan is wrong; they answer different questions, and the planners asked both."
+    },
+    {
+      "type": "para",
+      "text": "On the demo export, the report now shows NPV for each actual start: P001 starts in 2029 and is worth $1,077k there, not the $1,386k the earlier steps printed."
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "$ python -m cipt data/demo.json    # steps/04\nGridCap tiny: optimal\nfunded 5 of 8 projects, capex $6,000k of $7,890k, value $2,473k\nNPV $2,473k, risk reduced $740.3k (maximized: npv)"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Formula Gets a Test With a Value You Can Compute by Hand"
+    },
+    {
+      "type": "para",
+      "text": "With $`\\beta = 1`$ the Weibull curve is the exponential distribution, which has no memory: every year's PoF is $`1 - e^{-1/\\eta}`$ whatever the age. The tests use that to pin the formula to a number a reader can check. From `steps/04/tests/test_value.py`:"
+    },
+    {
+      "type": "html",
+      "text": "<!-- snapshot: steps/04/tests/test_value.py -->"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def test_risk_reduction_counts_the_years_after_the_work():\n    request = load_request(export([row(\"A\", (100,), 50, latest=2028, asset=FLAT)], years=THREE))\n    a, yearly = request.project(\"A\"), 1000 * (1 - math.exp(-0.1))\n    assert value.risk_reduction(request, a, 2027) == pytest.approx(2 * yearly)\n    assert value.risk_reduction(request, a, 2028) == pytest.approx(yearly)"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "14.2.4: 6 tests added; on step 03, 6 fail on an assertion; on step 04, 28 of 28 pass\n  test_npv_depends_on_the_start_year\n    before: assert (('A',), 500.0) == (('B',), 300)\n    after:  passed\n  test_failure_probability_rises_with_age\n    before: assert 0.0 > 0.0\n    after:  passed\n  test_annual_pof_follows_the_weibull_curve\n    before: assert 0.0 == 0.09516258196404048 ± 9.5e-08\n    after:  passed\n  test_risk_reduction_counts_the_years_after_the_work\n    before: assert 0.0 == 190.32516392808097 ± 1.9e-04\n    after:  passed\n  test_risk_objective_funds_the_riskier_asset\n    before: assert ('A',) == ('B',)\n    after:  passed\n  test_report_shows_npv_and_risk\n    before: assert 'NPV $300k, risk reduced $95.2k (maximized: npv)' in 'test: optimal\\nfunded 1 of \n    after:  passed"
+    },
+    {
+      "type": "para",
+      "text": "The first line is the step-03 model claiming 500 for project A, whose 500 is only real in 2027, a year with no money. Three of the \"before\" answers are 0.0: the stub's honest wrong answer, which is why the step-03 snapshot shipped one."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Value Added a File, Not Branches"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "14.2.4: steps/03 -> steps/04\n  package lines 265 -> 324, functions 27 -> 31, tests 22 -> 28\n  most branches: data.load_request (8) -> data.load_request (10)\n  data.py        85 ->  105\n  goals.py        0 ->   13\n  model.py       38 ->   44\n  plan.py        15 ->   18\n  report.py      24 ->   25\n  solve.py       34 ->   36\n  value.py        9 ->   23"
+    },
+    {
+      "type": "para",
+      "text": "The change touched six files but `value.py` holds all of the arithmetic, in four functions that take plain values and return numbers. `model.py` grew by six lines and has no formula in it. The loader is again the most-branched function: every new column is read and checked there."
+    },
+    {
+      "type": "para",
+      "text": "**Practice.** This lesson's project practice starts from `steps/03`, the whole package. It is graded by the tests in the practice's `tests/` folder and by a check that `main.py`, which plans the demo export, prints what the practice's `expected/report.txt` holds."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**The step-03 plan claims value its starts don't have**: $26,108k claimed, $23,909k real.",
+        "**A coefficient per variable prices each start year**: $`\\text{npv}_{i,t}`$ and $`r_{i,t}`$ on $`x_{i,t}`$, both computed in `value.py` before the model is built.",
+        "**Risk removed is PoF times CoF over the years after the work**, from the asset's Weibull curve.",
+        "**Maximizing NPV and maximizing risk give different plans**: $24,260k and $3,709k against $18,559k and $6,828k."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Name",
+        "Meaning"
+      ],
+      "rows": [
+        [
+          "`annual_pof(beta, eta, age)`",
+          "$`1 - \\exp((a/\\eta)^\\beta - ((a+1)/\\eta)^\\beta)`$"
+        ],
+        [
+          "`annual_risk(request, project, y)`",
+          "CoF times the PoF at the asset's age in year $`y`$"
+        ],
+        [
+          "`risk_reduction(request, project, t)`",
+          "$`r_{i,t}`$: risk of years $`t + d_i`$ to the plan's last"
+        ],
+        [
+          "`coefficients(request)`",
+          "$`(\\text{npv}_{i,t}, r_{i,t})`$ keyed like `built.x`"
+        ],
+        [
+          "`objective`",
+          "the request's setting: \"npv\" or \"risk\""
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [MathOpt `expressions.py` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/expressions.py) (`evaluate_expression`, used to read both measures at the solution); [MathOpt `model.py` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/model.py) (`Model.maximize` sets the objective to the expression it is given, which is how one model serves either goal)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "P022's risk removed is $36.1k for a 2027 start. Compute the 2030 term by hand from the formula and the printed PoF.",
+        "Count risk after the plan's last year, for ten more years, and predict how the risk plan changes. Which lesson of section 7 discusses the horizon?",
+        "Write a test that fails if `risk_reduction` counted the last year of work itself."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Keep Both Measures on `Built`"
+    },
+    {
+      "type": "para",
+      "text": "The model maximizes one measure, but `Built` holds both, and every plan reports both. A plan that reports only what it maximized hides what it gave up: the risk plan's $5,701k of NPV would be invisible. Holding both expressions also makes the next lesson cheap, since a frontier only adds a row on one of them and maximizes the other."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "**value_by_start.py.** Prices the step-03 plan at the NPV of its real starts, prints P022's NPV, PoF and risk for each start year, and solves with each objective using `steps/04`. *Try:* print the five projects with the most risk removed per $k of capex, and predict whether the risk plan funds them all."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [value_by_start.py](src/value_by_start.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**cli_demo.py, ledger.py, code_size.py.** The demo run, the test ledger and the size table for step 04."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [cli_demo.py](src/cli_demo.py)",
+        "Program: [ledger.py](src/ledger.py)",
+        "Program: [code_size.py](src/code_size.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 13,
+    "paras": 35,
+    "code": 14,
+    "tables": 2,
+    "lists": 5,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 1,
+    "html": 6,
+    "disclosures": 0
+  },
+  "content_sha256": "5de78a79402b07182962fff253d520e86ebcc0633a4adf090bb9f504dbe77a57"
+}

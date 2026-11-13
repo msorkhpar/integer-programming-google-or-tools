@@ -1,0 +1,169 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "13-capstone",
+    "51-capstone-cipt-lite"
+  ],
+  "variant": "prose",
+  "unit": 6,
+  "kind": "practice",
+  "ordinal": 3,
+  "ingested": "2026-11-13",
+  "title": "An NPV and risk frontier endpoint",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "Planners want to see the trade-off before they pick a plan: how much NPV each extra $1k of risk removed costs. Your milestone adds a frontier endpoint to the service. It answers with the plans the epsilon-constraint method finds, from the plan with the most NPV to the plan that removes the most risk, and never with a plan another returned plan beats on both counts. The practice portfolio is invented for a fictional utility; each project carries, beside `npv`, a `risk` table: the risk it removes ($k) for each start year, as milestone 3 computed it."
+    },
+    {
+      "type": "para",
+      "text": "`frontier_endpoint.py` gives you milestone 2's model with a reduced rule set (`build`, `solve`, `plan_of`, `check`), `objectives(snapshot, x)`, which returns the NPV and risk expressions, `score(snapshot, plan)`, which returns `{\"npv\", \"risk\", \"plan\"}`, `from_json`, which turns a snapshot's text year keys back into integers, and the request model `FrontierRequest` (a snapshot and `points` from 2 to 11)."
+    },
+    {
+      "type": "para",
+      "text": "Write:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "function",
+        "contract",
+        "lesson"
+      ],
+      "rows": [
+        [
+          "`best(snapshot, first, then, floors)`",
+          "build a fresh model; add a row `value >= floor` for each entry of `floors` (`{\"risk\": 120}`); maximize `first` (\"npv\" or \"risk\"); if there is no plan return None; otherwise hold `first` at its optimum (a row `value >= optimum - HOLD`, with the given `HOLD = 1e-6`: the risk table is rounded to $0.001k, so an optimum need not be a whole number, and rounding it could cut off the optimum or let a worse plan in), maximize `then`, and return `score` of that plan",
+          "8.3.1, 8.3.2"
+        ],
+        [
+          "`frontier(snapshot, points)`",
+          "the two ends, `best(.., \"npv\", \"risk\", {})` and `best(.., \"risk\", \"npv\", {})`; then, for k from 0 to `points - 1`, the floor `r_npv + (r_risk - r_npv) * k / (points - 1)` between the ends' risk values, and `best(.., \"npv\", \"risk\", {\"risk\": floor})`. Keep each point once: a point with the same NPV and the same risk removed as one already found is not added, even if its plan differs, so the first one found (the lowest floor) stays. Then drop any point another point beats or equals on both objectives, and sort by risk removed",
+          "8.3.1, 8.3.3"
+        ],
+        [
+          "`create_app()`",
+          "a FastAPI app with `POST /frontier`, body `FrontierRequest`, answering `{\"objectives\": [\"npv\", \"risk\"], \"points\": frontier(...)}` with the snapshot passed through `from_json`",
+          "12.4.1, 12.4.3"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The lesson's service also answers with a `snapshot` field, because its request names a snapshot already stored, by digest, and the answer echoes that digest. Here the request carries the whole snapshot, so the answer has only `objectives` and `points`."
+    },
+    {
+      "type": "para",
+      "text": "The tests compare your points with every plan of the test portfolio, enumerated by brute force, so any correct formulation passes. Each solve is exact (zero gap). About thirty-five lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Milestone 6: an endpoint that returns the NPV against risk-removed frontier of a practice portfolio.\n\nEach project carries, beside \"npv\", a \"risk\" table: the risk it removes ($k) for each start year,\nmilestone 3's coefficients. The practice portfolio is invented for a fictional utility.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom fastapi import FastAPI\nfrom pydantic import BaseModel, ConfigDict, Field\n\n# ---- given: milestone 2's model and rule checker, with a reduced rule set ----------------------------\n\nimport contextlib\nimport ctypes\nimport os\nimport sys\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef starts(job: dict) -> range:\n    return range(job[\"earliest\"], job[\"latest\"] + 1)\n\n\ndef spend(job: dict, start: int) -> dict[int, int]:\n    \"\"\"What a project started in `start` spends in each year of work.\"\"\"\n    return {start + k: c for k, c in enumerate(job[\"cost\"])}\n\n\ndef build(snapshot: dict, skip: frozenset = frozenset()):\n    \"\"\"Milestone 2's model, with must_, once_, alt_, after_ and budget_ rows only.\n\n    `skip` plants a bug, for testing the tests: \"must\", \"alt\" or \"budget\" leaves those rows out,\n    \"lag\" reads every lag as 0, \"value\" adds a stray 1 to the objective.\n    \"\"\"\n    jobs = snapshot[\"projects\"]\n    model = mathopt.Model(name=\"practice plan\")\n    x = {(j, t): model.add_binary_variable(name=f\"x_{j}_{t}\") for j in sorted(jobs) for t in starts(jobs[j])}\n\n    def started(j):\n        return mathopt.LinearExpression() + mathopt.fast_sum(x[j, t] for t in starts(jobs[j]))\n\n    for j in sorted(jobs):\n        if jobs[j][\"must\"] and \"must\" not in skip:\n            model.add_linear_constraint(started(j) == 1, name=f\"must_{j}\")\n        else:\n            model.add_linear_constraint(started(j) <= 1, name=f\"once_{j}\")\n    groups: dict[str, list[str]] = {}\n    for j in sorted(jobs):\n        if jobs[j][\"group\"]:\n            groups.setdefault(jobs[j][\"group\"], []).append(j)\n    for g, members in sorted(groups.items()):\n        if \"alt\" not in skip:\n            model.add_linear_constraint(mathopt.fast_sum(started(m) for m in members) <= 1, name=f\"alt_{g}\")\n    for c in sorted(jobs):\n        p, lag = jobs[c][\"parent\"], 0 if \"lag\" in skip else jobs[c][\"lag\"]\n        if p:\n            for t in starts(jobs[c]):\n                model.add_linear_constraint(\n                    mathopt.LinearExpression() + mathopt.fast_sum(x[c, u] for u in starts(jobs[c]) if u <= t)\n                    - mathopt.fast_sum(x[p, s] for s in starts(jobs[p]) if s <= t - lag) <= 0, name=f\"after_{c}_{t}\")\n    for y in snapshot[\"years\"]:\n        if \"budget\" not in skip:\n            model.add_linear_constraint(\n                mathopt.LinearExpression() + mathopt.fast_sum(\n                    spend(jobs[j], t).get(y, 0) * v for (j, t), v in x.items()) <= snapshot[\"budget\"][y],\n                name=f\"budget_{y}\")\n    model.maximize(mathopt.fast_sum(jobs[j][\"npv\"][t] * v for (j, t), v in x.items()) + (1 if \"value\" in skip else 0))\n    return model, x\n\n\n@contextlib.contextmanager\ndef _quiet():\n    \"\"\"Keep the bundled HiGHS's stray C output off the screen.\"\"\"\n    sys.stdout.flush()\n    saved, sink = os.dup(1), os.open(os.devnull, os.O_WRONLY)\n    os.dup2(sink, 1)\n    try:\n        yield\n    finally:\n        ctypes.CDLL(None).fflush(None)\n        os.dup2(saved, 1)\n        os.close(saved)\n        os.close(sink)\n\n\ndef solve(model, model_params=None) -> mathopt.SolveResult:\n    \"\"\"HiGHS to a zero gap.\"\"\"\n    with _quiet():\n        return mathopt.solve(model, mathopt.SolverType.HIGHS,\n                             params=mathopt.SolveParameters(relative_gap_tolerance=0.0), model_params=model_params)\n\n\ndef plan_of(x, result) -> dict[str, int]:\n    values = result.variable_values()\n    return {j: t for (j, t), v in x.items() if values[v] > 0.5}\n\n\ndef value(snapshot: dict, plan: dict[str, int]) -> int:\n    return sum(snapshot[\"projects\"][j][\"npv\"][t] for j, t in plan.items())\n\n\ndef check(snapshot: dict, plan: dict[str, int]) -> list[str]:\n    \"\"\"Every rule the plan breaks, by row name, from the data alone.\"\"\"\n    jobs, broken = snapshot[\"projects\"], []\n    broken += [f\"window_{j}\" for j, t in sorted(plan.items()) if t not in starts(jobs[j])]\n    broken += [f\"must_{j}\" for j in sorted(jobs) if jobs[j][\"must\"] and j not in plan]\n    groups: dict[str, int] = {}\n    for j in plan:\n        if jobs[j][\"group\"]:\n            groups[jobs[j][\"group\"]] = groups.get(jobs[j][\"group\"], 0) + 1\n    broken += [f\"alt_{g}\" for g, n in sorted(groups.items()) if n > 1]\n    for c, t in sorted(plan.items()):\n        p = jobs[c][\"parent\"]\n        if p and (p not in plan or plan[p] + jobs[c][\"lag\"] > t):\n            broken.append(f\"after_{c}_{t}\")\n    for y in snapshot[\"years\"]:\n        if sum(spend(jobs[j], t).get(y, 0) for j, t in plan.items()) > snapshot[\"budget\"][y]:\n            broken.append(f\"budget_{y}\")\n    return broken\n\n\ndef objectives(snapshot: dict, x: dict):\n    \"\"\"The two objective expressions: NPV and risk removed, both in $k.\"\"\"\n    jobs = snapshot[\"projects\"]\n    npv = mathopt.fast_sum(jobs[j][\"npv\"][t] * v for (j, t), v in x.items())\n    risk = mathopt.fast_sum(jobs[j][\"risk\"][t] * v for (j, t), v in x.items())\n    return npv, risk\n\n\ndef score(snapshot: dict, plan: dict[str, int]) -> dict:\n    jobs = snapshot[\"projects\"]\n    return {\"npv\": sum(jobs[j][\"npv\"][t] for j, t in plan.items()),\n            \"risk\": sum(jobs[j][\"risk\"][t] for j, t in plan.items()), \"plan\": dict(sorted(plan.items()))}\n\n\ndef from_json(snapshot: dict) -> dict:\n    \"\"\"A snapshot sent as JSON, with its year keys made integers again.\"\"\"\n    out = {**snapshot, \"budget\": {int(y): b for y, b in snapshot[\"budget\"].items()}}\n    out[\"projects\"] = {j: {**p, \"npv\": {int(t): v for t, v in p[\"npv\"].items()},\n                           \"risk\": {int(t): v for t, v in p[\"risk\"].items()}}\n                       for j, p in snapshot[\"projects\"].items()}\n    return out\n\n\nclass FrontierRequest(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\")\n    snapshot: dict\n    points: int = Field(default=5, ge=2, le=11)\n\n\n# ---- yours -----------------------------------------------------------------------------------------\n\n\nHOLD = 1e-6     # how far below its optimum the first objective may fall in the second solve, $k\n\n\ndef best(snapshot: dict, first: str, then: str, floors: dict[str, float]) -> dict | None:\n    \"\"\"Maximize `first`, then `then` with `first` held at its optimum; every floor holds. None if no plan.\"\"\"\n    model, x = build(snapshot)\n    value = dict(zip((\"npv\", \"risk\"), objectives(snapshot, x)))\n    for name, floor in floors.items():\n        model.add_linear_constraint(value[name] >= floor)\n    model.maximize(value[first])\n    result = solve(model)\n    if not result.has_primal_feasible_solution():\n        return None\n    model.add_linear_constraint(value[first] >= result.objective_value() - HOLD)\n    model.maximize(value[then])\n    return score(snapshot, plan_of(x, solve(model)))\n\n\ndef frontier(snapshot: dict, points: int) -> list[dict]:\n    \"\"\"The epsilon-constraint frontier: the two ends, then NPV maximized at evenly spaced risk floors.\"\"\"\n    top_npv = best(snapshot, \"npv\", \"risk\", {})\n    top_risk = best(snapshot, \"risk\", \"npv\", {})\n    found = []\n    for k in range(points):\n        floor = top_npv[\"risk\"] + (top_risk[\"risk\"] - top_npv[\"risk\"]) * k / (points - 1)\n        point = best(snapshot, \"npv\", \"risk\", {\"risk\": floor})\n        if point is not None and all((q[\"npv\"], q[\"risk\"]) != (point[\"npv\"], point[\"risk\"]) for q in found):\n            found.append(point)\n    kept = [p for p in found if not any(q[\"npv\"] >= p[\"npv\"] and q[\"risk\"] >= p[\"risk\"] and q != p for q in found)]\n    return sorted(kept, key=lambda p: p[\"risk\"])\n\n\ndef create_app() -> FastAPI:\n    app = FastAPI(title=\"Practice frontier\")\n\n    @app.post(\"/frontier\")\n    def pareto(request: FrontierRequest) -> dict:\n        return {\"objectives\": [\"npv\", \"risk\"], \"points\": frontier(from_json(request.snapshot), request.points)}\n\n    return app\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"years\": [2027], \"budget\": {2027: 100}, \"projects\": {\n        \"J1\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2027, \"must\": False, \"parent\": None, \"lag\": 0,\n               \"group\": None, \"npv\": {2027: 50}, \"risk\": {2027: 10}},\n        \"J2\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2027, \"must\": False, \"parent\": None, \"lag\": 0,\n               \"group\": None, \"npv\": {2027: 20}, \"risk\": {2027: 40}}}}\n    print(frontier(snapshot, 3))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Milestone 6: an endpoint that returns the NPV against risk-removed frontier of a practice portfolio.\n\nEach project carries, beside \"npv\", a \"risk\" table: the risk it removes ($k) for each start year,\nmilestone 3's coefficients. The practice portfolio is invented for a fictional utility.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom fastapi import FastAPI\nfrom pydantic import BaseModel, ConfigDict, Field\n\n# ---- given: milestone 2's model and rule checker, with a reduced rule set ----------------------------\n\nimport contextlib\nimport ctypes\nimport os\nimport sys\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef starts(job: dict) -> range:\n    return range(job[\"earliest\"], job[\"latest\"] + 1)\n\n\ndef spend(job: dict, start: int) -> dict[int, int]:\n    \"\"\"What a project started in `start` spends in each year of work.\"\"\"\n    return {start + k: c for k, c in enumerate(job[\"cost\"])}\n\n\ndef build(snapshot: dict, skip: frozenset = frozenset()):\n    \"\"\"Milestone 2's model, with must_, once_, alt_, after_ and budget_ rows only.\n\n    `skip` plants a bug, for testing the tests: \"must\", \"alt\" or \"budget\" leaves those rows out,\n    \"lag\" reads every lag as 0, \"value\" adds a stray 1 to the objective.\n    \"\"\"\n    jobs = snapshot[\"projects\"]\n    model = mathopt.Model(name=\"practice plan\")\n    x = {(j, t): model.add_binary_variable(name=f\"x_{j}_{t}\") for j in sorted(jobs) for t in starts(jobs[j])}\n\n    def started(j):\n        return mathopt.LinearExpression() + mathopt.fast_sum(x[j, t] for t in starts(jobs[j]))\n\n    for j in sorted(jobs):\n        if jobs[j][\"must\"] and \"must\" not in skip:\n            model.add_linear_constraint(started(j) == 1, name=f\"must_{j}\")\n        else:\n            model.add_linear_constraint(started(j) <= 1, name=f\"once_{j}\")\n    groups: dict[str, list[str]] = {}\n    for j in sorted(jobs):\n        if jobs[j][\"group\"]:\n            groups.setdefault(jobs[j][\"group\"], []).append(j)\n    for g, members in sorted(groups.items()):\n        if \"alt\" not in skip:\n            model.add_linear_constraint(mathopt.fast_sum(started(m) for m in members) <= 1, name=f\"alt_{g}\")\n    for c in sorted(jobs):\n        p, lag = jobs[c][\"parent\"], 0 if \"lag\" in skip else jobs[c][\"lag\"]\n        if p:\n            for t in starts(jobs[c]):\n                model.add_linear_constraint(\n                    mathopt.LinearExpression() + mathopt.fast_sum(x[c, u] for u in starts(jobs[c]) if u <= t)\n                    - mathopt.fast_sum(x[p, s] for s in starts(jobs[p]) if s <= t - lag) <= 0, name=f\"after_{c}_{t}\")\n    for y in snapshot[\"years\"]:\n        if \"budget\" not in skip:\n            model.add_linear_constraint(\n                mathopt.LinearExpression() + mathopt.fast_sum(\n                    spend(jobs[j], t).get(y, 0) * v for (j, t), v in x.items()) <= snapshot[\"budget\"][y],\n                name=f\"budget_{y}\")\n    model.maximize(mathopt.fast_sum(jobs[j][\"npv\"][t] * v for (j, t), v in x.items()) + (1 if \"value\" in skip else 0))\n    return model, x\n\n\n@contextlib.contextmanager\ndef _quiet():\n    \"\"\"Keep the bundled HiGHS's stray C output off the screen.\"\"\"\n    sys.stdout.flush()\n    saved, sink = os.dup(1), os.open(os.devnull, os.O_WRONLY)\n    os.dup2(sink, 1)\n    try:\n        yield\n    finally:\n        ctypes.CDLL(None).fflush(None)\n        os.dup2(saved, 1)\n        os.close(saved)\n        os.close(sink)\n\n\ndef solve(model, model_params=None) -> mathopt.SolveResult:\n    \"\"\"HiGHS to a zero gap.\"\"\"\n    with _quiet():\n        return mathopt.solve(model, mathopt.SolverType.HIGHS,\n                             params=mathopt.SolveParameters(relative_gap_tolerance=0.0), model_params=model_params)\n\n\ndef plan_of(x, result) -> dict[str, int]:\n    values = result.variable_values()\n    return {j: t for (j, t), v in x.items() if values[v] > 0.5}\n\n\ndef value(snapshot: dict, plan: dict[str, int]) -> int:\n    return sum(snapshot[\"projects\"][j][\"npv\"][t] for j, t in plan.items())\n\n\ndef check(snapshot: dict, plan: dict[str, int]) -> list[str]:\n    \"\"\"Every rule the plan breaks, by row name, from the data alone.\"\"\"\n    jobs, broken = snapshot[\"projects\"], []\n    broken += [f\"window_{j}\" for j, t in sorted(plan.items()) if t not in starts(jobs[j])]\n    broken += [f\"must_{j}\" for j in sorted(jobs) if jobs[j][\"must\"] and j not in plan]\n    groups: dict[str, int] = {}\n    for j in plan:\n        if jobs[j][\"group\"]:\n            groups[jobs[j][\"group\"]] = groups.get(jobs[j][\"group\"], 0) + 1\n    broken += [f\"alt_{g}\" for g, n in sorted(groups.items()) if n > 1]\n    for c, t in sorted(plan.items()):\n        p = jobs[c][\"parent\"]\n        if p and (p not in plan or plan[p] + jobs[c][\"lag\"] > t):\n            broken.append(f\"after_{c}_{t}\")\n    for y in snapshot[\"years\"]:\n        if sum(spend(jobs[j], t).get(y, 0) for j, t in plan.items()) > snapshot[\"budget\"][y]:\n            broken.append(f\"budget_{y}\")\n    return broken\n\n\ndef objectives(snapshot: dict, x: dict):\n    \"\"\"The two objective expressions: NPV and risk removed, both in $k.\"\"\"\n    jobs = snapshot[\"projects\"]\n    npv = mathopt.fast_sum(jobs[j][\"npv\"][t] * v for (j, t), v in x.items())\n    risk = mathopt.fast_sum(jobs[j][\"risk\"][t] * v for (j, t), v in x.items())\n    return npv, risk\n\n\ndef score(snapshot: dict, plan: dict[str, int]) -> dict:\n    jobs = snapshot[\"projects\"]\n    return {\"npv\": sum(jobs[j][\"npv\"][t] for j, t in plan.items()),\n            \"risk\": sum(jobs[j][\"risk\"][t] for j, t in plan.items()), \"plan\": dict(sorted(plan.items()))}\n\n\ndef from_json(snapshot: dict) -> dict:\n    \"\"\"A snapshot sent as JSON, with its year keys made integers again.\"\"\"\n    out = {**snapshot, \"budget\": {int(y): b for y, b in snapshot[\"budget\"].items()}}\n    out[\"projects\"] = {j: {**p, \"npv\": {int(t): v for t, v in p[\"npv\"].items()},\n                           \"risk\": {int(t): v for t, v in p[\"risk\"].items()}}\n                       for j, p in snapshot[\"projects\"].items()}\n    return out\n\n\nclass FrontierRequest(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\")\n    snapshot: dict\n    points: int = Field(default=5, ge=2, le=11)\n\n\n# ---- yours -----------------------------------------------------------------------------------------\n\n\nHOLD = 1e-6     # how far below its optimum the first objective may fall in the second solve, $k\n\n\ndef best(snapshot: dict, first: str, then: str, floors: dict[str, float]) -> dict | None:\n    \"\"\"Maximize `first`, then `then` with `first` held at its optimum; every floor holds. None if no plan.\"\"\"\n    # TODO\n    return None\n\n\ndef frontier(snapshot: dict, points: int) -> list[dict]:\n    \"\"\"The epsilon-constraint frontier: the two ends, then NPV maximized at evenly spaced risk floors.\"\"\"\n    # TODO\n    return []\n\n\ndef create_app() -> FastAPI:\n    app = FastAPI(title=\"Practice frontier\")\n    # TODO: POST /frontier\n    return app\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"years\": [2027], \"budget\": {2027: 100}, \"projects\": {\n        \"J1\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2027, \"must\": False, \"parent\": None, \"lag\": 0,\n               \"group\": None, \"npv\": {2027: 50}, \"risk\": {2027: 10}},\n        \"J2\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2027, \"must\": False, \"parent\": None, \"lag\": 0,\n               \"group\": None, \"npv\": {2027: 20}, \"risk\": {2027: 40}}}}\n    print(frontier(snapshot, 3))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 1,
+    "tables": 1,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "71f6ff7bd8c2272815449660a8ca3e29d139fe10524da60087974caa055b955d",
+  "starting_code": "\"\"\"Milestone 6: an endpoint that returns the NPV against risk-removed frontier of a practice portfolio.\n\nEach project carries, beside \"npv\", a \"risk\" table: the risk it removes ($k) for each start year,\nmilestone 3's coefficients. The practice portfolio is invented for a fictional utility.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom fastapi import FastAPI\nfrom pydantic import BaseModel, ConfigDict, Field\n\n# ---- given: milestone 2's model and rule checker, with a reduced rule set ----------------------------\n\nimport contextlib\nimport ctypes\nimport os\nimport sys\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef starts(job: dict) -> range:\n    return range(job[\"earliest\"], job[\"latest\"] + 1)\n\n\ndef spend(job: dict, start: int) -> dict[int, int]:\n    \"\"\"What a project started in `start` spends in each year of work.\"\"\"\n    return {start + k: c for k, c in enumerate(job[\"cost\"])}\n\n\ndef build(snapshot: dict, skip: frozenset = frozenset()):\n    \"\"\"Milestone 2's model, with must_, once_, alt_, after_ and budget_ rows only.\n\n    `skip` plants a bug, for testing the tests: \"must\", \"alt\" or \"budget\" leaves those rows out,\n    \"lag\" reads every lag as 0, \"value\" adds a stray 1 to the objective.\n    \"\"\"\n    jobs = snapshot[\"projects\"]\n    model = mathopt.Model(name=\"practice plan\")\n    x = {(j, t): model.add_binary_variable(name=f\"x_{j}_{t}\") for j in sorted(jobs) for t in starts(jobs[j])}\n\n    def started(j):\n        return mathopt.LinearExpression() + mathopt.fast_sum(x[j, t] for t in starts(jobs[j]))\n\n    for j in sorted(jobs):\n        if jobs[j][\"must\"] and \"must\" not in skip:\n            model.add_linear_constraint(started(j) == 1, name=f\"must_{j}\")\n        else:\n            model.add_linear_constraint(started(j) <= 1, name=f\"once_{j}\")\n    groups: dict[str, list[str]] = {}\n    for j in sorted(jobs):\n        if jobs[j][\"group\"]:\n            groups.setdefault(jobs[j][\"group\"], []).append(j)\n    for g, members in sorted(groups.items()):\n        if \"alt\" not in skip:\n            model.add_linear_constraint(mathopt.fast_sum(started(m) for m in members) <= 1, name=f\"alt_{g}\")\n    for c in sorted(jobs):\n        p, lag = jobs[c][\"parent\"], 0 if \"lag\" in skip else jobs[c][\"lag\"]\n        if p:\n            for t in starts(jobs[c]):\n                model.add_linear_constraint(\n                    mathopt.LinearExpression() + mathopt.fast_sum(x[c, u] for u in starts(jobs[c]) if u <= t)\n                    - mathopt.fast_sum(x[p, s] for s in starts(jobs[p]) if s <= t - lag) <= 0, name=f\"after_{c}_{t}\")\n    for y in snapshot[\"years\"]:\n        if \"budget\" not in skip:\n            model.add_linear_constraint(\n                mathopt.LinearExpression() + mathopt.fast_sum(\n                    spend(jobs[j], t).get(y, 0) * v for (j, t), v in x.items()) <= snapshot[\"budget\"][y],\n                name=f\"budget_{y}\")\n    model.maximize(mathopt.fast_sum(jobs[j][\"npv\"][t] * v for (j, t), v in x.items()) + (1 if \"value\" in skip else 0))\n    return model, x\n\n\n@contextlib.contextmanager\ndef _quiet():\n    \"\"\"Keep the bundled HiGHS's stray C output off the screen.\"\"\"\n    sys.stdout.flush()\n    saved, sink = os.dup(1), os.open(os.devnull, os.O_WRONLY)\n    os.dup2(sink, 1)\n    try:\n        yield\n    finally:\n        ctypes.CDLL(None).fflush(None)\n        os.dup2(saved, 1)\n        os.close(saved)\n        os.close(sink)\n\n\ndef solve(model, model_params=None) -> mathopt.SolveResult:\n    \"\"\"HiGHS to a zero gap.\"\"\"\n    with _quiet():\n        return mathopt.solve(model, mathopt.SolverType.HIGHS,\n                             params=mathopt.SolveParameters(relative_gap_tolerance=0.0), model_params=model_params)\n\n\ndef plan_of(x, result) -> dict[str, int]:\n    values = result.variable_values()\n    return {j: t for (j, t), v in x.items() if values[v] > 0.5}\n\n\ndef value(snapshot: dict, plan: dict[str, int]) -> int:\n    return sum(snapshot[\"projects\"][j][\"npv\"][t] for j, t in plan.items())\n\n\ndef check(snapshot: dict, plan: dict[str, int]) -> list[str]:\n    \"\"\"Every rule the plan breaks, by row name, from the data alone.\"\"\"\n    jobs, broken = snapshot[\"projects\"], []\n    broken += [f\"window_{j}\" for j, t in sorted(plan.items()) if t not in starts(jobs[j])]\n    broken += [f\"must_{j}\" for j in sorted(jobs) if jobs[j][\"must\"] and j not in plan]\n    groups: dict[str, int] = {}\n    for j in plan:\n        if jobs[j][\"group\"]:\n            groups[jobs[j][\"group\"]] = groups.get(jobs[j][\"group\"], 0) + 1\n    broken += [f\"alt_{g}\" for g, n in sorted(groups.items()) if n > 1]\n    for c, t in sorted(plan.items()):\n        p = jobs[c][\"parent\"]\n        if p and (p not in plan or plan[p] + jobs[c][\"lag\"] > t):\n            broken.append(f\"after_{c}_{t}\")\n    for y in snapshot[\"years\"]:\n        if sum(spend(jobs[j], t).get(y, 0) for j, t in plan.items()) > snapshot[\"budget\"][y]:\n            broken.append(f\"budget_{y}\")\n    return broken\n\n\ndef objectives(snapshot: dict, x: dict):\n    \"\"\"The two objective expressions: NPV and risk removed, both in $k.\"\"\"\n    jobs = snapshot[\"projects\"]\n    npv = mathopt.fast_sum(jobs[j][\"npv\"][t] * v for (j, t), v in x.items())\n    risk = mathopt.fast_sum(jobs[j][\"risk\"][t] * v for (j, t), v in x.items())\n    return npv, risk\n\n\ndef score(snapshot: dict, plan: dict[str, int]) -> dict:\n    jobs = snapshot[\"projects\"]\n    return {\"npv\": sum(jobs[j][\"npv\"][t] for j, t in plan.items()),\n            \"risk\": sum(jobs[j][\"risk\"][t] for j, t in plan.items()), \"plan\": dict(sorted(plan.items()))}\n\n\ndef from_json(snapshot: dict) -> dict:\n    \"\"\"A snapshot sent as JSON, with its year keys made integers again.\"\"\"\n    out = {**snapshot, \"budget\": {int(y): b for y, b in snapshot[\"budget\"].items()}}\n    out[\"projects\"] = {j: {**p, \"npv\": {int(t): v for t, v in p[\"npv\"].items()},\n                           \"risk\": {int(t): v for t, v in p[\"risk\"].items()}}\n                       for j, p in snapshot[\"projects\"].items()}\n    return out\n\n\nclass FrontierRequest(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\")\n    snapshot: dict\n    points: int = Field(default=5, ge=2, le=11)\n\n\n# ---- yours -----------------------------------------------------------------------------------------\n\n\nHOLD = 1e-6     # how far below its optimum the first objective may fall in the second solve, $k\n\n\ndef best(snapshot: dict, first: str, then: str, floors: dict[str, float]) -> dict | None:\n    \"\"\"Maximize `first`, then `then` with `first` held at its optimum; every floor holds. None if no plan.\"\"\"\n    # TODO\n    return None\n\n\ndef frontier(snapshot: dict, points: int) -> list[dict]:\n    \"\"\"The epsilon-constraint frontier: the two ends, then NPV maximized at evenly spaced risk floors.\"\"\"\n    # TODO\n    return []\n\n\ndef create_app() -> FastAPI:\n    app = FastAPI(title=\"Practice frontier\")\n    # TODO: POST /frontier\n    return app\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"years\": [2027], \"budget\": {2027: 100}, \"projects\": {\n        \"J1\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2027, \"must\": False, \"parent\": None, \"lag\": 0,\n               \"group\": None, \"npv\": {2027: 50}, \"risk\": {2027: 10}},\n        \"J2\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2027, \"must\": False, \"parent\": None, \"lag\": 0,\n               \"group\": None, \"npv\": {2027: 20}, \"risk\": {2027: 40}}}}\n    print(frontier(snapshot, 3))\n",
+  "exercise": {
+    "main_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-3/frontier_endpoint.py",
+    "test_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-3/test_frontier_endpoint.py",
+    "run_command": [
+      "python3",
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-3/frontier_endpoint.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-3/target/report.xml",
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-3/test_frontier_endpoint.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_endpoint_returns_pareto_points_from_end_to_end",
+        "kind": "main",
+        "says": "POST /frontier returns Pareto-optimal points sorted by risk removed, from the most-NPV end to the most-risk end, and refuses 1 or 12 points with 422"
+      },
+      {
+        "id": "test_two_points_are_the_two_ends",
+        "kind": "main",
+        "says": "asked for two points, the frontier is exactly its two ends"
+      },
+      {
+        "id": "test_each_end_is_lexicographic_so_no_end_is_weakly_dominated",
+        "kind": "edge",
+        "says": "when plans tie on the first objective, the end takes the one that is best on the second"
+      },
+      {
+        "id": "test_no_point_is_repeated_or_dominated_when_floors_share_a_plan",
+        "kind": "edge",
+        "says": "two floors that lead to the same plan give one point, not two"
+      },
+      {
+        "id": "test_the_hold_row_keeps_a_fractional_optimum",
+        "kind": "edge",
+        "says": "when the best risk removed is not a whole number, the end keeps that optimum and takes the best NPV among the plans that reach it"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-3/target/report.xml"
+    },
+    "origin": {
+      "path": "51-capstone-cipt-lite/README_13.1.6.md",
+      "section": "The Frontier Endpoint Returns Only Non-Dominated Plans"
+    },
+    "concepts": [
+      "an endpoint that returns the NPV and risk frontier by the epsilon-constraint method, non-dominated points only"
+    ]
+  }
+}

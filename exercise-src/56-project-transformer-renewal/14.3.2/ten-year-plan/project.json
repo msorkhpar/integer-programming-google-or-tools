@@ -1,0 +1,133 @@
+{
+  "project_api": 1,
+  "title": "Plan ten years with a Weibull curve and a budget per year",
+  "before": "../../../../56-project-transformer-renewal/steps/01",
+  "after": "../../../../56-project-transformer-renewal/steps/02",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the tiny fleet matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "renewal/risk.py",
+      "signature": "def risk_removed(t: Transformer, start: int, request: Request) -> float",
+      "contract": "The coefficient of x[i, start], $k: for each year y of the risk window (request.risk_years(), the window's years from FIRST_YEAR, or the plan's years when window is None) with y >= start, the old unit's PoF at its age in year y minus a new unit's PoF at age y - start, times the unit's CoF, divided by (1 + request.rate) to the power y - FIRST_YEAR. Years before start remove nothing.",
+      "idea": "A replacement's value is the failure cost it avoids each year after it, discounted to today, so a later replacement is worth less.",
+      "lesson": {
+        "title": "7.3.4 Risk Reduction From an Intervention, Year by Year",
+        "href": "../../../../07-the-capital-planning-domain/32-asset-risk/units/unit-04/7.3.4-risk-reduction-from-an-intervention-year-by-year.unit.html"
+      }
+    },
+    {
+      "file": "renewal/risk.py",
+      "signature": "def pof_next(age: float, kind: str) -> float",
+      "contract": "The probability that a unit of this kind, working at `age`, fails within the year: 1 - exp((age / eta)^beta - ((age + 1) / eta)^beta), with beta and eta from KINDS[kind]. It reproduces the fleet's pof column.",
+      "idea": "A Weibull curve gives the PoF at any age, so a plan can value a unit in years it has not reached.",
+      "lesson": {
+        "title": "7.3.1 Probability of Failure and Hazard Curves (Weibull)",
+        "href": "../../../../07-the-capital-planning-domain/32-asset-risk/units/unit-01/7.3.1-probability-of-failure-and-hazard-curves-weibull.unit.html"
+      }
+    },
+    {
+      "file": "renewal/model.py",
+      "signature": "def build(fleet: list[Transformer], request: Request) -> Built",
+      "contract": "Candidates are the units at least request.min_age old. One binary x[tid, year] per candidate and plan year (request.plan_years(), `years` years from FIRST_YEAR), named `x_<tid>_<year>`; a row `once_<tid>` letting each candidate be replaced at most once; a row `budget_<year>` per plan year keeping that year's replacement cost within request.budget; and the summed risk_removed coefficients as the objective to maximize. Built.x is keyed by (tid, year), Built.budget by year.",
+      "idea": "A start-year variable per unit and year, with a row allowing one start, turns when into a choice the solver makes.",
+      "lesson": {
+        "title": "6.4.1 Start-Time Variables x[i,t] and Timing Windows",
+        "href": "../../../../06-formulation-craft/26-multi-period-timing/units/unit-01/6.4.1-start-time-variables-x-i-t-and-timing-windows.unit.html"
+      }
+    },
+    {
+      "file": "renewal/plan.py",
+      "signature": "def feasible(fleet: list[Transformer], request: Request, replace: dict[str, int]) -> bool",
+      "contract": "Fixes x[tid, year] to 1 for each listed unit and its year and every other variable to 0, solves, and answers whether the solver found a plan.",
+      "idea": "A pinned plan now names a year for each unit, so the pin is on the pair.",
+      "lesson": {
+        "title": "12.3.1 Unit-Testing One Constraint at a Time",
+        "href": "../../../../12-engineering-the-optimization-service/47-testing-optimization-code/units/unit-01/12.3.1-unit-testing-one-constraint-at-a-time.unit.html"
+      }
+    },
+    {
+      "file": "renewal/plan.py",
+      "signature": "def plan(fleet: list[Transformer], request: Request) -> Plan",
+      "contract": "As before, with request.gap as the solver's relative gap tolerance; the Plan maps each replaced unit to the year of its variable that is 1.",
+      "idea": "A gap tolerance lets the solver stop once its plan is provably close to the best.",
+      "lesson": {
+        "title": "14.3.2 A Ten-Year Budget and Weibull Failure Risk",
+        "href": "../../../../14-growing-real-projects/56-project-transformer-renewal/units/unit-02/14.3.2-a-ten-year-budget-and-weibull-failure-risk.unit.html"
+      }
+    },
+    {
+      "file": "renewal/report.py",
+      "signature": "def spend_by_year(fleet: list[Transformer], replace: dict[str, int], outage_cost: int = 0) -> dict[int, int]",
+      "contract": "What the replacements cost in each year, $k: for each year that appears in `replace` (transformer id -> year), the summed cost of the units replaced that year, as a dict sorted by year. Years with no replacement are left out. `outage_cost` is a stub for the next lesson, which charges each outage to its year; this step ignores it.",
+      "idea": "A plan is a map from unit to year, so the report groups it by year and adds up costs; the solver's own rows are not read back.",
+      "lesson": {
+        "title": "14.3.2 A Ten-Year Budget and Weibull Failure Risk",
+        "href": "../../../../14-growing-real-projects/56-project-transformer-renewal/units/unit-02/14.3.2-a-ten-year-budget-and-weibull-failure-risk.unit.html"
+      },
+      "stub": "return {}"
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_plan.py::test_the_plan_is_the_best_subset_within_the_budget",
+      "main",
+      "in one year, the plan removes as much risk as the best subset, each unit valued by the risk it removes"
+    ],
+    [
+      "tests/test_risk.py::test_the_curve_reproduces_the_fleet_pof_column",
+      "main",
+      "the Weibull curve reproduces the fleet's PoF column"
+    ],
+    [
+      "tests/test_risk.py::test_a_later_replacement_removes_less_risk",
+      "main",
+      "a later replacement removes less risk than an earlier one"
+    ],
+    [
+      "tests/test_risk.py::test_risk_removed_counts_the_years_after_the_replacement_discounted",
+      "main",
+      "a replacement's value counts the years after it, discounted to 2027, as worked by hand"
+    ],
+    [
+      "tests/test_years.py::test_each_year_keeps_to_its_own_budget",
+      "edge",
+      "each year keeps to its own budget: two units in different years are allowed, in one year refused"
+    ],
+    [
+      "tests/test_years.py::test_a_tight_budget_spreads_replacements_over_the_years",
+      "main",
+      "a tight budget spreads the replacements over the years"
+    ],
+    [
+      "tests/test_years.py::test_the_riskier_unit_goes_first",
+      "main",
+      "the riskier unit is replaced first"
+    ],
+    [
+      "tests/test_years.py::test_units_younger_than_the_screen_are_not_candidates",
+      "main",
+      "units younger than the age screen are not candidates"
+    ]
+  ],
+  "plants": {
+    "tests/test_years.py::test_each_year_keeps_to_its_own_budget": [
+      [
+        "renewal/plan.py",
+        "        var.lower_bound = var.upper_bound = 1 if replace.get(tid) == y else 0\n",
+        "        var.lower_bound = var.upper_bound = 1 if tid in replace else 0\n"
+      ]
+    ]
+  },
+  "cites": {
+    "path": "56-project-transformer-renewal/README_14.3.2.md",
+    "section": null
+  }
+}

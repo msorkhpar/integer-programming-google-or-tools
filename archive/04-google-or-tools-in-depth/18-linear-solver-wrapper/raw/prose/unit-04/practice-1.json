@@ -1,0 +1,141 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "18-linear-solver-wrapper"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Send crews to flood sites",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A river authority sends pump crews to flood sites. Each site needs exactly one crew; each crew goes to at most one site; some crews are not equipped for some sites. The cost of sending a crew to a site is a whole number of $k, given only for the allowed pairs."
+    },
+    {
+      "type": "para",
+      "text": "Write `assign(crews, sites, cost)` in `sites.py` with `SimpleLinearSumAssignment`. `cost` maps `(crew, site)` to the cost, for allowed pairs only. There are never fewer crews than sites. Return `(total cost, {crew: site})`, listing only the crews that got a site, or `None` when no assignment covers every site."
+    },
+    {
+      "type": "para",
+      "text": "The model, with $`E`$ the allowed pairs:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\min\\;& \\sum_{(c,s) \\in E} \\text{cost}_{c,s}\\, x_{c,s} \\\\\n\\text{s.t. }& \\sum_{c : (c,s) \\in E} x_{c,s} = 1 && \\forall s && \\text{(site}_s) \\\\\n& \\sum_{s : (c,s) \\in E} x_{c,s} \\le 1 && \\forall c && \\text{(crew}_c) \\\\\n& x_{c,s} \\in \\{0, 1\\}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "`SimpleLinearSumAssignment` gives *every* left node a right node, so the crew rows' \"at most one\" needs the trick of the lesson's second section. The tests compare your answer with a brute-force search. About twelve lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.graph.python import linear_sum_assignment\n\n\ndef assign(crews: list[str], sites: list[str], cost: dict):\n    \"\"\"Each site gets one crew, each crew at most one site, at least total cost.\n\n    cost: {(crew, site): whole-number cost} over the allowed pairs only. Returns\n    (total, {crew: site}) for the crews that got a site, or None if no such assignment exists.\n    \"\"\"\n    lsa = linear_sum_assignment.SimpleLinearSumAssignment()\n    for (crew, site), c in cost.items():\n        lsa.add_arc_with_cost(crews.index(crew), sites.index(site), c)\n    for dummy in range(len(sites), len(crews)):              # \"no site\": any crew, cost 0\n        for i in range(len(crews)):\n            lsa.add_arc_with_cost(i, dummy, 0)\n    if lsa.solve() != lsa.OPTIMAL:\n        return None\n    plan = {crews[i]: sites[lsa.right_mate(i)] for i in range(len(crews)) if lsa.right_mate(i) < len(sites)}\n    return lsa.optimal_cost(), plan\n\n\nif __name__ == \"__main__\":\n    print(assign([\"A\", \"B\"], [\"north\", \"south\"], {(\"A\", \"north\"): 3, (\"A\", \"south\"): 5, (\"B\", \"north\"): 4, (\"B\", \"south\"): 9}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.graph.python import linear_sum_assignment\n\n\ndef assign(crews: list[str], sites: list[str], cost: dict):\n    \"\"\"Each site gets one crew, each crew at most one site, at least total cost.\n\n    cost: {(crew, site): whole-number cost} over the allowed pairs only. Returns\n    (total, {crew: site}) for the crews that got a site, or None if no such assignment exists.\n    \"\"\"\n    # TODO: build a SimpleLinearSumAssignment, square it if needed, solve, and read the plan.\n    return 0, {}\n\n\nif __name__ == \"__main__\":\n    print(assign([\"A\", \"B\"], [\"north\", \"south\"], {(\"A\", \"north\"): 3, (\"A\", \"south\"): 5, (\"B\", \"north\"): 4, (\"B\", \"south\"): 9}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "06144391e999a5d2b9bb6053de4c6cff367e01fa29597d77c61632c75596af7a",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.graph.python import linear_sum_assignment\n\n\ndef assign(crews: list[str], sites: list[str], cost: dict):\n    \"\"\"Each site gets one crew, each crew at most one site, at least total cost.\n\n    cost: {(crew, site): whole-number cost} over the allowed pairs only. Returns\n    (total, {crew: site}) for the crews that got a site, or None if no such assignment exists.\n    \"\"\"\n    # TODO: build a SimpleLinearSumAssignment, square it if needed, solve, and read the plan.\n    return 0, {}\n\n\nif __name__ == \"__main__\":\n    print(assign([\"A\", \"B\"], [\"north\", \"south\"], {(\"A\", \"north\"): 3, (\"A\", \"south\"): 5, (\"B\", \"north\"): 4, (\"B\", \"south\"): 9}))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-04/practice-1/sites.py",
+    "test_path": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-04/practice-1/test_sites.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-04/practice-1/sites.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-04/practice-1/target/report.xml",
+      "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-04/practice-1/test_sites.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_every_crew_gets_a_site_at_least_cost",
+        "kind": "main",
+        "says": "with one crew per site and every pair allowed, the assignment is the cheapest one"
+      },
+      {
+        "id": "test_a_forbidden_pair_is_never_used",
+        "kind": "edge",
+        "says": "a crew is never sent to a site it may not take"
+      },
+      {
+        "id": "test_spare_crews_stay_idle",
+        "kind": "edge",
+        "says": "with more crews than sites, the spare crews get no site and the cost is still the least"
+      },
+      {
+        "id": "test_a_site_no_crew_may_take_gives_no_plan",
+        "kind": "edge",
+        "says": "when some site has no crew allowed to take it, there is no plan"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-04/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "18-linear-solver-wrapper/README_4.7.4.md",
+      "section": "The Table Must Be Square: Pad It With Dummy Tasks"
+    },
+    "concepts": [
+      "SimpleLinearSumAssignment takes one whole-number arc per allowed pair and returns each left node's right mate",
+      "an assignment with more workers than tasks is squared with cost-0 dummy tasks"
+    ]
+  }
+}

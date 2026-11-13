@@ -1,0 +1,120 @@
+{
+  "quiz_api": 1,
+  "address": [
+    "12-engineering-the-optimization-service",
+    "49-cloud-deployment"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "ordinal": 3,
+  "title": "S3 and a local SQLite file for snapshots and results",
+  "exercise": {
+    "provenance": "generated",
+    "trust": "advisory",
+    "kind": "quiz",
+    "questions": [
+      {
+        "id": "q-second-result",
+        "stem": "A worker's put_result for run-0042 is sent again after a network error, but the first write had in fact reached S3. With the lesson's store, what happens to the second write?",
+        "options": [
+          {
+            "id": "a",
+            "text": "It replaces the first object with the same bytes, so the run's result is unchanged",
+            "correct": false,
+            "says": "Every write is conditional: with If-None-Match: *, S3 refuses to write over an existing object."
+          },
+          {
+            "id": "b",
+            "text": "S3 refuses it with 412, and put_result raises: a result is already there",
+            "correct": true,
+            "says": "Right: a result that already exists is an error; the output shows 'second result for run-0007 refused'."
+          },
+          {
+            "id": "c",
+            "text": "S3 refuses it with 412, and put_result counts it a success, as put_snapshot does",
+            "correct": false,
+            "says": "Only an existing snapshot is fine (same key, same content); 'a result that already exists is an error'."
+          },
+          {
+            "id": "d",
+            "text": "S3 keeps it as a second version, and put_result returns the newer version's key",
+            "correct": false,
+            "says": "A conditional write succeeds only if no object exists at the key; otherwise it fails with 412."
+          }
+        ],
+        "origin": {
+          "path": "49-cloud-deployment/README_12.5.3.md",
+          "section": "Every Write Is Conditional: S3 Refuses to Replace an Object"
+        }
+      },
+      {
+        "id": "q-overwrite",
+        "stem": "In the lesson's versioned bucket, someone writes new bytes over a snapshot's key with a plain put_object, no condition. What happens next?",
+        "options": [
+          {
+            "id": "a",
+            "text": "A read is refused as corrupted, and the earlier version is still kept and re-hashes to its key",
+            "correct": true,
+            "says": "Right: get_snapshot re-hashes and refuses; the output shows 2 versions, the earlier one re-hashing to its key."
+          },
+          {
+            "id": "b",
+            "text": "A read of it is refused as corrupted, and the earlier version is gone, as the key holds new bytes",
+            "correct": false,
+            "says": "Versioning keeps every version: the output shows 'versions kept: 2'."
+          },
+          {
+            "id": "c",
+            "text": "A read of it returns the new bytes, as S3 checked their checksum when they were written",
+            "correct": false,
+            "says": "get_snapshot hashes the bytes and compares with the key; the output shows the read refused."
+          },
+          {
+            "id": "d",
+            "text": "The write is refused with 412, as every object in a versioned bucket can be written only once",
+            "correct": false,
+            "says": "The unconditional overwrite succeeded; only writes sent with If-None-Match: * are refused."
+          }
+        ],
+        "origin": {
+          "path": "49-cloud-deployment/README_12.5.3.md",
+          "section": "Every Read Re-Hashes, and Versioning Keeps What an Overwrite Replaced"
+        }
+      },
+      {
+        "id": "q-rebuild",
+        "stem": "The API's SQLite index file is lost. At that moment three runs had finished and two were still waiting. What does rebuilding it from S3 give back?",
+        "options": [
+          {
+            "id": "a",
+            "text": "The five runs, as a run's index row is copied to S3 when the run is submitted",
+            "correct": false,
+            "says": "Nothing in S3 says a waiting run exists; the rebuild of the lesson gave 2 rows of 3."
+          },
+          {
+            "id": "b",
+            "text": "The three run ids, while their statuses and NPVs stay behind in the lost index",
+            "correct": false,
+            "says": "Every result object carries its run id, digest, status and NPV; the rebuilt rows print 'optimal' and the NPV."
+          },
+          {
+            "id": "c",
+            "text": "The three finished runs; the two waiting ones come back by asking Step Functions",
+            "correct": true,
+            "says": "Right: only runs with a result object are rebuilt; after a rebuild, ask Step Functions for the executions still running."
+          },
+          {
+            "id": "d",
+            "text": "The three finished runs; the two waiting ones are lost along with the index file",
+            "correct": false,
+            "says": "The lesson: ask Step Functions for the executions still running to recover the waiting runs."
+          }
+        ],
+        "origin": {
+          "path": "49-cloud-deployment/README_12.5.3.md",
+          "section": "The Index Can Be Rebuilt From S3, Except for Runs Still Waiting"
+        }
+      }
+    ]
+  }
+}

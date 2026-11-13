@@ -1,0 +1,50 @@
+{
+ "title": "CP-SAT's native logic",
+ "questions": [
+  {
+   "id": "q-and-then",
+   "heading": "Each Logic Constraint Allows Exactly the Assignments Its Name Says",
+   "stem": "Engineers write: \"if feeder upgrades F1 and F2 are both funded, substation S must be rebuilt.\" With Booleans f1, f2 and s, which CP-SAT constraint states exactly that rule?",
+   "options": [
+    {"id": "a", "text": "`add_bool_or(f1, f2, s)`", "correct": false,
+     "says": "That is 'at least one of the three', which refuses funding none of them and allows f1 and f2 without s."},
+    {"id": "b", "text": "`add_bool_and(f1, f2, s)`", "correct": false,
+     "says": "That forces all three to be funded, whatever the plan."},
+    {"id": "c", "text": "`add_bool_or(~f1, ~f2, s)`", "correct": true,
+     "says": "Right: the clause refuses only f1 = 1, f2 = 1, s = 0, which is the one combination the rule forbids."},
+    {"id": "d", "text": "`add_implication(s, f1)` and `add_implication(s, f2)`", "correct": false,
+     "says": "These run the wrong way: they say a rebuilt substation needs both upgrades."}
+   ]
+  },
+  {
+   "id": "q-two-literals",
+   "heading": "OnlyEnforceIf Switches a Linear Row On a Conjunction of Literals",
+   "stem": "A crew row must hold only in plans that fund project A and do not fund project B, with Booleans a and b. How is the row switched?",
+   "options": [
+    {"id": "a", "text": "`.only_enforce_if(a, ~b)` on the row: one call with both literals", "correct": true,
+     "says": "Right: several enforcement literals mean all of them, so the row holds exactly when a is true and b is false."},
+    {"id": "b", "text": "two copies of the row, one with `.only_enforce_if(a)`, one with `~b`", "correct": false,
+     "says": "Each copy holds when its own literal is true, so the row would hold whenever either is true."},
+    {"id": "c", "text": "`.only_enforce_if(a - b)` on the row: one call with the difference", "correct": false,
+     "says": "Enforcement takes literals, not linear expressions; a - b is an expression."},
+    {"id": "d", "text": "a big-M term on the row, since every call takes a single literal", "correct": false,
+     "says": "`only_enforce_if` takes any number of literals; no M is needed."}
+   ]
+  },
+  {
+   "id": "q-bonus-side",
+   "heading": "Write the Side the Objective Would Exploit, or Both",
+   "stem": "A model maximizes NPV plus a $200k bonus, earned through a Boolean b when vegetation capex is more than $3,000k (capex in whole $k). Only one enforced row may be added for b. Which row makes the bonus honest?",
+   "options": [
+    {"id": "a", "text": "`add(capex <= 3000).only_enforce_if(~b)`, which limits capex without b", "correct": false,
+     "says": "This says nothing when b is true, so the solver takes the bonus with any capex, as the rebate run showed."},
+    {"id": "b", "text": "no row at all, since the objective always sets b to its true value", "correct": false,
+     "says": "The objective pushes b toward 1 whatever the capex; nothing ties b to the spending."},
+    {"id": "c", "text": "`add(capex <= 3000).only_enforce_if(b)`, which caps capex with b", "correct": false,
+     "says": "That makes the bonus require low capex, the opposite of the rule."},
+    {"id": "d", "text": "`add(capex >= 3001).only_enforce_if(b)`, which needs more capex for b", "correct": true,
+     "says": "Right: the solver wants b true, so the row enforced on b is the side it would otherwise exploit."}
+   ]
+  }
+ ]
+}

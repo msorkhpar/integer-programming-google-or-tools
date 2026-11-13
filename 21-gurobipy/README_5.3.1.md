@@ -1,0 +1,621 @@
+# 5.3.1 Models, Attributes and the Matrix API
+
+GridCap's planning team runs its selection model on HiGHS through MathOpt. A new partner, a
+consulting firm, sends its models as gurobipy code and asks whether GridCap's numbers can be
+reproduced in Gurobi. To answer, someone on the team has to read and write gurobipy: build the same
+model, solve it, and read back the same plan. This lesson ports GridCap small's selection model
+(lesson 4.2.1) and its timing model (lesson 6.4.1) to gurobipy, and checks that Gurobi finds the
+optimum MathOpt found. GridCap is a fictional utility, and its numbers are teaching data.
+
+**gurobipy** is the Python interface of Gurobi, a commercial MIP and LP solver. Unlike MathOpt, it
+is not a layer over several solvers: a gurobipy model is always solved by Gurobi. That makes it a
+second, independent way to write the same model, and the API most Gurobi users meet first. Every
+gurobipy program needs a Gurobi license to start; lesson 5.3.4 explains the kinds of license and
+how to give the course's runner yours. The course runner has a size-limited license, the one the
+outputs below come from, and every model in this module stays within its 2,000 variables and 2,000
+rows.
+
+Can MathOpt hand a model to Gurobi instead? `SolverType.GUROBI` exists, but in the course's runner
+it fails: OR-Tools 9.15 cannot load the Gurobi 13 library that comes with gurobipy, and the call
+raises `RuntimeError: bad_function_call` (lesson 4.2.3 shows the attempt). So this module teaches
+Gurobi through gurobipy itself.
+
+## The Model
+
+The selection model of lesson 4.2.1 on GridCap small: fund projects, each at its earliest start, for
+the most NPV within each year's budget.
+
+**Sets.** $`P`$ the candidate projects; $`Y`$ the plan's years (2027–2031); $`M \subseteq P`$ the
+must-do projects; $`\mathcal{G}`$ the alternative groups; $`C \subseteq P`$ the child projects, with
+parent $`p(c)`$.
+
+**Parameters.** $`v_i`$, the NPV of project $`i`$ at its earliest start ($k); $`c_{i,y}`$, what it
+spends in year $`y`$ when it starts at its earliest start ($k); $`B_y`$, the budget of year
+$`y`$ ($k).
+
+**Variables.** $`x_i \in \{0, 1\}`$ for every $`i \in P`$: 1 if project $`i`$ is funded.
+
+**Objective.**
+
+```math
+\max \; \sum_{i \in P} v_i\, x_i
+```
+
+**Constraints.**
+
+```math
+\begin{aligned}
+x_i &= 1 && \forall i \in M && \text{(must}_i) \\
+\sum_{i \in g} x_i &\le 1 && \forall g \in \mathcal{G} && \text{(alt}_g) \\
+x_c &\le x_{p(c)} && \forall c \in C && \text{(needs}_c) \\
+\sum_{i \in P} c_{i,y}\, x_i &\le B_y && \forall y \in Y && \text{(budget}_y)
+\end{aligned}
+```
+
+| Label | Name in gurobipy |
+| --- | --- |
+| $`\text{must}_i`$, $`\text{alt}_g`$, $`\text{needs}_c`$ | `must_P003`, `alt_G001`, `needs_P007` |
+| $`\text{budget}_y`$ | `budget[2027]` … `budget[2031]` (named by `addConstrs`, see below) |
+| $`x_i`$ | `x[P001]` … `x[P040]` |
+
+On GridCap small that is 40 variables and 13 rows. MathOpt with HiGHS finds an optimum of 22,532
+(lesson 4.2.2).
+
+## An Environment Holds the License, and a Quiet One Prints Nothing
+
+Everything in gurobipy lives in an **environment** (`gp.Env`): it reads the license, holds
+parameters, and every model is created inside one. If you never create one, gurobipy makes a default
+environment the first time you build a model, and that one prints a license banner as it starts.
+The banner names the license, and it can name the license holder; it does not belong in a program's
+output, a log a service keeps, or a page like this one.
+
+The Gurobi documentation's pattern for settings that must be in place before the license is read is
+an **empty** environment: create it with `empty=True`, set parameters, then `start()` it. Setting
+`OutputFlag` to 0 there turns off all output, the banner included. Every program in this module gets
+its environment from this function in `grb.py`:
+
+```python
+def quiet_env() -> gp.Env:
+    """A started environment that prints nothing: no license banner, no solver log."""
+    env = gp.Env(empty=True)              # empty: parameters can be set before the license is read
+    env.setParam("OutputFlag", 0)
+    env.start()                           # reads the license; raises GurobiError if there is none
+    return env
+```
+
+`start()` is where a missing license shows up, as a `GurobiError` (lesson 5.3.4 shows the
+messages). A model is then made with `gp.Model(name, env=env)`, and inherits the environment's
+parameters: no solver log either.
+
+## A Model Is Variables, Constraints and an Objective, Added Lazily
+
+A first model, small enough to check by hand: three projects and one budget of $1,000k.
+
+| Project | Cost ($k) | NPV ($k) |
+| --- | --- | --- |
+| feeder | 600 | 420 |
+| breaker | 300 | 250 |
+| trim | 250 | 190 |
+
+$`\max\; 420 f + 250 b + 190 t`$ subject to $`600 f + 300 b + 250 t \le 1000`$ (budget), with
+$`f, b, t \in \{0, 1\}`$.
+
+```python
+m = gp.Model("three-projects", env=env)
+feeder = m.addVar(vtype=GRB.BINARY, name="feeder")        # cost 600, NPV 420
+breaker = m.addVar(vtype=GRB.BINARY, name="breaker")      # cost 300, NPV 250
+trim = m.addVar(vtype=GRB.BINARY, name="trim")            # cost 250, NPV 190
+m.addConstr(600 * feeder + 300 * breaker + 250 * trim <= 1000, name="budget")
+m.setObjective(420 * feeder + 250 * breaker + 190 * trim, GRB.MAXIMIZE)
+
+print("before update:", m.NumVars, "variables,", m.NumConstrs, "rows")
+m.update()
+print("after update: ", m.NumVars, "variables,", m.NumConstrs, "rows")
+
+m.optimize()
+print("status", m.Status, STATUS[m.Status], "| objective", m.ObjVal)
+for v in m.getVars():
+    print(f"  {v.VarName:8} {v.X:g}")
+```
+
+```text
+before update: 0 variables, 0 rows
+after update:  3 variables, 1 rows
+status 2 OPTIMAL | objective 670.0
+  feeder   1
+  breaker  1
+  trim     0
+```
+
+The four calls map one to one onto MathOpt's:
+
+| gurobipy | MathOpt (lesson 4.2.1) |
+| --- | --- |
+| `m.addVar(lb=0.0, ub=GRB.INFINITY, obj=0.0, vtype=GRB.CONTINUOUS, name="")` | `model.add_variable(lb=..., ub=..., is_integer=..., name=...)` |
+| `vtype=GRB.BINARY` (or `"B"`); `GRB.INTEGER` (`"I"`) | `add_binary_variable`, `add_integer_variable` |
+| `m.addConstr(expr <= rhs, name=...)` | `model.add_linear_constraint(expr <= rhs, name=...)` |
+| `m.setObjective(expr, GRB.MAXIMIZE)` | `model.maximize(expr)` |
+| `m.optimize()` | `mathopt.solve(model, solver_type)` |
+
+Three differences matter in practice:
+
+- **A variable's default lower bound is 0, not $`-\infty`$.** `addVar()` with no arguments is a
+  continuous variable in $`[0, \infty)`$. A free variable needs `lb=-GRB.INFINITY`.
+- **Changes are lazy.** gurobipy queues every addition and change and applies them at the next
+  `update()`, `optimize()` or `write()`. Before the update the model above still reported 0
+  variables and 0 rows, and a new variable's attributes cannot be read yet. Building a model and
+  solving it never needs an explicit `update()`, because `optimize()` applies the queue; you call it
+  only to read something back before solving.
+- **`optimize()` returns nothing.** The result is stored in the model, and you read it from there:
+  `m.Status`, `m.ObjVal`, each variable's `X`. There is no separate result object as in MathOpt.
+
+The plan is right: feeder and breaker cost 900 and earn 670; any plan with trim either leaves out
+feeder (at most 440) or breaks the budget.
+
+## GridCap's Selection Model Ports Row for Row
+
+`build_selection` in `grb.py` writes the model of the first section. Each row of the formulation is
+one call:
+
+```python
+m = gp.Model(f"{portfolio.name}-selection", env=env)
+vtype = GRB.BINARY if integer else GRB.CONTINUOUS
+x = m.addVars(portfolio.project_ids, lb=0.0, ub=1.0, vtype=vtype, name="x")
+for p in portfolio.projects:
+    if p.must_do:
+        m.addConstr(x[p.project_id] == 1, name=f"must_{p.project_id}")
+groups: dict[str, list[str]] = {}
+for p in portfolio.projects:
+    if p.alt_group:
+        groups.setdefault(p.alt_group, []).append(p.project_id)
+for g, members in groups.items():
+    m.addConstr(gp.quicksum(x[i] for i in members) <= 1, name=f"alt_{g}")
+for p in portfolio.projects:
+    if p.parent:
+        m.addConstr(x[p.project_id] <= x[p.parent], name=f"needs_{p.project_id}")
+budget = m.addConstrs(
+    (gp.quicksum(p.spend(p.earliest_start).get(y, 0) * x[p.project_id] for p in portfolio.projects)
+     <= portfolio.budget[y] for y in portfolio.years), name="budget")
+m.setObjective(gp.quicksum(p.value * x[p.project_id] for p in portfolio.projects), GRB.MAXIMIZE)
+```
+
+Three gurobipy tools appear here:
+
+- **`addVars(keys, ...)`** adds one variable per key and returns a **`tupledict`**, a dictionary from
+  key to variable with extra methods (the last section uses them). Its names are the prefix and the
+  key in brackets: `x[P001]`.
+- **`gp.quicksum(...)`** adds up terms into a linear expression (`LinExpr`), as Python's `sum`
+  does; it is gurobipy's own summation function, and the form gurobipy code usually uses.
+- **`addConstrs(generator, name=...)`** adds one row per item of a generator and returns a
+  `tupledict` of rows, keyed by the generator's index: `budget[2030]` is the 2030 row, named
+  `budget[2030]`.
+
+Then the solve, with one parameter set on the model:
+
+```python
+small = generate("small")
+sel = build_selection(env, small)
+sel.model.Params.MIPGap = 0.0                  # prove optimality exactly, as MathOpt's EXACT does
+sel.model.optimize()
+print("GridCap small:", STATUS[sel.model.Status], sel.model.ObjVal)
+print("funded:", [i for i, v in sel.x.items() if v.X > 0.5][:8], "...")
+```
+
+```text
+GridCap small: OPTIMAL 22532.0
+funded: ['P001', 'P003', 'P005', 'P008', 'P009', 'P010', 'P011', 'P015'] ...
+```
+
+22,532, the optimum HiGHS found through MathOpt in lesson 4.2.2, and the module's tests check that
+the two solvers fund the same projects. `MIPGap` is Gurobi's relative gap tolerance (lesson 3.4.1
+defines the gap); its default, $`10^{-4}`$, lets Gurobi stop at a plan within 0.01% of the bound, so
+the programs here set it to 0 whenever they compare an optimum. `m.Params.<Name> = value` sets a
+parameter on one model; `env.setParam` sets it for models created afterwards.
+
+## Everything You Read or Write Is an Attribute
+
+A gurobipy model reports everything through **attributes**: named values held by the model, by each
+variable or by each row. `m.NumVars` is a model attribute, `x["P001"].X` a variable attribute,
+`budget[2030].Slack` a row attribute. Some can be written (bounds, right-hand sides, objective
+coefficients, names); others are results, filled by `optimize()`. Here is GridCap small's model
+read through its attributes:
+
+```python
+try:
+    print(x["P001"].X)                         # no solve yet: no solution to read
+except AttributeError as error:
+    print("before optimize:", type(error).__name__, error)
+
+m.optimize()
+print("model     :", "NumVars", m.NumVars, "| NumConstrs", m.NumConstrs, "| NumBinVars", m.NumBinVars,
+      "| NumNZs", m.NumNZs)
+print("solution  :", STATUS[m.Status], "| ObjVal", m.ObjVal, "| ObjBound", m.ObjBound, "| MIPGap", m.MIPGap,
+      "| SolCount", m.SolCount)
+print("variable  :", x["P001"].VarName, "X", x["P001"].X, "LB", x["P001"].LB, "UB", x["P001"].UB,
+      "VType", x["P001"].VType, "Obj", x["P001"].Obj)
+row = budget[2030]
+print("row       :", row.ConstrName, "Sense", row.Sense, "RHS", row.RHS, "Slack", row.Slack)
+```
+
+```text
+before optimize: AttributeError Index out of range for attribute 'X'
+model     : NumVars 40 | NumConstrs 13 | NumBinVars 40 | NumNZs 69
+solution  : OPTIMAL | ObjVal 22532.0 | ObjBound 22532.0 | MIPGap 0.0 | SolCount 9
+variable  : x[P001] X 1.0 LB 0.0 UB 1.0 VType B Obj 1401.0
+row       : budget[2030] Sense < RHS 8610.0 Slack 70.0
+```
+
+- **Before a solve there is no `X`**, and reading it raises `AttributeError` with the message
+  "Index out of range for attribute 'X'": the attribute exists, but the model holds no solution to
+  index into.
+- **Model attributes** describe the model (`NumVars`, `NumConstrs`, `NumBinVars`, `NumNZs`, the
+  number of nonzero coefficients) and the solve (`Status`, `ObjVal`, `ObjBound` the best bound,
+  `MIPGap` the gap reached, `SolCount` the number of plans Gurobi kept).
+- **A variable's attributes** are its data (`LB`, `UB`, `VType`, `Obj` its objective coefficient,
+  `VarName`) and its value (`X`). **A row's** are `ConstrName`, `Sense` (`<`, `>` or `=`), `RHS`,
+  and `Slack`, the right-hand side minus the row's value: 2030's budget has $70k left.
+
+`Status` is a number. Gurobi's documentation lists every optimization status code; `grb.py` builds a
+name table from the constants gurobipy defines (`GRB.Status.OPTIMAL` is 2), and the programs print
+the name:
+
+```python
+STATUS = {getattr(GRB.Status, n): n for n in dir(GRB.Status) if n.isupper()}   # 2 -> "OPTIMAL", ...
+```
+
+The codes a program has to handle after a MIP solve:
+
+| Code | Name | A plan to read? | What the caller does |
+| --- | --- | --- | --- |
+| 2 | `OPTIMAL` | yes | use it |
+| 3 | `INFEASIBLE` | no | report a data or rule conflict (lesson 5.3.3) |
+| 4 | `INF_OR_UNBD` | no | infeasible or unbounded, not yet told apart; the status-code page says to re-solve with the `DualReductions` parameter at 0 to decide |
+| 5 | `UNBOUNDED` | no | report a modeling error, a missing bound |
+| 7–10, 16, 17 | `ITERATION_LIMIT`, `NODE_LIMIT`, `TIME_LIMIT`, `SOLUTION_LIMIT`, `WORK_LIMIT`, `MEM_LIMIT` | only if `SolCount > 0` | use the plan and report the gap, or report the limit |
+| 11 | `INTERRUPTED` | only if `SolCount > 0` | as for a limit |
+| 12 | `NUMERIC` | no | report a solver failure |
+
+A limit status says *why* the solve stopped, not whether a plan exists; `SolCount` says that. This
+is MathOpt's split between `termination.reason` and `has_primal_feasible_solution()` (lesson 4.2.2),
+spread over two attributes.
+
+<!-- practice 1 -->
+
+`getAttr` reads one attribute of many objects at once, in the shape it is given, and attributes are
+written by assignment:
+
+```python
+print("X of a list:", [v + 0.0 for v in m.getAttr("X", [x["P001"], x["P002"], x["P003"]])])   # + 0.0: -0.0 -> 0.0
+slack = m.getAttr("Slack", budget)                  # a tupledict in, a dict-like out
+print("Slack by year:", {y: round(s) for y, s in slack.items()})
+
+# Writing attributes changes the model: force P001 out, give 2030 another $1,000k, re-optimize.
+x["P001"].UB = 0
+budget[2030].RHS += 1000
+m.optimize()
+print("after edits:", STATUS[m.Status], m.ObjVal, "| P001", x["P001"].X, "| RHS 2030", budget[2030].RHS)
+
+try:
+    print(budget[2030].Pi)
+except (AttributeError, gp.GurobiError) as error:
+    print("a MIP row has no Pi:", type(error).__name__, error)
+```
+
+```text
+X of a list: [1.0, 0.0, 1.0]
+Slack by year: {2027: 720, 2028: 40, 2029: 700, 2030: 70, 2031: 1870}
+after edits: OPTIMAL 22613.0 | P001 0.0 | RHS 2030 9610.0
+a MIP row has no Pi: AttributeError Unable to retrieve attribute 'Pi'
+```
+
+The `+ 0.0` turns a solver's `-0.0` into `0.0` for printing. Setting `UB = 0` forces P001 out of the
+plan; raising the 2030 right-hand side gives that year $1,000k more. Both edits are queued like any
+other change, and the next `optimize()` applies them and re-solves the same model: the new plan,
+without P001 but with the larger 2030 budget, is worth 22,613. This is incremental solving, as in
+lesson 4.3.4: one model, edited and re-solved, with no rebuild.
+
+The last line is a preview of lesson 5.3.2: `Pi`, a row's dual value, exists only after an LP solve.
+On a MIP, Gurobi has no value to give and the read fails.
+
+## The Matrix API Takes the Model as Arrays
+
+The model so far was written row by row, the way the formulation reads. The same model is also a
+matrix: one column per variable, one row per constraint. In the matrix form of lesson 2.1.2, it is
+
+```math
+\max\; c^\top x \quad \text{subject to} \quad A_{\text{budget}}\, x \le B,\;\; A_{\text{alt}}\, x \le \mathbf{1},\;\; A_{\text{needs}}\, x \le \mathbf{0},\;\; \ell \le x \le \mathbf{1},\;\; x \in \{0,1\}^{n}
+```
+
+where $`(A_{\text{budget}})_{y,i} = c_{i,y}`$, each row of $`A_{\text{alt}}`$ has a 1 for every
+member of one group, each row of $`A_{\text{needs}}`$ has $`+1`$ for a child and $`-1`$ for its
+parent ($`x_c - x_{p(c)} \le 0`$), and $`\ell_i = 1`$ for a must-do project, 0 otherwise. The must-do
+rows have become lower bounds: $`x_i = 1`$ for a binary is the same as $`1 \le x_i \le 1`$.
+
+gurobipy's **matrix API** takes exactly this. `addMVar(n, ...)` adds a vector of $`n`$ variables
+(an `MVar`, which behaves like a NumPy array), and `addMConstr(A, x, sense, b)` adds the rows
+$`A x \;\text{sense}\; b`$ for a NumPy array or SciPy sparse matrix $`A`$. The data are built as
+arrays first, here as SciPy sparse matrices, which store only the nonzeros:
+
+```python
+c = np.array([p.value for p in small.projects], dtype=float)
+spend = sp.lil_matrix((len(small.years), n))
+for p in small.projects:
+    for y, amount in p.spend(p.earliest_start).items():
+        if y in small.years:
+            spend[small.years.index(y), col[p.project_id]] = amount
+B = np.array([small.budget[y] for y in small.years], dtype=float)
+```
+
+```python
+lb = np.array([1.0 if p.must_do else 0.0 for p in small.projects])   # must-do: x_i = 1 as a bound
+
+m = gp.Model("small-matrix", env=env)
+xv = m.addMVar(n, lb=lb, ub=1.0, vtype=GRB.BINARY, name="x")
+m.addMConstr(spend.tocsr(), xv, "<", B, name="budget")
+m.addMConstr(alt.tocsr(), xv, "<", np.ones(len(groups)), name="alt")
+m.addMConstr(needs.tocsr(), xv, "<", np.zeros(len(children)), name="needs")
+m.setObjective(c @ xv, GRB.MAXIMIZE)
+m.Params.MIPGap = 0.0
+m.optimize()
+print("matrix model :", STATUS[m.Status], m.ObjVal, "|", m.NumVars, "variables,", m.NumConstrs, "rows")
+print("x as an array:", xv.X[:10].round().astype(int), "...")
+```
+
+```text
+matrix model : OPTIMAL 22532.0 | 40 variables, 9 rows
+x as an array: [1 0 1 0 1 0 0 1 1 1] ...
+```
+
+The same optimum, 22,532, with 9 rows instead of 13: the 4 must-do rows are now bounds. `c @ xv` is
+the objective $`c^\top x`$, written with NumPy's matrix product, and `xv.X` reads the whole plan as a
+NumPy array. Building rows from arrays skips writing one Python expression per row; lesson 11.1.2
+measures what that saves when a model is built from data that are already in arrays.
+
+The other direction is `getA()`: any model, however it was built, hands back its constraint matrix
+as a SciPy sparse matrix, one row per constraint and one column per variable, in the order the model
+holds them (each row's position is its `index` attribute):
+
+```python
+A = sel.model.getA()
+print("row by row   :", STATUS[sel.model.Status], sel.model.ObjVal, "|", sel.model.NumVars, "variables,",
+      sel.model.NumConstrs, "rows")
+print("getA():", type(A).__name__, A.shape, "nonzeros", A.nnz)
+print("budget rows of getA() equal the spend matrix:",
+      bool((A[[sel.budget[y].index for y in small.years], :] != spend.tocsr()).nnz == 0))
+```
+
+```text
+row by row   : OPTIMAL 22532.0 | 40 variables, 13 rows
+getA(): csr_matrix (13, 40) nonzeros 69
+budget rows of getA() equal the spend matrix: True
+```
+
+The row-by-row model's budget rows are exactly the spend matrix built for the matrix model. `getA()`
+is how to check a builder: build the model two ways and compare matrices, or read the matrix to
+count nonzeros, find empty rows, or look at the range of coefficients (lesson 10.1.2).
+
+<!-- practice 2 -->
+
+## tupledict Wildcards Write Sums Over Indices
+
+The timing model of lesson 6.4.1 has two indices, project and start year, and its rows sum over one
+of them. Lesson 6.4.1 is in section 6, which the course reaches later; section 4 used the same
+model from lesson 4.3.1 on. You do not need lesson 6.4.1 here: the model is restated in full below,
+and when this section compares Gurobi's answer with "the optimum lesson 6.4.1 found", it means the
+first lines that lesson recorded from its MathOpt model, solved with HiGHS on GridCap small:
+
+<!-- unverified -->
+```text
+OPTIMAL NPV $24,260k
+started 27 of 40; 9 later than their earliest year
+```
+
+In full:
+
+**Sets.** $`P`$, $`Y`$, $`M`$, $`\mathcal{G}`$, $`C`$ as above; $`T_i \subseteq Y`$, the start years
+allowed for project $`i`$; $`L_c`$, child $`c`$'s lag after its parent.
+
+**Parameters.** $`\text{npv}_{i,t}`$, project $`i`$'s NPV if it starts in year $`t`$ ($k);
+$`c_{i,k}`$, its spend in its $`k`$-th year of work ($k); $`B_y`$ ($k).
+
+**Variables.** $`x_{i,t} \in \{0, 1\}`$ for $`i \in P`$, $`t \in T_i`$: 1 if project $`i`$ starts in
+year $`t`$.
+
+**Objective.** $`\max \sum_{i \in P} \sum_{t \in T_i} \text{npv}_{i,t}\, x_{i,t}`$.
+
+**Constraints**, with $`\text{spend}_y = \sum_{i \in P} \sum_{t \in T_i,\, t \le y} c_{i,\,y-t}\, x_{i,t}`$:
+
+```math
+\begin{aligned}
+\sum_{t \in T_i} x_{i,t} &\le 1 && \forall i \in P \setminus M && \text{(once}_i) \\
+\sum_{t \in T_i} x_{i,t} &= 1 && \forall i \in M && \text{(must}_i) \\
+\sum_{i \in g} \sum_{t \in T_i} x_{i,t} &\le 1 && \forall g \in \mathcal{G} && \text{(alt}_g) \\
+\sum_{u \in T_c,\, u \le t} x_{c,u} &\le \sum_{s \in T_{p(c)},\, s \le t - L_c} x_{p(c),s} && \forall c \in C,\ t \in T_c && \text{(after}_{c,t}) \\
+\text{spend}_y &\le B_y && \forall y \in Y && \text{(budget}_y)
+\end{aligned}
+```
+
+`build_plan` in `grb.py` keys the variables by `(project, year)` pairs, and the row "project $`i`$
+starts at most once" uses the `tupledict`'s **wildcard sum**: `x.sum("P017", "*")` adds every
+variable whose first key is P017, whatever its year.
+
+```python
+keys = [(p.project_id, t) for p in portfolio.projects for t in p.starts()]
+x = m.addVars(keys, vtype=GRB.BINARY, name="x")
+pl = Plan(m, x)
+by_id = {p.project_id: p for p in portfolio.projects}
+for p in portfolio.projects:
+    started = x.sum(p.project_id, "*")                 # every start year of project p
+    if p.must_do:
+        pl.once[p.project_id] = m.addConstr(started == 1, name=f"must_{p.project_id}")
+    else:
+        pl.once[p.project_id] = m.addConstr(started <= 1, name=f"once_{p.project_id}")
+```
+
+```python
+m.update()                                   # names and counts are readable after an update
+print("x has", len(x), "variables, one per project and allowed start year")
+print("x.select('P017', '*') =", [v.VarName for v in x.select("P017", "*")])
+print("x.sum('P017', '*')    =", x.sum("P017", "*"))
+print("rows:", m.NumConstrs, "| e.g.", [c.ConstrName for c in m.getConstrs()][:3], "...")
+```
+
+```text
+x has 80 variables, one per project and allowed start year
+x.select('P017', '*') = ['x[P017,2030]', 'x[P017,2031]']
+x.sum('P017', '*')    = x[P017,2030] + x[P017,2031]
+rows: 49 | e.g. ['once_P001', 'once_P002', 'must_P003'] ...
+```
+
+`select` returns the matching variables as a list, `sum` their sum; `"*"` matches any value in that
+position, and a fixed value matches only itself. P017 may start in 2030 or 2031, so it has two
+variables, and the sum is exactly $`\sum_{t \in T_{\text{P017}}} x_{\text{P017},t}`$. The spend
+expressions are built term by term with `LinExpr.add(var, coefficient)`, and the budget rows from
+them, as in the formulation:
+
+```python
+pl.spend = {y: gp.LinExpr() for y in portfolio.years}
+for p in portfolio.projects:
+    for t in p.starts():
+        for year, amount in p.spend(t).items():
+            if year in pl.spend:
+                pl.spend[year].add(x[p.project_id, t], amount)
+pl.budget = {y: m.addConstr(pl.spend[y] <= portfolio.budget[y], name=f"budget_{y}") for y in portfolio.years}
+```
+
+Solved:
+
+```python
+m.optimize()
+plan = chosen(pl)
+print("status", STATUS[m.Status], "| NPV", m.ObjVal, "| projects started", len(plan))
+print("spend by year:", {y: round(e.getValue()) for y, e in pl.spend.items()})
+```
+
+```text
+status OPTIMAL | NPV 24260.0 | projects started 27
+spend by year: {2027: 8750, 2028: 7970, 2029: 8630, 2030: 8560, 2031: 7720}
+```
+
+24,260 with 27 projects, the optimum lesson 6.4.1 found for this model in MathOpt (lesson 4.3.1
+printed the same 24,260 for it before adding its reserve rule). The tests solve section 4's MathOpt
+copy of the model next to this port and check that both have 80 variables and 49 rows and the same
+optimum. `getValue()` evaluates a linear
+expression at the current solution, which is how a program reads a quantity the model never made a
+variable, such as a year's spend. Lessons 5.3.2 to 5.3.4 build on these two ports.
+
+## Summary
+
+- **An environment holds the license, and a quiet one prints nothing.** `gp.Env(empty=True)`,
+  `setParam("OutputFlag", 0)`, `start()`: no banner, no log, and a `GurobiError` at `start()` if
+  there is no license.
+- **A model is variables, constraints and an objective, added lazily.** `addVar`, `addConstr`,
+  `setObjective`, `optimize`; changes apply at the next `update()` or `optimize()`; variables default
+  to $`[0, \infty)`$.
+- **GridCap's selection model ports row for row**, with `addVars`, `quicksum` and `addConstrs`, and
+  Gurobi finds MathOpt's optimum, 22,532.
+- **Everything you read or write is an attribute.** `m.Status`, `m.ObjVal`, `v.X`, `c.Slack`;
+  `getAttr` for many at once; assignment (`v.UB = 0`, `c.RHS += 1000`) edits the model for the next
+  solve. A limit status needs `SolCount` to say whether there is a plan.
+- **The matrix API takes the model as arrays.** `addMVar` and `addMConstr(A, x, sense, b)`; `getA()`
+  reads any model's matrix back.
+- **tupledict wildcards write sums over indices.** `x.sum("P017", "*")` and `x.select(...)`; the
+  timing model's optimum is 24,260, as in MathOpt.
+
+## Reference
+
+| Task | gurobipy |
+| --- | --- |
+| a quiet environment | `env = gp.Env(empty=True); env.setParam("OutputFlag", 0); env.start()` |
+| a model | `m = gp.Model("name", env=env)` |
+| variables | `m.addVar(lb=0.0, ub=GRB.INFINITY, obj=0.0, vtype=GRB.CONTINUOUS, name="")`; `m.addVars(keys, ...)` |
+| a row; many rows | `m.addConstr(expr <= rhs, name=...)`; `m.addConstrs((... for k in K), name="row")` |
+| objective | `m.setObjective(expr, GRB.MAXIMIZE)` |
+| solve; status | `m.optimize()`; `m.Status`, `m.SolCount` |
+| values | `m.ObjVal`, `v.X`, `m.getAttr("X", vars)`, `expr.getValue()` |
+| edit | `v.LB`, `v.UB`, `v.Obj`, `c.RHS` by assignment; then `optimize()` |
+| parameters | `m.Params.MIPGap = 0.0`; `env.setParam("OutputFlag", 0)` |
+| matrices | `m.addMVar(n, lb, ub, vtype)`; `m.addMConstr(A, x, "<", b)`; `m.getA()` |
+| sums over keys | `x.sum("P017", "*")`, `x.select("P017", "*")`, `gp.quicksum(...)` |
+
+| Attribute | Of | Meaning |
+| --- | --- | --- |
+| `NumVars`, `NumConstrs`, `NumBinVars`, `NumNZs` | model | size |
+| `Status`, `SolCount`, `ObjVal`, `ObjBound`, `MIPGap` | model | the solve's outcome |
+| `X`, `LB`, `UB`, `Obj`, `VType`, `VarName` | variable | value and data |
+| `Slack`, `RHS`, `Sense`, `ConstrName` | linear row | slack and data |
+
+| Term | Meaning |
+| --- | --- |
+| environment | the object that holds the license and the parameters; every model lives in one |
+| lazy update | changes are queued and applied at `update()`, `optimize()` or `write()` |
+| attribute | a named value of the model, a variable or a row: data you set or results you read |
+| `tupledict` | a dict of variables or rows keyed by tuples, with wildcard `sum` and `select` |
+| matrix API | `addMVar` and `addMConstr`: the model given as arrays |
+
+**Further reading.** Gurobi,
+[Python API: Model](https://docs.gurobi.com/projects/optimizer/en/current/reference/python/model.html)
+(`addVar`, `addVars`, `addConstr`, `addConstrs`, `addMVar`, `addMConstr`, `getA`, `getAttr`),
+[Python API: Env](https://docs.gurobi.com/projects/optimizer/en/current/reference/python/env.html)
+(empty environments, `start`, `setParam`),
+[Attribute examples](https://docs.gurobi.com/projects/optimizer/en/current/concepts/attributes/examples.html)
+(reading and writing attributes, lazy updates),
+[Variable attributes](https://docs.gurobi.com/projects/optimizer/en/current/reference/attributes/variable.html),
+[Linear constraint attributes](https://docs.gurobi.com/projects/optimizer/en/current/reference/attributes/constraintlinear.html)
+and
+[Optimization status codes](https://docs.gurobi.com/projects/optimizer/en/current/reference/numericcodes/statuscodes.html).
+The documentation pages are for the current Gurobi release; the runner has gurobipy 13.0.3, and
+every behaviour shown here was run on it. OR-Tools'
+[`advanced_linear_programming.py`](https://github.com/google/or-tools/blob/stable/ortools/math_opt/samples/python/advanced_linear_programming.py)
+is the MathOpt sample lesson 5.3.2 ports.
+
+## Challenges
+
+1. Build the three-project model with `addVars` and one `addConstr`, and check it finds the same plan.
+2. Add the yearly budget of the timing model with `addConstrs` instead of a dictionary comprehension.
+   What names do the rows get, and which line of `iis.py` (lesson 5.3.3) would then need to change?
+3. Use `getA()` on the timing model and count the rows with a single nonzero. Which rows are they?
+
+## Design Note: One Builder per Model, Whatever the API
+
+The selection model now exists three times in the course: in MathOpt (`selection.py`, lesson 4.2.1),
+in gurobipy row by row (`build_selection`), and in gurobipy as matrices (`matrix_api.py`). Each
+is written once, as a function from a portfolio to a model, and a test solves them side by side.
+When a partner's code and GridCap's disagree, that test is where the search starts: if the matrices
+from `getA()` are equal, the difference is in the solve, not the model.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson
+shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy
+of the code, so the course's own files never change. Every program needs a Gurobi license in the
+runner (lesson 5.3.4); without one it stops at `quiet_env()` with error 10009.
+
+**first_model.py.** The three-project model with its lazy update, then GridCap small's selection
+model (*A Model Is Variables, Constraints and an Objective*, *GridCap's Selection Model Ports Row for
+Row*). *Try:* Raise the budget to 1,150 and predict the plan before running.
+
+- Program: [first_model.py](src/first_model.py)
+
+**attributes.py.** The selection model read through its attributes, then edited and re-solved
+(*Everything You Read or Write Is an Attribute*). *Try:* Set `x["P001"].LB = 1` instead of the upper
+bound, and predict whether the NPV goes up or down.
+
+- Program: [attributes.py](src/attributes.py)
+
+**matrix_api.py.** The selection model built from arrays with `addMVar` and `addMConstr`, and the
+row-by-row model's `getA()` (*The Matrix API Takes the Model as Arrays*). *Try:* Write the must-do
+rule as a fourth `addMConstr` instead of bounds and predict the row count.
+
+- Program: [matrix_api.py](src/matrix_api.py)
+
+**timing_port.py.** The timing model of lesson 6.4.1 in gurobipy (*tupledict Wildcards Write Sums
+Over Indices*). *Try:* Print `x.select("*", 2027)` and predict how many projects could start in 2027.
+
+- Program: [timing_port.py](src/timing_port.py)
+
+**grb.py.** The quiet environment, the masking function, the status names and both GridCap models,
+imported by every program of the module. The masking function, `mask`, hides the user, host and
+license details a Gurobi message can carry; lesson 5.3.4 explains it.
+
+- Library: [grb.py](src/grb.py)

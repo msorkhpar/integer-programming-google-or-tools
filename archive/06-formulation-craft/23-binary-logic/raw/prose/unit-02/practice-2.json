@@ -1,0 +1,158 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "23-binary-logic"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Permits and bundle discounts",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A rural telecom carrier is choosing which tower and backhaul upgrades to build this year. Two contract terms change what a plan really costs:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Permits.** Some upgrades need a permit, for example to cross the river. Each permit in `permits` maps a name to `(fee, projects)`: the fee is paid **once** if *any* of its projects is funded, however many of them are, and not at all if none is.",
+        "**Bundle discounts.** Each `(tower, backhaul, discount)` in `bundles` takes `discount` ($k) off the plan's spend when *both* the tower and its backhaul link are funded."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The plan's spend (project costs, plus permit fees, minus bundle discounts) must not exceed `budget`. The model in `towers.py` has a binary `x[pid]` for each upgrade (1 if funded) and no budget row yet. Write `add_fee_rules(model, x, projects, permits, bundles, budget)` so that the model allows exactly the plans whose real spend fits the budget. Add whatever variables you need."
+    },
+    {
+      "type": "para",
+      "text": "With $`P`$ the upgrades and $`c_p`$ the cost of upgrade $`p`$ ($k), the model so far is only"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "x_p \\in \\{0, 1\\} \\quad \\forall p \\in P \\qquad \\text{(build upgrade } p\\text{)}"
+    },
+    {
+      "type": "para",
+      "text": "Write the rest first: each new variable with its domain, the rows that tie it to the $`x_p`$, and the budget row, each labelled. For each new variable, decide which way the solver would like to move it, and make sure your rows stop it."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix which upgrades are built and ask the solver whether the model accepts the plan, so any correct formulation passes. About twelve lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Upgrade:\n    pid: str\n    cost: int        # $k\n\n\ndef add_fee_rules(model: mathopt.Model, x: dict, projects: list[Upgrade],\n                  permits: dict[str, tuple[int, list[str]]], bundles: list[tuple[str, str, int]],\n                  budget: int) -> None:\n    \"\"\"Costs plus each needed permit's fee, once, minus each complete bundle's discount, within budget.\"\"\"\n    charged = []\n    for name, (fee, members) in permits.items():\n        paid = model.add_binary_variable(name=f\"permit_{name}\")\n        for i in members:\n            model.add_linear_constraint(paid >= x[i], name=f\"permit_{name}_{i}\")\n        charged.append(fee * paid)\n    for tower, backhaul, discount in bundles:\n        both = model.add_binary_variable(name=f\"bundle_{tower}_{backhaul}\")\n        model.add_linear_constraint(both <= x[tower], name=f\"bundle_{tower}_{backhaul}_t\")\n        model.add_linear_constraint(both <= x[backhaul], name=f\"bundle_{tower}_{backhaul}_b\")\n        charged.append(-discount * both)\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in projects) + sum(charged) <= budget,\n                                name=\"budget\")\n\n\ndef build(projects: list[Upgrade], permits: dict[str, tuple[int, list[str]]],\n          bundles: list[tuple[str, str, int]], budget: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"tower-upgrades\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    add_fee_rules(model, x, projects, permits, bundles, budget)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    upgrades = [Upgrade(\"T1\", 100), Upgrade(\"B1\", 60), Upgrade(\"C1\", 50)]\n    model, x = build(upgrades, {\"river\": (25, [\"C1\"])}, [(\"T1\", \"B1\", 40)], 200)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Upgrade:\n    pid: str\n    cost: int        # $k\n\n\ndef add_fee_rules(model: mathopt.Model, x: dict, projects: list[Upgrade],\n                  permits: dict[str, tuple[int, list[str]]], bundles: list[tuple[str, str, int]],\n                  budget: int) -> None:\n    \"\"\"Costs plus each needed permit's fee, once, minus each complete bundle's discount, within budget.\"\"\"\n    # TODO: a variable per permit and per bundle, their rows, and the budget row.\n    return None\n\n\ndef build(projects: list[Upgrade], permits: dict[str, tuple[int, list[str]]],\n          bundles: list[tuple[str, str, int]], budget: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"tower-upgrades\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    add_fee_rules(model, x, projects, permits, bundles, budget)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    upgrades = [Upgrade(\"T1\", 100), Upgrade(\"B1\", 60), Upgrade(\"C1\", 50)]\n    model, x = build(upgrades, {\"river\": (25, [\"C1\"])}, [(\"T1\", \"B1\", 40)], 200)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "5edc8cf76ac80a3f42288c15e1f54494ea872aaabcf9a843c7b1ee1a0e8ff24f",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Upgrade:\n    pid: str\n    cost: int        # $k\n\n\ndef add_fee_rules(model: mathopt.Model, x: dict, projects: list[Upgrade],\n                  permits: dict[str, tuple[int, list[str]]], bundles: list[tuple[str, str, int]],\n                  budget: int) -> None:\n    \"\"\"Costs plus each needed permit's fee, once, minus each complete bundle's discount, within budget.\"\"\"\n    # TODO: a variable per permit and per bundle, their rows, and the budget row.\n    return None\n\n\ndef build(projects: list[Upgrade], permits: dict[str, tuple[int, list[str]]],\n          bundles: list[tuple[str, str, int]], budget: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"tower-upgrades\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    add_fee_rules(model, x, projects, permits, bundles, budget)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    upgrades = [Upgrade(\"T1\", 100), Upgrade(\"B1\", 60), Upgrade(\"C1\", 50)]\n    model, x = build(upgrades, {\"river\": (25, [\"C1\"])}, [(\"T1\", \"B1\", 40)], 200)\n    print(len(list(model.linear_constraints())), \"rows\")\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-2/towers.py",
+    "test_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-2/test_towers.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-2/towers.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-2/target/report.xml",
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-2/test_towers.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_permit_fee_is_charged_when_a_project_needs_it",
+        "kind": "main",
+        "says": "a plan that fits the budget with its permit fee is allowed, and one whose costs fit but whose fee does not is refused"
+      },
+      {
+        "id": "test_a_bundle_discount_is_applied_when_both_members_are_funded",
+        "kind": "main",
+        "says": "a bundle that fits the budget only after its discount is allowed, and a plan over budget even after it is refused"
+      },
+      {
+        "id": "test_a_permit_is_paid_once_however_many_projects_use_it",
+        "kind": "edge",
+        "says": "two projects under one permit pay its fee once"
+      },
+      {
+        "id": "test_a_plan_needing_no_permit_pays_no_fee",
+        "kind": "edge",
+        "says": "a plan with no project under a permit pays no permit fee"
+      },
+      {
+        "id": "test_one_member_of_a_bundle_gets_no_discount",
+        "kind": "edge",
+        "says": "a plan with only one member of a bundle gets no discount"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "23-binary-logic/README_6.1.2.md",
+      "section": "Pin Only the Side the Model Would Exploit, or Both When Unsure"
+    },
+    "concepts": [
+      "a conjunction or disjunction used as a value is a new binary with rows bounding it from above and below",
+      "the direction the solver wants to move a logic variable decides which of its rows are essential"
+    ]
+  }
+}

@@ -1,0 +1,136 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "11-performance-at-scale",
+    "44-decomposition-and-heuristics"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Tell the master what the crane month can hold",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The crane of the previous practice is booked by a planning master that chooses which lifts to do this month, $`x_l \\in \\{0,1\\}`$; a scheduling check then tests each chosen month. Every refused month costs one more master solve. The planners want the master to refuse, by itself, the months that are obviously too full, with linear rows in $`x`$ that never refuse a month the crane could really do."
+    },
+    {
+      "type": "para",
+      "text": "Lift $`l`$ needs $`p_l`$ crane days, may begin on day $`r_l`$ and must end by day $`d_l`$ (one crane, one lift at a time). Days are counted as in the lesson's half-open windows $`[r, e)`$: the lift may use the days $`r_l, r_l + 1, \\dots, d_l - 1`$, so its window holds $`d_l - r_l`$ crane days, and a stretch $`[a, b)`$ holds $`b - a`$. Write the rows first: which stretches $`[a, b)`$ get a row, which lifts each row counts, and the row itself with a label and quantifier. A stretch runs from some lift's release $`a`$ to some lift's deadline $`b > a`$, and it gets a row only when at least one lift's whole window lies inside it; a stretch with no such lift gets none. Then write `add_energy_rows(model, x, lifts)` to add them and return them in a dict keyed by `(a, b)`. `lifts[name]` is `(days, release, deadline)`; `x[name]` is the master's variable."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix a month's lifts and ask the solver whether the master allows it, so any correct formulation passes. About six lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_energy_rows(model: mathopt.Model, x: dict, lifts: dict[str, tuple[int, int, int]]) -> dict:\n    \"\"\"For every stretch [a, b] from a release to a deadline: lifts that must happen inside it fit in it.\"\"\"\n    rows = {}\n    for a in sorted({r for _, r, _ in lifts.values()}):\n        for b in sorted({d for _, _, d in lifts.values()}):\n            inside = [n for n, (_, r, d) in lifts.items() if a <= r and d <= b]\n            if b > a and inside:\n                rows[a, b] = model.add_linear_constraint(\n                    sum(lifts[n][0] * x[n] for n in inside) <= b - a, name=f\"energy_{a}_{b}\")\n    return rows\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    lifts = {\"breaker A\": (6, 0, 8), \"breaker B\": (5, 2, 9)}\n    x = {n: model.add_binary_variable(name=n) for n in lifts}\n    print(sorted(add_energy_rows(model, x, lifts)))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_energy_rows(model: mathopt.Model, x: dict, lifts: dict[str, tuple[int, int, int]]) -> dict:\n    \"\"\"For every stretch [a, b] from a release to a deadline: lifts that must happen inside it fit in it.\"\"\"\n    # TODO: write the rows first, then add them. Return them by (a, b).\n    return {}\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    lifts = {\"breaker A\": (6, 0, 8), \"breaker B\": (5, 2, 9)}\n    x = {n: model.add_binary_variable(name=n) for n in lifts}\n    print(sorted(add_energy_rows(model, x, lifts)))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "f332f42a3ee3644a707f8a768df6adcf117c2de6fff566448e10afa2f48e578b",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_energy_rows(model: mathopt.Model, x: dict, lifts: dict[str, tuple[int, int, int]]) -> dict:\n    \"\"\"For every stretch [a, b] from a release to a deadline: lifts that must happen inside it fit in it.\"\"\"\n    # TODO: write the rows first, then add them. Return them by (a, b).\n    return {}\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    lifts = {\"breaker A\": (6, 0, 8), \"breaker B\": (5, 2, 9)}\n    x = {n: model.add_binary_variable(name=n) for n in lifts}\n    print(sorted(add_energy_rows(model, x, lifts)))\n",
+  "exercise": {
+    "main_path": "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-03/practice-2/energy.py",
+    "test_path": "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-03/practice-2/test_energy.py",
+    "run_command": [
+      "python3",
+      "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-03/practice-2/energy.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-03/practice-2/target/report.xml",
+      "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-03/practice-2/test_energy.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_light_month_is_allowed_and_an_overfull_month_refused",
+        "kind": "main",
+        "says": "a month whose lifts fit is allowed, and one with more crane days than the month has is refused"
+      },
+      {
+        "id": "test_lifts_crowded_into_a_short_window_are_refused",
+        "kind": "edge",
+        "says": "lifts whose windows all lie inside a short stretch of days cannot need more days than that stretch has"
+      },
+      {
+        "id": "test_lifts_that_only_overlap_a_window_are_not_counted_in_it",
+        "kind": "edge",
+        "says": "a lift whose window reaches outside a stretch can be done outside it, so the stretch's row does not count it"
+      },
+      {
+        "id": "test_a_stretch_from_day_a_to_day_b_holds_b_minus_a_days",
+        "kind": "edge",
+        "says": "a stretch from day a up to day b holds b - a crane days, not one more"
+      },
+      {
+        "id": "test_a_stretch_with_no_lift_inside_gets_no_row",
+        "kind": "edge",
+        "says": "only stretches with a lift's whole window inside them get a row"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-03/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "44-decomposition-and-heuristics/README_11.3.3.md",
+      "section": "A Relaxation of the Subproblem in the Master Saves Iterations"
+    },
+    "concepts": [
+      "rows in the master's variables that every schedulable set satisfies, one per stretch from a release to a deadline"
+    ]
+  }
+}

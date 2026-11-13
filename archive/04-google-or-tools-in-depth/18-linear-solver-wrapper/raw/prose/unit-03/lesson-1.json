@@ -1,0 +1,585 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "18-linear-solver-wrapper"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Graph and flow solvers: `SimpleMaxFlow` and `SimpleMinCostFlow`",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "4.7.3 Graph and Flow Solvers: SimpleMaxFlow and SimpleMinCostFlow"
+    },
+    {
+      "type": "para",
+      "text": "Lesson 2.1.3 shipped GridCap's spare transformers from two depots, through a hub or direct, to four regions, as an LP: one flow variable per route, one balance row per place. Two questions from stores come back to the same network. Before winter: *how many spares can the network deliver at most, and which routes are the bottleneck?* And every week: *ship this week's spares at the least cost.* Neither question needs an LP solver. OR-Tools has a graph library with solvers built for exactly these two problems, the **maximum flow** and the **minimum-cost flow**, that work on whole numbers and take the network itself as input, not a model."
+    },
+    {
+      "type": "para",
+      "text": "This lesson teaches the two solvers the way the OR-Tools pages \"Maximum Flows\" and \"Minimum Cost Flows\" do, on their own examples, and then puts lesson 2.1.3's network through them. The answer must match the LP's $299k. GridCap, its depots and its network are fictional. Four rules, one per heading."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "SimpleMaxFlow Finds the Most a Network Can Carry From a Source to a Sink"
+    },
+    {
+      "type": "para",
+      "text": "A **network** (lesson 2.1.3) is a set of **nodes** joined by **arcs**: one-way links, each with a **capacity**, the most it can carry. The **maximum flow problem** picks two nodes, a **source** $`s`$ and a **sink** $`t`$, and asks for the largest amount that can travel from $`s`$ to $`t`$. Every arc must stay within its capacity, and every other node must pass on exactly what it receives. As an LP, with $`f_a`$ the flow on arc $`a`$ and $`v`$ the amount delivered:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max\\;& v \\\\\n\\text{s.t. }& \\sum_{a \\text{ out of } n} f_a - \\sum_{a \\text{ into } n} f_a =\n  \\begin{cases} v & n = s \\\\ -v & n = t \\\\ 0 & \\text{otherwise} \\end{cases} && \\forall n && \\text{(balance}_n) \\\\\n& 0 \\le f_a \\le u_a && \\forall a\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "`SimpleMaxFlow` solves it without your writing any of these rows. You give it the arcs, and it returns the flows. The OR-Tools example, from Taha's textbook (adapted from `simple_max_flow_program.py`):"
+    },
+    {
+      "type": "example",
+      "id": "max_flow_example-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "18-linear-solver-wrapper/src/max_flow_example.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "18-linear-solver-wrapper/src/max_flow_example.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "smf = max_flow.SimpleMaxFlow()\nstart_nodes = np.array([0, 0, 0, 1, 1, 2, 2, 3, 3])\nend_nodes = np.array([1, 2, 3, 2, 4, 3, 4, 2, 4])\ncapacities = np.array([20, 30, 10, 40, 30, 10, 20, 5, 20])\nall_arcs = smf.add_arcs_with_capacity(start_nodes, end_nodes, capacities)   # arc indices 0..8\n\nstatus = smf.solve(0, 4)                  # source 0, sink 4\nif status != smf.OPTIMAL:\n    raise SystemExit(f\"max flow failed: {status}\")\nprint(\"max flow:\", smf.optimal_flow())\nfor arc, flow, capacity in zip(all_arcs, smf.flows(all_arcs), capacities):\n    print(f\"  {smf.tail(arc)} -> {smf.head(arc)}  {flow:3} / {capacity:3}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "max flow: 60\n  0 -> 1   20 /  20\n  0 -> 2   30 /  30\n  0 -> 3   10 /  10\n  1 -> 2    0 /  40\n  1 -> 4   20 /  30\n  2 -> 3   10 /  10\n  2 -> 4   20 /  20\n  3 -> 2    0 /   5\n  3 -> 4   20 /  20"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "How to read the API:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Nodes are integers 0, 1, 2, ...** and are created by mentioning them in an arc. There are no names. A program with named places keeps its own name-to-number table.",
+        "**Arcs are given as three parallel arrays**: start nodes, end nodes and capacities, where entry $`k`$ of each describes arc $`k`$. `add_arcs_with_capacity` adds them all and returns their **arc indices**. `add_arc_with_capacity(tail, head, capacity)` adds one arc and returns its index.",
+        "**`solve(source, sink)`** returns a status. Check it against `smf.OPTIMAL` before reading anything else; the other statuses report bad input or a possible integer overflow.",
+        "**Results are read by arc index**: `optimal_flow()` is the total, `flow(arc)` or `flows(arcs)` is the flow on arcs, and `tail(arc)`, `head(arc)` and `capacity(arc)` describe an arc."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Every arc out of node 0 is full: 20, 30 and 10 add up to 60. No plan can send more than those three arcs carry, so 60 is the most possible. That reasoning is the **max-flow min-cut theorem**. A **cut** splits the nodes into a source side (holding $`s`$) and a sink side (holding $`t`$). Its capacity is the total capacity of the arcs that go from the source side to the sink side. Every unit of flow has to cross the cut, so every cut's capacity bounds the flow, and the theorem says the smallest cut's capacity *equals* the maximum flow. The solver hands back a minimum cut:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "source side of a minimum cut: [0]\nsink side of a minimum cut:   [1, 4]"
+    },
+    {
+      "type": "para",
+      "text": "The source side is $`\\{0\\}`$, and its arcs out carry $`20 + 30 + 10 = 60`$, the max flow. (Nodes 2 and 3 are on neither list: `get_sink_side_min_cut` returns the nodes that can still reach the sink through unused capacity, which describes a second minimum cut, and the two answers need not cover every node.) The cut is the useful part of the answer: it names the arcs to widen if you want more flow. Widening any other arc changes nothing."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Many Sources and Many Sinks Become One Pair With a Super Source and a Super Sink"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's question has two depots and four regions, not one source and one sink. The standard trick: add a **super source** with an arc to each depot, of capacity equal to that depot's shelf, and a **super sink** with an arc from each region, of capacity equal to its demand. A flow from the super source to the super sink is then a shipment that respects every shelf and fills no region beyond its need."
+    },
+    {
+      "type": "example",
+      "id": "spares_max_flow-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "18-linear-solver-wrapper/src/spares_max_flow.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "18-linear-solver-wrapper/src/spares_max_flow.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "SOURCE, SINK = len(NAMES), len(NAMES) + 1          # two extra nodes after the named ones"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "example",
+      "id": "spares_max_flow-3",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "18-linear-solver-wrapper/src/spares_max_flow.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "18-linear-solver-wrapper/src/spares_max_flow.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "    smf = max_flow.SimpleMaxFlow()\n    for depot, shelf in SUPPLY.items():\n        smf.add_arc_with_capacity(SOURCE, NODE[depot], shelf)\n    for (i, j), (_, cap) in ARCS.items():\n        smf.add_arc_with_capacity(NODE[i], NODE[j], 0 if (i, j) in closed else cap)\n    for region, need in DEMAND.items():\n        smf.add_arc_with_capacity(NODE[region], SINK, need)\n    if smf.solve(SOURCE, SINK) != smf.OPTIMAL:\n        raise SystemExit(\"max flow failed\")"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`NODE` maps each place's name to its number, in the order depots, hub, regions (it is in `spares_network.py`, with lesson 2.1.3's data). The program also lists the arcs that cross the minimum cut, the bottleneck, and tries the network with the Northgate–Central route closed:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "demand 70, on the shelves 80\nclosed: none: at most 70 spares delivered\n  a minimum cut: Ridge->sink (15) + Valley->sink (25) + Coast->sink (18) + Plains->sink (12)\nclosed: Northgate->Central: at most 60 spares delivered\n  a minimum cut: source->Southport (35) + Northgate->Valley (10) + Ridge->sink (15)"
+    },
+    {
+      "type": "para",
+      "text": "With every route open, the network can deliver all 70 spares the regions need. The minimum cut is the four arcs into the super sink: the bottleneck is the demand itself, so the routes are wide enough."
+    },
+    {
+      "type": "para",
+      "text": "With Northgate–Central closed, at most 60 can arrive, and the cut explains the shortfall in three terms. Southport can send no more than its 35. Northgate, cut off from the hub, can reach only Valley directly (10) and Ridge (whose need of 15 is the limit). $`35 + 10 + 15 = 60`$. Northgate still holds 20 spares that nothing can carry. To get the last 10 delivered, stores must widen one of those cut arcs, for example raise Northgate–Valley's capacity, or reopen the hub route. A bigger Southport–Central route would not help, because it is not in the cut."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "SimpleMinCostFlow Ships Supplies to Demands at Least Cost, and the Supplies Must Balance"
+    },
+    {
+      "type": "para",
+      "text": "The minimum-cost flow adds a cost per unit to each arc, and a **supply** $`b_n`$ to each node: positive at a node that sends units out, negative at a node that takes them in (a demand), 0 at a node that only passes them on. It asks for the cheapest flow that meets every supply exactly:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\min\\;& \\sum_{a} c_a\\, f_a \\\\\n\\text{s.t. }& \\sum_{a \\text{ out of } n} f_a - \\sum_{a \\text{ into } n} f_a = b_n && \\forall n && \\text{(balance}_n) \\\\\n& 0 \\le f_a \\le u_a && \\forall a\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Add up every balance row and each arc's flow appears once with $`+1`$ (at its tail) and once with $`-1`$ (at its head), so the left sides sum to 0. **The supplies must therefore add up to 0**, or no flow can satisfy the rows. The OR-Tools example (adapted from `simple_min_cost_flow_program.py`, from Bradley, Hax and Magnanti's *Applied Mathematical Programming*) has one source of 20 and two demands of 5 and 15:"
+    },
+    {
+      "type": "example",
+      "id": "min_cost_flow_example-4",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "18-linear-solver-wrapper/src/min_cost_flow_example.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "18-linear-solver-wrapper/src/min_cost_flow_example.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "supplies = [20, 0, 0, -5, -15]                     # + supplies, - demands; they sum to 0\n\nall_arcs = smcf.add_arcs_with_capacity_and_unit_cost(start_nodes, end_nodes, capacities, unit_costs)\nsmcf.set_nodes_supplies(np.arange(0, len(supplies)), supplies)\n\nstatus = smcf.solve()"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "minimum cost: 150\n  0 -> 1   12 /  15  cost 48\n  0 -> 2    8 /   8  cost 32\n  1 -> 2    8 /  20  cost 16\n  1 -> 3    4 /   4  cost 8\n  1 -> 4    0 /  10  cost 0\n  2 -> 3   12 /  15  cost 12\n  2 -> 4    4 /   4  cost 12\n  3 -> 4   11 /  20  cost 22\n  4 -> 2    0 /   5  cost 0"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The calls mirror `SimpleMaxFlow`: arcs as parallel arrays, now with a unit cost too (`add_arcs_with_capacity_and_unit_cost`), and supplies set per node (`set_node_supply(node, supply)`, or `set_nodes_supplies` for many). `solve()` takes no source or sink: the supplies say where flow starts and ends. Check node 3: in $`4 + 12 = 16`$, out $`11`$, net $`-5`$, its demand."
+    },
+    {
+      "type": "para",
+      "text": "Now lesson 2.1.3's network. Its depots hold 80 spares and its regions need 70. The LP handled that with \"$`\\le`$ supply\" rows at the depots, but this solver's rows are equations, so given the data as it stands it refuses:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "supplies sum to 10: status UNBALANCED"
+    },
+    {
+      "type": "para",
+      "text": "The fix is to say where the other 10 spares go. They stay on the shelf. So add a **shelf node** that demands the surplus, $`b = -10`$, with a zero-cost arc from each depot to it, each as wide as that depot's stock:"
+    },
+    {
+      "type": "example",
+      "id": "spares_min_cost_flow-5",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "18-linear-solver-wrapper/src/spares_min_cost_flow.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "18-linear-solver-wrapper/src/spares_min_cost_flow.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "    if with_shelf:\n        shelf = len(NAMES)                                   # one extra node: spares that stay put\n        for depot, on_hand in SUPPLY.items():\n            kept[depot] = smcf.add_arc_with_capacity_and_unit_cost(NODE[depot], shelf, on_hand, 0)\n        smcf.set_node_supply(shelf, -(sum(SUPPLY.values()) - sum(DEMAND.values())))"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "with a shelf node taking 10: status OPTIMAL, cost $299k\n  Northgate  -> Ridge     15\n  Northgate  -> Central   30\n  Southport  -> Coast     18\n  Southport  -> Central    7\n  Central    -> Valley    25\n  Central    -> Plains    12\n  left on the shelf: 0 at Northgate, 10 at Southport\nlesson 2.1.3's LP: cost $299k; same cost: True"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "$299k, and the same routes lesson 2.1.3's LP chose. The program solves that LP again in MathOpt for the check. The shelf node is the min-cost-flow form of the LP's \"$`\\le`$ supply\" row: the depot's slack has become an arc."
+    },
+    {
+      "type": "para",
+      "text": "**The data must be whole numbers.** Capacities, costs and supplies are integers in this API, and a fractional cost is refused before anything is solved:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "unit cost 2.5 -> TypeError: add_arc_with_capacity_and_unit_cost(): incompatible function arguments. The following argument types are supported:\nunit cost 25 in $100s accepted: arc 0, unit cost 25"
+    },
+    {
+      "type": "para",
+      "text": "When a cost has cents or tenths, scale every cost by the same power of ten (here, to $100s) and divide the optimal cost by it afterwards. Scaling every cost by the same positive factor leaves the best flow unchanged. In return for integer data you get an integer answer: every flow is a whole number, which lesson 2.1.3 showed an LP of this shape also achieves at its corners."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "When Demand Cannot Be Met, solve_max_flow_with_min_cost Ships What It Can"
+    },
+    {
+      "type": "para",
+      "text": "`solve()` needs balanced supplies and a network able to carry them. Close Northgate–Central and raise Valley's demand by 10, so that supply (80) and demand (80) balance but the routes cannot carry it, and `solve()` reports the plain truth:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "80 wanted, Northgate->Central closed: solve() -> INFEASIBLE\n  solve_max_flow_with_min_cost() -> OPTIMAL, 60 shipped, cost $259k"
+    },
+    {
+      "type": "para",
+      "text": "`solve_max_flow_with_min_cost()` answers a different, often more useful question: of all flows that **deliver as much as possible** (from the positive-supply nodes to the negative ones, within each node's supply), which is **cheapest**? Here it ships 60 of the 80 wanted, at $259k: the extra 10 for Valley cannot get past the same cut the max flow found. `maximum_flow()` reports how much was shipped. Compare it with the total demand to learn whether everyone got their spares."
+    },
+    {
+      "type": "para",
+      "text": "It also handles surplus stock without a shelf node:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "80 on hand, 70 wanted: solve() -> UNBALANCED; solve_max_flow_with_min_cost() -> OPTIMAL, 70 shipped, cost $299k"
+    },
+    {
+      "type": "para",
+      "text": "So the two calls answer two questions:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Call",
+        "Question it answers",
+        "When supplies do not balance, or cannot all be shipped"
+      ],
+      "rows": [
+        [
+          "`solve()`",
+          "cheapest flow meeting every supply and demand exactly",
+          "UNBALANCED, or INFEASIBLE"
+        ],
+        [
+          "`solve_max_flow_with_min_cost()`",
+          "cheapest flow among those shipping the most possible",
+          "ships less; read `maximum_flow()`"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "A weekly shipping job should use the second call and then *check* `maximum_flow()` against the demand. A plan that quietly ships 60 of 80 is a plan someone must be told about."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The two problems the solvers take, as lesson 2.1.3 would write them. The solvers build these rows themselves from the arcs and supplies."
+    },
+    {
+      "type": "para",
+      "text": "**Maximum flow** (`SimpleMaxFlow`). **Sets.** $`N`$, the nodes; $`A \\subseteq N \\times N`$, the arcs; a source $`s \\in N`$ and a sink $`t \\in N`$. **Parameters.** $`u_a`$, the capacity of arc $`a`$ (whole number). **Variables.** $`0 \\le f_a \\le u_a`$ for $`a \\in A`$; $`v \\ge 0`$, the amount delivered."
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max\\;& v \\\\\n\\text{s.t. }& \\sum_{(n,j) \\in A} f_{nj} - \\sum_{(i,n) \\in A} f_{in} = \\begin{cases} v & n = s \\\\ -v & n = t \\\\ 0 & \\text{otherwise} \\end{cases} && \\forall n \\in N && \\text{(balance}_n) \\\\\n& 0 \\le f_a \\le u_a && \\forall a \\in A && \\text{(capacity}_a)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "For GridCap's question, $`N`$ adds a super source $`s`$ with arcs $`(s, d)`$ of capacity $`\\text{shelf}_d`$ to each depot $`d`$, and a super sink $`t`$ with arcs $`(r, t)`$ of capacity $`\\text{need}_r`$ from each region $`r`$."
+    },
+    {
+      "type": "para",
+      "text": "**Minimum-cost flow** (`SimpleMinCostFlow.solve`). **Sets.** $`N`$, $`A`$ as above. **Parameters.** $`u_a`$, capacity; $`c_a`$, cost per unit ($k), whole numbers; $`b_n`$, supply of node $`n`$ (positive: sends; negative: demands), with $`\\sum_n b_n = 0`$. **Variables.** $`0 \\le f_a \\le u_a`$ for $`a \\in A`$."
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\min\\;& \\sum_{a \\in A} c_a\\, f_a \\\\\n\\text{s.t. }& \\sum_{(n,j) \\in A} f_{nj} - \\sum_{(i,n) \\in A} f_{in} = b_n && \\forall n \\in N && \\text{(balance}_n) \\\\\n& 0 \\le f_a \\le u_a && \\forall a \\in A && \\text{(capacity}_a)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "For GridCap's shipment: $`b`$ is +45 at Northgate, +35 at Southport, 0 at Central, minus each region's demand, and $`-10`$ at the shelf node, whose arcs from the depots cost 0."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**SimpleMaxFlow finds the most a network can carry from a source to a sink.** Nodes are integers, arcs come in parallel arrays, `solve(s, t)` returns a status, and the minimum cut names the arcs that limit the flow: 60 on the OR-Tools example, all of them leaving node 0.",
+        "**Many sources and sinks become one pair** with a super source (arcs as wide as each shelf) and a super sink (arcs as wide as each demand). GridCap's network delivers all 70 spares, and 60 with Northgate–Central closed.",
+        "**SimpleMinCostFlow ships supplies to demands at least cost, and the supplies must balance.** A surplus is UNBALANCED until a shelf node takes it; then the cost is $299k, the LP's answer. Data must be whole numbers.",
+        "**When demand cannot be met, `solve_max_flow_with_min_cost` ships what it can**, at least cost. Check `maximum_flow()` against the demand."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "`SimpleMaxFlow`",
+        "`SimpleMinCostFlow`",
+        "Meaning"
+      ],
+      "rows": [
+        [
+          "`add_arc_with_capacity(t, h, u)`",
+          "`add_arc_with_capacity_and_unit_cost(t, h, u, c)`",
+          "one arc; returns its index"
+        ],
+        [
+          "`add_arcs_with_capacity(T, H, U)`",
+          "`add_arcs_with_capacity_and_unit_cost(T, H, U, C)`",
+          "many arcs, parallel arrays"
+        ],
+        [
+          "",
+          "`set_node_supply(n, b)`, `set_nodes_supplies(N, B)`",
+          "supplies: + sends, − demands"
+        ],
+        [
+          "`solve(source, sink)`",
+          "`solve()`, `solve_max_flow_with_min_cost()`",
+          "returns a status"
+        ],
+        [
+          "`OPTIMAL`, `BAD_INPUT`, `POSSIBLE_OVERFLOW`, `BAD_RESULT`",
+          "`OPTIMAL`, `INFEASIBLE`, `UNBALANCED`, `BAD_CAPACITY_RANGE`, `BAD_COST_RANGE`, ...",
+          "statuses"
+        ],
+        [
+          "`optimal_flow()`",
+          "`optimal_cost()`, `maximum_flow()`",
+          "the answer"
+        ],
+        [
+          "`flow(a)`, `flows(A)`, `tail(a)`, `head(a)`, `capacity(a)`",
+          "the same, plus `unit_cost(a)`, `supply(n)`",
+          "per arc and node"
+        ],
+        [
+          "`get_source_side_min_cut()`, `get_sink_side_min_cut()`",
+          "",
+          "a minimum cut"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [Maximum Flows (OR-Tools)](https://developers.google.com/optimization/flow/maxflow) (the Taha example adapted above, the parallel-array input, and the max-flow min-cut reading of its answer); [Minimum Cost Flows (OR-Tools)](https://developers.google.com/optimization/flow/mincostflow) (the example adapted above and its supplies, positive at sources and negative at demands); [Network Flows (OR-Tools)](https://developers.google.com/optimization/flow) (the flow problems the graph library covers); [OR-Tools sample simple_max_flow_program.py](https://github.com/google/or-tools/blob/stable/ortools/graph/samples/simple_max_flow_program.py) and [simple_min_cost_flow_program.py](https://github.com/google/or-tools/blob/stable/ortools/graph/samples/simple_min_cost_flow_program.py) (the two programs, with NumPy arrays for the arcs)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "In `spares_max_flow.py`, close Southport–Central instead. Predict the most that can be delivered and the cut, then run it.",
+        "A route's cost rises to $2.5k per spare. Rewrite the spares data in $100s and predict the optimal cost the solver reports.",
+        "Why does the shelf node need an arc from *each* depot? Remove Northgate's and predict the status."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Name the Nodes Once, Next to the Data"
+    },
+    {
+      "type": "para",
+      "text": "The graph solvers know nodes only as numbers, and an off-by-one in a node table ships spares to the wrong region with no error. Keep one table from names to numbers next to the data (`spares_network.py` has `NAMES` and `NODE`), build every arc through it, and translate every answer back through it. Extra nodes, such as a super source, a sink or a shelf, get numbers after the named ones, so adding them never renumbers a real place."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**max_flow_example.py.** The OR-Tools max-flow example and its minimum cut (*SimpleMaxFlow Finds the Most a Network Can Carry*). *Try:* Raise the capacity of arc 0 → 3 from 10 to 30. Predict the new max flow before you run it."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [max_flow_example.py](src/max_flow_example.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**spares_max_flow.py.** GridCap's spares network with a super source and sink, open and with one route closed (*Many Sources and Many Sinks Become One Pair*). *Try:* Raise Northgate–Valley to 20 with Northgate–Central closed. Predict the delivered total."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [spares_max_flow.py](src/spares_max_flow.py)",
+        "Library: [spares_network.py](src/spares_network.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**min_cost_flow_example.py.** The OR-Tools min-cost-flow example (*SimpleMinCostFlow Ships Supplies to Demands at Least Cost*). *Try:* Change node 0's supply to 25 and node 4's to −20. Predict the status."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [min_cost_flow_example.py](src/min_cost_flow_example.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**spares_min_cost_flow.py.** Lesson 2.1.3's shipment, refused as unbalanced and then solved with a shelf node, checked against the LP (*SimpleMinCostFlow Ships Supplies to Demands at Least Cost*). *Try:* Make the hub routes cost one more each. Predict whether the routes change."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [spares_min_cost_flow.py](src/spares_min_cost_flow.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**flow_edge_cases.py.** Surplus, shortfall and fractional data, with `solve()` and with `solve_max_flow_with_min_cost()` (*When Demand Cannot Be Met*). *Try:* Reopen the route but keep the extra demand of 10. Predict both calls' answers."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [flow_edge_cases.py](src/flow_edge_cases.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 11,
+    "paras": 37,
+    "code": 10,
+    "tables": 2,
+    "lists": 8,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 5
+  },
+  "content_sha256": "d5ed65dace82e846480aa0a11aa2a435c2a304b8b05c3f11c45a12a1ffb6d4c3"
+}

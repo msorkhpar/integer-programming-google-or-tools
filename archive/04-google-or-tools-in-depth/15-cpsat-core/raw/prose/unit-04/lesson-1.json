@@ -1,0 +1,532 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "15-cpsat-core"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "When CP-SAT beats MIP, and when it doesn't",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "4.4.4 When CP-SAT Beats MIP, and When It Doesn't"
+    },
+    {
+      "type": "para",
+      "text": "GridCap now has two solvers that can take its selection model: HiGHS through MathOpt, which proves optimality with LP bounds (lesson 3.4.1), and CP-SAT, which searches over integers with propagation and clause learning (lesson 4.4.1). Lesson 1.1.3 said CP-SAT \"shines on scheduling, sequencing and dense logic\" and promised a measurement. This lesson makes it, on three GridCap-style models chosen because they pull in different directions: the one-period selection, a vegetation crew's trimming order, and the ten-year selection of GridCap medium."
+    },
+    {
+      "type": "para",
+      "text": "A comparison between solvers is easy to get wrong, so the measurements follow three rules. Each solver gets a **deterministic work limit** instead of a time limit (HiGHS a number of branch-and-bound nodes; CP-SAT one search worker, or a deterministic portfolio, and a limit in deterministic time, a work measure the solver keeps \"as close as possible to a second\"), so a run gives the same answer every time and on every machine; each run is repeated once to show it. The programs print statuses, values and bounds, never wall-clock times, which change from machine to machine and run to run. And the conclusion is about these models: the lesson ends with how to measure your own."
+    },
+    {
+      "type": "para",
+      "text": "GridCap is a fictional utility's portfolio, generated for this course; the trimming jobs below are a seeded random draw in its style."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "Three models, two of them from earlier lessons."
+    },
+    {
+      "type": "para",
+      "text": "**The one-period selection** is lesson 4.4.1's model, unchanged."
+    },
+    {
+      "type": "para",
+      "text": "**The crew's trimming order.** One vegetation crew trims $`n`$ circuits, one at a time."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "*Sets.* $`J = \\{1, \\dots, n\\}`$, the circuits.",
+        "*Parameters.* $`d_j`$, the days circuit $`j`$ takes; $`u_j`$, its due day; $`w_j`$, its risk weight (how much a day's lateness costs); $`H = \\sum_j d_j`$, the horizon in days.",
+        "*Variables.* $`s_j \\in \\{0, \\dots, H\\}`$, the day trimming starts; $`\\ell_j \\in [0, H]`$, its lateness in days; $`y_{jk} \\in \\{0, 1\\}`$ for each pair $`j < k`$, 1 if $`j`$ is trimmed before $`k`$.",
+        "*Objective.* $`\\min \\sum_{j \\in J} w_j\\, \\ell_j`$, the risk-weighted lateness.",
+        "*Constraints.*"
+      ]
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\ell_j &\\ge s_j + d_j - u_j && \\forall j \\in J && \\text{(late}_j) \\\\\ny_{jk} = 1 &\\Rightarrow s_j + d_j \\le s_k && \\forall j < k && \\text{(before}_{jk}) \\\\\ny_{jk} = 0 &\\Rightarrow s_k + d_k \\le s_j && \\forall j < k && \\text{(after}_{jk})\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Each pair is a **disjunction**: one circuit or the other goes first. For HiGHS, each implication is a big-M row: $`s_j + d_j \\le s_k + H(1 - y_{jk})`$ and $`s_k + d_k \\le s_j + H\\, y_{jk}`$. A big $`M`$ has to be at least the most the row could be broken by when it is switched off, which comes from bounds in the data. Here the crew never needs to wait, so every circuit can be finished by day $`H`$; then $`s_j + d_j - s_k \\le H`$, and $`M = H`$ is enough to switch either row off. (Lesson 6.2.1, in section 6, derives such bounds, and lesson 6.2.4 treats disjunctions, in depth.) For CP-SAT it is the row with `only_enforce_if(y)` or `only_enforce_if(~y)` (lesson 4.4.2). In CP-SAT, $`\\ell_j`$ is an integer from 0 to $`H`$; it is a whole number at the optimum anyway, because every $`d_j`$ and $`u_j`$ is."
+    },
+    {
+      "type": "para",
+      "text": "**The ten-year selection** is the multi-period timing model of lesson 4.3.1 on GridCap medium: start-time binaries $`x_{i,t}`$, 1 if project $`i`$ starts in year $`t`$, for each project and allowed start year, at most one start per project and exactly one for a must-do, at most one project per alternative group, children starting at least their lag after their parents, and a budget row per year, maximizing NPV by start year. Lesson 4.3.1 states it in full (without that lesson's reserve rows), and lesson 6.4.1, in section 6, builds it step by step; it has no logic beyond what those rows say."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "On a Plain Selection Both Prove the Same Optimum"
+    },
+    {
+      "type": "para",
+      "text": "Lessons 4.4.1 and 4.4.2 already ran the comparison on GridCap small's selection, with every rule variant:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "HiGHS OPTIMAL  objective 25,374  same plan: True"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "all five       OPTIMAL  objective 23,775 (-1,599)  HiGHS 23,775  adds ['P013', 'P014', 'P024', 'P036']  drops ['P011', 'P022', 'P029', 'P032']"
+    },
+    {
+      "type": "para",
+      "text": "Both solvers proved the same optimum, with no limit set. This is the common case the OR-Tools guide *Mixed-Integer Programming* describes: for many problems there is no clear difference in speed, and the choice can come down to which modeling style suits the rules. For GridCap's rules, that tilts toward CP-SAT's `add_implication` and `only_enforce_if` when the rules are many and logical, and toward MathOpt when the model must also run on other solvers (lesson 4.2.3)."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Disjunctions and Sequencing Favor CP-SAT"
+    },
+    {
+      "type": "para",
+      "text": "The crew's trimming order, for 8, 10 and 12 circuits. HiGHS gets 10,000 nodes; CP-SAT one worker and 10 units of deterministic time. The two models differ only in how each disjunction is written:"
+    },
+    {
+      "type": "example",
+      "id": "sequencing-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "15-cpsat-core/src/sequencing.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "15-cpsat-core/src/sequencing.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "            first = model.add_binary_variable()                # 1: circuit i is trimmed before j\n            model.add_linear_constraint(start[i] + d <= start[j] + horizon * (1 - first))\n            model.add_linear_constraint(start[j] + jobs[j][0] <= start[i] + horizon * first)"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "example",
+      "id": "sequencing-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "15-cpsat-core/src/sequencing.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "15-cpsat-core/src/sequencing.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "            first = model.new_bool_var(f\"first_{i}_{j}\")\n            model.add(start[i] + d <= start[j]).only_enforce_if(first)\n            model.add(start[j] + jobs[j][0] <= start[i]).only_enforce_if(~first)"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "  n  solver status    best plan   bound  repeats\n  8  HiGHS  OPTIMAL         100     100  True\n  8  CP-SAT OPTIMAL         100     100  True\n 10  HiGHS  FEASIBLE        133       0  True\n 10  CP-SAT OPTIMAL         133     133  True\n 12  HiGHS  FEASIBLE        176       3  True\n 12  CP-SAT OPTIMAL         167     167  True"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "With 8 circuits both prove the optimum. With 10, HiGHS finds the optimal order (133) but after 10,000 nodes its bound is still 0: it cannot rule out a plan with no lateness at all. With 12 it has not found the best order (176 against 167) and its bound is 3. CP-SAT proves every optimum within its limit. Both runs repeat exactly."
+    },
+    {
+      "type": "para",
+      "text": "The bound tells you why. In the LP relaxation of the big-M model, $`y_{jk}`$ may be $`0.5`$, and then both rows read $`s_j + d_j \\le s_k + H/2`$ and $`s_k + d_k \\le s_j + H/2`$: with $`H`$ as large as all the trimming days together, both hold with every circuit starting on day 0. The relaxation says \"no lateness is possible\", so its bound is near 0 and branching has to fix many $`y`$ before the bound rises. This is the weak relaxation a big-M row gives, at its worst (lesson 6.2.2, in section 6, measures what a loose $`M`$ does to the LP bound): the rule is nothing but disjunctions. CP-SAT does not rely on that relaxation. Once a few orders are decided, propagation narrows every start day's range, and each dead end teaches it a clause that rules out a whole family of orders."
+    },
+    {
+      "type": "para",
+      "text": "So reach for CP-SAT when the model is mostly **logic and disjunctions**: sequencing, scheduling with \"this or that first\", many if-then rules, all-different assignments. Lessons 4.5.1 and 4.5.2 go further with CP-SAT's interval variables and `add_no_overlap`, built for exactly this crew problem."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Large Models With Strong LP Bounds Favor a MIP Solver"
+    },
+    {
+      "type": "para",
+      "text": "The ten-year selection of GridCap medium is the other kind of model: hundreds of yes/no decisions tied together by a few budget rows: a multi-dimensional knapsack (yes/no items under several capacity rows) with timing (lesson 6.3.1, in section 6, treats knapsacks in depth). Its LP relaxation is close to the integer optimum, which is exactly what branch-and-bound needs. The model is written once, and `build(portfolio, api)` creates it in either API:"
+    },
+    {
+      "type": "example",
+      "id": "multi_period-3",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "15-cpsat-core/src/multi_period.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "15-cpsat-core/src/multi_period.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "def build(portfolio, api: str):\n    \"\"\"Start-year binaries x[i, t], once/must rows, alternatives, parents with lags, yearly budgets.\"\"\"\n    by_id = {p.project_id: p for p in portfolio.projects}\n    if api == \"mathopt\":\n        model = mathopt.Model(name=\"multi-period\")\n        new_bool, add = (lambda name: model.add_binary_variable(name=name)), model.add_linear_constraint\n    else:\n        model = cp_model.CpModel()\n        new_bool, add = model.new_bool_var, model.add"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "HiGHS gets 2,000 nodes. CP-SAT gets 10 units of deterministic time twice: once with one worker, and once with 8 workers running an **interleaved** portfolio, a parameter (`interleave_search`) that `sat_parameters.proto` describes as deterministic whatever the number of workers (lesson 4.6.3):"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "GridCap medium: 400 projects, 887 start variables, 10 years\nsolver                 status     best plan      bound    gap  repeats\nHiGHS                  FEASIBLE     226,797    226,914  0.05%  True\nCP-SAT, 1 worker       FEASIBLE     224,421    231,151  3.00%  True\nCP-SAT, 8 interleaved  FEASIBLE     226,656    226,919  0.12%  True"
+    },
+    {
+      "type": "para",
+      "text": "HiGHS ends within 0.05% of its bound. A single CP-SAT worker ends 3% away, with both a worse plan and a weaker bound. The 8-worker portfolio closes most of that, to 0.12%, but HiGHS on its single search is still closer. The limits are in different units (nodes, deterministic seconds), so this is not a race with a winner; it is the shape of the result that matters. On a large model whose LP relaxation is strong, an LP-based MIP solver gets its bound from the relaxation directly, while CP-SAT has to earn it, and does so mainly through its LP-based workers (the Primer's chapter on the search describes them), which is why one worker does much worse than a portfolio."
+    },
+    {
+      "type": "para",
+      "text": "Also part of \"when it doesn't\": the free LP bound. HiGHS's best bound comes from LP relaxations at every node, and it reports duals for an LP (lesson 2.3.3). CP-SAT reports a bound, but no duals, no reduced costs, and no LP relaxation you can inspect."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Continuous Amounts Need MathOpt or Scaling"
+    },
+    {
+      "type": "para",
+      "text": "The third limit is the type of variable. CP-SAT's model has no continuous variable at all; its variable makers are"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "CpModel variable makers: ['new_bool_var', 'new_int_var', 'new_int_var_from_domain']"
+    },
+    {
+      "type": "para",
+      "text": "(intervals aside, lesson 4.5.1). A model with a genuinely continuous quantity, an amount of money borrowed, a flow, an LP's dual, belongs in MathOpt. MathOpt can still hand such a model to CP-SAT: lesson 4.4.1's credit line, turned into any amount from $0k to $2,000k at 0.6 $k of cost per $k borrowed, solved by both:"
+    },
+    {
+      "type": "example",
+      "id": "continuous-4",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "15-cpsat-core/src/continuous.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "15-cpsat-core/src/continuous.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "borrow = model.add_variable(lb=0, ub=2_000, name=\"borrow\")       # continuous, $k\nmodel.add_linear_constraint(k == 0)                               # replace the tranches by the amount\nbudget = next(c for c in model.linear_constraints() if c.name == \"budget\")\nbudget.set_coefficient(borrow, -1)\nmodel.objective.set_linear_coefficient(borrow, -0.6)"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "HIGHS   OPTIMAL  objective 25,435.0  borrow $1,220.0k  21 projects\nCP_SAT  OPTIMAL  objective 25,435.0  borrow $1,220.0k  21 projects\nfrom CP-SAT's log: ['Scaling to pure integer problem.']"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Same answer. The log line shows how: before searching, CP-SAT's MathOpt backend turned the model into a pure integer one, scaling the continuous variable and the float coefficient. Here that is harmless, because the best amount is a whole number of $k anyway. On a model where continuous quantities carry the structure (a network flow, a blend), that conversion is approximate by nature, and an LP-based solver handles the continuous part directly; keep such models on HiGHS, SCIP or Gurobi, and use CP-SAT where the decisions are discrete."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Measure on Your Own Model Before You Choose"
+    },
+    {
+      "type": "para",
+      "text": "The three results give a rule of thumb, and no more:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Your model is mostly",
+        "Likely better",
+        "Seen here"
+      ],
+      "rows": [
+        [
+          "yes/no selection with a few linear rules",
+          "either; pick by modeling style",
+          "GridCap small: same optimum, both at once"
+        ],
+        [
+          "logic, disjunctions, sequencing, all-different",
+          "CP-SAT",
+          "crew order: CP-SAT proves, big-M HiGHS stalls at a bound near 0"
+        ],
+        [
+          "large, linear, strong LP relaxation (knapsack-like, flows)",
+          "a MIP solver",
+          "GridCap medium: HiGHS closest to proven"
+        ],
+        [
+          "continuous amounts, or a need for duals",
+          "a MIP or LP solver through MathOpt",
+          "the credit line: CP-SAT must scale it to integers"
+        ],
+        [
+          "fractional data in the rows",
+          "a MIP solver, or CP-SAT after exact scaling (lesson 4.4.3)",
+          ""
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "When the model is in between, measure, and measure fairly:"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "**Write the model once** and build it for each solver, as `multi_period.py` does, so you compare solvers rather than two different models.",
+        "**Use deterministic limits** (a node limit, CP-SAT's deterministic time with one worker or an interleaved portfolio) or no limit at all, and repeat each run to confirm it repeats.",
+        "**Compare statuses, values and bounds**, on several instances of the size you will run in production; a single instance can mislead.",
+        "**Check the plans against each other**: if two solvers prove different optima, one of the models is wrong."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Lesson 5.4.2, in section 5, turns this into a benchmark harness with seeds and time-to-gap; this lesson's job is to know which way to lean before you start."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**On a plain selection both prove the same optimum.** For GridCap's selection, choose by modeling style; CP-SAT's logic constraints read like the rules.",
+        "**Disjunctions and sequencing favor CP-SAT.** A big-M disjunction's LP bound is near 0; CP-SAT proves optima that HiGHS cannot within the same kind of limit.",
+        "**Large models with strong LP bounds favor a MIP solver.** On GridCap medium's ten-year selection, HiGHS ends closest to proven; one CP-SAT worker is far behind, a portfolio much closer.",
+        "**Continuous amounts need MathOpt or scaling.** CP-SAT has no continuous variable; its MathOpt backend scales such a model to integers.",
+        "**Measure on your own model before you choose.** One model, deterministic limits, statuses and bounds, several instances."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "",
+        "CP-SAT",
+        "MIP solver (HiGHS through MathOpt)"
+      ],
+      "rows": [
+        [
+          "variables",
+          "Booleans and bounded integers",
+          "continuous, integer, binary"
+        ],
+        [
+          "data",
+          "whole numbers in rows; floats in the objective",
+          "any numbers, within tolerances"
+        ],
+        [
+          "logic",
+          "native: `add_bool_or`, `add_implication`, `only_enforce_if`",
+          "linear rows, big-M or indicators (lesson 4.3.1; lessons 6.1.2 and 6.2.1 in section 6)"
+        ],
+        [
+          "bound",
+          "from propagation, clauses and LP workers",
+          "from LP relaxations"
+        ],
+        [
+          "duals, reduced costs",
+          "none",
+          "yes, for an LP"
+        ],
+        [
+          "parallel search",
+          "a portfolio of workers",
+          "depends on the solver"
+        ],
+        [
+          "shines on",
+          "scheduling, sequencing, dense logic",
+          "large linear models, continuous parts"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Fair comparison",
+        "How"
+      ],
+      "rows": [
+        [
+          "same model",
+          "one builder, two APIs"
+        ],
+        [
+          "repeatable runs",
+          "node limit for HiGHS; `num_workers = 1` or `interleave_search` and `max_deterministic_time` for CP-SAT"
+        ],
+        [
+          "what to print",
+          "status, value, bound; never wall time from one run"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [Mixed-Integer Programming (OR-Tools)](https://developers.google.com/optimization/mip) (MIP solvers for problems that are an LP with integer variables, CP-SAT for problems that are mostly Boolean, and often no clear difference in speed); [CP-SAT Solver (OR-Tools)](https://developers.google.com/optimization/cp/cp_solver) (CP-SAT works over the integers); [`sat_parameters.proto` (OR-Tools on GitHub)](https://github.com/google/or-tools/blob/stable/ortools/sat/sat_parameters.proto) (`num_workers`, `max_deterministic_time` and `interleave_search`, the deterministic portfolio); [The CP-SAT Primer, Alternatives (Krupke)](https://d-krupke.github.io/cpsat-primer/big_picture.html) (when a MIP solver or CP-SAT fits, and CP-SAT's lack of continuous variables); [The CP-SAT Primer, How CP-SAT Reasons: The Search Core (Krupke)](https://d-krupke.github.io/cpsat-primer/search_core.html) (propagation, clause learning, the LP relaxation as a propagator, and the portfolio of workers); [The CP-SAT Primer, introduction (Krupke)](https://d-krupke.github.io/cpsat-primer/) (MIP as the most successful general approach, and where many logical constraints make CP-SAT competitive)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Raise HiGHS's node limit in `sequencing.py` to 100,000 for 10 circuits. Predict whether it proves the optimum, then run it.",
+        "Give `multi_period.py`'s single CP-SAT worker 60 units of deterministic time. Predict the gap.",
+        "Give each start day in the HiGHS model a smaller upper bound you can justify from the data, and use it as $`M`$. Does HiGHS's bound after 10,000 nodes rise?"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Keep the Model Portable Until You Have Measured"
+    },
+    {
+      "type": "para",
+      "text": "`multi_period.py` builds one model for both APIs from a dozen lines. That is cheap insurance: the choice of solver is a measurement, not a belief, and the measurement changes when the data grows or a rule is added. Keep the model in a form that can reach both (MathOpt does this for MIP solvers and CP-SAT alike, lesson 4.2.3) until the numbers on your own instances settle the choice; then use the chosen solver's own strengths, such as CP-SAT's `only_enforce_if` or HiGHS's duals, deliberately."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**sequencing.py.** One crew's trimming order as a big-M MILP for HiGHS and as a CP-SAT model with enforced rows, for 8, 10 and 12 circuits, each run twice (*Disjunctions and Sequencing Favor CP-SAT*). *Try:* Add 14 circuits. Predict both solvers' statuses."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [sequencing.py](src/sequencing.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**multi_period.py.** GridCap medium's ten-year selection, built once for both APIs and solved by HiGHS, one CP-SAT worker and an interleaved portfolio (*Large Models With Strong LP Bounds Favor a MIP Solver*). *Try:* Give HiGHS 200 nodes instead of 2,000. Predict its gap."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [multi_period.py](src/multi_period.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**continuous.py.** CpModel's variable makers, and a continuous credit-line amount solved through MathOpt by HiGHS and by CP-SAT (*Continuous Amounts Need MathOpt or Scaling*). *Try:* Make the cost 0.65 $k per $k. Predict the amount borrowed."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [continuous.py](src/continuous.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 12,
+    "paras": 30,
+    "code": 5,
+    "tables": 3,
+    "lists": 7,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 4
+  },
+  "content_sha256": "d76e404f8a12d43cd34be4a38e2ce2fa7d5192251af368a620f4f3500af51f1f"
+}

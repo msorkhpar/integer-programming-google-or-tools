@@ -1,0 +1,165 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "02-linear-programming",
+    "04-lp-modeling"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Report how much room each row has left",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility's operations team solves a pumping LP every night, and the morning report must say, for every row, how much room was left, and which rows were binding. Their models are MathOpt models, so every row is stored as $`\\text{lb} \\le a \\cdot x \\le \\text{ub}`$, with $`\\pm\\infty`$ for a missing side. With $`a \\cdot x`$ the row's activity at the solution, a row's **room** is:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Row, as stored",
+        "Room"
+      ],
+      "rows": [
+        [
+          "only `ub` finite ($`a \\cdot x \\le \\text{ub}`$)",
+          "the slack, $`\\text{ub} - a \\cdot x`$"
+        ],
+        [
+          "only `lb` finite ($`a \\cdot x \\ge \\text{lb}`$)",
+          "the surplus, $`a \\cdot x - \\text{lb}`$"
+        ],
+        [
+          "both finite (a range, or an equation when they are equal)",
+          "$`\\min(\\text{ub} - a \\cdot x,\\ a \\cdot x - \\text{lb})`$"
+        ],
+        [
+          "neither finite (a free row, $`-\\infty \\le a \\cdot x \\le +\\infty`$)",
+          "`math.inf`: nothing limits the row, so it never binds"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Write two functions in `report.py`:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`room(model, result)` returns a dict from each row's name to its room, for every linear constraint of the model, using the solution in `result`;",
+        "`binding(model, result, tol=1e-6)` returns the names of the rows whose room is at most `tol`, in the order `model.linear_constraints()` gives them."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`row.terms()`, `row.lower_bound`, `row.upper_bound` and `result.variable_values()` give everything you need; `math.isfinite` tells a bound from $`\\pm\\infty`$. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef room(model: mathopt.Model, result: mathopt.SolveResult) -> dict[str, float]:\n    \"\"\"Each row's room at the solution: slack on a <= row, surplus on a >= row, the nearer side of a range.\"\"\"\n    values = result.variable_values()\n    rooms = {}\n    for row in model.linear_constraints():\n        a = sum(term.coefficient * values[term.variable] for term in row.terms())\n        lo, hi = row.lower_bound, row.upper_bound\n        if math.isfinite(lo) and math.isfinite(hi):\n            rooms[row.name] = min(hi - a, a - lo)\n        elif math.isfinite(hi):\n            rooms[row.name] = hi - a\n        else:\n            rooms[row.name] = a - lo\n    return rooms\n\n\ndef binding(model: mathopt.Model, result: mathopt.SolveResult, tol: float = 1e-6) -> list[str]:\n    \"\"\"Names of the rows with no room left (within tol), in the order the model holds them.\"\"\"\n    return [name for name, r in room(model, result).items() if r <= tol]\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_variable(lb=0, ub=4, name=\"x\")\n    model.add_linear_constraint(x <= 10, name=\"cap\")\n    model.maximize(x)\n    result = mathopt.solve(model, mathopt.SolverType.GLOP)\n    print(room(model, result), binding(model, result))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef room(model: mathopt.Model, result: mathopt.SolveResult) -> dict[str, float]:\n    \"\"\"Each row's room at the solution: slack on a <= row, surplus on a >= row, the nearer side of a range.\"\"\"\n    # TODO: each row's room from its activity and its stored bounds. For now every row reports 0.\n    return {row.name: 0.0 for row in model.linear_constraints()}\n\n\ndef binding(model: mathopt.Model, result: mathopt.SolveResult, tol: float = 1e-6) -> list[str]:\n    \"\"\"Names of the rows with no room left (within tol), in the order the model holds them.\"\"\"\n    # TODO: the rows whose room is at most tol.\n    return []\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_variable(lb=0, ub=4, name=\"x\")\n    model.add_linear_constraint(x <= 10, name=\"cap\")\n    model.maximize(x)\n    result = mathopt.solve(model, mathopt.SolverType.GLOP)\n    print(room(model, result), binding(model, result))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 1,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "0b46e09db97a16aa4017155f29fbd918c74f568fb71b33cfe5521892ab16fac8",
+  "starting_code": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef room(model: mathopt.Model, result: mathopt.SolveResult) -> dict[str, float]:\n    \"\"\"Each row's room at the solution: slack on a <= row, surplus on a >= row, the nearer side of a range.\"\"\"\n    # TODO: each row's room from its activity and its stored bounds. For now every row reports 0.\n    return {row.name: 0.0 for row in model.linear_constraints()}\n\n\ndef binding(model: mathopt.Model, result: mathopt.SolveResult, tol: float = 1e-6) -> list[str]:\n    \"\"\"Names of the rows with no room left (within tol), in the order the model holds them.\"\"\"\n    # TODO: the rows whose room is at most tol.\n    return []\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_variable(lb=0, ub=4, name=\"x\")\n    model.add_linear_constraint(x <= 10, name=\"cap\")\n    model.maximize(x)\n    result = mathopt.solve(model, mathopt.SolverType.GLOP)\n    print(room(model, result), binding(model, result))\n",
+  "exercise": {
+    "main_path": "practice/02-linear-programming/04-lp-modeling/prose/unit-02/practice-2/report.py",
+    "test_path": "practice/02-linear-programming/04-lp-modeling/prose/unit-02/practice-2/test_report.py",
+    "run_command": [
+      "python3",
+      "practice/02-linear-programming/04-lp-modeling/prose/unit-02/practice-2/report.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/02-linear-programming/04-lp-modeling/prose/unit-02/practice-2/target/report.xml",
+      "practice/02-linear-programming/04-lp-modeling/prose/unit-02/practice-2/test_report.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_slack_of_an_at_most_row_and_the_binding_list",
+        "kind": "main",
+        "says": "a <= row's room is its slack, and binding lists the rows with no room"
+      },
+      {
+        "id": "test_the_surplus_of_an_at_least_row_is_positive",
+        "kind": "edge",
+        "says": "a >= row's room is its surplus, activity minus bound, never negative"
+      },
+      {
+        "id": "test_a_ranged_row_reports_its_room_to_the_nearer_bound",
+        "kind": "edge",
+        "says": "a ranged row's room is its distance to the nearer of its two bounds"
+      },
+      {
+        "id": "test_a_row_off_its_bound_only_by_rounding_noise_is_binding",
+        "kind": "edge",
+        "says": "a row whose room is floating-point noise counts as binding"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/02-linear-programming/04-lp-modeling/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "04-lp-modeling/README_2.1.2.md",
+      "section": "MathOpt Stores Every Row as lb ≤ a·x ≤ ub, So You Write Rules as the Business States Them"
+    },
+    "concepts": [
+      "a row's room is its slack or surplus, and a row with none is binding",
+      "MathOpt keeps each row as a lower and an upper bound on one expression, so a range is one row"
+    ]
+  }
+}

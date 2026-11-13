@@ -1,0 +1,152 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "12-ortools-landscape"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Write a budget pick in CP-SAT",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A school district (not GridCap) funds building repairs from a yearly budget. Its finance office keeps every cost in millions of dollars with two decimals (`1.15` is $1,150,000), and wants the pick made in CP-SAT, because its other planning models already use it."
+    },
+    {
+      "type": "para",
+      "text": "Write `pick(values, costs, budget)` in `pick.py`. It returns the indices of the repairs to fund, in increasing order, for this model:"
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`I = \\{0, 1, \\dots, n-1\\}`$, the repairs."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`v_i`$, the value of repair $`i`$ (a score, with up to two decimals); $`c_i`$, its cost ($M, two decimals); $`B`$, the budget ($M, two decimals)."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_i \\in \\{0, 1\\}`$ for every $`i \\in I`$."
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& \\sum_{i \\in I} v_i\\, x_i \\\\\n\\text{s.t. } & \\sum_{i \\in I} c_i\\, x_i \\le B && \\text{(budget)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "CP-SAT accepts whole numbers only in a row, so state the budget row in hundredths of a million, where every cost and the budget are whole. Turn each number into hundredths with care: a value such as `1.15 * 100` is not exactly 115 in floating point. Use `cp_model.CpModel`, `new_bool_var`, `add`, `maximize` and `cp_model.CpSolver`, as lesson 4.1.1 did. About ten lines."
+    },
+    {
+      "type": "para",
+      "text": "Two facts from the lesson you will need. CP-SAT's objective accepts decimal coefficients, so the values may stay as they are, or be scaled to hundredths like the costs; either gives the same pick. And `solver.solve(model)` returns a status: read the plan only when it is `cp_model.OPTIMAL` or `cp_model.FEASIBLE`. Funding nothing always fits the budget, so this model always has a plan."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\nSCALE = 100          # hundredths of a million: every cost and the budget is a whole number of these\n\n\ndef pick(values: list[float], costs: list[float], budget: float) -> list[int]:\n    \"\"\"Indices of the repairs to fund, in increasing order: most value with total cost <= budget.\"\"\"\n    model = cp_model.CpModel()\n    x = [model.new_bool_var(f\"x_{i}\") for i in range(len(values))]\n    whole = [round(c * SCALE) for c in costs]\n    model.add(sum(w * xi for w, xi in zip(whole, x)) <= round(budget * SCALE))\n    model.maximize(sum(round(v * SCALE) * xi for v, xi in zip(values, x)))\n    solver = cp_model.CpSolver()\n    solver.solve(model)\n    return [i for i in range(len(x)) if solver.value(x[i])]\n\n\nif __name__ == \"__main__\":\n    print(pick([3, 4, 5], [0.5, 0.65, 1.2], 1.15))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\nSCALE = 100          # hundredths of a million: every cost and the budget is a whole number of these\n\n\ndef pick(values: list[float], costs: list[float], budget: float) -> list[int]:\n    \"\"\"Indices of the repairs to fund, in increasing order: most value with total cost <= budget.\"\"\"\n    # TODO: one Boolean per repair, the budget row in hundredths, maximize the value, solve.\n    return []\n\n\nif __name__ == \"__main__\":\n    print(pick([3, 4, 5], [0.5, 0.65, 1.2], 1.15))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 7,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "4bce1a0110cefe10831f23c2108960ea444283cb3e8ced77e1fd3fd6b116ce6d",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\nSCALE = 100          # hundredths of a million: every cost and the budget is a whole number of these\n\n\ndef pick(values: list[float], costs: list[float], budget: float) -> list[int]:\n    \"\"\"Indices of the repairs to fund, in increasing order: most value with total cost <= budget.\"\"\"\n    # TODO: one Boolean per repair, the budget row in hundredths, maximize the value, solve.\n    return []\n\n\nif __name__ == \"__main__\":\n    print(pick([3, 4, 5], [0.5, 0.65, 1.2], 1.15))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/12-ortools-landscape/prose/unit-01/practice-1/pick.py",
+    "test_path": "practice/04-google-or-tools-in-depth/12-ortools-landscape/prose/unit-01/practice-1/test_pick.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/12-ortools-landscape/prose/unit-01/practice-1/pick.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/12-ortools-landscape/prose/unit-01/practice-1/target/report.xml",
+      "practice/04-google-or-tools-in-depth/12-ortools-landscape/prose/unit-01/practice-1/test_pick.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_whole_number_data_gives_the_best_pick",
+        "kind": "main",
+        "says": "on whole-number data the pick has the most value any affordable set has"
+      },
+      {
+        "id": "test_the_pick_is_affordable_and_in_order",
+        "kind": "main",
+        "says": "the pick costs no more than the budget and lists indices in increasing order"
+      },
+      {
+        "id": "test_costs_with_cents_are_not_rounded_to_millions",
+        "kind": "edge",
+        "says": "costs with two decimals are compared at full precision, so three items of 1.40 do not fit a budget of 4.00"
+      },
+      {
+        "id": "test_an_exact_fit_survives_floating_point",
+        "kind": "edge",
+        "says": "items whose costs add up to exactly the budget all fit, although the budget times 100 is not exactly a whole number in floating point"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/12-ortools-landscape/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "12-ortools-landscape/README_4.1.1.md",
+      "section": "MathOpt, CP-SAT and the Linear Solver Wrapper Each Take a General Model"
+    },
+    "concepts": [
+      "MathOpt, CP-SAT and pywraplp spell the same general model differently, and CP-SAT takes integers only"
+    ]
+  }
+}

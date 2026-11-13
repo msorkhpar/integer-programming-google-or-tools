@@ -1,0 +1,144 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "09-diagnostics-and-explainability",
+    "38-sensitivity-for-mip"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Which way a fixed-integer price holds",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility decides which pumping stations to commission this year (yes or no each) and how many hours of contractor overtime to buy, any amount up to a cap. A limit row, such as the capital budget, caps what stations and overtime use together. After the MILP is solved, finance reads the fixed-integer price of that row and asks two questions: if the limit rises by `step`, does the plan (stations held as chosen) gain exactly price × `step`? And if it falls by `step`, does it lose exactly price × `step`?"
+    },
+    {
+      "type": "para",
+      "text": "Write `price_directions(model, result, row_name, step)` for a solved MILP whose `row_name` row is a $`\\le`$ row. It returns a dict:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`\"price\"`: the row's dual value in the fixed-integer LP;",
+        "`\"up\"`: `True` when the fixed-integer LP with the row's limit raised by `step` is optimal and its value is the original fixed LP's value plus price × `step` (within `1e-6`);",
+        "`\"down\"`: the same for the limit lowered by `step`, with value minus price × `step`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`fix_plan(model, result)` is given: it fixes every integer variable at its value in `result` and makes it continuous. It changes the caller's model in place, and your function may leave the plan fixed there: afterwards the tests read only the row's limit. Find the row by its name as the lesson's `selection.row` does (MathOpt has no lookup by name). Solve each LP with GLOP. Put the row's limit back where it was before you return."
+    },
+    {
+      "type": "para",
+      "text": "State first, with the plan fixed, which values of `step` you expect to hold upward and downward, in terms of the continuous variable's value and its bounds. The tests build small station models and check your answers. About twelve lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef fix_plan(model: mathopt.Model, result: mathopt.SolveResult) -> None:\n    \"\"\"Fix every integer variable at its value in `result`, and make it continuous.\"\"\"\n    for v in model.variables():\n        if v.integer:\n            value = round(result.variable_values(v))\n            v.integer = False\n            v.lower_bound = value\n            v.upper_bound = value\n\n\ndef price_directions(model: mathopt.Model, result: mathopt.SolveResult, row_name: str, step: float) -> dict:\n    \"\"\"The fixed-integer price of a <= row, and whether it forecasts the fixed plan's change for +step and -step.\"\"\"\n    fix_plan(model, result)\n    row = next(r for r in model.linear_constraints() if r.name == row_name)\n    base = mathopt.solve(model, mathopt.SolverType.GLOP)\n    price, limit = base.dual_values(row), row.upper_bound\n    answer = {\"price\": price}\n    for label, change in ((\"up\", step), (\"down\", -step)):\n        row.upper_bound = limit + change                  # from the original limit each time\n        moved = mathopt.solve(model, mathopt.SolverType.GLOP)\n        answer[label] = (moved.termination.reason == mathopt.TerminationReason.OPTIMAL\n                         and abs(moved.objective_value() - base.objective_value() - price * change) <= 1e-6)\n    row.upper_bound = limit\n    return answer\n\n\nif __name__ == \"__main__\":\n    m = mathopt.Model()\n    north = m.add_binary_variable(name=\"north\")\n    overtime = m.add_variable(lb=0, ub=20, name=\"overtime\")\n    m.add_linear_constraint(40 * north + overtime <= 50, name=\"budget\")\n    m.maximize(60 * north + 0.5 * overtime)\n    print(price_directions(m, mathopt.solve(m, mathopt.SolverType.HIGHS), \"budget\", 5))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef fix_plan(model: mathopt.Model, result: mathopt.SolveResult) -> None:\n    \"\"\"Fix every integer variable at its value in `result`, and make it continuous.\"\"\"\n    for v in model.variables():\n        if v.integer:\n            value = round(result.variable_values(v))\n            v.integer = False\n            v.lower_bound = value\n            v.upper_bound = value\n\n\ndef price_directions(model: mathopt.Model, result: mathopt.SolveResult, row_name: str, step: float) -> dict:\n    \"\"\"The fixed-integer price of a <= row, and whether it forecasts the fixed plan's change for +step and -step.\"\"\"\n    # TODO: say which steps should hold each way, then fix the plan, read the price and test both ways.\n    return {\"price\": 0.0, \"up\": False, \"down\": False}\n\n\nif __name__ == \"__main__\":\n    m = mathopt.Model()\n    north = m.add_binary_variable(name=\"north\")\n    overtime = m.add_variable(lb=0, ub=20, name=\"overtime\")\n    m.add_linear_constraint(40 * north + overtime <= 50, name=\"budget\")\n    m.maximize(60 * north + 0.5 * overtime)\n    print(price_directions(m, mathopt.solve(m, mathopt.SolverType.HIGHS), \"budget\", 5))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "8de52e5067f1b19cb43b52c64ebeb2f571904ed4f95ca562f30667fb4b18a6da",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef fix_plan(model: mathopt.Model, result: mathopt.SolveResult) -> None:\n    \"\"\"Fix every integer variable at its value in `result`, and make it continuous.\"\"\"\n    for v in model.variables():\n        if v.integer:\n            value = round(result.variable_values(v))\n            v.integer = False\n            v.lower_bound = value\n            v.upper_bound = value\n\n\ndef price_directions(model: mathopt.Model, result: mathopt.SolveResult, row_name: str, step: float) -> dict:\n    \"\"\"The fixed-integer price of a <= row, and whether it forecasts the fixed plan's change for +step and -step.\"\"\"\n    # TODO: say which steps should hold each way, then fix the plan, read the price and test both ways.\n    return {\"price\": 0.0, \"up\": False, \"down\": False}\n\n\nif __name__ == \"__main__\":\n    m = mathopt.Model()\n    north = m.add_binary_variable(name=\"north\")\n    overtime = m.add_variable(lb=0, ub=20, name=\"overtime\")\n    m.add_linear_constraint(40 * north + overtime <= 50, name=\"budget\")\n    m.maximize(60 * north + 0.5 * overtime)\n    print(price_directions(m, mathopt.solve(m, mathopt.SolverType.HIGHS), \"budget\", 5))\n",
+  "exercise": {
+    "main_path": "practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-2/direction.py",
+    "test_path": "practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-2/test_direction.py",
+    "run_command": [
+      "python3",
+      "practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-2/direction.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-2/target/report.xml",
+      "practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-2/test_direction.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_with_room_a_small_raise_gains_price_times_step",
+        "kind": "main",
+        "says": "with the continuous variable strictly inside its bounds, a small raise of the limit changes the fixed plan's value by price x step"
+      },
+      {
+        "id": "test_the_up_and_down_checks_each_start_from_the_original_limit",
+        "kind": "edge",
+        "says": "a small cut loses price x step too, and each check moves the limit from its original value, not from where the other check left it"
+      },
+      {
+        "id": "test_a_step_past_the_continuous_room_breaks_the_forecast",
+        "kind": "edge",
+        "says": "a step past what the continuous variable can absorb, or a cut it cannot absorb, does not hold, even when the fixed plan stays feasible"
+      },
+      {
+        "id": "test_the_price_comes_from_the_fixed_plan_not_the_relaxation",
+        "kind": "edge",
+        "says": "the price is read with the integers fixed at the plan, not merely relaxed"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "38-sensitivity-for-mip/README_9.2.2.md",
+      "section": "The Price Holds Only With the Plan Fixed and Inside Its Range"
+    },
+    "concepts": [
+      "the directions and sizes of change a fixed-integer price forecasts"
+    ]
+  }
+}

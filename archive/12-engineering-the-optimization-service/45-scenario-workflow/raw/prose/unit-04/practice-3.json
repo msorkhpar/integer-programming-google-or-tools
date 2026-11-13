@@ -1,0 +1,131 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "45-scenario-workflow"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 3,
+  "ingested": "2026-11-13",
+  "title": "Which years' spend changed between two runs",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "Riverbend Water's (invented for this practice) finance team does not read which mains moved between two runs; it reads which years' spend changed. Runs are stored as in this lesson, one `run_start` row per funded main, and a `cost` table holds each main's cost in each year of work (`year_offset` 0 is the start year)."
+    },
+    {
+      "type": "para",
+      "text": "Write the query `SPEND_DIFF` in `spend.py`. With the named parameters `:a` and `:b` (two run ids) it returns one row `(year, a_spend, b_spend)` for every calendar year in which the two runs spend different totals, ordered by year. A run that spends nothing in a year counts as 0 there, and a year in which the runs spend the same is left out. `spend_diff` already runs the query."
+    },
+    {
+      "type": "para",
+      "text": "Write the spend of each run in each year first (which pairs of a run's start row and a cost row land in year $`y`$?), then compare the two runs year by year. About twelve lines of SQL. If you use `FULL OUTER JOIN`, it needs SQLite `3.39.0` or later; the runner's library is `3.46.1`."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport sqlite3\n\nSCHEMA = \"\"\"\nCREATE TABLE run_start (run_id INTEGER NOT NULL, project TEXT NOT NULL, start_year INTEGER NOT NULL,\n                        PRIMARY KEY (run_id, project)) STRICT;\nCREATE TABLE cost (project TEXT NOT NULL, year_offset INTEGER NOT NULL, amount INTEGER NOT NULL,\n                   PRIMARY KEY (project, year_offset)) STRICT;\n\"\"\"\n\nSPEND_DIFF = \"\"\"\nWITH spend AS (\n    SELECT r.run_id, r.start_year + c.year_offset AS year, sum(c.amount) AS amount\n    FROM run_start AS r JOIN cost AS c ON c.project = r.project\n    WHERE r.run_id IN (:a, :b)\n    GROUP BY r.run_id, year\n)\nSELECT coalesce(a.year, b.year) AS year, coalesce(a.amount, 0) AS a_spend, coalesce(b.amount, 0) AS b_spend\nFROM (SELECT year, amount FROM spend WHERE run_id = :a) AS a\nFULL OUTER JOIN (SELECT year, amount FROM spend WHERE run_id = :b) AS b ON a.year = b.year\nWHERE coalesce(a.amount, 0) <> coalesce(b.amount, 0)\nORDER BY year\n\"\"\"\n\n\ndef spend_diff(conn: sqlite3.Connection, a: int, b: int) -> list[tuple[int, int, int]]:\n    \"\"\"(year, run a's spend, run b's spend) for every year whose spend differs, in year order.\"\"\"\n    return [tuple(row) for row in conn.execute(SPEND_DIFF, {\"a\": a, \"b\": b})]\n\n\nif __name__ == \"__main__\":\n    conn = sqlite3.connect(\":memory:\")\n    conn.executescript(SCHEMA)\n    conn.executemany(\"INSERT INTO cost VALUES (?, ?, ?)\", [(\"M-1\", 0, 300), (\"M-1\", 1, 200)])\n    conn.executemany(\"INSERT INTO run_start VALUES (?, ?, ?)\", [(1, \"M-1\", 2027), (2, \"M-1\", 2028)])\n    print(spend_diff(conn, 1, 2))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport sqlite3\n\nSCHEMA = \"\"\"\nCREATE TABLE run_start (run_id INTEGER NOT NULL, project TEXT NOT NULL, start_year INTEGER NOT NULL,\n                        PRIMARY KEY (run_id, project)) STRICT;\nCREATE TABLE cost (project TEXT NOT NULL, year_offset INTEGER NOT NULL, amount INTEGER NOT NULL,\n                   PRIMARY KEY (project, year_offset)) STRICT;\n\"\"\"\n\nSPEND_DIFF = \"\"\"\nSELECT NULL AS year, NULL AS a_spend, NULL AS b_spend WHERE 0\n\"\"\"\n\n\ndef spend_diff(conn: sqlite3.Connection, a: int, b: int) -> list[tuple[int, int, int]]:\n    \"\"\"(year, run a's spend, run b's spend) for every year whose spend differs, in year order.\"\"\"\n    return [tuple(row) for row in conn.execute(SPEND_DIFF, {\"a\": a, \"b\": b})]\n\n\nif __name__ == \"__main__\":\n    conn = sqlite3.connect(\":memory:\")\n    conn.executescript(SCHEMA)\n    conn.executemany(\"INSERT INTO cost VALUES (?, ?, ?)\", [(\"M-1\", 0, 300), (\"M-1\", 1, 200)])\n    conn.executemany(\"INSERT INTO run_start VALUES (?, ?, ?)\", [(1, \"M-1\", 2027), (2, \"M-1\", 2028)])\n    print(spend_diff(conn, 1, 2))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "fd541df06e937738aacc20a5d82cfcb30b1c10789f64fe71d7a826f51afe5fbf",
+  "starting_code": "from __future__ import annotations\n\nimport sqlite3\n\nSCHEMA = \"\"\"\nCREATE TABLE run_start (run_id INTEGER NOT NULL, project TEXT NOT NULL, start_year INTEGER NOT NULL,\n                        PRIMARY KEY (run_id, project)) STRICT;\nCREATE TABLE cost (project TEXT NOT NULL, year_offset INTEGER NOT NULL, amount INTEGER NOT NULL,\n                   PRIMARY KEY (project, year_offset)) STRICT;\n\"\"\"\n\nSPEND_DIFF = \"\"\"\nSELECT NULL AS year, NULL AS a_spend, NULL AS b_spend WHERE 0\n\"\"\"\n\n\ndef spend_diff(conn: sqlite3.Connection, a: int, b: int) -> list[tuple[int, int, int]]:\n    \"\"\"(year, run a's spend, run b's spend) for every year whose spend differs, in year order.\"\"\"\n    return [tuple(row) for row in conn.execute(SPEND_DIFF, {\"a\": a, \"b\": b})]\n\n\nif __name__ == \"__main__\":\n    conn = sqlite3.connect(\":memory:\")\n    conn.executescript(SCHEMA)\n    conn.executemany(\"INSERT INTO cost VALUES (?, ?, ?)\", [(\"M-1\", 0, 300), (\"M-1\", 1, 200)])\n    conn.executemany(\"INSERT INTO run_start VALUES (?, ?, ?)\", [(1, \"M-1\", 2027), (2, \"M-1\", 2028)])\n    print(spend_diff(conn, 1, 2))\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-3/spend.py",
+    "test_path": "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-3/test_spend.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-3/spend.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-3/target/report.xml",
+      "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-3/test_spend.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_years_whose_spend_changed_are_listed_and_equal_years_are_not",
+        "kind": "main",
+        "says": "two mains that swap years list both years, and a main in the same year in both runs adds no row"
+      },
+      {
+        "id": "test_a_year_only_the_second_run_spends_in_is_listed",
+        "kind": "edge",
+        "says": "a year only the second run spends in is listed with 0 for the first"
+      },
+      {
+        "id": "test_a_year_only_the_first_run_spends_in_is_listed_with_zero",
+        "kind": "edge",
+        "says": "a year only the first run spends in is listed with 0 for the second"
+      },
+      {
+        "id": "test_later_years_of_work_count_in_their_own_year",
+        "kind": "edge",
+        "says": "a two-year main's second-year cost lands in the year after its start"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-3/target/report.xml"
+    },
+    "origin": {
+      "path": "45-scenario-workflow/README_12.1.4.md",
+      "section": "Copy, Override Three Projects, Re-Optimize, and Diff the Runs in SQL"
+    },
+    "concepts": [
+      "a full outer join compares two runs and keeps rows present on one side only"
+    ]
+  }
+}

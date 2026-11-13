@@ -1,0 +1,146 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "28-piecewise-linear"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Refurbishing a pump fleet on value curves, checked against Pyomo",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility has a refurbishment fund for its fleet of pumps. Each pump in `pumps` has an age (years), a Weibull shape `beta` and scale `eta` (years), a cost per failure `cof` ($k) and the cost of a full refurbishment `capex` ($k). A refurbishment of **depth** `d` between 0 and 1 costs `d * capex` and leaves the pump as old as `(1 - d) * age`. A failed pump is repaired just enough to run again, so the expected number of failures between ages `a` and `a + h` is `((a + h) / eta) ** beta - (a / eta) ** beta`."
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Write `value_points(pump, horizon)`: the failure cost (in $k) that a refurbishment avoids over the next `horizon` years, at each depth of `DEPTHS = (0, 0.25, 0.5, 0.75, 1)`, as a list of five numbers.",
+        "Write `plan(pumps, fund, horizon)`: a MathOpt model that chooses a depth per pump, with each pump's value read from the five-point curve through `value_points` (straight lines between them), keeps the total cost within `fund`, and maximizes the total value. Solve it with HiGHS to a zero gap and return the optimal value and a dict of depths."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "With $`R`$ the pumps and $`V_{i,j}`$ pump $`i`$'s value at depth $`D_j`$, write the formulation first:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& \\sum_{i \\in R} v_i \\\\\n& \\sum_{i \\in R} \\text{capex}_i\\, d_i \\le \\text{fund}, \\qquad 0 \\le d_i \\le 1 \\\\\n& v_i = \\text{the five-point curve of pump } i \\text{ at } d_i \\qquad \\text{(your variables and rows)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Some fleets have pumps whose failure rate speeds up with age, and some whose rate grows slowly. Look at the curves' shapes before you choose how to write each one; the cheapest exact choice per pump is the one a reviewer expects, but any exact formulation passes."
+    },
+    {
+      "type": "para",
+      "text": "The tests compare your points with the formula, and your plan's value with a Pyomo model built from the same curves with `pyomo.environ.Piecewise(..., pw_constr_type=\"EQ\", pw_repn=\"INC\")` and solved by HiGHS. About thirty lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nDEPTHS = (0.0, 0.25, 0.5, 0.75, 1.0)\n\n\n@dataclass(frozen=True)\nclass Pump:\n    pid: str\n    age: float\n    beta: float\n    eta: float\n    cof: float      # $k per failure\n    capex: float    # $k for a full refurbishment\n\n\ndef value_points(pump: Pump, horizon: float) -> list[float]:\n    \"\"\"The failure cost avoided over `horizon` years at each depth of DEPTHS, in $k.\"\"\"\n    def failures(age: float) -> float:\n        return ((age + horizon) / pump.eta) ** pump.beta - (age / pump.eta) ** pump.beta\n\n    return [pump.cof * (failures(pump.age) - failures((1 - d) * pump.age)) for d in DEPTHS]\n\n\ndef plan(pumps: list[Pump], fund: float, horizon: float) -> tuple[float, dict[str, float]]:\n    \"\"\"The best total value within the fund, and the depth chosen for each pump.\"\"\"\n    model = mathopt.Model(name=\"refurbishment\")\n    depth, worth = {}, {}\n    for p in pumps:\n        v = value_points(p, horizon)\n        rises = [v[k + 1] - v[k] for k in range(len(v) - 1)]\n        if all(a >= b for a, b in zip(rises, rises[1:])):          # concave and pushed up: lines suffice\n            d = model.add_variable(lb=0, ub=1, name=f\"d_{p.pid}\")\n            y = model.add_variable(lb=0, name=f\"v_{p.pid}\")\n            for k, rise in enumerate(rises):\n                model.add_linear_constraint(y <= v[k] + rise / 0.25 * (d - DEPTHS[k]), name=f\"below_{p.pid}_{k}\")\n            depth[p.pid], worth[p.pid] = d, y\n        else:                                                      # quarters used strictly in order\n            used = [model.add_variable(lb=0, ub=1, name=f\"used_{p.pid}_{k}\") for k in range(len(rises))]\n            for k in range(len(rises) - 1):\n                done = model.add_binary_variable(name=f\"done_{p.pid}_{k}\")\n                model.add_linear_constraint(used[k + 1] <= done, name=f\"then_{p.pid}_{k}\")\n                model.add_linear_constraint(done <= used[k], name=f\"done_{p.pid}_{k}\")\n            depth[p.pid] = 0.25 * sum(used)\n            worth[p.pid] = sum(rise * u for rise, u in zip(rises, used))\n    model.add_linear_constraint(sum(p.capex * depth[p.pid] for p in pumps) <= fund, name=\"fund\")\n    model.maximize(sum(worth.values()))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS,\n                           params=mathopt.SolveParameters(relative_gap_tolerance=0.0))\n    chosen = {pid: mathopt.evaluate_expression(d + 0, result.variable_values()) for pid, d in depth.items()}\n    return result.objective_value(), chosen\n\n\nif __name__ == \"__main__\":\n    fleet = [Pump(\"North\", 30, 3.2, 40, 500, 400), Pump(\"South\", 35, 1.4, 45, 900, 500)]\n    print([round(v, 1) for v in value_points(fleet[0], 3)])\n    print(plan(fleet, 500, 3))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nDEPTHS = (0.0, 0.25, 0.5, 0.75, 1.0)\n\n\n@dataclass(frozen=True)\nclass Pump:\n    pid: str\n    age: float\n    beta: float\n    eta: float\n    cof: float      # $k per failure\n    capex: float    # $k for a full refurbishment\n\n\ndef value_points(pump: Pump, horizon: float) -> list[float]:\n    \"\"\"The failure cost avoided over `horizon` years at each depth of DEPTHS, in $k.\"\"\"\n    # TODO: expected failures before and after the refurbishment, times the cost per failure.\n    return [0.0] * len(DEPTHS)\n\n\ndef plan(pumps: list[Pump], fund: float, horizon: float) -> tuple[float, dict[str, float]]:\n    \"\"\"The best total value within the fund, and the depth chosen for each pump.\"\"\"\n    # TODO: a depth and a value per pump on its five-point curve, the fund row, and the solve.\n    return 0.0, {}\n\n\nif __name__ == \"__main__\":\n    fleet = [Pump(\"North\", 30, 3.2, 40, 500, 400), Pump(\"South\", 35, 1.4, 45, 900, 500)]\n    print([round(v, 1) for v in value_points(fleet[0], 3)])\n    print(plan(fleet, 500, 3))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "4f915d94440fc388f01ffd6519dac3841f46129fcfa2da28a146821462d522dd",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nDEPTHS = (0.0, 0.25, 0.5, 0.75, 1.0)\n\n\n@dataclass(frozen=True)\nclass Pump:\n    pid: str\n    age: float\n    beta: float\n    eta: float\n    cof: float      # $k per failure\n    capex: float    # $k for a full refurbishment\n\n\ndef value_points(pump: Pump, horizon: float) -> list[float]:\n    \"\"\"The failure cost avoided over `horizon` years at each depth of DEPTHS, in $k.\"\"\"\n    # TODO: expected failures before and after the refurbishment, times the cost per failure.\n    return [0.0] * len(DEPTHS)\n\n\ndef plan(pumps: list[Pump], fund: float, horizon: float) -> tuple[float, dict[str, float]]:\n    \"\"\"The best total value within the fund, and the depth chosen for each pump.\"\"\"\n    # TODO: a depth and a value per pump on its five-point curve, the fund row, and the solve.\n    return 0.0, {}\n\n\nif __name__ == \"__main__\":\n    fleet = [Pump(\"North\", 30, 3.2, 40, 500, 400), Pump(\"South\", 35, 1.4, 45, 900, 500)]\n    print([round(v, 1) for v in value_points(fleet[0], 3)])\n    print(plan(fleet, 500, 3))\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-04/practice-2/refurbish.py",
+    "test_path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-04/practice-2/test_refurbish.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-04/practice-2/refurbish.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/28-piecewise-linear/prose/unit-04/practice-2/target/report.xml",
+      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-04/practice-2/test_refurbish.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_value_points_follow_the_failure_model",
+        "kind": "main",
+        "says": "each pump's five values are the failure cost its refurbishment depth avoids over the horizon"
+      },
+      {
+        "id": "test_the_plan_matches_pyomo_for_wearing_out_pumps",
+        "kind": "main",
+        "says": "with only wearing-out pumps, the plan's value equals that of a Pyomo Piecewise model of the same curves"
+      },
+      {
+        "id": "test_the_plan_matches_pyomo_with_slowly_ageing_pumps",
+        "kind": "edge",
+        "says": "with pumps whose failure rate grows slowly in the fleet, the plan's value still equals the Pyomo model's"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-04/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "28-piecewise-linear/README_6.6.4.md",
+      "section": "A Second Tool Checks the Formulation"
+    },
+    "concepts": [
+      "a value curve sampled from an asset's failure model at a few renewal depths",
+      "one exact formulation per curve, the cheapest its shape allows",
+      "an independent model built by another tool confirms the optimum",
+      "the Weibull shape sorts value curves into concave and convex ones"
+    ]
+  }
+}

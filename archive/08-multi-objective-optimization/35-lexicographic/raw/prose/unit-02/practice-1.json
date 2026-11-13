@@ -1,0 +1,140 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "08-multi-objective-optimization",
+    "35-lexicographic"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Porting a ranked objective list to setObjectiveN",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A hospital's theatre-scheduling team stores its ranked objectives the MathOpt way, as a list of levels:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "{\"name\": \"urgent\", \"priority\": 0, \"maximize\": True, \"abs_tol\": None, \"rel_tol\": 0.02}"
+    },
+    {
+      "type": "para",
+      "text": "A lower `priority` is optimized first; a tolerance of `None` means \"not set\", which in MathOpt allows no loss. An analyst wants to check the schedules in Gurobi, so the same levels must become `Model.setObjectiveN` calls on a model whose `ModelSense` is `GRB.MAXIMIZE`."
+    },
+    {
+      "type": "para",
+      "text": "Write `set_objective_n_args(levels)`. It returns one dict of keyword arguments per level, in the order of `levels`, with the keys `index` (the level's position in the list), `priority`, `weight`, `abstol`, `reltol` and `name`, so that each can be passed as `model.setObjectiveN(expr, **args)` and Gurobi optimizes the objectives in the same order, with the same senses and the same tolerances as MathOpt would. Any integers that give the right order are accepted. Gurobi's documentation (the `setObjectiveN` docstring of gurobipy 13.0 and the multi-objective attributes page) types `ObjNPriority` as an integer with default 0 and states no range, so it neither promises nor rules out negative priorities. The reference does not rely on them: it maps each MathOpt priority $`p`$ to $`p_{\\max} - p`$, where $`p_{\\max}`$ is the largest MathOpt priority in the list, so every Gurobi priority is 0 or more and the level MathOpt solves first gets the largest. The tests only compare the order the priorities give, so a negative mapping such as $`-p`$ passes them too."
+    },
+    {
+      "type": "para",
+      "text": "The tests need no Gurobi license: they read your dicts. About eight lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\n\ndef set_objective_n_args(levels: list[dict]) -> list[dict]:\n    \"\"\"setObjectiveN keyword arguments, one dict per level, for a model with ModelSense = maximize.\"\"\"\n    top = max(level[\"priority\"] for level in levels)\n    return [{\"index\": i,\n             \"priority\": top - level[\"priority\"],            # Gurobi: the highest priority goes first\n             \"weight\": 1 if level[\"maximize\"] else -1,       # one ModelSense: minimize f = maximize -f\n             \"abstol\": level[\"abs_tol\"] or 0.0,              # MathOpt's unset means no loss\n             \"reltol\": level[\"rel_tol\"] or 0.0,\n             \"name\": level[\"name\"]}\n            for i, level in enumerate(levels)]\n\n\nif __name__ == \"__main__\":\n    levels = [{\"name\": \"urgent\", \"priority\": 0, \"maximize\": True, \"abs_tol\": None, \"rel_tol\": 0.02},\n              {\"name\": \"overtime\", \"priority\": 1, \"maximize\": False, \"abs_tol\": 2.0, \"rel_tol\": None}]\n    for args in set_objective_n_args(levels):\n        print(args)\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\n\ndef set_objective_n_args(levels: list[dict]) -> list[dict]:\n    \"\"\"setObjectiveN keyword arguments, one dict per level, for a model with ModelSense = maximize.\"\"\"\n    # TODO: Gurobi's priority order, the weight that encodes the sense, and the tolerances.\n    return [{\"index\": i, \"priority\": level[\"priority\"], \"weight\": 1, \"abstol\": 1e-6, \"reltol\": 0,\n             \"name\": \"objective\"} for i, level in enumerate(levels)]\n\n\nif __name__ == \"__main__\":\n    levels = [{\"name\": \"urgent\", \"priority\": 0, \"maximize\": True, \"abs_tol\": None, \"rel_tol\": 0.02},\n              {\"name\": \"overtime\", \"priority\": 1, \"maximize\": False, \"abs_tol\": 2.0, \"rel_tol\": None}]\n    for args in set_objective_n_args(levels):\n        print(args)\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "12d16edf744d71f6e495ff2f9bbe1ecaf70aa504c7a4b39baa0ad27d3e58426c",
+  "starting_code": "from __future__ import annotations\n\n\ndef set_objective_n_args(levels: list[dict]) -> list[dict]:\n    \"\"\"setObjectiveN keyword arguments, one dict per level, for a model with ModelSense = maximize.\"\"\"\n    # TODO: Gurobi's priority order, the weight that encodes the sense, and the tolerances.\n    return [{\"index\": i, \"priority\": level[\"priority\"], \"weight\": 1, \"abstol\": 1e-6, \"reltol\": 0,\n             \"name\": \"objective\"} for i, level in enumerate(levels)]\n\n\nif __name__ == \"__main__\":\n    levels = [{\"name\": \"urgent\", \"priority\": 0, \"maximize\": True, \"abs_tol\": None, \"rel_tol\": 0.02},\n              {\"name\": \"overtime\", \"priority\": 1, \"maximize\": False, \"abs_tol\": 2.0, \"rel_tol\": None}]\n    for args in set_objective_n_args(levels):\n        print(args)\n",
+  "exercise": {
+    "main_path": "practice/08-multi-objective-optimization/35-lexicographic/prose/unit-02/practice-1/port.py",
+    "test_path": "practice/08-multi-objective-optimization/35-lexicographic/prose/unit-02/practice-1/test_port.py",
+    "run_command": [
+      "python3",
+      "practice/08-multi-objective-optimization/35-lexicographic/prose/unit-02/practice-1/port.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/08-multi-objective-optimization/35-lexicographic/prose/unit-02/practice-1/target/report.xml",
+      "practice/08-multi-objective-optimization/35-lexicographic/prose/unit-02/practice-1/test_port.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_maximized_levels_keep_their_order_names_and_tolerances",
+        "kind": "main",
+        "says": "three maximized levels with priorities 0, 1, 2 and every tolerance set come out in the same order of optimization, with weight 1 and the same tolerances"
+      },
+      {
+        "id": "test_a_minimized_level_gets_a_negative_weight",
+        "kind": "edge",
+        "says": "a minimized level in a model whose sense is maximize gets weight -1"
+      },
+      {
+        "id": "test_an_unset_absolute_tolerance_means_no_loss",
+        "kind": "edge",
+        "says": "a level whose absolute tolerance is None gets abstol 0, not Gurobi's default"
+      },
+      {
+        "id": "test_priorities_need_not_be_consecutive_or_sorted",
+        "kind": "edge",
+        "says": "levels with priorities 7, 0 and 3, listed in that order, are optimized 0, 3, 7"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/08-multi-objective-optimization/35-lexicographic/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "35-lexicographic/README_8.2.2.md",
+      "section": "gurobipy Solves the Hierarchy Natively, and Its Priorities Run the Other Way"
+    },
+    "concepts": [
+      "turning MathOpt-style ranked objectives into setObjectiveN arguments: priority order, weights for senses, tolerance defaults"
+    ]
+  }
+}

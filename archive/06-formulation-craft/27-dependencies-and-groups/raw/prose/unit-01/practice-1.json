@@ -1,0 +1,159 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "27-dependencies-and-groups"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A school district's deadlines",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A school district plans its building work for 2027 to 2030. The model in `schools.py` has a binary `x[pid, t]` for each project and each year `t` in its `starts` (1 if the project starts in year `t`). Three rules come from the state and the district's own policy:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Once.** No project starts more than once.",
+        "**Required work.** `required` maps a project to a deadline year. A required project must be done, and it must start in its deadline year or earlier.",
+        "**Accessibility.** `access` maps a school to its accessibility projects (ramps, lifts, doors), and `targets` maps a school to a pair `(k, year)`: by the end of `year`, at least `k` of that school's accessibility projects must have started. Which ones is up to the plan."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Write `add_mandates(model, x, projects, required, access, targets)` so that the model allows exactly the plans that keep all three rules."
+    },
+    {
+      "type": "para",
+      "text": "The model so far, with $`P`$ the projects and $`T_i`$ the start years of project $`i`$:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& x_{i,t} \\in \\{0, 1\\} && \\forall i \\in P,\\ t \\in T_i && \\text{(project } i \\text{ starts in year } t\\text{)} \\\\\n& \\text{?} && && \\text{(your rows)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Name the remaining sets and parameters (the required projects and their deadlines, the schools, each school's access projects, its count and its year), then write your rows, each with its quantifier and a label, and only then code them. Before you write the access row, ask which of a project's start variables should count toward a target year."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix every `x[pid, t]` through its bounds and ask the solver whether the model accepts the plan, so any correct formulation passes. About ten lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n\n\ndef add_mandates(model: mathopt.Model, x: dict, projects: list[Project], required: dict[str, int],\n                 access: dict[str, list[str]], targets: dict[str, tuple[int, int]]) -> None:\n    \"\"\"Each project at most once; required work by its deadline; each school's access target.\"\"\"\n    starts = {p.pid: p.starts for p in projects}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    for pid, deadline in required.items():\n        in_time = [x[pid, t] for t in starts[pid] if t <= deadline]\n        model.add_linear_constraint(sum(in_time) == 1, name=f\"required_{pid}\")\n    for school, (k, year) in targets.items():\n        done_by = [x[pid, t] for pid in access.get(school, []) for t in starts[pid] if t <= year]\n        model.add_linear_constraint(sum(done_by) >= k, name=f\"access_{school}\")\n\n\ndef build(projects: list[Project], required: dict[str, int], access: dict[str, list[str]],\n          targets: dict[str, tuple[int, int]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"school-works\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    add_mandates(model, x, projects, required, access, targets)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"ROOF\", (2027, 2028)), Project(\"RAMP\", (2028, 2029))]\n    model, x = build(projects, {\"ROOF\": 2027}, {\"Oak\": [\"RAMP\"]}, {\"Oak\": (1, 2029)})\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n\n\ndef add_mandates(model: mathopt.Model, x: dict, projects: list[Project], required: dict[str, int],\n                 access: dict[str, list[str]], targets: dict[str, tuple[int, int]]) -> None:\n    \"\"\"Each project at most once; required work by its deadline; each school's access target.\"\"\"\n    # TODO: the once rows, the required rows and the access rows.\n    return None\n\n\ndef build(projects: list[Project], required: dict[str, int], access: dict[str, list[str]],\n          targets: dict[str, tuple[int, int]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"school-works\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    add_mandates(model, x, projects, required, access, targets)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"ROOF\", (2027, 2028)), Project(\"RAMP\", (2028, 2029))]\n    model, x = build(projects, {\"ROOF\": 2027}, {\"Oak\": [\"RAMP\"]}, {\"Oak\": (1, 2029)})\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "2ad09f579e03d1e5e76277e3384d4116ae8c6a6118e70ca4f57c9b3beb1fa990",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n\n\ndef add_mandates(model: mathopt.Model, x: dict, projects: list[Project], required: dict[str, int],\n                 access: dict[str, list[str]], targets: dict[str, tuple[int, int]]) -> None:\n    \"\"\"Each project at most once; required work by its deadline; each school's access target.\"\"\"\n    # TODO: the once rows, the required rows and the access rows.\n    return None\n\n\ndef build(projects: list[Project], required: dict[str, int], access: dict[str, list[str]],\n          targets: dict[str, tuple[int, int]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"school-works\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    add_mandates(model, x, projects, required, access, targets)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"ROOF\", (2027, 2028)), Project(\"RAMP\", (2028, 2029))]\n    model, x = build(projects, {\"ROOF\": 2027}, {\"Oak\": [\"RAMP\"]}, {\"Oak\": (1, 2029)})\n    print(model.get_num_linear_constraints(), \"rows\")\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-1/schools.py",
+    "test_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-1/test_schools.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-1/schools.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-1/target/report.xml",
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-1/test_schools.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_every_required_project_is_done",
+        "kind": "main",
+        "says": "a plan that does every required project is allowed, and one that skips a required project is refused"
+      },
+      {
+        "id": "test_each_school_meets_its_access_target",
+        "kind": "main",
+        "says": "a plan that meets each school's access target is allowed, and one that falls short is refused"
+      },
+      {
+        "id": "test_a_required_project_after_its_deadline_is_refused",
+        "kind": "edge",
+        "says": "a required project started after its deadline is refused"
+      },
+      {
+        "id": "test_access_work_after_the_target_year_does_not_count",
+        "kind": "edge",
+        "says": "access work started after the target year does not count toward the target"
+      },
+      {
+        "id": "test_no_project_starts_twice",
+        "kind": "edge",
+        "says": "a discretionary project started in two years is refused"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "27-dependencies-and-groups/README_6.5.1.md",
+      "section": "A Group Can Be Mandated When No Single Project Is"
+    },
+    "concepts": [
+      "a must-do is an equality row on whether the project starts, while a discretionary project gets an at-most-once row",
+      "a mandate on a group is one counting row over the members' start sums"
+    ]
+  }
+}

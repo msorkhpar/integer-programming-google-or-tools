@@ -1,0 +1,138 @@
+{
+  "project_api": 1,
+  "title": "Show the trade between risk and NPV",
+  "before": "../../../../55-project-cipt-planner/steps/04",
+  "after": "../../../../55-project-cipt-planner/steps/05",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the demo export matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "cipt/goals.py",
+      "signature": "def best(request: Request, first: str, floor: float | None = None) -> Plan",
+      "contract": "Maximizes the goal named first ('npv' or 'risk'), with an optional floor on the risk removed as a row named risk_floor; then, holding the first goal at its best within KEEP, maximizes the other. Returns the second solve's Plan, or the first one's when it is not optimal.",
+      "idea": "A lexicographic second solve keeps the first goal and takes the most of the other, so no point is beaten by a plan equal on the first goal.",
+      "lesson": {
+        "title": "8.2.1 Hierarchical Objectives with Tolerances",
+        "href": "../../../../08-multi-objective-optimization/35-lexicographic/units/unit-01/8.2.1-hierarchical-objectives-with-tolerances.unit.html"
+      },
+      "stub": "return Plan(status=\"not solved\")"
+    },
+    {
+      "file": "cipt/goals.py",
+      "signature": "def dominates(a: Point, b: Point) -> bool",
+      "contract": "True when point a is at least as good as b on both goals and better on one, each comparison within the slack KEEP gives that goal.",
+      "idea": "A point is on the frontier when no other point dominates it.",
+      "lesson": {
+        "title": "8.3.2 AUGMECON: Avoiding Weakly Efficient Points",
+        "href": "../../../../08-multi-objective-optimization/36-epsilon-constraint/units/unit-02/8.3.2-augmecon-avoiding-weakly-efficient-points.unit.html"
+      },
+      "stub": "return False"
+    },
+    {
+      "file": "cipt/goals.py",
+      "signature": "def frontier(request: Request, points: int = 5) -> list[Point]",
+      "contract": "Returns up to `points` non-dominated points, from the best NPV to the most risk removed: the two ends, then best NPV for risk floors spread evenly between the ends' risk. Drops a point whose NPV repeats one already found, and any dominated point. Empty when either end is not optimal.",
+      "idea": "The epsilon-constraint method: maximize one goal while the other must reach a floor, for a series of floors.",
+      "lesson": {
+        "title": "8.3.1 The ε-Constraint Method",
+        "href": "../../../../08-multi-objective-optimization/36-epsilon-constraint/units/unit-01/8.3.1-the-constraint-method.unit.html"
+      }
+    },
+    {
+      "file": "cipt/rules.py",
+      "signature": "def risk_floor(built: Built) -> None",
+      "contract": "Adds a row risk_floor (the plan removes at least the request's risk_floor) when the request sets one, and nothing otherwise.",
+      "idea": "A floor the planners set is one more named row over the risk expression.",
+      "lesson": {
+        "title": "8.3.1 The ε-Constraint Method",
+        "href": "../../../../08-multi-objective-optimization/36-epsilon-constraint/units/unit-01/8.3.1-the-constraint-method.unit.html"
+      },
+      "stub": "return None"
+    },
+    {
+      "file": "cipt/solve.py",
+      "signature": "def solve_built(built: Built) -> Plan",
+      "contract": "Solves a Built the caller may have changed after build (a new objective, an extra row) and returns its Plan.",
+      "idea": "Solving a model you changed is a separate step from building it.",
+      "lesson": {
+        "title": "14.2.5 Two Goals: Risk Against NPV",
+        "href": "../../../../14-growing-real-projects/55-project-cipt-planner/units/unit-05/14.2.5-two-goals-risk-against-npv.unit.html"
+      },
+      "stub": "return Plan(status=\"not solved\")"
+    },
+    {
+      "file": "cipt/model.py",
+      "signature": "def build(request: Request) -> Built",
+      "contract": "Sets the NPV and risk expressions on the Built before the rules run, so a rule may name them.",
+      "idea": "A rule over a goal needs the goal's expression to exist first.",
+      "lesson": {
+        "title": "14.2.5 Two Goals: Risk Against NPV",
+        "href": "../../../../14-growing-real-projects/55-project-cipt-planner/units/unit-05/14.2.5-two-goals-risk-against-npv.unit.html"
+      }
+    },
+    {
+      "file": "cipt/data.py",
+      "signature": "def load_request(raw: dict) -> Request",
+      "contract": "Also reads the request's optional risk_floor, in $k; None when the export has none.",
+      "idea": "The floor is a request setting, so the planners can ask for it in the export.",
+      "lesson": {
+        "title": "14.2.5 Two Goals: Risk Against NPV",
+        "href": "../../../../14-growing-real-projects/55-project-cipt-planner/units/unit-05/14.2.5-two-goals-risk-against-npv.unit.html"
+      }
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_goals.py::test_frontier_runs_from_best_npv_to_most_risk_removed",
+      "main",
+      "the frontier runs from the best NPV to the most risk removed"
+    ],
+    [
+      "tests/test_goals.py::test_frontier_finds_the_plan_between_the_ends",
+      "main",
+      "the frontier finds the plan between its two ends"
+    ],
+    [
+      "tests/test_goals.py::test_no_frontier_point_is_dominated",
+      "main",
+      "no frontier point is beaten on both goals by another"
+    ],
+    [
+      "tests/test_goals.py::test_tied_npv_end_takes_the_most_risk",
+      "edge",
+      "of two plans tied on NPV, the frontier's NPV end is the one removing more risk"
+    ],
+    [
+      "tests/test_goals.py::test_risk_floor_is_respected",
+      "edge",
+      "a risk floor in the export gives the best NPV above that floor"
+    ]
+  ],
+  "plants": {
+    "tests/test_goals.py::test_tied_npv_end_takes_the_most_risk": [
+      [
+        "cipt/goals.py",
+        "    other = \"risk\" if first == \"npv\" else \"npv\"\n    built.add(f\"keep_{first}\", goal[first] >= getattr(plan, first) - KEEP[first])\n    built.model.maximize(goal[other])\n    return solve_built(built)\n",
+        "    return plan\n"
+      ]
+    ],
+    "tests/test_goals.py::test_risk_floor_is_respected": [
+      [
+        "cipt/rules.py",
+        "RULES = (once_or_must, alternatives, bundles, parents, budgets, risk_floor)",
+        "RULES = (once_or_must, alternatives, bundles, parents, budgets)"
+      ]
+    ]
+  },
+  "cites": {
+    "path": "55-project-cipt-planner/README_14.2.5.md",
+    "section": null
+  }
+}

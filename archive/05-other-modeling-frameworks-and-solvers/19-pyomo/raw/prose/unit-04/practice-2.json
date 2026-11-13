@@ -1,0 +1,135 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "05-other-modeling-frameworks-and-solvers",
+    "19-pyomo"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "A deletion filter in Pyomo",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A staffing team's models are LPs and small MILPs, and when one comes back infeasible they want the rows to blame without a commercial solver. HiGHS can tell them whether a model is feasible; the **deletion filter** turns that yes/no answer into an irreducible infeasible subsystem."
+    },
+    {
+      "type": "para",
+      "text": "Write `deletion_filter(model)` in `iis.py`. It receives an infeasible Pyomo model and returns the sorted names of the rows of one irreducible infeasible subsystem; variable bounds always stay."
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Deactivate the objective: only feasibility matters. Objectives and constraints both have `.deactivate()` and `.activate()`; for the objective the reference calls `objective.deactivate()` on each one `model.component_data_objects(pyo.Objective, active=True)` yields.",
+        "Take each active row in turn (`model.component_data_objects(pyo.Constraint, active=True)`). Call `row.deactivate()` and ask `feasible(model)` (in the starter). If the model is now feasible, the row is part of the conflict: `row.activate()` and keep it. If the model is still infeasible, leave the row out for good.",
+        "The rows left active at the end are the subsystem."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The tests use models with one conflict and with two unrelated ones. About ten lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport pyomo.environ as pyo\nfrom pyomo.contrib.solver.common.factory import SolverFactory\nfrom pyomo.contrib.solver.common.results import TerminationCondition\n\n\ndef feasible(model: pyo.ConcreteModel) -> bool:\n    \"\"\"Whether the model's active rows and the variables' bounds have a common point.\"\"\"\n    results = SolverFactory(\"highs\").solve(model, raise_exception_on_nonoptimal_result=False,\n                                           load_solutions=False)\n    return results.termination_condition != TerminationCondition.provenInfeasible\n\n\ndef deletion_filter(model: pyo.ConcreteModel) -> list[str]:\n    \"\"\"Names of the rows of one irreducible infeasible subsystem of an infeasible model (bounds kept).\"\"\"\n    for objective in model.component_data_objects(pyo.Objective, active=True):\n        objective.deactivate()                     # feasibility is the only question\n    rows = list(model.component_data_objects(pyo.Constraint, active=True))\n    keep = []\n    for row in rows:\n        row.deactivate()\n        if feasible(model):                        # without this row the rest is feasible: it is needed\n            row.activate()\n            keep.append(row.name)\n    return sorted(keep)\n\n\nif __name__ == \"__main__\":\n    m = pyo.ConcreteModel()\n    m.x = pyo.Var(bounds=(0, 10))\n    m.y = pyo.Var(bounds=(0, 10))\n    m.a = pyo.Constraint(expr=m.x + m.y >= 12)\n    m.b = pyo.Constraint(expr=m.x <= 3)\n    m.c = pyo.Constraint(expr=m.y <= 4)\n    m.d = pyo.Constraint(expr=m.x - m.y <= 5)\n    print(deletion_filter(m))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport pyomo.environ as pyo\nfrom pyomo.contrib.solver.common.factory import SolverFactory\nfrom pyomo.contrib.solver.common.results import TerminationCondition\n\n\ndef feasible(model: pyo.ConcreteModel) -> bool:\n    \"\"\"Whether the model's active rows and the variables' bounds have a common point.\"\"\"\n    results = SolverFactory(\"highs\").solve(model, raise_exception_on_nonoptimal_result=False,\n                                           load_solutions=False)\n    return results.termination_condition != TerminationCondition.provenInfeasible\n\n\ndef deletion_filter(model: pyo.ConcreteModel) -> list[str]:\n    \"\"\"Names of the rows of one irreducible infeasible subsystem of an infeasible model (bounds kept).\"\"\"\n    # TODO: deactivate the objective; take each active row in turn: drop it, and put it back only\n    #       if the model without it is feasible. The rows left active are the subsystem.\n    return []\n\n\nif __name__ == \"__main__\":\n    m = pyo.ConcreteModel()\n    m.x = pyo.Var(bounds=(0, 10))\n    m.y = pyo.Var(bounds=(0, 10))\n    m.a = pyo.Constraint(expr=m.x + m.y >= 12)\n    m.b = pyo.Constraint(expr=m.x <= 3)\n    m.c = pyo.Constraint(expr=m.y <= 4)\n    m.d = pyo.Constraint(expr=m.x - m.y <= 5)\n    print(deletion_filter(m))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "4b78da74015a6af0aaca877627efe911c7509c9539a347c789519d803650d4c1",
+  "starting_code": "from __future__ import annotations\n\nimport pyomo.environ as pyo\nfrom pyomo.contrib.solver.common.factory import SolverFactory\nfrom pyomo.contrib.solver.common.results import TerminationCondition\n\n\ndef feasible(model: pyo.ConcreteModel) -> bool:\n    \"\"\"Whether the model's active rows and the variables' bounds have a common point.\"\"\"\n    results = SolverFactory(\"highs\").solve(model, raise_exception_on_nonoptimal_result=False,\n                                           load_solutions=False)\n    return results.termination_condition != TerminationCondition.provenInfeasible\n\n\ndef deletion_filter(model: pyo.ConcreteModel) -> list[str]:\n    \"\"\"Names of the rows of one irreducible infeasible subsystem of an infeasible model (bounds kept).\"\"\"\n    # TODO: deactivate the objective; take each active row in turn: drop it, and put it back only\n    #       if the model without it is feasible. The rows left active are the subsystem.\n    return []\n\n\nif __name__ == \"__main__\":\n    m = pyo.ConcreteModel()\n    m.x = pyo.Var(bounds=(0, 10))\n    m.y = pyo.Var(bounds=(0, 10))\n    m.a = pyo.Constraint(expr=m.x + m.y >= 12)\n    m.b = pyo.Constraint(expr=m.x <= 3)\n    m.c = pyo.Constraint(expr=m.y <= 4)\n    m.d = pyo.Constraint(expr=m.x - m.y <= 5)\n    print(deletion_filter(m))\n",
+  "exercise": {
+    "main_path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-04/practice-2/iis.py",
+    "test_path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-04/practice-2/test_iis.py",
+    "run_command": [
+      "python3",
+      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-04/practice-2/iis.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-04/practice-2/target/report.xml",
+      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-04/practice-2/test_iis.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_one_conflict_between_cover_and_the_union_cap",
+        "kind": "main",
+        "says": "a staffing model whose cover row conflicts with the union cap returns those two rows"
+      },
+      {
+        "id": "test_three_rows_where_any_two_agree",
+        "kind": "main",
+        "says": "a conflict of three rows, any two of which can hold together, returns all three"
+      },
+      {
+        "id": "test_two_separate_conflicts_give_one_of_them",
+        "kind": "edge",
+        "says": "a model with two unrelated conflicts returns the rows of one of them, not an empty list"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-04/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "19-pyomo/README_5.1.4.md",
+      "section": "The MIS Tool Explains an Infeasible Model With Any Solver, on Its LP Relaxation"
+    },
+    "concepts": [
+      "finding a conflicting set of rows with any solver"
+    ]
+  }
+}

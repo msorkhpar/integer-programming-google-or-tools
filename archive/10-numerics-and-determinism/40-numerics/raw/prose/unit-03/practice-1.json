@@ -1,0 +1,141 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "10-numerics-and-determinism",
+    "40-numerics"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Scan a nightly HiGHS log for numerical warnings",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A regional airline re-optimizes its maintenance schedule every night with HiGHS and keeps each solve's log as a list of lines. Nobody reads the logs, so the operations team wants a scanner that returns the lines worth reading, as short findings stored with each plan."
+    },
+    {
+      "type": "para",
+      "text": "Write `scan(lines, max_span=1e6)`. It returns a list of findings, in the order their lines appear:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "a line that starts with `WARNING:` (after leading spaces) gives `\"warning: <text>\"`, where `<text>` is the rest of the line after `WARNING:`, with spaces trimmed at both ends;",
+        "the range line that starts with `Matrix`, such as `  Matrix  [1e-01, 1e+09]`, gives `\"matrix span <ratio>\"` when the largest value divided by the smallest is above `max_span`, with the ratio written as `f\"{ratio:.0e}\"` (so `1e+10`);",
+        "a report line such as `                    8.89e-07 (int. viol.)` gives `\"<kind> violation <value>\"` when its value is above 0, with `<kind>` `bound`, `integrality` or `row` for `(bound viol.)`, `(int. viol.)` and `(row viol.)`, and `<value>` the number exactly as the line writes it."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Every other line gives nothing. The tests use their own logs, in HiGHS's format. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nKINDS = {\"(bound viol.)\": \"bound\", \"(int. viol.)\": \"integrality\", \"(row viol.)\": \"row\"}\n\n\ndef scan(lines: list[str], max_span: float = 1e6) -> list[str]:\n    \"\"\"The numerical findings of a HiGHS log, in the order their lines appear.\"\"\"\n    findings: list[str] = []\n    for line in lines:\n        text = line.strip()\n        if text.startswith(\"WARNING:\"):\n            findings.append(\"warning: \" + text[len(\"WARNING:\"):].strip())\n        elif text.startswith(\"Matrix\"):\n            low, high = (float(v) for v in text[text.index(\"[\") + 1:text.index(\"]\")].split(\",\"))\n            if high / low > max_span:\n                findings.append(f\"matrix span {high / low:.0e}\")\n        else:\n            for marker, kind in KINDS.items():\n                value = text.split()[0] if text.endswith(marker) else None\n                if value is not None and float(value) > 0:\n                    findings.append(f\"{kind} violation {value}\")\n    return findings\n\n\nif __name__ == \"__main__\":\n    print(scan([\"WARNING: Problem has some excessively large costs\", \"  Matrix  [1e-01, 1e+09]\",\n                \"                    8.89e-07 (int. viol.)\"]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nKINDS = {\"(bound viol.)\": \"bound\", \"(int. viol.)\": \"integrality\", \"(row viol.)\": \"row\"}\n\n\ndef scan(lines: list[str], max_span: float = 1e6) -> list[str]:\n    \"\"\"The numerical findings of a HiGHS log, in the order their lines appear.\"\"\"\n    findings: list[str] = []\n    # TODO: warnings, a matrix span above max_span, and violations above 0.\n    return findings\n\n\nif __name__ == \"__main__\":\n    print(scan([\"WARNING: Problem has some excessively large costs\", \"  Matrix  [1e-01, 1e+09]\",\n                \"                    8.89e-07 (int. viol.)\"]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "1108aa8261cf0c2e3e9a935716c7504ddeb2db274a1b599ee06453dc7ac808e5",
+  "starting_code": "from __future__ import annotations\n\nKINDS = {\"(bound viol.)\": \"bound\", \"(int. viol.)\": \"integrality\", \"(row viol.)\": \"row\"}\n\n\ndef scan(lines: list[str], max_span: float = 1e6) -> list[str]:\n    \"\"\"The numerical findings of a HiGHS log, in the order their lines appear.\"\"\"\n    findings: list[str] = []\n    # TODO: warnings, a matrix span above max_span, and violations above 0.\n    return findings\n\n\nif __name__ == \"__main__\":\n    print(scan([\"WARNING: Problem has some excessively large costs\", \"  Matrix  [1e-01, 1e+09]\",\n                \"                    8.89e-07 (int. viol.)\"]))\n",
+  "exercise": {
+    "main_path": "practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-1/scan.py",
+    "test_path": "practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-1/test_scan.py",
+    "run_command": [
+      "python3",
+      "practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-1/scan.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-1/target/report.xml",
+      "practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-1/test_scan.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_troubled_log_gives_its_findings_in_order_and_a_clean_one_none",
+        "kind": "main",
+        "says": "a log with a warning, a wide matrix span and an integrality violation gives those three findings in log order, and a clean log gives none"
+      },
+      {
+        "id": "test_a_zero_violation_is_not_a_finding",
+        "kind": "edge",
+        "says": "a violation line that reads 0 is not a finding"
+      },
+      {
+        "id": "test_a_span_at_the_limit_is_not_a_finding",
+        "kind": "edge",
+        "says": "a matrix span equal to the limit is within it"
+      },
+      {
+        "id": "test_the_cost_range_is_not_the_matrix_span",
+        "kind": "edge",
+        "says": "only the Matrix line gives a span finding, not the Cost, Bound or RHS lines"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "40-numerics/README_10.1.3.md",
+      "section": "The Report's Violation Lines Are the Solver's Audit of Its Own Plan"
+    },
+    "concepts": [
+      "the report's violation lines are the solver's own measure of its plan, and nonzero values point at what to inspect",
+      "HiGHS warns about large costs and bounds but not about the matrix, so the ranges are read directly"
+    ]
+  }
+}

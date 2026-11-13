@@ -1,0 +1,154 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "52-ortools-routing"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Price a tour with a transit callback",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility's meter readers walk one loop a day from their depot. The route planner gets its distances from a mapping service in kilometers, with decimals, and it has to price a loop with the OR-Tools routing library. Two functions in `tour.py` are unfinished:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`build(cost, depot)` makes a one-vehicle routing model from an integer cost matrix, with `cost[a][b]` the cost of going from node `a` to node `b` (the matrix need not be symmetric: some streets are one-way). The index manager is already there; the arc cost is missing.",
+        "`scaled(km, scale)` turns the kilometers into the integer costs the model needs: each distance times `scale`, as an integer."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "In the lesson's notation, with $`\\text{node}(i)`$ the node of solver index $`i`$, the model must minimize"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_{i} c_{\\text{node}(i),\\, \\text{node}(\\text{next}_i)}, \\qquad c_{ab} = \\operatorname{round}(\\text{scale} \\cdot d_{ab})"
+    },
+    {
+      "type": "para",
+      "text": "where $`d_{ab}`$ is the distance in kilometers and $`\\operatorname{round}`$ goes to the nearest integer. The reference uses Python's built-in `round(scale * d)`, which sends an exact half to the even neighbour (`round(2.5)` is 2, `round(3.5)` is 4), and returns an `int`; `int(...)` would instead cut every fraction off, so 12.97 would become 12. Say in your own words which of the two indices the callback receives is the arc's start, and why it must be converted before it reads the matrix."
+    },
+    {
+      "type": "para",
+      "text": "The tests price hand-built loops with `ReadAssignmentFromRoutes`, so any correct callback passes. About six lines in total."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef build(cost: list[list[int]], depot: int):\n    \"\"\"A one-vehicle routing model whose arc from node a to node b costs cost[a][b].\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(cost), 1, depot)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def arc(from_index, to_index):\n        return cost[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    routing.SetArcCostEvaluatorOfAllVehicles(routing.RegisterTransitCallback(arc))\n    return manager, routing\n\n\ndef scaled(km: list[list[float]], scale: int) -> list[list[int]]:\n    \"\"\"Integer arc costs: every distance times scale, rounded to the nearest integer.\"\"\"\n    return [[round(scale * d) for d in row] for row in km]\n\n\nif __name__ == \"__main__\":\n    grid = scaled([[0, 1.25, 2.5], [1.25, 0, 1.8], [2.5, 1.8, 0]], 100)\n    manager, routing = build(grid, 0)\n    plan = routing.ReadAssignmentFromRoutes([[1, 2]], True)\n    print(grid, plan.ObjectiveValue() if plan else None)\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef build(cost: list[list[int]], depot: int):\n    \"\"\"A one-vehicle routing model whose arc from node a to node b costs cost[a][b].\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(cost), 1, depot)\n    routing = pywrapcp.RoutingModel(manager)\n    # TODO: a transit callback that prices one arc, registered, and set as every vehicle's arc cost.\n    return manager, routing\n\n\ndef scaled(km: list[list[float]], scale: int) -> list[list[int]]:\n    \"\"\"Integer arc costs: every distance times scale, rounded to the nearest integer.\"\"\"\n    # TODO\n    return [[0 for d in row] for row in km]\n\n\nif __name__ == \"__main__\":\n    grid = scaled([[0, 1.25, 2.5], [1.25, 0, 1.8], [2.5, 1.8, 0]], 100)\n    manager, routing = build(grid, 0)\n    plan = routing.ReadAssignmentFromRoutes([[1, 2]], True)\n    print(grid, plan.ObjectiveValue() if plan else None)\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "23e15e87d03a38ef018bf1e8f8347107aa3c515fb4cc337cba48c27e9962c886",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef build(cost: list[list[int]], depot: int):\n    \"\"\"A one-vehicle routing model whose arc from node a to node b costs cost[a][b].\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(cost), 1, depot)\n    routing = pywrapcp.RoutingModel(manager)\n    # TODO: a transit callback that prices one arc, registered, and set as every vehicle's arc cost.\n    return manager, routing\n\n\ndef scaled(km: list[list[float]], scale: int) -> list[list[int]]:\n    \"\"\"Integer arc costs: every distance times scale, rounded to the nearest integer.\"\"\"\n    # TODO\n    return [[0 for d in row] for row in km]\n\n\nif __name__ == \"__main__\":\n    grid = scaled([[0, 1.25, 2.5], [1.25, 0, 1.8], [2.5, 1.8, 0]], 100)\n    manager, routing = build(grid, 0)\n    plan = routing.ReadAssignmentFromRoutes([[1, 2]], True)\n    print(grid, plan.ObjectiveValue() if plan else None)\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-01/practice-1/tour.py",
+    "test_path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-01/practice-1/test_tour.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-01/practice-1/tour.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-01/practice-1/target/report.xml",
+      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-01/practice-1/test_tour.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_tour_costs_the_sum_of_its_arcs",
+        "kind": "main",
+        "says": "the model charges a tour the sum of the costs of the arcs it drives, the drive back included"
+      },
+      {
+        "id": "test_one_way_streets_are_priced_in_the_driving_direction",
+        "kind": "edge",
+        "says": "an arc is priced from the stop being left to the stop being reached, so a one-way matrix gives a tour and its reverse different costs"
+      },
+      {
+        "id": "test_a_depot_that_is_not_node_0",
+        "kind": "edge",
+        "says": "the tour starts and ends at the depot node it is given, even when that is not node 0"
+      },
+      {
+        "id": "test_scaled_costs_are_integers",
+        "kind": "main",
+        "says": "scaled costs are Python integers, each distance times the scale"
+      },
+      {
+        "id": "test_scaling_rounds_to_the_nearest_integer",
+        "kind": "edge",
+        "says": "a scaled cost is rounded to the nearest integer, not cut down, even when floating-point arithmetic lands just below a whole number"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "52-ortools-routing/README_4.8.1.md",
+      "section": "A Transit Callback Returns the Integer Cost of One Arc"
+    },
+    "concepts": [
+      "the solver passes indices, which the index manager converts to the nodes the data is indexed by",
+      "a registered transit callback prices each arc as an integer, and fractional costs are scaled and rounded"
+    ]
+  }
+}

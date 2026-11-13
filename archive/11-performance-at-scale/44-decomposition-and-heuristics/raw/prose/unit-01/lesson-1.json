@@ -1,0 +1,530 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "11-performance-at-scale",
+    "44-decomposition-and-heuristics"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Lagrangian relaxation and subgradient optimization",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "11.3.1 Lagrangian Relaxation and Subgradient Optimization"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's planners solve the multi-year plan of lesson 6.4.2 every week, and on the small portfolio the solver answers at once. The board now asks a different kind of question: \"whatever plan you bring us, how far could it be from the best one?\" A plan answers half of that. The other half is a **bound**: a number that no plan can beat, proved without searching through plans. Lesson 3.4.1 showed where a MIP solver gets its bound (the LP relaxation and the search tree). This lesson builds a bound of a different kind, by hand, from one observation: in the plan model only the five yearly budget rows tie the 40 projects together. Put a price on each year's money instead of a hard limit, and the model falls apart into dozens of tiny problems that are solved by inspection. That is **Lagrangian relaxation**, and the method that finds good prices is **subgradient optimization**."
+    },
+    {
+      "type": "para",
+      "text": "GridCap is a fictional utility's portfolio; none of its numbers are real."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The plan model is lesson 6.4.2's, with lesson 6.4.3's cumulative precedence rows. Every program in this module builds it with `capital.build`."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`P`$ the projects; $`Y`$ the plan's years; $`T_i \\subseteq Y`$ the start years project $`i`$ may use; $`M \\subseteq P`$ the must-do projects; $`\\mathcal{G}`$ the alternative groups, each a set of projects; $`C \\subseteq P`$ the child projects, with parent $`p(c)`$ and lag $`L_c`$ years."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`\\text{npv}_{i,t}`$, the NPV of project $`i`$ started in year $`t`$ ($k); $`c_{i,k}`$, what project $`i`$ spends in its $`k`$-th year of work ($k), so that started in $`t`$ it spends $`c_{i,y-t}`$ in year $`y`$ (zero outside its years of work); $`B_y`$, the budget of year $`y`$ ($k)."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_{i,t} \\in \\{0, 1\\}`$ for every $`i \\in P`$ and $`t \\in T_i`$: project $`i`$ starts in year $`t`$. In code, `x[i, t]`."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "z^* \\;=\\; \\max \\; \\sum_{i \\in P} \\sum_{t \\in T_i} \\text{npv}_{i,t}\\, x_{i,t}"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{t \\in T_i} x_{i,t} &\\le 1 && \\forall i \\in P \\setminus M && \\text{(once}_i) \\\\\n\\sum_{t \\in T_i} x_{i,t} &= 1 && \\forall i \\in M && \\text{(must}_i) \\\\\n\\sum_{i \\in g} \\sum_{t \\in T_i} x_{i,t} &\\le 1 && \\forall g \\in \\mathcal{G} && \\text{(alt}_g) \\\\\n\\sum_{u \\in T_c,\\, u \\le t} x_{c,u} &\\le \\sum_{s \\in T_{p(c)},\\, s \\le t - L_c} x_{p(c),s} && \\forall c \\in C,\\ t \\in T_c && \\text{(after}_{c,t}) \\\\\n\\text{spend}_y(x) \\;=\\; \\sum_{i \\in P} \\sum_{t \\in T_i,\\, t \\le y} c_{i,\\,y-t}\\, x_{i,t} &\\le B_y && \\forall y \\in Y && \\text{(budget}_y)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "$`z^*`$ names the optimal NPV. On GridCap small, $`z^* = 24{,}260`$ ($k), the optimum of lesson 6.4.2."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Complicating Row Ties Everything Together; Without It the Model Splits"
+    },
+    {
+      "type": "para",
+      "text": "Look at which projects each row mentions. A once row mentions one project. An alt row mentions the two or three projects of one group, an after row a parent and its child. The budget rows are different: each one mentions every project that could be at work in that year, which is nearly all of them. These rows are the **complicating constraints**: delete them, and what is left is a set of small problems that share no row, each solvable on its own."
+    },
+    {
+      "type": "para",
+      "text": "`lagrange.components` finds those small problems by joining projects that share a row other than a budget row, alternatives and parent-child pairs:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "for members in alt_groups(portfolio).values():\n    for other in members[1:]:\n        root[find(other)] = find(members[0])\nfor p in portfolio.projects:\n    if p.parent:\n        root[find(p.project_id)] = find(p.parent)"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "40 projects fall into 36 independent groups once the budget rows go; the largest has 2 projects\nmedium: 400 projects, 364 groups, the largest 2 projects"
+    },
+    {
+      "type": "para",
+      "text": "A group of two projects with two start years each has at most $`3 \\times 3 = 9`$ choices (each project: not started, or one of its start years), so each group is solved by trying every choice. On the medium portfolio the same function finds 364 groups of at most two projects: the work grows in step with the number of projects, not exponentially. Dropping the rows, however, throws away the very rule that makes planning hard; a plan built without them overspends. Lagrangian relaxation keeps a trace of the rows in the objective."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Any Nonnegative Prices on the Budget Rows Give an Upper Bound"
+    },
+    {
+      "type": "para",
+      "text": "Give each year a price $`\\lambda_y \\ge 0`$ per $k of spend, and reward a plan for every $k it leaves unspent (or charge it for every $k it overspends):"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "L(\\lambda) \\;=\\; \\max_{x} \\; \\sum_{i \\in P} \\sum_{t \\in T_i} \\text{npv}_{i,t}\\, x_{i,t}\n\\;+\\; \\sum_{y \\in Y} \\lambda_y \\bigl(B_y - \\text{spend}_y(x)\\bigr)\n\\qquad \\text{subject to once, must, alt and after, } x \\in \\{0,1\\}"
+    },
+    {
+      "type": "para",
+      "text": "This is the **Lagrangian relaxation** of the budget rows, and $`\\lambda`$ are its **Lagrange multipliers**. $`L(\\lambda)`$ is an upper bound on $`z^*`$ for every $`\\lambda \\ge 0`$, by a two-line argument. Take the optimal plan $`x^*`$. It meets every budget row, so $`B_y - \\text{spend}_y(x^*) \\ge 0`$, and with $`\\lambda_y \\ge 0`$ the added term is $`\\ge 0`$; so the Lagrangian objective at $`x^*`$ is at least $`z^*`$. And $`x^*`$ meets the rows left in the relaxation, so it is one of the plans the max looks at; the max is at least its value. Together: $`L(\\lambda) \\ge z^*`$. The sign of $`\\lambda`$ matters: a negative price would reward overspending and break the first step. This is the same argument as weak duality in lesson 2.3.2, with integer variables kept integer."
+    },
+    {
+      "type": "para",
+      "text": "Rearranged, the relaxation scores every start with its own **priced value**, NPV minus the price of the money it spends, and adds the constant $`\\sum_y \\lambda_y B_y`$:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "L(\\lambda) \\;=\\; \\sum_{y \\in Y} \\lambda_y B_y \\;+\\; \\max_x \\sum_{i \\in P}\\sum_{t \\in T_i}\n\\Bigl(\\text{npv}_{i,t} - \\sum_{y} \\lambda_y\\, c_{i,\\,y-t}\\Bigr)\\, x_{i,t}"
+    },
+    {
+      "type": "para",
+      "text": "So each group picks, independently, the choice with the largest total priced value (starting nothing is worth 0; a must-do has to start even when every start is worth less than 0):"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def priced(p: Project, t: int, lam: dict[int, float]) -> float:\n    \"\"\"npv[i,t] less the price of the money project i spends if it starts in t.\"\"\"\n    return p.npv[t] - sum(lam.get(y, 0.0) * c for y, c in p.spend(t).items())"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "bound = sum(lam[y] * portfolio.budget[y] for y in portfolio.years)\nplan: dict[str, int] = {}\nfor group in components(portfolio):\n    options = [[None, *p.starts()] for p in group]\n    best, best_choice = None, None\n    for combo in itertools.product(*options):\n        choice = {p.project_id: t for p, t in zip(group, combo)}\n        if not allowed(group, choice):\n            continue\n        worth = sum(priced(p, t, lam) for p, t in zip(group, combo) if t is not None)\n        if best is None or worth > best:\n            best, best_choice = worth, choice\n    bound += best"
+    },
+    {
+      "type": "para",
+      "text": "`price_bound.py` evaluates $`L(\\lambda)`$ at five price vectors, and checks each against MathOpt solving the same relaxed model (the plan model built without budget rows, with the priced term added to its objective):"
+    },
+    {
+      "type": "example",
+      "id": "price_bound-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "44-decomposition-and-heuristics/src/price_bound.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "44-decomposition-and-heuristics/src/price_bound.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "cap = build(small, budget_rows=False)\npriced = sum(lam[y] * (small.budget[y] - cap.spend[y]) for y in small.years)\ncap.model.maximize(cap.model.objective.as_linear_expression() + priced)\nreturn solve_highs(cap.model, EXACT).objective_value()"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "lam 0 everywhere              L(lam)  36,852.0  solver  36,852.0  projects started 38  above the optimum by 12,592.0\nlam 0.3 everywhere            L(lam)  29,563.0  solver  29,563.0  projects started 32  above the optimum by 5,303.0\nlam 0.6 everywhere            L(lam)  27,773.0  solver  27,773.0  projects started 20  above the optimum by 3,513.0\nlam 1.0 everywhere            L(lam)  37,284.0  solver  37,284.0  projects started  4  above the optimum by 13,024.0\nlam 0.6, 0.6, 0.5, 0.5, 0.3   L(lam)  27,226.0  solver  27,226.0  projects started 25  above the optimum by 2,966.0\nMILP optimum 24,260.0"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Every bound sits above 24,260, as the argument says it must, and enumeration and solver agree. The prices change the bound a lot. At $`\\lambda = 0`$ money is free: 38 of 40 projects start and the bound is the sum of every project's best NPV. At $`\\lambda = 1`$ money costs a whole dollar of NPV per dollar, only 4 projects are worth starting, and the bound is dominated by the constant $`\\sum_y B_y`$ of unspent money. Between the two, 0.6 in every year gives 27,773, and prices that differ by year do better still. Finding the best prices is a problem of its own: the **Lagrangian dual**,"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "z_{LD} \\;=\\; \\min_{\\lambda \\ge 0} L(\\lambda) \\;\\ge\\; z^*."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Subgradient Steps Raise the Price of an Overspent Year and Lower the Price of an Underspent One"
+    },
+    {
+      "type": "para",
+      "text": "$`L(\\lambda)`$ is the largest of many linear functions of $`\\lambda`$ (one per plan), so it is convex but has corners, and there is no derivative to follow at a corner. What is always available is a **subgradient**. Let $`x^\\lambda`$ be the plan that reached $`L(\\lambda)`$. Then the vector"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "g_y \\;=\\; B_y - \\text{spend}_y(x^\\lambda) \\qquad \\forall y \\in Y"
+    },
+    {
+      "type": "para",
+      "text": "satisfies $`L(\\mu) \\ge L(\\lambda) + \\sum_y g_y (\\mu_y - \\lambda_y)`$ for every $`\\mu \\ge 0`$, because the plan $`x^\\lambda`$ is still available at prices $`\\mu`$ and is worth exactly the right side there. So moving against $`g`$ is the only direction in which the bound can fall. In words: if the relaxed plan overspends year $`y`$ ($`g_y < 0`$), raise $`\\lambda_y`$; if it leaves money unspent ($`g_y > 0`$), lower it, but never below zero:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\lambda_y^{k+1} \\;=\\; \\max\\Bigl(0,\\; \\lambda_y^k - s_k\\, g_y^k\\Bigr)"
+    },
+    {
+      "type": "para",
+      "text": "The step length $`s_k`$ decides whether this works. The program uses **Polyak's step**,"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "s_k \\;=\\; \\theta_k\\, \\frac{L(\\lambda^k) - \\underline{z}}{\\lVert g^k \\rVert^2},"
+    },
+    {
+      "type": "para",
+      "text": "where $`\\underline{z}`$ is the value of the best feasible plan found so far (a lower bound on $`z^*`$) and $`\\theta_k`$ starts at 2 and is halved after 5 iterations without a better bound. The step is long while the bound is far from the best plan, and shrinks as they close. A subgradient step can raise the bound (iteration 3 below does), which is why the program keeps the best bound seen, not the last one."
+    },
+    {
+      "type": "example",
+      "id": "subgradient-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "44-decomposition-and-heuristics/src/subgradient.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "44-decomposition-and-heuristics/src/subgradient.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "spend = spend_of(portfolio, relaxed)\ng = {y: portfolio.budget[y] - spend[y] for y in portfolio.years}   # a subgradient of L at lam\nnorm = sum(v * v for v in g.values())\nhistory.append((k, bound, best_bound, best_value, dict(lam)))\nif norm == 0:\n    break\nstep = theta * (bound - best_value) / norm                            # Polyak's step\nlam = {y: max(0.0, lam[y] - step * g[y]) for y in portfolio.years}"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The `norm == 0` exit is the lucky case: the relaxed plan spends every budget exactly, so it is feasible and its bound equals its value, which proves it optimal."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Relaxed Plan Repaired Into a Feasible One Gives the Lower Bound"
+    },
+    {
+      "type": "para",
+      "text": "$`x^\\lambda`$ ignores the budgets, so it usually overspends. A **Lagrangian heuristic** repairs it: `repair` drops, while some year overspends, the optional project that earns least NPV per dollar spent in the overspent years (never a must-do, never a parent whose child stays), then adds back, best ratio first, any project that still fits every rule. Every repaired plan is feasible, so its NPV is a lower bound $`\\underline{z} \\le z^*`$, and the best one so far is the $`\\underline{z}`$ in Polyak's step. With an upper bound from the prices and a lower bound from a plan, each iteration reports a gap, as a MIP solver does (lesson 3.4.1):"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "iter  1  L(lam)  36,852.0  best bound  36,852.0  best plan  22,474  gap 63.98%  lam 0.000 0.000 0.000 0.000 0.000\niter  2  L(lam)  36,398.4  best bound  36,398.4  best plan  22,474  gap 61.96%  lam 0.760 0.938 0.415 1.453 0.000\niter  3  L(lam)  37,100.6  best bound  36,398.4  best plan  22,474  gap 61.96%  lam 0.000 0.000 0.818 0.338 1.140\niter  5  L(lam)  33,232.7  best bound  33,232.7  best plan  22,474  gap 47.87%  lam 0.603 0.266 0.856 0.685 0.983\niter 10  L(lam)  33,661.1  best bound  31,725.2  best plan  23,047  gap 37.65%  lam 0.337 1.278 0.225 0.426 0.563\niter 20  L(lam)  28,707.5  best bound  27,833.2  best plan  23,047  gap 20.77%  lam 0.531 0.782 0.503 0.455 0.523\niter 30  L(lam)  28,546.3  best bound  26,968.8  best plan  23,065  gap 16.93%  lam 0.772 0.479 0.458 0.637 0.309\niter 40  L(lam)  27,331.3  best bound  26,875.9  best plan  23,065  gap 16.52%  lam 0.704 0.524 0.490 0.468 0.431\niter 50  L(lam)  26,677.2  best bound  26,677.2  best plan  23,369  gap 14.16%  lam 0.613 0.543 0.442 0.475 0.363\niter 60  L(lam)  26,699.9  best bound  26,642.5  best plan  23,369  gap 14.01%  lam 0.640 0.557 0.457 0.467 0.340\nMILP optimum  24,260.0   LP bound  26,587.4\nLagrangian bound - optimum  2,382.5   repaired plan breaks: nothing\nLP budget-row duals 0.640 0.547 0.465 0.422 0.316"
+    },
+    {
+      "type": "para",
+      "text": "Read it as a race between two numbers. The bound falls from 36,852 to 26,642.5 in 60 iterations, fast at first and slowly at the end, which is typical of subgradient methods. The prices zigzag early (iteration 2 overshoots 2030 to 1.453, iteration 3 drops it back), then settle between 0.34 and 0.64. The repaired plans climb from 22,474 to 23,369. Both bounds are on the right side of the true optimum, 24,260: the Lagrangian bound $2,382.5k above it, the plan $891k below it. The 14.01% gap is the honest statement the board asked for: \"our plan is worth 23,369, and no plan is worth more than 26,642.5\"."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "When the Pieces' Own LP Has Whole-Number Answers, the Best Bound Is the LP Bound"
+    },
+    {
+      "type": "para",
+      "text": "Look at the second-last output line. The LP relaxation of the full model (lesson 3.1.2) gives 26,587.4, and the Lagrangian bound is creeping down toward it, not toward 24,260. That is a theorem, not an accident of the step rule. If the relaxed problem (once, must, alt and after rows) has an LP relaxation whose optimum is always a 0/1 plan, its **integrality property**, then adding the integer requirement gives the relaxed problem nothing, and by LP duality the best Lagrangian bound equals the LP bound: $`z_{LD} = z_{LP}`$. Each group here is a choice of at most one start among a handful, which is such a problem. So on this model the subgradient loop can, at best, reproduce the bound the LP relaxation gives in one solve."
+    },
+    {
+      "type": "para",
+      "text": "The argument takes three steps. Write $`X`$ for the 0/1 plans that keep the once, must, alt and after rows, and $`\\bar X`$ for the plans that keep the same rows with each $`x_{i,t}`$ allowed anywhere in $`[0, 1]`$ (their LP relaxation)."
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "**For fixed prices, the max over $`X`$ equals the max over $`\\bar X`$.** At fixed $`\\lambda`$, the objective of $`L(\\lambda)`$ is linear in $`x`$. The integrality property says that an LP over $`\\bar X`$ has a 0/1 optimum, and that optimum is in $`X`$. So allowing fractions gains nothing, and $`L(\\lambda)`$ is also the optimum of an LP over $`\\bar X`$.",
+        "**Then $`z_{LD}`$ is the dual of an LP.** By step 1, $`z_{LD} = \\min_{\\lambda \\ge 0} L(\\lambda)`$ prices the budget rows of an LP: maximize NPV over $`\\bar X`$ subject to the budget rows. That LP is the LP relaxation of the full model, with optimum $`z_{LP}`$.",
+        "**LP duality closes the gap.** For an LP, the best prices on some of its rows give a bound equal to its optimum (strong duality, lesson 2.3.2). So $`z_{LD} = z_{LP}`$."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Without the property, step 1 fails in one direction only. Fractions can then raise the max, so the max over $`X`$ can be lower than the max over $`\\bar X`$, and $`z_{LD} \\le z_{LP}`$, sometimes strictly. That is the case the third reason below relies on."
+    },
+    {
+      "type": "para",
+      "text": "Why use it, then? Three reasons hold in practice:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Scale.** The bound is computed by enumerating tiny groups, never by solving an LP of the whole model. When the model is too large to load into one LP, or must be bounded in parallel, this still works.",
+        "**Prices that mean something.** The final $`\\lambda`$ are prices on each year's money. The last output line prints the LP relaxation's budget-row duals (lesson 2.3.3): 0.640, 0.547, 0.465, 0.422, 0.316, against the loop's 0.640, 0.557, 0.457, 0.467, 0.340. The loop found nearly the same prices without ever solving an LP.",
+        "**Stronger bounds from other relaxations.** If the relaxed problem lacks the integrality property, $`z_{LD}`$ can be strictly below $`z_{LP}`$. Relaxing the once and alt rows instead would keep the five budget rows in the relaxed problem: a knapsack with five rows, which has no integrality property. Its best bound can then beat the LP bound, at the price of solving that knapsack as a MIP in every iteration, and without the split into tiny groups."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Lesson 9.2.2 priced the budget rows a different way: it fixed the integer plan and read the LP's duals. Those prices explain one plan. Lagrangian prices are the other way round: they are chosen first, and the plan follows from them."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The Lagrangian dual of the budget rows, whole. New are the multipliers $`\\lambda_y`$, one per budget row; the budget rows move from the constraints into the objective."
+    },
+    {
+      "type": "para",
+      "text": "**Sets, parameters.** As in the plan model above."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_{i,t} \\in \\{0, 1\\}`$ for every $`i \\in P`$, $`t \\in T_i`$ (inner problem), and $`\\lambda_y \\ge 0`$ for every $`y \\in Y`$ (outer problem), in $k of NPV per $k of spend."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "z_{LD} \\;=\\; \\min_{\\lambda \\ge 0} \\; \\Bigl[\\; \\sum_{y \\in Y} \\lambda_y B_y \\;+\\; \\max_{x} \\sum_{i \\in P}\\sum_{t \\in T_i}\n\\Bigl(\\text{npv}_{i,t} - \\sum_{y \\in Y} \\lambda_y\\, c_{i,\\,y-t}\\Bigr)\\, x_{i,t} \\;\\Bigr]"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints of the inner problem.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{t \\in T_i} x_{i,t} &\\le 1 && \\forall i \\in P \\setminus M && \\text{(once}_i) \\\\\n\\sum_{t \\in T_i} x_{i,t} &= 1 && \\forall i \\in M && \\text{(must}_i) \\\\\n\\sum_{i \\in g} \\sum_{t \\in T_i} x_{i,t} &\\le 1 && \\forall g \\in \\mathcal{G} && \\text{(alt}_g) \\\\\n\\sum_{u \\in T_c,\\, u \\le t} x_{c,u} &\\le \\sum_{s \\in T_{p(c)},\\, s \\le t - L_c} x_{p(c),s} && \\forall c \\in C,\\ t \\in T_c && \\text{(after}_{c,t}) \\\\\n& \\text{(budget}_y) \\text{ removed, priced by } \\lambda_y \\text{ in the objective} && && \\leftarrow \\text{this lesson}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "For every $`\\lambda \\ge 0`$: $`z^* \\le z_{LD} \\le L(\\lambda)`$, and here $`z_{LD} = z_{LP}`$."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**A complicating row ties everything together; without it the model splits.** The yearly budget rows are the only rows that mention most projects; without them GridCap small falls into 36 groups of at most 2 projects.",
+        "**Any nonnegative prices on the budget rows give an upper bound.** $`L(\\lambda) \\ge z^*`$ for every $`\\lambda \\ge 0`$, by weak duality; each group picks its best choice at the priced values.",
+        "**Subgradient steps raise the price of an overspent year and lower the price of an underspent one.** $`g_y = B_y - \\text{spend}_y(x^\\lambda)`$, projected onto $`\\lambda \\ge 0`$, with Polyak's step; keep the best bound, since a step can make it worse.",
+        "**A relaxed plan repaired into a feasible one gives the lower bound.** The two bounds bracket the optimum and give a gap.",
+        "**When the pieces' own LP has whole-number answers, the best bound is the LP bound.** Here $`z_{LD} = z_{LP} = 26{,}587.4`$; a stronger bound needs a relaxed problem without that property."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Term",
+        "Meaning"
+      ],
+      "rows": [
+        [
+          "complicating constraint",
+          "a row that links pieces which would otherwise be independent"
+        ],
+        [
+          "Lagrangian relaxation $`L(\\lambda)`$",
+          "the model with the complicating rows moved into the objective at prices $`\\lambda`$"
+        ],
+        [
+          "weak duality (here)",
+          "$`L(\\lambda) \\ge z^*`$ for every $`\\lambda \\ge 0`$ in a max problem with $`\\le`$ rows"
+        ],
+        [
+          "Lagrangian dual $`z_{LD}`$",
+          "$`\\min_{\\lambda \\ge 0} L(\\lambda)`$, the best such bound"
+        ],
+        [
+          "subgradient",
+          "$`g_y = B_y - \\text{spend}_y(x^\\lambda)`$, the relaxed plan's unspent money by year"
+        ],
+        [
+          "projected step",
+          "$`\\lambda \\leftarrow \\max(0, \\lambda - s\\, g)`$"
+        ],
+        [
+          "Polyak's step",
+          "$`s = \\theta\\,(L(\\lambda) - \\underline{z}) / \\lVert g \\rVert^2`$, $`0 < \\theta \\le 2`$"
+        ],
+        [
+          "Lagrangian heuristic",
+          "repair the relaxed plan into a feasible one: a lower bound"
+        ],
+        [
+          "integrality property",
+          "the relaxed problem's LP always has a 0/1 optimum; then $`z_{LD} = z_{LP}`$"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Program",
+        "What it shows"
+      ],
+      "rows": [
+        [
+          "`lagrange.py`",
+          "the groups, the priced values and $`L(\\lambda)`$ by enumeration"
+        ],
+        [
+          "`price_bound.py`",
+          "$`L(\\lambda)`$ at five price vectors, checked against MathOpt"
+        ],
+        [
+          "`subgradient.py`",
+          "the subgradient loop, the repair, both bounds against the MILP and the LP"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [MathOpt (OR-Tools)](https://developers.google.com/optimization/math_opt) and its [basic example](https://developers.google.com/optimization/math_opt/basic_example) (building, solving and reading a model, as `price_bound.py` does for each relaxed model); [Lagrangian Relaxation, lecture notes (Erasmus University Rotterdam)](https://personal.eur.nl/birbil/bolbilim/teaa/02_Lag_Rel.html) (the bound for a maximization with the relaxed rows priced, the projected update $`\\lambda \\leftarrow \\max(0, \\lambda - \\alpha(b - Ax))`$, step-length rules from Held et al. including the one used here with $`\\beta`$ halved when the bound stalls, and when the Lagrangian bound equals the LP bound); [Applied Mathematical Programming, Chapter 12, Large-Scale Systems (MIT 15.053)](https://web.mit.edu/15.053/www/AMP-Chapter-12.pdf) (section 12.6, the economic reading of decomposition: a price on the complicating resource, charged to each piece, coordinates pieces that are solved separately); [Hybrid Lagrangian relaxation and Benders decomposition for stochastic hub location (University of Edinburgh)](https://www.research.ed.ac.uk/en/publications/a-hybrid-lagrangian-relaxation-and-benders-decomposition-algorith/) (a 2024 conference abstract combining the two methods of this lesson and the next on a two-stage stochastic model)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "The subgradient loop starts from $`\\lambda = 0`$. Start it from the LP's budget-row duals instead (lesson 2.3.3 reads them). Predict how many iterations the bound needs to come within 1% of 26,587.4.",
+        "Relax the once rows instead of the budget rows. What problem is left for each year, and is it still split into independent groups?",
+        "The repair heuristic's plan stays $891k below the optimum. Propose a better repair, and say which bound it can improve and which it cannot.",
+        "A planner asks whether $`\\lambda_{2028} = 0.557`$ means \"one more $k in 2028 is worth $557 of NPV\". What would you answer, given lesson 9.2.4?"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Keep Both Bounds and the Iteration in Every Report"
+    },
+    {
+      "type": "para",
+      "text": "A subgradient loop that prints only its last $`L(\\lambda)`$ hides two things: that the bound zigzags (the last value is not the best), and how far the bound is from any plan. Reporting the best bound, the best plan and the iteration together turns the loop into the same kind of evidence a MIP log gives (lesson 3.3.4), and lets the reader check the one fact that must always hold: the bound above the plan."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**capital.py.** The plan model every lesson of this module starts from (lesson 6.4.2's model with lesson 6.4.3's precedence rows, and lesson 4.6.1's crew rows on request), a plain-Python rule checker and a quiet HiGHS solve. It prints nothing."
+    },
+    {
+      "type": "para",
+      "text": "**lagrange.py.** The groups left when the budget rows go, the priced value of a start, and $`L(\\lambda)`$ by enumeration (*A Complicating Row Ties Everything Together*). It prints nothing; the next two programs use it."
+    },
+    {
+      "type": "para",
+      "text": "**price_bound.py.** Evaluates $`L(\\lambda)`$ at five price vectors and checks each against MathOpt (*Any Nonnegative Prices on the Budget Rows Give an Upper Bound*). *Try:* Set every price to 0.45. Predict whether the bound lands between the 0.3 and 0.6 rows, and why it need not."
+    },
+    {
+      "type": "para",
+      "text": "**subgradient.py.** The subgradient loop with Polyak's step, the repair heuristic, and the comparison with the MILP and the LP (*the last three sections*). *Try:* Change the halving rule's `patience` from 5 to 2. Predict whether the bound after 60 iterations is lower or higher."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [capital.py](src/capital.py)",
+        "Library: [lagrange.py](src/lagrange.py)",
+        "Program: [price_bound.py](src/price_bound.py)",
+        "Program: [subgradient.py](src/subgradient.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 13,
+    "paras": 43,
+    "code": 15,
+    "tables": 2,
+    "lists": 5,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 2
+  },
+  "content_sha256": "02ac76d1a82b9ba8d5adf7d2dc44c048bbddc32b6f05ee84a54d361fbea1ba3d"
+}

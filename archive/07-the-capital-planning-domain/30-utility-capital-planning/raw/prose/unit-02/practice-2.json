@@ -1,0 +1,164 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "07-the-capital-planning-domain",
+    "30-utility-capital-planning"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "The rows a gas utility's project appears in",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A gas utility (a fictional one) plans its fleets (mains, valves, regulators) with the same multi-period model as GridCap: a binary $`x_{i,t}`$ for every project $`i`$ and every start year $`t`$ from its earliest to its latest. When a test of the model fails, the first question is \"which rows does this project's variables appear in?\". Write the function that answers it."
+    },
+    {
+      "type": "para",
+      "text": "The model's rows, with the names the code gives them:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`must_<id>` if the project is a must-do, otherwise `once_<id>`: the sum of its start variables.",
+        "`alt_<group>` for a project in an alternative group.",
+        "`after_<child>_<t>` for each child project and each of the child's start years $`t`$: $`\\text{by}(\\text{child}, t) \\le \\text{by}(\\text{parent}, t - \\text{lag})`$, where $`\\text{by}(i, t)`$ is the sum of project $`i`$'s start variables for years up to $`t`$. A variable appears in a row only if the row has a term for it.",
+        "`budget_<y>` for each plan year $`y`$, summing the spend of every project at work in $`y`$; a project started in $`t`$ with a duration of $`d`$ years is at work in years $`t`$ to $`t + d - 1`$.",
+        "`crew_<program>_<y>`, the same as the budget row but one per program."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Write `rows_for(pid, projects, years)` in `rows.py`: the set of row names in which at least one of project `pid`'s start variables appears. Only years in `years` have budget and crew rows."
+    },
+    {
+      "type": "para",
+      "text": "A parent's variable is in a child's `after_<child>_<t>` row only when the row's right-hand side can reach it: $`\\text{by}(\\text{parent}, t - \\text{lag})`$ sums the parent's starts up to $`t - \\text{lag}`$, so the parent appears exactly when $`t - \\text{lag}`$ is at least the parent's earliest start. Worked example: a parent P that may start only in 2028, and its child C (start 2028 to 2030, lag 1)."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`after_C_2028`: the right side is $`\\text{by}(P, 2027)`$, which sums no variable of P (P cannot start by 2027), so P is not in this row.",
+        "`after_C_2029`: the right side is $`\\text{by}(P, 2028) = x_{P,2028}`$, so P is in it.",
+        "`after_C_2030`: the right side is $`\\text{by}(P, 2029) = x_{P,2028}`$, so P is in it."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "So P's rows are `once_P`, `after_C_2029`, `after_C_2030` and its budget and crew rows for 2028; C's own variables are in all three of C's after rows. The tests use small hand-made fleets. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    program: str\n    earliest: int\n    latest: int\n    duration: int                  # years of work\n    must_do: bool = False\n    alt_group: str | None = None\n    parent: str | None = None\n    lag: int = 0\n\n\ndef rows_for(pid: str, projects: list[Project], years: list[int]) -> set[str]:\n    \"\"\"The names of every row in which one of project `pid`'s start variables appears.\"\"\"\n    p = next(q for q in projects if q.pid == pid)\n    starts = range(p.earliest, p.latest + 1)\n    rows = {f\"must_{pid}\" if p.must_do else f\"once_{pid}\"}\n    if p.alt_group:\n        rows.add(f\"alt_{p.alt_group}\")\n    if p.parent:\n        rows |= {f\"after_{pid}_{t}\" for t in starts}\n    for c in projects:\n        if c.parent == pid:\n            rows |= {f\"after_{c.pid}_{t}\" for t in range(c.earliest, c.latest + 1) if t - c.lag >= p.earliest}\n    for t in starts:\n        for k in range(p.duration):\n            if t + k in years:\n                rows |= {f\"budget_{t + k}\", f\"crew_{p.program}_{t + k}\"}\n    return rows\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"S1\", \"substations\", 2027, 2028, 2), Project(\"S2\", \"substations\", 2029, 2029, 1, parent=\"S1\", lag=1)]\n    print(sorted(rows_for(\"S1\", projects, [2027, 2028, 2029])))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    program: str\n    earliest: int\n    latest: int\n    duration: int                  # years of work\n    must_do: bool = False\n    alt_group: str | None = None\n    parent: str | None = None\n    lag: int = 0\n\n\ndef rows_for(pid: str, projects: list[Project], years: list[int]) -> set[str]:\n    \"\"\"The names of every row in which one of project `pid`'s start variables appears.\"\"\"\n    # TODO: go through the model's rows one kind at a time. The empty set is a placeholder.\n    return set()\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"S1\", \"substations\", 2027, 2028, 2), Project(\"S2\", \"substations\", 2029, 2029, 1, parent=\"S1\", lag=1)]\n    print(sorted(rows_for(\"S1\", projects, [2027, 2028, 2029])))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 1,
+    "tables": 0,
+    "lists": 2,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "4487688082b214c15e623f283a0f959cf6bd46babab1850ea308de469a206e29",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    program: str\n    earliest: int\n    latest: int\n    duration: int                  # years of work\n    must_do: bool = False\n    alt_group: str | None = None\n    parent: str | None = None\n    lag: int = 0\n\n\ndef rows_for(pid: str, projects: list[Project], years: list[int]) -> set[str]:\n    \"\"\"The names of every row in which one of project `pid`'s start variables appears.\"\"\"\n    # TODO: go through the model's rows one kind at a time. The empty set is a placeholder.\n    return set()\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"S1\", \"substations\", 2027, 2028, 2), Project(\"S2\", \"substations\", 2029, 2029, 1, parent=\"S1\", lag=1)]\n    print(sorted(rows_for(\"S1\", projects, [2027, 2028, 2029])))\n",
+  "exercise": {
+    "main_path": "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-02/practice-2/rows.py",
+    "test_path": "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-02/practice-2/test_rows.py",
+    "run_command": [
+      "python3",
+      "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-02/practice-2/rows.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-02/practice-2/target/report.xml",
+      "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-02/practice-2/test_rows.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_lone_project_has_its_once_budget_and_crew_rows",
+        "kind": "main",
+        "says": "a project with one start year is in its once row and the budget and crew rows of its years of work"
+      },
+      {
+        "id": "test_must_do_and_alternative_rows",
+        "kind": "main",
+        "says": "a must-do is in its must row, and an option is in its group's row"
+      },
+      {
+        "id": "test_a_parent_sits_in_its_childrens_rows",
+        "kind": "edge",
+        "says": "a parent's variables appear in its children's precedence rows, not only the child's"
+      },
+      {
+        "id": "test_a_parent_is_absent_from_rows_its_starts_cannot_reach",
+        "kind": "edge",
+        "says": "a parent is in a child's row only for child years its own start years can precede"
+      },
+      {
+        "id": "test_budget_years_cover_every_start_and_year_of_work",
+        "kind": "edge",
+        "says": "the budget and crew rows cover every allowed start, not only the earliest"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "30-utility-capital-planning/README_7.1.2.md",
+      "section": "Each Fleet Brings Its Own Rows to the Model"
+    },
+    "concepts": [
+      "each project's attributes decide which once, must, alternative, precedence, budget and crew rows it appears in"
+    ]
+  }
+}

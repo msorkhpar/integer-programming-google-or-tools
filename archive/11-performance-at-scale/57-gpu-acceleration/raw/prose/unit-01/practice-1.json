@@ -1,0 +1,149 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "11-performance-at-scale",
+    "57-gpu-acceleration"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "PDHG for a blend with exact nutrient rows",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A feed mill blends ingredients into a ration. Ingredient $`j`$ costs $`c_j`$ per tonne, at most $`u_j`$ tonnes of it are in stock, and each nutrient row $`i`$ must be met **exactly**: a tonne of ingredient $`j`$ brings $`A_{ij}`$ units of nutrient $`i`$, and the ration needs $`b_i`$ units. The mill wants the cheapest ration, and its LPs will grow too large to factor, so the team wants a first-order method."
+    },
+    {
+      "type": "para",
+      "text": "Before you code, write the model (variables with their bounds, the objective, the rows). This model differs from the lesson's in two ways: it **minimises**, and its rows are **equalities**."
+    },
+    {
+      "type": "para",
+      "text": "**The sign convention the tests use.** The Lagrangian is $`L(x, y) = c^\\top x + y^\\top (b - A x)`$ over $`0 \\le x \\le u`$, with one price $`y_i`$ per nutrient row. The plan minimises it and the prices maximise it, so the plan moves **down** $`c - A^\\top y`$ and each price moves **up** its row's shortfall $`b_i - a_i x`$. An equality row has both sides, so its price may take either sign and is never clipped. One iteration is then"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\nx^{k+1} &= \\operatorname{clip}_{[0,\\,u]}\\bigl( x^k - \\tau\\,(c - A^\\top y^k) \\bigr) \\\\\ny^{k+1} &= y^k + \\sigma\\,\\bigl( b - A\\,(2x^{k+1} - x^k) \\bigr)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "This is the lesson's iteration rewritten for a minimisation with equality rows: in the lesson's form (maximise $`-c^\\top x`$, price on the upper side), the price of an exact row is the negative of this $`y`$, and the lesson's dual clip $`\\max(0, v - \\sigma b) + \\min(0, v - \\sigma b)`$ is just $`v - \\sigma b`$ when both sides equal $`b`$."
+    },
+    {
+      "type": "para",
+      "text": "Write `pdhg_step(A, b, c, u, x, y, tau, sigma)` in `blend.py`: one PDHG iteration, a primal step clipped to the bounds and then a dual step at the look-ahead point $`2x^{k+1} - x^k`$, returning `(x_new, y_new)` as NumPy arrays. `solve`, which runs your step from zero, is given. About three lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport numpy as np\n\n\ndef pdhg_step(A, b, c, u, x, y, tau: float, sigma: float):\n    \"\"\"One PDHG iteration for  min c'x  s.t.  A x = b,  0 <= x <= u.  Returns (x_new, y_new).\"\"\"\n    x_new = np.clip(x - tau * (c - A.T @ y), 0.0, u)\n    y_new = y + sigma * (b - A @ (2 * x_new - x))\n    return x_new, y_new\n\n\ndef solve(A, b, c, u, iterations: int):\n    \"\"\"Run pdhg_step from zero with tau = sigma = 0.9 / ||A||_F; return the last x and y.\"\"\"\n    tau = sigma = 0.9 / np.linalg.norm(A)\n    x, y = np.zeros(A.shape[1]), np.zeros(A.shape[0])\n    for _ in range(iterations):\n        x, y = pdhg_step(A, b, c, u, x, y, tau, sigma)\n    return x, y\n\n\nif __name__ == \"__main__\":\n    A = np.array([[1.0, 1.0]])\n    x, y = solve(A, np.array([4.0]), np.array([1.0, 2.0]), np.array([3.0, 3.0]), 2000)\n    print(np.round(x, 4), np.round(y, 4))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport numpy as np\n\n\ndef pdhg_step(A, b, c, u, x, y, tau: float, sigma: float):\n    \"\"\"One PDHG iteration for  min c'x  s.t.  A x = b,  0 <= x <= u.  Returns (x_new, y_new).\"\"\"\n    # TODO: the primal step (clipped to the bounds), then the dual step at the look-ahead point.\n    return x.copy(), y.copy()\n\n\ndef solve(A, b, c, u, iterations: int):\n    \"\"\"Run pdhg_step from zero with tau = sigma = 0.9 / ||A||_F; return the last x and y.\"\"\"\n    tau = sigma = 0.9 / np.linalg.norm(A)\n    x, y = np.zeros(A.shape[1]), np.zeros(A.shape[0])\n    for _ in range(iterations):\n        x, y = pdhg_step(A, b, c, u, x, y, tau, sigma)\n    return x, y\n\n\nif __name__ == \"__main__\":\n    A = np.array([[1.0, 1.0]])\n    x, y = solve(A, np.array([4.0]), np.array([1.0, 2.0]), np.array([3.0, 3.0]), 2000)\n    print(np.round(x, 4), np.round(y, 4))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "211238b9b685bf0b56e753f1c95df61e7842dc937f80866fe04d7b1f07bd3573",
+  "starting_code": "from __future__ import annotations\n\nimport numpy as np\n\n\ndef pdhg_step(A, b, c, u, x, y, tau: float, sigma: float):\n    \"\"\"One PDHG iteration for  min c'x  s.t.  A x = b,  0 <= x <= u.  Returns (x_new, y_new).\"\"\"\n    # TODO: the primal step (clipped to the bounds), then the dual step at the look-ahead point.\n    return x.copy(), y.copy()\n\n\ndef solve(A, b, c, u, iterations: int):\n    \"\"\"Run pdhg_step from zero with tau = sigma = 0.9 / ||A||_F; return the last x and y.\"\"\"\n    tau = sigma = 0.9 / np.linalg.norm(A)\n    x, y = np.zeros(A.shape[1]), np.zeros(A.shape[0])\n    for _ in range(iterations):\n        x, y = pdhg_step(A, b, c, u, x, y, tau, sigma)\n    return x, y\n\n\nif __name__ == \"__main__\":\n    A = np.array([[1.0, 1.0]])\n    x, y = solve(A, np.array([4.0]), np.array([1.0, 2.0]), np.array([3.0, 3.0]), 2000)\n    print(np.round(x, 4), np.round(y, 4))\n",
+  "exercise": {
+    "main_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-01/practice-1/blend.py",
+    "test_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-01/practice-1/test_blend.py",
+    "run_command": [
+      "python3",
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-01/practice-1/blend.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-01/practice-1/target/report.xml",
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-01/practice-1/test_blend.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_optimal_pair_is_a_fixed_point_and_another_pair_moves",
+        "kind": "main",
+        "says": "the optimal plan and price stay put, and any other pair moves"
+      },
+      {
+        "id": "test_the_iterations_reach_the_blend_optimum",
+        "kind": "main",
+        "says": "repeated steps reach the blend's optimum"
+      },
+      {
+        "id": "test_the_price_step_looks_ahead",
+        "kind": "main",
+        "says": "the price step uses the look-ahead point"
+      },
+      {
+        "id": "test_an_exact_row_can_take_a_negative_price",
+        "kind": "edge",
+        "says": "a row met exactly can take a negative price"
+      },
+      {
+        "id": "test_a_variable_never_passes_its_upper_bound",
+        "kind": "edge",
+        "says": "a variable is clipped at its upper bound as well as at 0"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "57-gpu-acceleration/README_11.4.1.md",
+      "section": "A PDHG Iteration Is Two Matrix-Vector Products and Two Clips"
+    },
+    "concepts": [
+      "one PDHG iteration is a clipped primal step and a dual step at the look-ahead point, with each price clipped by its row's sides"
+    ]
+  }
+}

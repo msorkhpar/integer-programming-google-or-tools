@@ -1,0 +1,131 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "09-diagnostics-and-explainability",
+    "37-infeasibility"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "How much over budget, year by year",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A school district's facilities plan funds building projects over a few years. Each project, if funded, spends a fixed amount ($k) in each year listed in its cost dictionary. Some projects are required by the state inspector; the rest are optional. Each year has its own budget, and money does not carry over from one year to the next. This year the required projects do not fit, and the superintendent wants to know the smallest overspend, year by year, that lets every required project be funded."
+    },
+    {
+      "type": "para",
+      "text": "Write the formulation first: one 0/1 variable per project, an elastic budget row per year whose elastic variable is that year's overspend (continuous, at least 0), a row that funds each required project, and an objective that makes the total overspend as small as possible. Then write `least_overspend(projects, budget, required)` to build it with MathOpt, solve it with HiGHS at a relative gap of 0 (`mathopt.SolveParameters(relative_gap_tolerance=0.0)`, so the overspend is a proven least, as in the lesson's own solves) and return `{year: overspend}` for every year of `budget`, each rounded to a whole number of $k."
+    },
+    {
+      "type": "para",
+      "text": "`projects` maps a project name to `{year: cost}`; `budget` maps each year to its budget; `required` is a set of project names. The tests compare the overspends, so any correct formulation passes. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef least_overspend(projects: dict, budget: dict, required: set[str]) -> dict[int, int]:\n    \"\"\"The smallest overspend in each year that lets every required project be funded.\"\"\"\n    model = mathopt.Model(name=\"district\")\n    fund = {p: model.add_binary_variable(name=f\"fund_{p}\") for p in projects}\n    over = {y: model.add_variable(lb=0, name=f\"over_{y}\") for y in budget}\n    for p in required:\n        model.add_linear_constraint(fund[p] == 1, name=f\"required_{p}\")\n    for y, limit in budget.items():\n        spend = mathopt.fast_sum(cost.get(y, 0) * fund[p] for p, cost in projects.items())\n        model.add_linear_constraint(spend - over[y] <= limit, name=f\"budget_{y}\")\n    model.minimize(mathopt.fast_sum(over.values()))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS,\n                            params=mathopt.SolveParameters(relative_gap_tolerance=0.0))\n    return {y: round(result.variable_values(over[y])) for y in budget}\n\n\nif __name__ == \"__main__\":\n    projects = {\"roof\": {2027: 300}, \"boilers\": {2027: 200, 2028: 400}}\n    print(least_overspend(projects, {2027: 450, 2028: 450}, {\"roof\", \"boilers\"}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef least_overspend(projects: dict, budget: dict, required: set[str]) -> dict[int, int]:\n    \"\"\"The smallest overspend in each year that lets every required project be funded.\"\"\"\n    # TODO: write the formulation first (variables, elastic budget rows, objective), then build and solve it.\n    return {y: 0 for y in budget}\n\n\nif __name__ == \"__main__\":\n    projects = {\"roof\": {2027: 300}, \"boilers\": {2027: 200, 2028: 400}}\n    print(least_overspend(projects, {2027: 450, 2028: 450}, {\"roof\", \"boilers\"}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "f43afb7a9e06a2785e702d35fffa2593fd6078d58611395511bf8c9d3986ff32",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef least_overspend(projects: dict, budget: dict, required: set[str]) -> dict[int, int]:\n    \"\"\"The smallest overspend in each year that lets every required project be funded.\"\"\"\n    # TODO: write the formulation first (variables, elastic budget rows, objective), then build and solve it.\n    return {y: 0 for y in budget}\n\n\nif __name__ == \"__main__\":\n    projects = {\"roof\": {2027: 300}, \"boilers\": {2027: 200, 2028: 400}}\n    print(least_overspend(projects, {2027: 450, 2028: 450}, {\"roof\", \"boilers\"}))\n",
+  "exercise": {
+    "main_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-04/practice-1/district.py",
+    "test_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-04/practice-1/test_district.py",
+    "run_command": [
+      "python3",
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-04/practice-1/district.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-04/practice-1/target/report.xml",
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-04/practice-1/test_district.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_feasible_plan_needs_no_overspend_and_a_tight_one_needs_the_difference",
+        "kind": "main",
+        "says": "a plan that fits needs no overspend, and one that does not needs exactly the difference"
+      },
+      {
+        "id": "test_each_year_overspends_only_by_its_own_shortfall",
+        "kind": "edge",
+        "says": "each year has its own overspend, so a short year does not raise a year with room"
+      },
+      {
+        "id": "test_money_left_in_one_year_does_not_pay_for_another",
+        "kind": "edge",
+        "says": "there is no carry-over: room in one year does not pay for another"
+      },
+      {
+        "id": "test_optional_projects_never_add_to_the_overspend",
+        "kind": "edge",
+        "says": "only required projects must be funded"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-04/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "37-infeasibility/README_9.1.4.md",
+      "section": "Penalties in One Currency Give a Repair Planners Can Price"
+    },
+    "concepts": [
+      "elastic budget rows whose elastic variables are each year's overspend"
+    ]
+  }
+}

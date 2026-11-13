@@ -1,0 +1,136 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "11-performance-at-scale",
+    "57-gpu-acceleration"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "When may a first-order solver stop?",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A staffing team buys shifts: shift $`j`$ costs $`c_j`$ and covers $`A_{ij}`$ hours of need $`i`$, and each need must be covered **at least** $`b_i`$ hours. Their LP, $`\\min c^\\top x`$ subject to $`Ax \\ge b`$ and $`x \\ge 0`$, will be solved by a first-order method, and they need the rule that says when to stop."
+    },
+    {
+      "type": "para",
+      "text": "Before you code, write this LP's dual: one price $`y_i \\ge 0`$ per row, the dual objective, and the sign each reduced cost $`c_j - (A^\\top y)_j`$ must have when $`x_j`$ has a lower bound of 0 and no upper bound. Then write PDLP's three relative tests for this form, each with tolerance $`\\varepsilon`$: the gap between the primal and dual objectives, against $`1 + \\lvert\\text{primal}\\rvert + \\lvert\\text{dual}\\rvert`$; the 2-norm of how far the plan leaves rows short, against $`1 + \\lVert b \\rVert_2`$; and the 2-norm of the reduced costs of the wrong sign, against $`1 + \\lVert c \\rVert_2`$."
+    },
+    {
+      "type": "para",
+      "text": "Write `converged(A, b, c, x, y, eps)` in `stopping.py`: True when all three hold. The inputs are NumPy arrays and `y` is already non-negative. About eight lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport numpy as np\n\n\ndef converged(A, b, c, x, y, eps: float) -> bool:\n    \"\"\"PDLP's three relative tests for  min c'x  s.t.  A x >= b,  x >= 0, with prices y >= 0.\"\"\"\n    primal_obj, dual_obj = float(c @ x), float(b @ y)\n    gap_ok = abs(primal_obj - dual_obj) <= eps * (1 + abs(primal_obj) + abs(dual_obj))\n    shortfall = np.maximum(0.0, b - A @ x)                  # only rows the plan leaves short\n    primal_ok = np.linalg.norm(shortfall) <= eps * (1 + np.linalg.norm(b))\n    wrong_sign = np.maximum(0.0, -(c - A.T @ y))            # x >= 0 needs every reduced cost >= 0\n    dual_ok = np.linalg.norm(wrong_sign) <= eps * (1 + np.linalg.norm(c))\n    return bool(gap_ok and primal_ok and dual_ok)\n\n\nif __name__ == \"__main__\":\n    A = np.array([[1.0, 1.0], [1.0, 2.0]])\n    print(converged(A, np.array([4.0, 6.0]), np.array([2.0, 3.0]), np.array([2.0, 2.0]), np.array([1.0, 1.0]), 1e-6))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport numpy as np\n\n\ndef converged(A, b, c, x, y, eps: float) -> bool:\n    \"\"\"PDLP's three relative tests for  min c'x  s.t.  A x >= b,  x >= 0, with prices y >= 0.\"\"\"\n    # TODO: the gap, the primal residual and the dual residual, each against its relative limit.\n    return False\n\nif __name__ == \"__main__\":\n    A = np.array([[1.0, 1.0], [1.0, 2.0]])\n    print(converged(A, np.array([4.0, 6.0]), np.array([2.0, 3.0]), np.array([2.0, 2.0]), np.array([1.0, 1.0]), 1e-6))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "c1646cb966f1641e716f5732f759d413687cd69091058412cd0edeab416fd991",
+  "starting_code": "from __future__ import annotations\n\nimport numpy as np\n\n\ndef converged(A, b, c, x, y, eps: float) -> bool:\n    \"\"\"PDLP's three relative tests for  min c'x  s.t.  A x >= b,  x >= 0, with prices y >= 0.\"\"\"\n    # TODO: the gap, the primal residual and the dual residual, each against its relative limit.\n    return False\n\nif __name__ == \"__main__\":\n    A = np.array([[1.0, 1.0], [1.0, 2.0]])\n    print(converged(A, np.array([4.0, 6.0]), np.array([2.0, 3.0]), np.array([2.0, 2.0]), np.array([1.0, 1.0]), 1e-6))\n",
+  "exercise": {
+    "main_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-01/practice-2/stopping.py",
+    "test_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-01/practice-2/test_stopping.py",
+    "run_command": [
+      "python3",
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-01/practice-2/stopping.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-01/practice-2/target/report.xml",
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-01/practice-2/test_stopping.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_optimal_pair_passes_and_a_costlier_plan_fails",
+        "kind": "main",
+        "says": "an optimal plan and prices pass, and a costlier plan fails"
+      },
+      {
+        "id": "test_a_nearly_optimal_pair_passes_a_loose_tolerance_and_fails_a_tight_one",
+        "kind": "main",
+        "says": "a nearly optimal pair passes a loose tolerance and fails a tight one"
+      },
+      {
+        "id": "test_a_row_with_room_to_spare_is_not_a_breach",
+        "kind": "edge",
+        "says": "a row with room to spare is not counted as broken"
+      },
+      {
+        "id": "test_a_positive_reduced_cost_on_an_unused_variable_is_allowed",
+        "kind": "edge",
+        "says": "only reduced costs of the wrong sign count against the prices"
+      },
+      {
+        "id": "test_scaling_the_units_keeps_the_verdict",
+        "kind": "edge",
+        "says": "changing the units of the data does not change the verdict"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "57-gpu-acceleration/README_11.4.1.md",
+      "section": "A First-Order Method Stops at a Tolerance, Not at a Vertex"
+    },
+    "concepts": [
+      "a first-order method stops when the gap and both residuals are within a tolerance relative to the data's size"
+    ]
+  }
+}

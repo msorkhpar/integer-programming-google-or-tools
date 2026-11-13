@@ -1,0 +1,153 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "23-binary-logic"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Streetlight retrofits by ward",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A city's public-works department is choosing which streetlight blocks to retrofit with LED fixtures this year. The model in `retrofits.py` already has a binary `x[rid]` per candidate retrofit (1 if it is funded) and a budget row. Two rules from the operations office are missing:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Yards.** The crews of each ward work out of one yard, and a yard can stage at most `yard_cap[ward]` retrofits. A ward that does not appear in `yard_cap` has no yard limit.",
+        "**Fair share.** No ward may receive more than `max_share` (a fraction such as 0.4) of the retrofits the plan funds."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Write `add_ward_rules(model, x, retrofits, yard_cap, max_share)` so that the model allows exactly the plans that keep both rules."
+    },
+    {
+      "type": "para",
+      "text": "The model so far, with $`R`$ the candidate retrofits, $`c_r`$ the cost of retrofit $`r`$ and $`B`$ the budget:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& x_r \\in \\{0, 1\\} && \\forall r \\in R && \\text{(fund retrofit } r\\text{)} \\\\\n& \\sum_{r \\in R} c_r\\, x_r \\le B && && \\text{(budget, given)} \\\\\n& \\text{?} && && \\text{(your rows)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Name the sets and parameters you need (the wards, the retrofits of each ward, the caps, the share), write your rows in this notation first, each with its quantifier and a label, then code them. A share of a count is not linear as a fraction; find the form that is."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix a plan through the variables' bounds and ask the solver whether the model accepts it, so any correct formulation passes. About six lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Retrofit:\n    rid: str\n    ward: str\n    cost: int        # $k\n\n\ndef add_ward_rules(model: mathopt.Model, x: dict, retrofits: list[Retrofit],\n                   yard_cap: dict[str, int], max_share: float) -> None:\n    \"\"\"Each ward's yard stages at most yard_cap[ward] retrofits; no ward takes more than max_share of the plan.\"\"\"\n    funded = sum(x.values())\n    for ward in sorted({r.ward for r in retrofits}):\n        in_ward = sum(x[r.rid] for r in retrofits if r.ward == ward)\n        if ward in yard_cap:\n            model.add_linear_constraint(in_ward <= yard_cap[ward], name=f\"yard_{ward}\")\n        model.add_linear_constraint(in_ward <= max_share * funded, name=f\"share_{ward}\")\n\n\ndef build(retrofits: list[Retrofit], budget: int, yard_cap: dict[str, int],\n          max_share: float) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"streetlights\")\n    x = {r.rid: model.add_binary_variable(name=f\"x_{r.rid}\") for r in retrofits}\n    model.add_linear_constraint(sum(r.cost * x[r.rid] for r in retrofits) <= budget, name=\"budget\")\n    add_ward_rules(model, x, retrofits, yard_cap, max_share)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    blocks = [Retrofit(\"N1\", \"North\", 40), Retrofit(\"N2\", \"North\", 35), Retrofit(\"S1\", \"South\", 50)]\n    model, x = build(blocks, 200, {\"North\": 1}, 0.5)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Retrofit:\n    rid: str\n    ward: str\n    cost: int        # $k\n\n\ndef add_ward_rules(model: mathopt.Model, x: dict, retrofits: list[Retrofit],\n                   yard_cap: dict[str, int], max_share: float) -> None:\n    \"\"\"Each ward's yard stages at most yard_cap[ward] retrofits; no ward takes more than max_share of the plan.\"\"\"\n    # TODO: the yard rows and the fair-share rows.\n    return None\n\n\ndef build(retrofits: list[Retrofit], budget: int, yard_cap: dict[str, int],\n          max_share: float) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"streetlights\")\n    x = {r.rid: model.add_binary_variable(name=f\"x_{r.rid}\") for r in retrofits}\n    model.add_linear_constraint(sum(r.cost * x[r.rid] for r in retrofits) <= budget, name=\"budget\")\n    add_ward_rules(model, x, retrofits, yard_cap, max_share)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    blocks = [Retrofit(\"N1\", \"North\", 40), Retrofit(\"N2\", \"North\", 35), Retrofit(\"S1\", \"South\", 50)]\n    model, x = build(blocks, 200, {\"North\": 1}, 0.5)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "7d092d84f4f40f48432e7cc9b114cf07e2947cbaea951f41d97f3202aed59cc9",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Retrofit:\n    rid: str\n    ward: str\n    cost: int        # $k\n\n\ndef add_ward_rules(model: mathopt.Model, x: dict, retrofits: list[Retrofit],\n                   yard_cap: dict[str, int], max_share: float) -> None:\n    \"\"\"Each ward's yard stages at most yard_cap[ward] retrofits; no ward takes more than max_share of the plan.\"\"\"\n    # TODO: the yard rows and the fair-share rows.\n    return None\n\n\ndef build(retrofits: list[Retrofit], budget: int, yard_cap: dict[str, int],\n          max_share: float) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"streetlights\")\n    x = {r.rid: model.add_binary_variable(name=f\"x_{r.rid}\") for r in retrofits}\n    model.add_linear_constraint(sum(r.cost * x[r.rid] for r in retrofits) <= budget, name=\"budget\")\n    add_ward_rules(model, x, retrofits, yard_cap, max_share)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    blocks = [Retrofit(\"N1\", \"North\", 40), Retrofit(\"N2\", \"North\", 35), Retrofit(\"S1\", \"South\", 50)]\n    model, x = build(blocks, 200, {\"North\": 1}, 0.5)\n    print(len(list(model.linear_constraints())), \"rows\")\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-1/retrofits.py",
+    "test_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-1/test_retrofits.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-1/retrofits.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-1/target/report.xml",
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-1/test_retrofits.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_plan_within_every_yard_cap_is_allowed_and_one_over_a_cap_refused",
+        "kind": "main",
+        "says": "a plan within every ward's yard cap is allowed, and one that sends a ward more retrofits than its yard handles is refused"
+      },
+      {
+        "id": "test_a_ward_taking_too_large_a_share_is_refused",
+        "kind": "main",
+        "says": "a plan in which one ward takes more than its share of the funded retrofits is refused"
+      },
+      {
+        "id": "test_the_share_is_of_the_funded_retrofits_not_of_the_candidates",
+        "kind": "edge",
+        "says": "a small plan dominated by one ward is refused, although that ward's count is small next to the candidate list"
+      },
+      {
+        "id": "test_a_ward_with_no_yard_cap_still_has_a_share_limit",
+        "kind": "edge",
+        "says": "a ward missing from the yard caps has no yard limit, and still may not take more than its share"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "23-binary-logic/README_6.1.1.md",
+      "section": "A Counting Row Caps How Many Projects of One Kind Are Funded"
+    },
+    "concepts": [
+      "a cap on how many of a kind, and a share of the plan multiplied out, are rows on counts",
+      "a sum of binaries over a set counts the funded members, and a weighted sum totals a quantity over them"
+    ]
+  }
+}

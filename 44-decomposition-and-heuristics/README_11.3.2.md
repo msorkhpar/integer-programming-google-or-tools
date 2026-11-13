@@ -1,0 +1,424 @@
+# 11.3.2 Benders Decomposition
+
+GridCap's crews cannot do every project the capital plan of lesson 6.4.2 funds. Each program has its
+own crews, paid for already; beyond them, the work is done on overtime (up to a quarter of the
+program's crews, at $15k a crew-month) or by contractors from one pool of 3 crew-months a year, at
+$60k, $40k or $25k a crew-month for transmission, distribution and vegetation work. Which projects
+to start is a yes/no question. Who does each year's work, once the projects are chosen, is a small
+continuous one: a linear program per year. **Benders decomposition** keeps the two apart. A
+**master** problem chooses the projects and carries one variable per year standing in for that
+year's crew cost; for each plan the master proposes, the yearly LPs report the true cost, and their
+dual values become rows, **Benders cuts**, that teach the master what crew work costs, for every
+plan at once. This lesson builds the loop, checks every cut by hand on the first plan, and checks
+the loop's answer against the whole model solved in one MILP.
+
+The crew-cost layer (overtime share, prices, contractor pool) is invented for this lesson, like the
+budget pots of lesson 6.4.4; GridCap is a fictional utility's portfolio.
+
+## The Model
+
+The whole model, the one Benders will split. It is lesson 11.3.1's plan model plus the crew layer.
+
+**Sets.** $`P`$ the projects; $`Y`$ the plan's years; $`T_i`$ the start years of project $`i`$;
+$`M`$ the must-do projects; $`\mathcal{G}`$ the alternative groups; $`C`$ the child projects, with
+parent $`p(c)`$ and lag $`L_c`$; $`G`$ the programs (transmission, distribution, vegetation), and
+$`P_g`$ the projects of program $`g`$.
+
+**Parameters.** $`\text{npv}_{i,t}`$, $`c_{i,k}`$ and $`B_y`$ as in lesson 11.3.1 ($k);
+$`m_i`$, the crew-months project $`i`$ needs in each year it is worked on; $`d_i`$, its years of work;
+$`K_{g,y}`$, program $`g`$'s own crew-months in year $`y`$; $`\rho = 0.25`$, the overtime share;
+$`q^o = 15`$, the price of an overtime crew-month ($k); $`q^c_g`$, the price of a contractor
+crew-month for program $`g`$ (60, 40, 25 $k); $`U = 3`$, the contractor crew-months available per year.
+
+**Variables.** $`x_{i,t} \in \{0,1\}`$ for $`i \in P`$, $`t \in T_i`$: project $`i`$ starts in year
+$`t`$. For every $`g \in G`$, $`y \in Y`$, continuous: $`w_{g,y} \ge 0`$ own crew-months used,
+$`o_{g,y} \ge 0`$ overtime crew-months, $`h_{g,y} \ge 0`$ contractor crew-months (in code `own`,
+`over`, `hire`).
+
+The crew-months program $`g`$ needs in year $`y`$ are an expression in $`x`$:
+
+```math
+\text{need}_{g,y}(x) \;=\; \sum_{i \in P_g} \;\sum_{t \in T_i,\ t \le y < t + d_i} m_i\, x_{i,t}
+```
+
+**Objective.**
+
+```math
+\max \; \sum_{i \in P} \sum_{t \in T_i} \text{npv}_{i,t}\, x_{i,t} \;-\; \sum_{y \in Y} \sum_{g \in G} \bigl(q^o\, o_{g,y} + q^c_g\, h_{g,y}\bigr)
+```
+
+**Constraints.** The once, must, alt, after and budget rows of lesson 11.3.1, and:
+
+```math
+\begin{aligned}
+w_{g,y} + o_{g,y} + h_{g,y} &\ge \text{need}_{g,y}(x) && \forall g \in G,\ y \in Y && \text{(cover}_{g,y}) \\
+w_{g,y} &\le K_{g,y} && \forall g \in G,\ y \in Y && \text{(own}_{g,y}) \\
+o_{g,y} &\le \rho\, K_{g,y} && \forall g \in G,\ y \in Y && \text{(over}_{g,y}) \\
+\sum_{g \in G} h_{g,y} &\le U && \forall y \in Y && \text{(pool}_y)
+\end{aligned}
+```
+
+`benders.monolithic` builds exactly this and solves it with HiGHS; it is the answer the loop must
+reach. In it the own-crew and overtime limits are written as variable bounds; in the yearly LPs below
+they are rows, so that each has a dual value.
+
+## Fixing the Integer Plan Leaves One Small LP per Year
+
+Fix a plan $`\hat x`$. Every $`\text{need}_{g,y}(\hat x)`$ becomes a number, and what is left
+falls apart by year: nothing links 2027's crew variables to 2028's. Each year is a three-program LP,
+`crew_costs.year_lp`:
+
+```python
+for g in PROGRAMS:
+    own = m.add_variable(lb=0, name=f"own_{g}")
+    over = m.add_variable(lb=0, name=f"over_{g}")
+    hire = m.add_variable(lb=0, name=f"hire_{g}")
+    cover = own + over + hire
+```
+
+```python
+cost += OVERTIME_PRICE * over + CONTRACT_PRICE[g] * hire
+rows[f"cover_{g}"] = m.add_linear_constraint(cover >= need[g], name=f"cover_{g}")
+rows[f"own_{g}"] = m.add_linear_constraint(own <= portfolio.crews[g, year], name=f"own_{g}")
+rows[f"over_{g}"] = m.add_linear_constraint(
+    over <= OVERTIME_SHARE * portfolio.crews[g, year], name=f"over_{g}")
+```
+
+```python
+rows["pool"] = m.add_linear_constraint(sum(rows.pop("hires")) <= POOL, name="pool")
+m.minimize(cost)
+```
+
+Call its optimal value $`Q_y(\hat x)`$, the **subproblem** value: the cheapest way to staff year
+$`y`$'s work under plan $`\hat x`$. The whole model is then
+
+```math
+\max_{x} \; \sum_{i,t} \text{npv}_{i,t}\, x_{i,t} \;-\; \sum_{y \in Y} Q_y(x) \qquad \text{subject to the plan rows,}
+```
+
+with $`Q_y(x) = +\infty`$ when no staffing covers the work. This is the move Benders makes: the
+continuous variables disappear into functions of the integer ones. The functions are not known as
+formulas, but each one can be evaluated at any plan by one LP. The five yearly LPs are independent,
+so they could run in parallel; on a larger model with one LP per region and year, that matters.
+
+## The Year's Duals Price Its Right-Hand Sides, and the Same Prices Bound Every Other Plan
+
+Solve the year's LP for $`\hat x`$, and read the dual value $`\pi_r`$ of every row $`r`$ (lesson
+2.3.3: the change in the optimal cost per unit increase of the row's bound). By LP duality (lesson
+2.3.2) the optimal cost equals the sum of dual times bound over the rows, since every variable's
+only bound is zero:
+
+```math
+Q_y(\hat x) \;=\; \sum_{g} \Bigl(\pi_{\text{cover}_g}\, \text{need}_{g,y}(\hat x) + \pi_{\text{own}_g}\, K_{g,y} + \pi_{\text{over}_g}\, \rho K_{g,y}\Bigr) + \pi_{\text{pool}}\, U
+```
+
+Now change the plan. The rows' bounds change (only the cover rows', through $`\text{need}`$), but
+the old prices stay **dual feasible**: dual feasibility does not depend on the bounds. Any dual
+feasible prices give a lower bound on a minimization (weak duality), so for every plan $`x`$:
+
+```math
+Q_y(x) \;\ge\; \sum_{g} \Bigl(\pi_{\text{cover}_g}\, \text{need}_{g,y}(x) + \pi_{\text{own}_g}\, K_{g,y} + \pi_{\text{over}_g}\, \rho K_{g,y}\Bigr) + \pi_{\text{pool}}\, U
+```
+
+with equality at $`\hat x`$. The right side is linear in $`x`$. Give the master a variable
+$`\theta_y \ge 0`$ for year $`y`$'s crew cost, and this is a row the master can hold: the
+**optimality cut** $`\theta_y \ge \text{(right side)}`$. `benders.cut_expression` builds it with
+each cover row's bound written as the master's expression $`\text{need}_{g,y}(x)`$:
+
+```python
+expr = mathopt.LinearExpression()
+for g in PROGRAMS:
+    expr += result.dual_values(rows[f"cover_{g}"]) * need[g]
+    expr += result.dual_values(rows[f"own_{g}"]) * crews[g]
+    expr += result.dual_values(rows[f"over_{g}"]) * OVERTIME_SHARE * crews[g]
+return expr + result.dual_values(rows["pool"]) * POOL
+```
+
+`first_cuts.py` takes the master's first plan (the plan of lesson 6.4.2: no crew costs known yet,
+NPV 24,260) and prints, for each year, the need against the program's own crews, the LP's cost, the
+check that dual times bound adds up to it, and the cut:
+
+```text
+2027  need trans 20/26  distr  5/ 9  veget  3/ 2
+      crew cost  20.00   sum of dual x bound  20.00
+      nonzero duals: cover_vegetation 25, own_vegetation -25, over_vegetation -10
+      optimality cut: theta_2027 >= 25 need_veget(x) -55
+2028  need trans 18/19  distr 12/15  veget  1/ 3
+      crew cost   0.00   sum of dual x bound   0.00
+      nonzero duals: none
+2029  need trans 17/20  distr 14/11  veget  1/ 4
+      crew cost  51.25   sum of dual x bound  51.25
+      nonzero duals: cover_distribution 40, own_distribution -40, over_distribution -25
+      optimality cut: theta_2029 >= 40 need_distr(x) -508.75
+```
+
+Check 2027 by hand. Vegetation needs 3 crew-months and has 2 of its own. Overtime may add a quarter
+of 2, that is 0.5, at $15k: $7.5k. The last 0.5 comes from contractors at $25k: $12.5k. Total
+$20k, as printed. The prices say the same thing in marginal terms: one more crew-month of vegetation
+work would be bought from a contractor ($`\pi_{\text{cover}} = 25`$); one more own crew-month would
+save a contractor's $25k ($`\pi_{\text{own}} = -25`$); one more overtime month would save the $25k
+contractor month but cost $15k, a net $10k ($`\pi_{\text{over}} = -10`$). The cut evaluates to
+$`25 \cdot 3 - 25 \cdot 2 - 10 \cdot 0.5 = 20`$ at this plan, and for any plan it is
+$`\theta_{2027} \ge 25\,\text{need}_{\text{veg},2027}(x) - 55`$: the master now knows that 2027's
+crew cost is at least $25k for every vegetation crew-month of need beyond 2.2. At need 2 the cut asks only
+$`\theta \ge -5`$; the bound $`\theta \ge 0`$ does the rest. A cut is exact where it was made and a
+bound everywhere else.
+
+<!-- practice 1 -->
+
+## An Infeasible Year Returns a Feasibility Cut From a Shortfall LP
+
+The same first plan in 2031:
+
+```text
+2031  need trans 15/14  distr  6/ 4  veget 11/ 2
+      shortfall   6.50   sum of dual x bound   6.50
+      nonzero duals: cover_distribution 1, own_distribution -1, over_distribution -1, cover_vegetation 1, own_vegetation -1, over_vegetation -1, pool -1
+      feasibility cut: 1 need_distr(x) + 1 need_veget(x) -10.5 <= 0
+```
+
+Vegetation needs 11 crew-months against 2 of its own, 0.5 of overtime and a pool of 3 shared with
+distribution, which is itself 1 month short. No staffing covers it: $`Q_{2031}(\hat x) = +\infty`$,
+and no optimality cut can say so. The master needs a row that forbids this plan, and every plan
+that fails for the same reason: a **feasibility cut**.
+
+The textbook route reads a **dual ray** of the infeasible LP (a Farkas certificate: prices that
+prove no solution exists). MathOpt's GLOP and HiGHS do not return one here, on a deliberately
+infeasible one-year LP:
+
+```text
+GLOP  INFEASIBLE dual ray: False
+HIGHS INFEASIBLE dual ray: False
+PDLP  INFEASIBLE dual ray: True  cover 10601.4, own -10765.2, pool -10762.0
+```
+
+PDLP, a first-order method, returns one, but its numbers are those of an approximate method, and
+lesson 9.1.1 met the same gap for primal rays. The course uses a route that needs no
+ray and works with any LP solver: the **shortfall LP**. Add a variable $`s_g \ge 0`$ to each cover
+row, $`w_g + o_g + h_g + s_g \ge \text{need}_g`$, and minimize $`\sum_g s_g`$ instead of cost. It
+is always feasible (put all the need in $`s`$), and its optimum is zero exactly when the year can be
+covered. When it is positive, its duals $`\sigma`$ make the same argument as before: for every plan,
+the least shortfall is at least $`\sum_r \sigma_r\, \text{bound}_r(x)`$, so a plan with that sum
+above zero cannot be covered. The feasibility cut is
+
+```math
+\sum_{g} \Bigl(\sigma_{\text{cover}_g}\, \text{need}_{g,y}(x) + \sigma_{\text{own}_g}\, K_{g,y} + \sigma_{\text{over}_g}\, \rho K_{g,y}\Bigr) + \sigma_{\text{pool}}\, U \;\le\; 0
+```
+
+Here it reads $`\text{need}_{\text{dist},2031}(x) + \text{need}_{\text{veg},2031}(x) \le 10.5`$:
+distribution and vegetation together cannot need more than their own crews (4 + 2), their overtime
+(1 + 0.5) and the pool (3). A planner would have written that rule by hand, had they known it was the
+one that binds. Benders found it from one infeasible plan.
+
+```python
+m, rows = year_lp(portfolio, y, {g: need[g, y] for g in PROGRAMS}, phase_one=True)
+short = mathopt.solve(m, mathopt.SolverType.GLOP)
+if short.objective_value() > TOL:                  # no crews can cover this year's work
+    cap.model.add_linear_constraint(cut_expression(short, rows, need_x, crews) <= 0,
+                                    name=f"feas_{y}_{k}")
+```
+
+## The Master Is an Upper Bound, Each Plan's True Value a Lower Bound; Stop When They Meet
+
+The **master** is the plan model with a variable $`\theta_y \ge 0`$ per year and the objective
+$`\max \sum \text{npv}\,x - \sum_y \theta_y`$, plus every cut found so far. It starts with no cuts,
+so it believes crews are free.
+
+- The master's optimum is an **upper bound** on the whole model: every cut is valid for every plan,
+  so the master is a relaxation, and adding cuts can only lower it.
+- Each plan the master proposes has a **true value**, $`\sum \text{npv}\,\hat x - \sum_y Q_y(\hat x)`$,
+  when every year can be covered. That is a feasible plan's value, a **lower bound**.
+- When the master's $`\theta_y`$ already equal the $`Q_y(\hat x)`$, no cut is added: the master's
+  value is the true value of a feasible plan, the two bounds meet, and the plan is optimal.
+
+The loop re-solves the master from scratch each time (lesson 4.3.4's incremental edit, then a new
+solve); the next section says why not inside one search.
+
+```python
+for k in range(1, max_iterations + 1):
+    master = solve_highs(cap.model, EXACT)
+    upper = master.objective_value()
+    plan = schedule(cap, master)
+    need = need_of(portfolio, plan)
+```
+
+```python
+m, rows = year_lp(portfolio, y, {g: need[g, y] for g in PROGRAMS})
+sub = mathopt.solve(m, mathopt.SolverType.GLOP)
+if total is not None:
+    total += sub.objective_value()
+if master.variable_values(theta[y]) < sub.objective_value() - TOL:
+    cap.model.add_linear_constraint(theta[y] >= cut_expression(sub, rows, need_x, crews),
+                                    name=f"opt_{y}_{k}")
+```
+
+```text
+iter  1  master (upper)  24,260.00  best plan (lower)       none  cuts: feasibility 1, optimality 2
+iter  2  master (upper)  24,062.00  best plan (lower)       none  cuts: feasibility 2, optimality 1
+iter  3  master (upper)  23,994.75  best plan (lower)  23,812.25  cuts: feasibility 0, optimality 1
+iter  4  master (upper)  23,945.50  best plan (lower)  23,812.25  cuts: feasibility 1, optimality 3
+iter  5  master (upper)  23,818.50  best plan (lower)  23,812.25  cuts: feasibility 0, optimality 1
+iter  6  master (upper)  23,812.25  best plan (lower)  23,812.25  cuts: feasibility 0, optimality 0
+Benders: 23,812.25 after 6 master solves;  monolithic MILP: 23,812.25
+same plan: True   NPV 24,066  crew cost 253.75
+```
+
+The upper bound falls in every iteration, 24,260 to 23,812.25, as cuts accumulate. The first two
+plans cannot be staffed in some year, so there is no lower bound yet; the third plan can be, and
+its true value, 23,812.25, turns out to be the optimum, which the master proves three iterations
+later. Six master solves and 12 cuts in all reach the same value and the same plan as the
+monolithic MILP. The optimal plan gives up $194k of NPV (24,260 to 24,066) to cut the crew bill to
+$253.75k.
+
+Two habits from this output carry over to any decomposition. **Compare against the monolithic
+solve** on an instance small enough to solve whole, and compare with a tolerance: HiGHS returns
+objective values with noise near $`10^{-5}`$, so a test of equality must allow for it
+(this module's tests use $`10^{-3}`$). And **report the bounds per iteration**, not only the final
+plan: a loop stopped early still gives an honest gap between its two bounds.
+
+<!-- practice 2 -->
+
+## HiGHS Cannot Take the Cuts Inside Its Search; SCIP Can, as Lazy Constraints
+
+Each master solve above starts the branch-and-bound search from scratch, and throws away a tree that
+already proved most of the answer. The alternative, often called **branch-and-Benders-cut**, solves
+the master once and adds each cut the moment an integer plan breaks it, as a **lazy constraint**
+(lesson 4.3.5). Lesson 4.3.5 showed that HiGHS through MathOpt accepts a lazy-constraint callback,
+never calls it, and returns plans that break the lazy rows. So the one-search version
+runs on SCIP, with the same cut function:
+
+```python
+def separate(data: mathopt.CallbackData) -> mathopt.CallbackResult:
+    """At every integer plan SCIP finds, solve the yearly LPs and send the cuts the plan breaks."""
+    result = mathopt.CallbackResult()
+    plan = {pid: t for (pid, t), v in cap.x.items() if data.solution[v] > 0.5}
+```
+
+```python
+registration = mathopt.CallbackRegistration(events={mathopt.Event.MIP_SOLUTION}, add_lazy_constraints=True)
+params = mathopt.SolveParameters(relative_gap_tolerance=0.0, threads=1, random_seed=1)
+lazy = mathopt.solve(cap.model, mathopt.SolverType.GSCIP, params=params, callback_reg=registration, cb=separate)
+```
+
+```text
+one SCIP search with lazy cuts: OPTIMAL 23,812.25
+monolithic MILP:                23,812.25
+agree within 1e-3: True
+cuts sent: {'feasibility': 6, 'optimality': 31}
+```
+
+One search reaches the same optimum. It sent 37 cuts, against the loop's 12, because SCIP calls the
+callback at every integer plan it meets, including plans the loop's master never proposed. Which
+version is faster depends on how costly a master solve is against a callback; the one search never
+throws a tree away, the loop never sends a cut for a plan that could not win. When this program runs, SCIP also writes two `[scip_event.c:305] ERROR` lines
+to the error stream; lesson 4.3.5 met them too, and the solve is unaffected.
+
+So when the same callback is registered with HiGHS and the solve reports OPTIMAL above the loop's
+value, neither the cuts nor the loop is at fault. The cuts are not weaker in one search: sent by
+the same function to SCIP, they reach 23,812.25 above. The loop did not stop early: its two bounds
+met at 23,812.25, the monolithic MILP's value. HiGHS never called the callback, so it solved the
+master with no cuts, the master that believes crews are free, as in iteration 1 of the loop.
+
+## The Model
+
+The Benders master after $`k`$ iterations, whole. New are the $`\theta_y`$ and the two kinds of
+cut; the crew variables and rows live only in the yearly subproblems.
+
+**Sets, parameters.** As in the whole model above, plus $`\mathcal{O}_y`$, the optimality cuts found
+so far for year $`y`$, each with duals $`\pi^{(j)}`$, and $`\mathcal{F}_y`$, the feasibility cuts,
+each with shortfall duals $`\sigma^{(j)}`$.
+
+**Variables.** $`x_{i,t} \in \{0,1\}`$ as before; $`\theta_y \ge 0`$ for every $`y \in Y`$, the
+master's estimate of year $`y`$'s crew cost ($k), continuous.
+
+**Objective.**
+
+```math
+\max \; \sum_{i \in P} \sum_{t \in T_i} \text{npv}_{i,t}\, x_{i,t} \;-\; \sum_{y \in Y} \theta_y
+```
+
+**Constraints.** The once, must, alt, after and budget rows of lesson 11.3.1, and, writing
+$`\beta_y(\pi, x) = \sum_{g} (\pi_{\text{cover}_g} \text{need}_{g,y}(x) + \pi_{\text{own}_g} K_{g,y} + \pi_{\text{over}_g} \rho K_{g,y}) + \pi_{\text{pool}} U`$:
+
+```math
+\begin{aligned}
+\theta_y &\ge \beta_y\bigl(\pi^{(j)}, x\bigr) && \forall y \in Y,\ j \in \mathcal{O}_y && \text{(opt}_{y,k}) \quad \leftarrow \text{this lesson} \\
+\beta_y\bigl(\sigma^{(j)}, x\bigr) &\le 0 && \forall y \in Y,\ j \in \mathcal{F}_y && \text{(feas}_{y,k}) \quad \leftarrow \text{this lesson}
+\end{aligned}
+```
+
+The **subproblem** of year $`y`$ at plan $`\hat x`$ is the LP
+$`Q_y(\hat x) = \min \sum_g (q^o o_g + q^c_g h_g)`$ over $`w, o, h \ge 0`$ subject to cover, own,
+over and pool with $`\text{need}_{g,y}(\hat x)`$ on the right; its **shortfall** version adds
+$`s_g \ge 0`$ to each cover row and minimizes $`\sum_g s_g`$.
+
+## Summary
+
+- **Fixing the integer plan leaves one small LP per year.** The continuous variables become a
+  function $`Q_y(x)`$ of the plan, evaluated by an LP.
+- **The year's duals price its right-hand sides, and the same prices bound every other plan.**
+  $`\theta_y \ge \sum_r \pi_r\, \text{bound}_r(x)`$ is exact at the plan that produced it and valid
+  for every plan.
+- **An infeasible year returns a feasibility cut from a shortfall LP.** GLOP and HiGHS return no
+  dual ray here; the shortfall LP's duals give the cut with any LP solver.
+- **The master is an upper bound, each plan's true value a lower bound; stop when they meet.** On
+  GridCap small: 6 master solves, 12 cuts, the monolithic optimum 23,812.25 and the same plan.
+- **HiGHS cannot take the cuts inside its search; SCIP can, as lazy constraints.** One SCIP search
+  sent 37 cuts and reached the same optimum.
+
+## Reference
+
+| Term | Meaning |
+| --- | --- |
+| master | the integer part, with $`\theta_y`$ standing in for each subproblem's cost, plus the cuts so far |
+| subproblem $`Q_y(\hat x)`$ | the LP left when the plan is fixed |
+| optimality cut | $`\theta_y \ge \sum_r \pi_r\, \text{bound}_r(x)`$ from the subproblem's duals |
+| feasibility cut | $`\sum_r \sigma_r\, \text{bound}_r(x) \le 0`$ from a shortfall LP's duals (or a dual ray) |
+| upper bound (max) | the master's optimum; falls as cuts are added |
+| lower bound (max) | the best true value $`\sum \text{npv}\,\hat x - \sum_y Q_y(\hat x)`$ of a proposed plan |
+| branch-and-Benders-cut | one master search, cuts added as lazy constraints at each integer plan |
+
+| Solver through MathOpt | Use in Benders |
+| --- | --- |
+| GLOP, HiGHS (LP) | subproblems and shortfall LPs, with duals; no dual ray on an infeasible LP |
+| HiGHS (MIP) | the master in a loop of re-solves; never calls a callback (lesson 4.3.5) |
+| SCIP | the master as one search with lazy cuts (prints two `scip_event.c` lines) |
+
+**Further reading:** [OR-Tools MathOpt sample `tsp.py`](https://github.com/google/or-tools/blob/stable/ortools/math_opt/samples/python/tsp.py) (the lazy-constraint pattern `benders_lazy.py` follows: a `MIP_SOLUTION` registration with `add_lazy_constraints=True`, and `add_lazy_constraint` for each row the candidate breaks; the sample itself runs on Gurobi); [MathOpt (OR-Tools)](https://developers.google.com/optimization/math_opt) (solving with GLOP, HiGHS and SCIP from one model); [Ralphs, *Integer Programming*, Lecture 20 (Lehigh ISE 418)](https://coral.ise.lehigh.edu/%7Eted/files/ie418/lectures/Lecture20.pdf) (Benders as projection onto the master variables through the subproblem's value function; optimality cuts from the subproblem's dual solutions, feasibility cuts from a dual ray, and the master's value as the upper bound that meets the subproblems' lower bound); [Hooker, *Logic-based Benders decomposition for large-scale optimization* (arXiv 1910.11944)](https://ar5iv.labs.arxiv.org/html/1910.11944) (section 3, classical Benders as the case where the subproblem's inference dual is the LP dual; section 4, branch and check, which adds the cuts inside one master search); [Hybrid Lagrangian relaxation and Benders decomposition for stochastic hub location (University of Edinburgh)](https://www.research.ed.ac.uk/en/publications/a-hybrid-lagrangian-relaxation-and-benders-decomposition-algorith/) (a 2024 conference abstract: Benders on a two-stage stochastic model, combined with Lagrangian relaxation).
+
+## Challenges
+
+1. Replace the five $`\theta_y`$ with one $`\theta`$ for the whole plan, and add one cut per
+   iteration, the sum of the yearly ones. Predict whether the loop needs more or fewer master solves.
+2. Raise the contractor pool from 3 to 30 crew-months. Predict which kind of cut disappears.
+3. The first plan's 2031 feasibility cut is $`\text{need}_{\text{dist}} + \text{need}_{\text{veg}} \le 10.5`$.
+   Why is transmission missing from it, although transmission also needs more than its own crews in
+   2031?
+4. Write the cut that 2029's LP gives in words a crew manager would accept.
+
+## Design Note: Name Every Cut
+
+Every cut the loop adds has a name, `opt_2029_1` or `feas_2031_1`: the year it bounds and the
+iteration that found it. When a master turns infeasible, or a plan is refused for a reason a
+planner cannot see, the names lead back to the plan and the year that produced the rule. Unnamed
+cuts make a decomposition a black box at exactly the moment someone needs to look inside.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change.
+
+**crew_costs.py.** The invented crew layer (overtime share, prices, contractor pool), each plan's crew need, and the yearly LP with its shortfall version (*Fixing the Integer Plan Leaves One Small LP per Year*). It prints nothing.
+
+**first_cuts.py.** The first iteration by hand: each year's LP for the first master plan, the dual check, and the cut (*the second and third sections*). *Try:* Raise the vegetation contractor price from 25 to 35. Predict the new 2027 cut.
+
+**dual_ray.py.** Asks GLOP, HiGHS and PDLP for a dual ray of an infeasible one-year LP (*An Infeasible Year Returns a Feasibility Cut*). *Try:* Raise the pool from 3 to 6. Predict every line.
+
+**benders.py.** The Benders loop, the monolithic MILP, and the check that both give the same plan (*The Master Is an Upper Bound*). *Try:* Set `POOL` in `crew_costs.py` to 2. Predict whether the loop needs more master solves.
+
+**benders_lazy.py.** The same cuts as lazy constraints in one SCIP search (*HiGHS Cannot Take the Cuts Inside Its Search*). *Try:* Register the callback with HiGHS instead of SCIP. Predict the objective, using lesson 4.3.5.
+
+- Library: [crew_costs.py](src/crew_costs.py)
+- Program: [first_cuts.py](src/first_cuts.py)
+- Program: [dual_ray.py](src/dual_ray.py)
+- Program: [benders.py](src/benders.py)
+- Program: [benders_lazy.py](src/benders_lazy.py)

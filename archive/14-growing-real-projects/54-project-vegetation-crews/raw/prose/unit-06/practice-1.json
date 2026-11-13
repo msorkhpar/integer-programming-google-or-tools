@@ -1,0 +1,605 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "14-growing-real-projects",
+    "54-project-vegetation-crews"
+  ],
+  "variant": "prose",
+  "unit": 6,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Take the planner's overrides, and name the ones that clash",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "With calendars in place, GridCap's vegetation planner started using the plan every week, and wrote:"
+    },
+    {
+      "type": "quote",
+      "blocks": [
+        {
+          "type": "para",
+          "text": "Sometimes I know something the model doesn't. A crew is already on site near C17, so start it there in week 0. The county closes the road to C17 until October, so leave it. A landowner complained, so trim C02 first. I need to tell the planner these things and have it plan *around* them. And when it can't, \"INFEASIBLE\" is not an answer. Last week I forced in five circuits after a storm and got an empty plan and that one word. Tell me *which* of my decisions clash, in my words, so I know what to give up."
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "text": "You start from the calendar scheduler of the lesson before. Take the planner's overrides: pin a trim to a crew and a first week, skip a circuit, or force one in, each with a reason. Refuse an override that names nothing before any model is built. When a season has no plan, name a smallest set of the planner's rules that clash (the musts, the budget and the overrides, never the physics of crews and weeks) in the planner's words, and print them in the report. Split the model out of `planner.py` into `model.py`, and the explanation into `explain.py`."
+    },
+    {
+      "type": "para",
+      "text": "**The explanation.** Name the rules in the order they are made: each must as its circuit comes in the season, then the budget, then the overrides in the order given. The tests compare the explanation with an exact tuple in that order."
+    },
+    {
+      "type": "para",
+      "text": "**The report.** After the crew lines, a plan with an explanation prints `these rules cannot all hold; change one of them:` and one line per rule, two spaces, `- ` and the rule's words. An INFEASIBLE plan has no trims: its status line reads `status INFEASIBLE: 0 trims, cost $0k, risk carried $0k`, and each crew's line shows only its weeks off."
+    },
+    {
+      "type": "para",
+      "text": "**`main.py`.** After the tiny season's report it prints two more sections, each after an empty line. First the title `skip C03:` and the report of the tiny season with one override, `Override(\"skip\", \"C03\", reason=\"road closed\")`. Then the title `pin C01 and C05 a week apart on K1:` and the report with two, `Override(\"pin\", \"C01\", crew=\"K1\", start=12, reason=\"crew is nearby\")` and `Override(\"pin\", \"C05\", crew=\"K1\", start=13, reason=\"landowner asked\")`, which cannot both hold. Keep the line that sets `planner.WORKERS = 1`."
+    },
+    {
+      "type": "para",
+      "text": "Run's report gains the two sections above, as `expected/report.txt` shows. Submit runs every test in `tests/`, the earlier steps' included, and compares Run's report with the expected one."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "text": "Blueprint"
+    },
+    {
+      "type": "para",
+      "text": "Write each method below. The tests check each one by itself and the whole program end to end, so you may change any other part of the code as you see fit."
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`build` in `vegcrew/model.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def build(season: Season, overrides: tuple[Override, ...] = ()) -> TrimModel"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** The model of the lesson before, moved to model.py with crew_ids, horizon and start_domain, and built with the overrides. Every rule a planner can change sits behind a named literal, with its words: `must_<cid>` (`<cid> is overdue and must be trimmed this season`), budget (`the season's budget is $<budget>k`, the budget written with a thousands comma, as f\"{budget:,}\" writes it: `$962k`, `$1,000k`) and `override_<i>` (`override <i>: ` followed by the override's own words, as Override.says gives them: `trim <cid> on <crew> from week <start> (<reason>)` for a pin, `leave <cid> for next season (<reason>)`, `trim <cid> this season (<reason>)`, with `no reason given` when the reason is empty). A skip leaves its circuit untrimmed; a pin or force trims it; a pin also fixes the crew and the first week it names. The rules are made in this order: each must as its circuit comes in the season's order, then the budget, then the overrides in the order given.",
+        "**Modeling idea.** A rule behind a literal holds only when its literal is true, so the search can be asked which literals cannot all be true.",
+        "**Taught in** [4.4.2 Native Logic: `AddBoolOr`, `AddImplication`, `OnlyEnforceIf`](../../../../04-google-or-tools-in-depth/15-cpsat-core/units/unit-02/4.4.2-native-logic-addboolor-addimplication-onlyenforceif.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`holds` in `vegcrew/explain.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def holds(tm: TrimModel, names: list[str]) -> bool"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** Answers whether the named rules can all hold at once: clears the model's assumptions, adds the named rules' literals as assumptions, and solves with num_workers = 1 and stop_after_first_solution = True; True unless the status is INFEASIBLE.",
+        "**Modeling idea.** Only yes or no matters, so the first plan found is enough.",
+        "**Taught in** [4.6.2 Hints, Assumptions and `SufficientAssumptionsForInfeasibility`](../../../../04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/units/unit-02/4.6.2-hints-assumptions-and-sufficientassumptionsforinfeasibility.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`conflict` in `vegcrew/explain.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def conflict(tm: TrimModel) -> list[str]"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** Returns a minimal list of rule names that cannot all hold, or [] when every rule can: the rules the solver names as sufficient for infeasibility (assumptions need one worker), then each dropped in turn and left out when the rest still cannot hold. The names come back in the order the rules were made, whatever order the solver named them in.",
+        "**Modeling idea.** Assumptions name a set of rules that is enough for the proof; a deletion filter makes it minimal.",
+        "**Taught in** [9.1.5 CP-SAT Assumptions as a Conflict Finder](../../../../09-diagnostics-and-explainability/37-infeasibility/units/unit-05/9.1.5-cp-sat-assumptions-as-a-conflict-finder.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`why_infeasible` in `vegcrew/explain.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def why_infeasible(season: Season, overrides: tuple[Override, ...] = ()) -> list[str]"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** Builds the model of the season and its overrides and returns the words (TrimModel.says) of the rules in its conflict, in the conflict's order. The tests compare the explanation with an exact tuple in that order: musts, then the budget, then the overrides.",
+        "**Modeling idea.** A conflict is only useful in the words of the people who can change it.",
+        "**Taught in** [9.1.6 Turning an IIS Into a Planner Message](../../../../09-diagnostics-and-explainability/37-infeasibility/units/unit-06/9.1.6-turning-an-iis-into-a-planner-message.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`check_overrides` in `vegcrew/planner.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def check_overrides(season: Season, overrides: tuple[Override, ...]) -> list[str]"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** Returns what is wrong with the overrides as data, in order: `override <i>: unknown kind <kind repr>` unless the kind is pin, skip or force; `override <i>: no circuit <cid>`; `override <i>: no crew <crew>`; `override <i>: week <start> is outside the season`. Empty when nothing is.",
+        "**Modeling idea.** An override that names nothing is refused before any model is built.",
+        "**Taught in** [12.1.2 Manual Overrides as Bounds, With an Audit Trail](../../../../12-engineering-the-optimization-service/45-scenario-workflow/units/unit-02/12.1.2-manual-overrides-as-bounds-with-an-audit-trail.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`make_plan` in `vegcrew/planner.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def make_plan(season: Season, overrides: tuple[Override, ...] = ()) -> Plan"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** Raises ValueError with the problems joined by `; ` when check_overrides finds any; otherwise solves with every rule's literal true, and when the season is INFEASIBLE returns a Plan whose explanation is why_infeasible's words.",
+        "**Modeling idea.** A failed plan says which of the planner's rules clash, not just that it failed.",
+        "**Taught in** [14.1.6 Planner Overrides and Why a Plan Failed](../../../../14-growing-real-projects/54-project-vegetation-crews/units/unit-06/14.1.6-planner-overrides-and-why-a-plan-failed.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`format_plan` in `vegcrew/report.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def format_plan(season: Season, plan: Plan) -> str"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** After the crews, when the plan has an explanation, the line `these rules cannot all hold; change one of them:` and one line `  - <words>` per rule, in the explanation's order. An INFEASIBLE plan has no trims, so its status line reads `0 trims, cost $0k, risk carried $0k` and each crew's line shows only its weeks off, ending in two spaces.",
+        "**Modeling idea.** The explanation is part of the answer, so the report prints it.",
+        "**Taught in** [9.1.6 Turning an IIS Into a Planner Message](../../../../09-diagnostics-and-explainability/37-infeasibility/units/unit-06/9.1.6-turning-an-iis-into-a-planner-message.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"The CP-SAT model of a season: every trim an optional interval on one crew, every planner's rule\nbehind a named literal so that a failed plan can say which rules clash.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom ortools.sat.python import cp_model\n\nfrom vegcrew.data import DEFER_WEEKS, WEEKS_PER_MONTH, Circuit, Override, Season\n\n\ndef crew_ids(season: Season) -> list[str]:\n    return [f\"K{k}\" for k in range(1, season.crews + 1)]\n\n\ndef horizon(season: Season) -> int:\n    return season.months * WEEKS_PER_MONTH\n\n\n@dataclass\nclass TrimModel:\n    model: cp_model.CpModel\n    trimmed: dict[str, cp_model.IntVar] = field(default_factory=dict)                 # circuit\n    present: dict[tuple[str, str], cp_model.IntVar] = field(default_factory=dict)    # (circuit, crew)\n    start: dict[tuple[str, str], cp_model.IntVar] = field(default_factory=dict)\n    work: dict[tuple[str, str], cp_model.IntervalVar] = field(default_factory=dict)\n    end: dict[str, cp_model.IntVar] = field(default_factory=dict)                     # circuit\n    carried: dict[str, cp_model.IntVar] = field(default_factory=dict)                 # circuit\n    rules: dict[str, cp_model.IntVar] = field(default_factory=dict)                   # name -> literal\n    says: dict[str, str] = field(default_factory=dict)                                # name -> words\n\n    def rule(self, name: str, says: str) -> cp_model.IntVar:\n        \"\"\"A literal that switches one of the planner's rules on; the rows it guards hold only if it is 1.\"\"\"\n        self.rules[name] = self.model.new_bool_var(name)\n        self.says[name] = says\n        return self.rules[name]\n\n\ndef start_domain(c: Circuit, h: int) -> cp_model.Domain:\n    \"\"\"Every first week that keeps the trim inside one of the circuit's windows and the season.\"\"\"\n    windows = c.windows or ((0, h - 1),)\n    return cp_model.Domain.from_intervals(\n        [[first, min(last, h - 1) - c.weeks + 1] for first, last in windows\n         if min(last, h - 1) - c.weeks + 1 >= first])\n\n\ndef build(season: Season, overrides: tuple[Override, ...] = ()) -> TrimModel:\n    tm = TrimModel(cp_model.CpModel())\n    h = horizon(season)\n    deferred = h + DEFER_WEEKS                      # the end week of a circuit left for next season\n    for c in season.circuits:\n        t = tm.trimmed[c.cid] = tm.model.new_bool_var(f\"t_{c.cid}\")\n        e = tm.end[c.cid] = tm.model.new_int_var_from_domain(\n            cp_model.Domain.from_intervals([[c.weeks, h], [deferred, deferred]]), f\"e_{c.cid}\")\n        starts = start_domain(c, h)\n        options = [] if starts.is_empty() else crew_ids(season)    # no window fits it: no options\n        for k in options:\n            p = tm.present[c.cid, k] = tm.model.new_bool_var(f\"p_{c.cid}_{k}\")\n            s = tm.start[c.cid, k] = tm.model.new_int_var_from_domain(starts, f\"s_{c.cid}_{k}\")   # window_c\n            tm.work[c.cid, k] = tm.model.new_optional_fixed_size_interval_var(s, c.weeks, p, f\"w_{c.cid}_{k}\")\n            tm.model.add(e == s + c.weeks).only_enforce_if(p)                        # ends_c,k\n        tm.model.add(sum(tm.present[c.cid, k] for k in options) == t)               # once_c\n        tm.model.add(e == deferred).only_enforce_if(~t)                              # waits_c\n        if c.must:\n            overdue = tm.rule(f\"must_{c.cid}\", f\"{c.cid} is overdue and must be trimmed this season\")\n            tm.model.add(t == 1).only_enforce_if(overdue)                            # must_c\n        table = [c.carried(week) for week in range(deferred + 1)]\n        tm.carried[c.cid] = tm.model.new_int_var(0, table[-1], f\"r_{c.cid}\")\n        tm.model.add_element(e, table, tm.carried[c.cid])                            # risk_c\n    for k in crew_ids(season):\n        off = [tm.model.new_fixed_size_interval_var(first, last - first + 1, f\"off_{k}_{first}\")\n               for first, last in season.crew_off.get(k, ())]\n        tm.model.add_no_overlap([w for (_, crew), w in tm.work.items() if crew == k] + off)   # crew_k\n    tm.model.add(sum(c.cost * tm.trimmed[c.cid] for c in season.circuits) <= season.budget).only_enforce_if(\n        tm.rule(\"budget\", f\"the season's budget is ${season.budget:,}k\"))                # budget\n    for i, o in enumerate(overrides, start=1):\n        on = tm.rule(f\"override_{i}\", f\"override {i}: {o.says()}\")\n        t = tm.trimmed[o.cid]\n        if o.kind == \"skip\":\n            tm.model.add(t == 0).only_enforce_if(on)                                 # override_i\n            continue\n        tm.model.add(t == 1).only_enforce_if(on)                                     # pin and force\n        if o.crew and (o.cid, o.crew) in tm.present:\n            tm.model.add(tm.present[o.cid, o.crew] == 1).only_enforce_if(on)\n        if o.start is not None:\n            tm.model.add(tm.end[o.cid] == o.start + season.circuit(o.cid).weeks).only_enforce_if(on)\n    tm.model.minimize(sum(tm.carried.values()))\n    return tm\n"
+        },
+        {
+          "type": "para",
+          "text": "File: main.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run: plan the tiny season and print the vegetation manager's report, then the same season under a\nplanner's override it can keep and under two overrides that clash.\n\nThe season is GridCap tiny, six circuits of a fictional utility, drawn by vegcrew/generate.py from\nseed 54. Nothing is read from the working directory, so the report is the same wherever Run starts.\nThe planner searches with one worker here, as in steps/03, so that Run repeats the same search on\nevery run.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom vegcrew import planner\nfrom vegcrew.__main__ import main\nfrom vegcrew.data import Override, season_from_dict\nfrom vegcrew.generate import scenario\nfrom vegcrew.planner import make_plan\nfrom vegcrew.report import format_plan\n\nSIZE, SEED = \"tiny\", 54\n\n\ndef show_overrides() -> None:\n    \"\"\"The plan with one override it keeps, then the rules named when two overrides clash.\"\"\"\n    season = season_from_dict(scenario(SIZE, SEED))\n    kept = (Override(\"skip\", \"C03\", reason=\"road closed\"),)\n    clash = (Override(\"pin\", \"C01\", crew=\"K1\", start=12, reason=\"crew is nearby\"),\n             Override(\"pin\", \"C05\", crew=\"K1\", start=13, reason=\"landowner asked\"))\n    for title, overrides in ((\"skip C03:\", kept), (\"pin C01 and C05 a week apart on K1:\", clash)):\n        print()\n        print(title)\n        print(format_plan(season, make_plan(season, overrides)))\n\n\nif __name__ == \"__main__\":\n    planner.WORKERS = 1                            # one search worker: the same plan every run\n    main([SIZE, \"--seed\", str(SEED)])\n    show_overrides()\n"
+        },
+        {
+          "type": "para",
+          "text": "File: vegcrew/__init__.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"GridCap's vegetation crew planner.\n\nGridCap is a fictional utility, and every season this package plans is generated from a seed by\n`vegcrew.generate`. None of it is a real utility's data.\n\"\"\"\n"
+        },
+        {
+          "type": "para",
+          "text": "File: vegcrew/__main__.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"python -m vegcrew [tiny|small|medium] [--seed N]: plan a generated season and print the plan.\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\n\nfrom vegcrew.data import season_from_dict\nfrom vegcrew.generate import SIZES, scenario\nfrom vegcrew.planner import make_plan\nfrom vegcrew.report import format_plan\n\n\ndef main(argv: list[str] | None = None) -> None:\n    parser = argparse.ArgumentParser(prog=\"vegcrew\")\n    parser.add_argument(\"size\", nargs=\"?\", default=\"small\", choices=sorted(SIZES))\n    parser.add_argument(\"--seed\", type=int, default=54)\n    args = parser.parse_args(argv)\n    season = season_from_dict(scenario(args.size, args.seed))\n    print(format_plan(season, make_plan(season)))\n\n\nif __name__ == \"__main__\":\n    main()\n"
+        },
+        {
+          "type": "para",
+          "text": "File: vegcrew/data.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"The season the planner reads: typed, immutable, and only the columns the planner uses.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass\n\nWEEKS_PER_MONTH = 4\nDEFER_WEEKS = 26        # an untrimmed circuit waits this many weeks past the season for the next one\n\nWeeks = tuple[tuple[int, int], ...]     # spans of weeks, each (first, last), both included\n\n\n@dataclass(frozen=True)\nclass Circuit:\n    cid: str\n    region: str\n    miles: int\n    cost: int           # $k to trim the circuit\n    risk: int           # $k a year of tree-caused outage risk that a trim removes\n    weeks: int          # crew-weeks of work to trim it\n    growth: float       # $k a week by which the weekly risk grows while the circuit waits\n    windows: Weeks      # the trim must lie inside one of these; () means the whole season\n    must: bool          # compliance: it must be trimmed this season\n\n    def carried(self, end: int) -> int:\n        \"\"\"$k of risk carried from week 0 until a trim that ends at `end` (weeks 0 to end - 1).\"\"\"\n        weekly = self.risk / 52\n        return round(weekly * end + self.growth * end * (end - 1) / 2)\n\n\n@dataclass(frozen=True)\nclass Season:\n    name: str\n    budget: int         # $k for the year's trimming\n    crews: int          # crews working the season\n    months: int         # months in the season, each WEEKS_PER_MONTH weeks\n    crew_off: dict[str, Weeks]      # crew id -> weeks it cannot work\n    circuits: tuple[Circuit, ...]\n\n    def circuit(self, cid: str) -> Circuit:\n        return next(c for c in self.circuits if c.cid == cid)\n\n\n@dataclass(frozen=True)\nclass Override:\n    \"\"\"A planner's decision the plan must keep: pin a trim, skip a circuit, or force one in.\"\"\"\n    kind: str                       # \"pin\", \"skip\" or \"force\"\n    cid: str\n    crew: str | None = None         # pin: this crew (None: any crew)\n    start: int | None = None        # pin: this first week (None: any week)\n    reason: str = \"\"\n\n    def says(self) -> str:\n        where = \"\".join([f\" on {self.crew}\" if self.crew else \"\", f\" from week {self.start}\"\n                         if self.start is not None else \"\"])\n        what = {\"pin\": f\"trim {self.cid}{where}\", \"skip\": f\"leave {self.cid} for next season\",\n                \"force\": f\"trim {self.cid} this season\"}[self.kind]\n        return f\"{what} ({self.reason or 'no reason given'})\"\n\n\ndef spans(raw: list) -> Weeks:\n    return tuple((int(first), int(last)) for first, last in raw)\n\n\ndef season_from_dict(raw: dict) -> Season:\n    \"\"\"Read the columns the planner uses. Columns it does not use yet are ignored.\n\n    A circuit with no windows may be trimmed in any week, one with no must flag is optional work,\n    and a season with no crew_off has every crew at work every week.\n    \"\"\"\n    circuits = tuple(Circuit(c[\"id\"], c[\"region\"], int(c[\"miles\"]), int(c[\"cost\"]), int(c[\"risk\"]),\n                             int(c[\"weeks\"]), float(c[\"growth\"]), spans(c.get(\"windows\") or []),\n                             bool(c.get(\"must\", False)))\n                     for c in raw[\"circuits\"])\n    crew_off = {k: spans(weeks) for k, weeks in (raw.get(\"crew_off\") or {}).items()}\n    return Season(raw.get(\"name\", \"season\"), int(raw[\"budget\"]), int(raw[\"crews\"]), int(raw[\"months\"]),\n                  crew_off, circuits)\n"
+        },
+        {
+          "type": "para",
+          "text": "File: vegcrew/explain.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Why a season has no plan: the planner's rules that cannot all hold together, in the planner's words.\n\nEvery rule a planner can change (a must, the budget, an override) sits behind a literal (model.py). The\nsearch takes those literals as assumptions; when it proves the season infeasible, CP-SAT names a set of\nassumptions that is enough for the proof, and a deletion filter shrinks it to a minimal one: drop each\nrule in turn, and keep it out only if the rest still cannot hold.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\nfrom vegcrew.data import Override, Season\nfrom vegcrew.model import TrimModel, build\n\n\ndef holds(tm: TrimModel, names: list[str]) -> bool:\n    \"\"\"Can these rules all hold at once? One worker, stopped at the first plan: only yes or no matters.\"\"\"\n    tm.model.clear_assumptions()\n    tm.model.add_assumptions([tm.rules[n] for n in names])\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.parameters.stop_after_first_solution = True\n    return solver.solve(tm.model) != cp_model.INFEASIBLE\n\n\ndef conflict(tm: TrimModel) -> list[str]:\n    \"\"\"A minimal set of rule names that cannot all hold, or [] if every rule can.\"\"\"\n    names = list(tm.rules)\n    tm.model.clear_assumptions()\n    tm.model.add_assumptions([tm.rules[n] for n in names])\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1                  # assumptions need a single worker\n    if solver.solve(tm.model) != cp_model.INFEASIBLE:\n        return []\n    by_index = {lit.index: n for n, lit in tm.rules.items()}\n    core = [by_index[i] for i in solver.sufficient_assumptions_for_infeasibility()]\n    for name in list(core):                            # deletion filter\n        rest = [n for n in core if n != name]\n        if not holds(tm, rest):\n            core = rest\n    return sorted(core, key=names.index)               # in the order the rules were made\n\n\ndef why_infeasible(season: Season, overrides: tuple[Override, ...] = ()) -> list[str]:\n    tm = build(season, overrides)\n    return [tm.says[n] for n in conflict(tm)]\n"
+        },
+        {
+          "type": "para",
+          "text": "File: vegcrew/generate.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"A seeded generator of fictional trimming seasons, in the shape the circuit inventory exports.\n\nEach column is drawn from its own random stream, named after the seed, the size and the column, so\nadding a column later never changes the values of the columns already there.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport math\nimport random\n\nSIZES = {\"tiny\": 6, \"small\": 20, \"medium\": 60}\nCREWS = {\"tiny\": 1, \"small\": 2, \"medium\": 6}\nMONTHS = 6                                                     # April to September\nREGIONS = (\"North\", \"River\", \"Hills\")\n\n\ndef stream(seed: int, size: str, column: str) -> random.Random:\n    return random.Random(f\"{seed}-{size}-{column}\")\n\n\ndef scenario(size: str = \"small\", seed: int = 54) -> dict:\n    \"\"\"One season: a budget and the circuits, as plain JSON-ready values.\"\"\"\n    n = SIZES[size]\n    draw = stream(seed, size, \"circuits\")\n    circuits = []\n    for i in range(1, n + 1):\n        miles = draw.randint(8, 40)\n        circuits.append({\n            \"id\": f\"C{i:02d}\",\n            \"region\": draw.choice(REGIONS),\n            \"miles\": miles,\n            \"cost\": round(miles * draw.uniform(3.0, 6.0)),       # $k to trim the whole circuit\n            \"risk\": round(miles * draw.uniform(2.0, 12.0)),      # $k a year of tree-caused outage risk\n        })\n    work = stream(seed, size, \"weeks\")\n    for c in circuits:\n        c[\"weeks\"] = math.ceil(c[\"miles\"] / work.uniform(4.0, 7.0))     # crew-weeks to trim it\n    growth = stream(seed, size, \"growth\")\n    for c in circuits:\n        c[\"growth\"] = round(c[\"risk\"] / 52 * growth.uniform(0.02, 0.10), 2)   # $k a week, every week\n    access = stream(seed, size, \"access\")\n    last = MONTHS * 4 - 1\n    for c in circuits:\n        c[\"must\"] = access.random() < 0.15                     # overdue on its cycle: trim it this season\n        if c[\"region\"] == \"River\":\n            c[\"windows\"] = [[8, last]]                         # wet ground: no equipment before week 8\n        elif c[\"region\"] == \"Hills\" and access.random() < 0.5:\n            c[\"windows\"] = [[0, 5], [14, last]]                # nesting season closes weeks 6 to 13\n        else:\n            c[\"windows\"] = []                                  # the whole season\n    crew_off = {\"K1\": [[10, 11]]}                              # training\n    if CREWS[size] > 1:\n        crew_off[f\"K{CREWS[size]}\"] = [[14, 17]]               # held back for storm duty\n    budget = round(0.45 * sum(c[\"cost\"] for c in circuits))\n    return {\"name\": f\"{size}-{seed}\", \"budget\": budget, \"crews\": CREWS[size], \"months\": MONTHS,\n            \"crew_off\": crew_off, \"circuits\": circuits}\n"
+        },
+        {
+          "type": "para",
+          "text": "File: vegcrew/planner.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Turn a season into a plan: each trim is one crew's run of consecutive weeks, scheduled by CP-SAT\nto carry the least risk, keeping every calendar, must and planner's override, or saying why it cannot.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom ortools.sat.python import cp_model\n\nfrom vegcrew.data import Override, Season\nfrom vegcrew.explain import why_infeasible\nfrom vegcrew.model import build, crew_ids, horizon\n\nTIME_LIMIT = 10.0                                   # seconds\nWORKERS = 4                                         # parallel search workers\n\n__all__ = [\"Plan\", \"Trim\", \"check_overrides\", \"crew_ids\", \"horizon\", \"make_plan\"]\n\n\n@dataclass(frozen=True)\nclass Trim:\n    cid: str\n    crew: str                                       # K1, K2, ...\n    start: int                                      # first week, counted from 0\n    end: int                                        # the week after the last: end - start = weeks\n\n\n@dataclass(frozen=True)\nclass Plan:\n    status: str                                     # OPTIMAL, FEASIBLE, INFEASIBLE, UNKNOWN or MODEL_INVALID\n    trims: dict[str, Trim] = field(default_factory=dict)\n    cost: int = 0                                   # $k spent\n    risk_removed: int = 0                           # $k a year of risk the trims remove\n    risk_carried: int = 0                           # $k of risk carried until each circuit is trimmed\n    explanation: tuple[str, ...] = ()               # INFEASIBLE: the rules that cannot all hold\n\n\ndef check_overrides(season: Season, overrides: tuple[Override, ...]) -> list[str]:\n    \"\"\"What is wrong with the overrides as data, before any model is built.\"\"\"\n    problems = []\n    ids = {c.cid for c in season.circuits}\n    for i, o in enumerate(overrides, start=1):\n        if o.kind not in (\"pin\", \"skip\", \"force\"):\n            problems.append(f\"override {i}: unknown kind {o.kind!r}\")\n        if o.cid not in ids:\n            problems.append(f\"override {i}: no circuit {o.cid}\")\n        if o.crew is not None and o.crew not in crew_ids(season):\n            problems.append(f\"override {i}: no crew {o.crew}\")\n        if o.start is not None and not 0 <= o.start < horizon(season):\n            problems.append(f\"override {i}: week {o.start} is outside the season\")\n    return problems\n\n\ndef make_plan(season: Season, overrides: tuple[Override, ...] = ()) -> Plan:\n    \"\"\"Choose the circuits to trim, the crew for each and its weeks: the least risk carried through the\n    season and the wait for the next, within the budget, one crew per trim, one trim per crew at a time,\n    every trim inside one of its circuit's windows and outside its crew's weeks off, every must trimmed,\n    every override kept. If no plan keeps every rule, say which of the planner's rules clash.\"\"\"\n    problems = check_overrides(season, overrides)\n    if problems:\n        raise ValueError(\"; \".join(problems))\n    tm = build(season, overrides)\n    tm.model.add_bool_and(list(tm.rules.values()))     # every rule holds\n    solver = cp_model.CpSolver()\n    solver.parameters.max_time_in_seconds = TIME_LIMIT\n    solver.parameters.num_workers = WORKERS\n    status = solver.status_name(solver.solve(tm.model))\n    if status == \"INFEASIBLE\":\n        return Plan(status, explanation=tuple(why_infeasible(season, overrides)))\n    if status not in (\"OPTIMAL\", \"FEASIBLE\"):\n        return Plan(status)\n    trims = {}\n    for (cid, k), p in tm.present.items():\n        if solver.boolean_value(p):\n            start = solver.value(tm.start[cid, k])\n            trims[cid] = Trim(cid, k, start, start + season.circuit(cid).weeks)\n    chosen = [season.circuit(cid) for cid in trims]\n    return Plan(status, trims, cost=sum(c.cost for c in chosen), risk_removed=sum(c.risk for c in chosen),\n                risk_carried=round(solver.objective_value))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: vegcrew/record.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Stub for lesson 14.1.7: a plan's record as canonical JSON.\"\"\"\n\nfrom __future__ import annotations\n\nfrom vegcrew.data import Override\nfrom vegcrew.planner import Plan\n\n\ndef fingerprint(raw: dict, overrides: tuple[Override, ...] = ()) -> str:\n    return \"\"\n\n\ndef plan_record(raw: dict, plan: Plan, overrides: tuple[Override, ...] = ()) -> dict:\n    return {}\n\n\ndef dumps(record: dict) -> str:\n    return \"{}\"\n"
+        },
+        {
+          "type": "para",
+          "text": "File: vegcrew/report.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"The plan as the vegetation manager reads it: one line per crew, one letter per week.\"\"\"\n\nfrom __future__ import annotations\n\nfrom vegcrew.data import Season\nfrom vegcrew.model import crew_ids, horizon\nfrom vegcrew.planner import Plan\n\n\ndef format_plan(season: Season, plan: Plan) -> str:\n    lines = [f\"season {season.name}: {len(season.circuits)} circuits, budget ${season.budget:,}k, \"\n             f\"crews {season.crews}, weeks {horizon(season)}\",\n             f\"status {plan.status}: {len(plan.trims)} trims, cost ${plan.cost:,}k, \"\n             f\"risk carried ${plan.risk_carried:,}k\"]\n    for k in crew_ids(season):\n        trims = sorted((t for t in plan.trims.values() if t.crew == k), key=lambda t: t.start)\n        week = [\".\"] * horizon(season)\n        for first, last in season.crew_off.get(k, ()):\n            week[first:last + 1] = \"x\" * (last - first + 1)\n        for t in trims:\n            week[t.start:t.end] = t.cid[-1] * (t.end - t.start)\n        lines.append(f\"  {k} {''.join(week)}  \" + \" \".join(f\"{t.cid}:{t.start}-{t.end - 1}\" for t in trims))\n    if plan.explanation:\n        lines.append(\"these rules cannot all hold; change one of them:\")\n        lines += [f\"  - {says}\" for says in plan.explanation]\n    return \"\\n\".join(lines)\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"The CP-SAT model of a season: every trim an optional interval on one crew, every planner's rule\nbehind a named literal so that a failed plan can say which rules clash.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom ortools.sat.python import cp_model\n\nfrom vegcrew.data import DEFER_WEEKS, WEEKS_PER_MONTH, Circuit, Override, Season\n\n\ndef crew_ids(season: Season) -> list[str]:\n    return [f\"K{k}\" for k in range(1, season.crews + 1)]\n\n\ndef horizon(season: Season) -> int:\n    return season.months * WEEKS_PER_MONTH\n\n\n@dataclass\nclass TrimModel:\n    model: cp_model.CpModel\n    trimmed: dict[str, cp_model.IntVar] = field(default_factory=dict)                 # circuit\n    present: dict[tuple[str, str], cp_model.IntVar] = field(default_factory=dict)    # (circuit, crew)\n    start: dict[tuple[str, str], cp_model.IntVar] = field(default_factory=dict)\n    work: dict[tuple[str, str], cp_model.IntervalVar] = field(default_factory=dict)\n    end: dict[str, cp_model.IntVar] = field(default_factory=dict)                     # circuit\n    carried: dict[str, cp_model.IntVar] = field(default_factory=dict)                 # circuit\n    rules: dict[str, cp_model.IntVar] = field(default_factory=dict)                   # name -> literal\n    says: dict[str, str] = field(default_factory=dict)                                # name -> words\n\n    def rule(self, name: str, says: str) -> cp_model.IntVar:\n        \"\"\"A literal that switches one of the planner's rules on; the rows it guards hold only if it is 1.\"\"\"\n        self.rules[name] = self.model.new_bool_var(name)\n        self.says[name] = says\n        return self.rules[name]\n\n\ndef start_domain(c: Circuit, h: int) -> cp_model.Domain:\n    \"\"\"Every first week that keeps the trim inside one of the circuit's windows and the season.\"\"\"\n    windows = c.windows or ((0, h - 1),)\n    return cp_model.Domain.from_intervals(\n        [[first, min(last, h - 1) - c.weeks + 1] for first, last in windows\n         if min(last, h - 1) - c.weeks + 1 >= first])\n\n\ndef build(season: Season, overrides: tuple[Override, ...] = ()) -> TrimModel:\n    \"\"\"The model of the lesson before, moved to model.py with crew_ids, horizon and start_domain, and built with the overrides. Every rule a planner can change sits behind a named literal, with its words: `must_<cid>` (`<cid> is overdue and must be trimmed this season`), budget (`the season's budget is $<budget>k`, the budget written with a thousands comma, as f\"{budget:,}\" writes it: `$962k`, `$1,000k`) and `override_<i>` (`override <i>: ` followed by the override's own words, as Override.says gives them: `trim <cid> on <crew> from week <start> (<reason>)` for a pin, `leave <cid> for next season (<reason>)`, `trim <cid> this season (<reason>)`, with `no reason given` when the reason is empty). A skip leaves its circuit untrimmed; a pin or force trims it; a pin also fixes the crew and the first week it names. The rules are made in this order: each must as its circuit comes in the season's order, then the budget, then the overrides in the order given.\"\"\"\n    return None\n"
+    },
+    {
+      "type": "para",
+      "text": "File: main.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run: plan the tiny season and print the vegetation manager's report.\n\nThe season is GridCap tiny, six circuits of a fictional utility, drawn by vegcrew/generate.py from\nseed 54. Nothing is read from the working directory, so the report is the same wherever Run starts.\nThe planner searches with one worker here, as in steps/03, so that Run repeats the same search on\nevery run.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom vegcrew import planner\nfrom vegcrew.__main__ import main\n\nif __name__ == \"__main__\":\n    planner.WORKERS = 1                            # one search worker: the same plan every run\n    main([\"tiny\", \"--seed\", \"54\"])\n"
+    },
+    {
+      "type": "para",
+      "text": "File: vegcrew/__init__.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"GridCap's vegetation crew planner.\n\nGridCap is a fictional utility, and every season this package plans is generated from a seed by\n`vegcrew.generate`. None of it is a real utility's data.\n\"\"\"\n"
+    },
+    {
+      "type": "para",
+      "text": "File: vegcrew/__main__.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"python -m vegcrew [tiny|small|medium] [--seed N]: plan a generated season and print the plan.\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\n\nfrom vegcrew.data import season_from_dict\nfrom vegcrew.generate import SIZES, scenario\nfrom vegcrew.planner import make_plan\nfrom vegcrew.report import format_plan\n\n\ndef main(argv: list[str] | None = None) -> None:\n    parser = argparse.ArgumentParser(prog=\"vegcrew\")\n    parser.add_argument(\"size\", nargs=\"?\", default=\"small\", choices=sorted(SIZES))\n    parser.add_argument(\"--seed\", type=int, default=54)\n    args = parser.parse_args(argv)\n    season = season_from_dict(scenario(args.size, args.seed))\n    print(format_plan(season, make_plan(season)))\n\n\nif __name__ == \"__main__\":\n    main()\n"
+    },
+    {
+      "type": "para",
+      "text": "File: vegcrew/data.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"The season the planner reads: typed, immutable, and only the columns the planner uses.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass\n\nWEEKS_PER_MONTH = 4\nDEFER_WEEKS = 26        # an untrimmed circuit waits this many weeks past the season for the next one\n\nWeeks = tuple[tuple[int, int], ...]     # spans of weeks, each (first, last), both included\n\n\n@dataclass(frozen=True)\nclass Circuit:\n    cid: str\n    region: str\n    miles: int\n    cost: int           # $k to trim the circuit\n    risk: int           # $k a year of tree-caused outage risk that a trim removes\n    weeks: int          # crew-weeks of work to trim it\n    growth: float       # $k a week by which the weekly risk grows while the circuit waits\n    windows: Weeks      # the trim must lie inside one of these; () means the whole season\n    must: bool          # compliance: it must be trimmed this season\n\n    def carried(self, end: int) -> int:\n        \"\"\"$k of risk carried from week 0 until a trim that ends at `end` (weeks 0 to end - 1).\"\"\"\n        weekly = self.risk / 52\n        return round(weekly * end + self.growth * end * (end - 1) / 2)\n\n\n@dataclass(frozen=True)\nclass Season:\n    name: str\n    budget: int         # $k for the year's trimming\n    crews: int          # crews working the season\n    months: int         # months in the season, each WEEKS_PER_MONTH weeks\n    crew_off: dict[str, Weeks]      # crew id -> weeks it cannot work\n    circuits: tuple[Circuit, ...]\n\n    def circuit(self, cid: str) -> Circuit:\n        return next(c for c in self.circuits if c.cid == cid)\n\n\n@dataclass(frozen=True)\nclass Override:\n    \"\"\"Stub for lesson 14.1.6: a planner's decision the plan must keep.\"\"\"\n    kind: str                       # \"pin\", \"skip\" or \"force\"\n    cid: str\n    crew: str | None = None\n    start: int | None = None\n    reason: str = \"\"\n\n\ndef spans(raw: list) -> Weeks:\n    return tuple((int(first), int(last)) for first, last in raw)\n\n\ndef season_from_dict(raw: dict) -> Season:\n    \"\"\"Read the columns the planner uses. Columns it does not use yet are ignored.\n\n    A circuit with no windows may be trimmed in any week, one with no must flag is optional work,\n    and a season with no crew_off has every crew at work every week.\n    \"\"\"\n    circuits = tuple(Circuit(c[\"id\"], c[\"region\"], int(c[\"miles\"]), int(c[\"cost\"]), int(c[\"risk\"]),\n                             int(c[\"weeks\"]), float(c[\"growth\"]), spans(c.get(\"windows\") or []),\n                             bool(c.get(\"must\", False)))\n                     for c in raw[\"circuits\"])\n    crew_off = {k: spans(weeks) for k, weeks in (raw.get(\"crew_off\") or {}).items()}\n    return Season(raw.get(\"name\", \"season\"), int(raw[\"budget\"]), int(raw[\"crews\"]), int(raw[\"months\"]),\n                  crew_off, circuits)\n"
+    },
+    {
+      "type": "para",
+      "text": "File: vegcrew/explain.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Why a season has no plan: the planner's rules that cannot all hold together, in the planner's words.\n\nEvery rule a planner can change (a must, the budget, an override) sits behind a literal (model.py). The\nsearch takes those literals as assumptions; when it proves the season infeasible, CP-SAT names a set of\nassumptions that is enough for the proof, and a deletion filter shrinks it to a minimal one: drop each\nrule in turn, and keep it out only if the rest still cannot hold.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\nfrom vegcrew.data import Override, Season\nfrom vegcrew.model import TrimModel, build\n\n\ndef holds(tm: TrimModel, names: list[str]) -> bool:\n    \"\"\"Answers whether the named rules can all hold at once: clears the model's assumptions, adds the named rules' literals as assumptions, and solves with num_workers = 1 and stop_after_first_solution = True; True unless the status is INFEASIBLE.\"\"\"\n    return True\n\n\ndef conflict(tm: TrimModel) -> list[str]:\n    \"\"\"Returns a minimal list of rule names that cannot all hold, or [] when every rule can: the rules the solver names as sufficient for infeasibility (assumptions need one worker), then each dropped in turn and left out when the rest still cannot hold. The names come back in the order the rules were made, whatever order the solver named them in.\"\"\"\n    return []\n\n\ndef why_infeasible(season: Season, overrides: tuple[Override, ...] = ()) -> list[str]:\n    \"\"\"Builds the model of the season and its overrides and returns the words (TrimModel.says) of the rules in its conflict, in the conflict's order. The tests compare the explanation with an exact tuple in that order: musts, then the budget, then the overrides.\"\"\"\n    return []\n"
+    },
+    {
+      "type": "para",
+      "text": "File: vegcrew/generate.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"A seeded generator of fictional trimming seasons, in the shape the circuit inventory exports.\n\nEach column is drawn from its own random stream, named after the seed, the size and the column, so\nadding a column later never changes the values of the columns already there.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport math\nimport random\n\nSIZES = {\"tiny\": 6, \"small\": 20, \"medium\": 60}\nCREWS = {\"tiny\": 1, \"small\": 2, \"medium\": 6}\nMONTHS = 6                                                     # April to September\nREGIONS = (\"North\", \"River\", \"Hills\")\n\n\ndef stream(seed: int, size: str, column: str) -> random.Random:\n    return random.Random(f\"{seed}-{size}-{column}\")\n\n\ndef scenario(size: str = \"small\", seed: int = 54) -> dict:\n    \"\"\"One season: a budget and the circuits, as plain JSON-ready values.\"\"\"\n    n = SIZES[size]\n    draw = stream(seed, size, \"circuits\")\n    circuits = []\n    for i in range(1, n + 1):\n        miles = draw.randint(8, 40)\n        circuits.append({\n            \"id\": f\"C{i:02d}\",\n            \"region\": draw.choice(REGIONS),\n            \"miles\": miles,\n            \"cost\": round(miles * draw.uniform(3.0, 6.0)),       # $k to trim the whole circuit\n            \"risk\": round(miles * draw.uniform(2.0, 12.0)),      # $k a year of tree-caused outage risk\n        })\n    work = stream(seed, size, \"weeks\")\n    for c in circuits:\n        c[\"weeks\"] = math.ceil(c[\"miles\"] / work.uniform(4.0, 7.0))     # crew-weeks to trim it\n    growth = stream(seed, size, \"growth\")\n    for c in circuits:\n        c[\"growth\"] = round(c[\"risk\"] / 52 * growth.uniform(0.02, 0.10), 2)   # $k a week, every week\n    access = stream(seed, size, \"access\")\n    last = MONTHS * 4 - 1\n    for c in circuits:\n        c[\"must\"] = access.random() < 0.15                     # overdue on its cycle: trim it this season\n        if c[\"region\"] == \"River\":\n            c[\"windows\"] = [[8, last]]                         # wet ground: no equipment before week 8\n        elif c[\"region\"] == \"Hills\" and access.random() < 0.5:\n            c[\"windows\"] = [[0, 5], [14, last]]                # nesting season closes weeks 6 to 13\n        else:\n            c[\"windows\"] = []                                  # the whole season\n    crew_off = {\"K1\": [[10, 11]]}                              # training\n    if CREWS[size] > 1:\n        crew_off[f\"K{CREWS[size]}\"] = [[14, 17]]               # held back for storm duty\n    budget = round(0.45 * sum(c[\"cost\"] for c in circuits))\n    return {\"name\": f\"{size}-{seed}\", \"budget\": budget, \"crews\": CREWS[size], \"months\": MONTHS,\n            \"crew_off\": crew_off, \"circuits\": circuits}\n"
+    },
+    {
+      "type": "para",
+      "text": "File: vegcrew/planner.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Turn a season into a plan: each trim is one crew's run of consecutive weeks, scheduled by CP-SAT\nto carry the least risk, since a circuit's risk grows every week it waits.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom ortools.sat.python import cp_model\n\nfrom vegcrew.data import DEFER_WEEKS, WEEKS_PER_MONTH, Circuit, Override, Season\n\nTIME_LIMIT = 10.0                                   # seconds\nWORKERS = 4                                         # parallel search workers\n\n\n@dataclass(frozen=True)\nclass Trim:\n    cid: str\n    crew: str                                       # K1, K2, ...\n    start: int                                      # first week, counted from 0\n    end: int                                        # the week after the last: end - start = weeks\n\n\n@dataclass(frozen=True)\nclass Plan:\n    status: str                                     # OPTIMAL, FEASIBLE, INFEASIBLE, UNKNOWN or MODEL_INVALID\n    trims: dict[str, Trim] = field(default_factory=dict)\n    cost: int = 0                                   # $k spent\n    risk_removed: int = 0                           # $k a year of risk the trims remove\n    risk_carried: int = 0                           # $k of risk carried until each circuit is trimmed\n    explanation: tuple[str, ...] = ()               # stub for lesson 14.1.6\n\n\ndef crew_ids(season: Season) -> list[str]:\n    return [f\"K{k}\" for k in range(1, season.crews + 1)]\n\n\ndef horizon(season: Season) -> int:\n    return season.months * WEEKS_PER_MONTH\n\n\n@dataclass\nclass TrimModel:\n    model: cp_model.CpModel\n    trimmed: dict[str, cp_model.IntVar] = field(default_factory=dict)                 # circuit\n    present: dict[tuple[str, str], cp_model.IntVar] = field(default_factory=dict)    # (circuit, crew)\n    start: dict[tuple[str, str], cp_model.IntVar] = field(default_factory=dict)\n    work: dict[tuple[str, str], cp_model.IntervalVar] = field(default_factory=dict)\n    end: dict[str, cp_model.IntVar] = field(default_factory=dict)                     # circuit\n    carried: dict[str, cp_model.IntVar] = field(default_factory=dict)                 # circuit\n\n\ndef start_domain(c: Circuit, h: int) -> cp_model.Domain:\n    \"\"\"Every first week that keeps the trim inside one of the circuit's windows and the season.\"\"\"\n    windows = c.windows or ((0, h - 1),)\n    return cp_model.Domain.from_intervals(\n        [[first, min(last, h - 1) - c.weeks + 1] for first, last in windows\n         if min(last, h - 1) - c.weeks + 1 >= first])\n\n\ndef build(season: Season) -> TrimModel:\n    tm = TrimModel(cp_model.CpModel())\n    h = horizon(season)\n    deferred = h + DEFER_WEEKS                      # the end week of a circuit left for next season\n    for c in season.circuits:\n        t = tm.trimmed[c.cid] = tm.model.new_bool_var(f\"t_{c.cid}\")\n        e = tm.end[c.cid] = tm.model.new_int_var_from_domain(\n            cp_model.Domain.from_intervals([[c.weeks, h], [deferred, deferred]]), f\"e_{c.cid}\")\n        starts = start_domain(c, h)\n        options = [] if starts.is_empty() else crew_ids(season)    # no window fits it: no options\n        for k in options:\n            p = tm.present[c.cid, k] = tm.model.new_bool_var(f\"p_{c.cid}_{k}\")\n            s = tm.start[c.cid, k] = tm.model.new_int_var_from_domain(starts, f\"s_{c.cid}_{k}\")   # window_c\n            tm.work[c.cid, k] = tm.model.new_optional_fixed_size_interval_var(s, c.weeks, p, f\"w_{c.cid}_{k}\")\n            tm.model.add(e == s + c.weeks).only_enforce_if(p)                        # ends_c,k\n        tm.model.add(sum(tm.present[c.cid, k] for k in options) == t)               # once_c\n        tm.model.add(e == deferred).only_enforce_if(~t)                              # waits_c\n        if c.must:\n            tm.model.add(t == 1)                                                     # must_c\n        table = [c.carried(week) for week in range(deferred + 1)]\n        tm.carried[c.cid] = tm.model.new_int_var(0, table[-1], f\"r_{c.cid}\")\n        tm.model.add_element(e, table, tm.carried[c.cid])                            # risk_c\n    for k in crew_ids(season):\n        off = [tm.model.new_fixed_size_interval_var(first, last - first + 1, f\"off_{k}_{first}\")\n               for first, last in season.crew_off.get(k, ())]\n        tm.model.add_no_overlap([w for (_, crew), w in tm.work.items() if crew == k] + off)   # crew_k\n    tm.model.add(sum(c.cost * tm.trimmed[c.cid] for c in season.circuits) <= season.budget)   # budget\n    tm.model.minimize(sum(tm.carried.values()))\n    return tm\n\n\ndef check_overrides(season: Season, overrides: tuple[Override, ...]) -> list[str]:\n    \"\"\"Stub for lesson 14.1.6.\"\"\"\n    return []\n\n\ndef make_plan(season: Season, overrides: tuple[Override, ...] = ()) -> Plan:\n    \"\"\"Choose the circuits to trim, the crew for each and its weeks: the least risk carried through the\n    season and the wait for the next, within the budget, one crew per trim, one trim per crew at a time,\n    every trim inside one of its circuit's windows and outside its crew's weeks off, every must trimmed.\"\"\"\n    tm = build(season)\n    solver = cp_model.CpSolver()\n    solver.parameters.max_time_in_seconds = TIME_LIMIT\n    solver.parameters.num_workers = WORKERS\n    status = solver.status_name(solver.solve(tm.model))\n    if status not in (\"OPTIMAL\", \"FEASIBLE\"):\n        return Plan(status)\n    trims = {}\n    for (cid, k), p in tm.present.items():\n        if solver.boolean_value(p):\n            start = solver.value(tm.start[cid, k])\n            trims[cid] = Trim(cid, k, start, start + season.circuit(cid).weeks)\n    chosen = [season.circuit(cid) for cid in trims]\n    return Plan(status, trims, cost=sum(c.cost for c in chosen), risk_removed=sum(c.risk for c in chosen),\n                risk_carried=round(solver.objective_value))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: vegcrew/record.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Stub for lesson 14.1.7: a plan's record as canonical JSON.\"\"\"\n\nfrom __future__ import annotations\n\nfrom vegcrew.data import Override\nfrom vegcrew.planner import Plan\n\n\ndef fingerprint(raw: dict, overrides: tuple[Override, ...] = ()) -> str:\n    return \"\"\n\n\ndef plan_record(raw: dict, plan: Plan, overrides: tuple[Override, ...] = ()) -> dict:\n    return {}\n\n\ndef dumps(record: dict) -> str:\n    return \"{}\"\n"
+    },
+    {
+      "type": "para",
+      "text": "File: vegcrew/report.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"The plan as the vegetation manager reads it: one line per crew, one letter per week.\"\"\"\n\nfrom __future__ import annotations\n\nfrom vegcrew.data import Season\nfrom vegcrew.planner import Plan, crew_ids, horizon\n\n\ndef format_plan(season: Season, plan: Plan) -> str:\n    lines = [f\"season {season.name}: {len(season.circuits)} circuits, budget ${season.budget:,}k, \"\n             f\"crews {season.crews}, weeks {horizon(season)}\",\n             f\"status {plan.status}: {len(plan.trims)} trims, cost ${plan.cost:,}k, \"\n             f\"risk carried ${plan.risk_carried:,}k\"]\n    for k in crew_ids(season):\n        trims = sorted((t for t in plan.trims.values() if t.crew == k), key=lambda t: t.start)\n        week = [\".\"] * horizon(season)\n        for first, last in season.crew_off.get(k, ()):\n            week[first:last + 1] = \"x\" * (last - first + 1)\n        for t in trims:\n            week[t.start:t.end] = t.cid[-1] * (t.end - t.start)\n        lines.append(f\"  {k} {''.join(week)}  \" + \" \".join(f\"{t.cid}:{t.start}-{t.end - 1}\" for t in trims))\n    return \"\\n\".join(lines)\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 11,
+    "paras": 16,
+    "code": 17,
+    "tables": 0,
+    "lists": 7,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 1,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "1e2c7174190658a4b1cacbc41086fddc8f72522793d01dae9fc4ad54ce34fb3b",
+  "starting_code": "\"\"\"The CP-SAT model of a season: every trim an optional interval on one crew, every planner's rule\nbehind a named literal so that a failed plan can say which rules clash.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom ortools.sat.python import cp_model\n\nfrom vegcrew.data import DEFER_WEEKS, WEEKS_PER_MONTH, Circuit, Override, Season\n\n\ndef crew_ids(season: Season) -> list[str]:\n    return [f\"K{k}\" for k in range(1, season.crews + 1)]\n\n\ndef horizon(season: Season) -> int:\n    return season.months * WEEKS_PER_MONTH\n\n\n@dataclass\nclass TrimModel:\n    model: cp_model.CpModel\n    trimmed: dict[str, cp_model.IntVar] = field(default_factory=dict)                 # circuit\n    present: dict[tuple[str, str], cp_model.IntVar] = field(default_factory=dict)    # (circuit, crew)\n    start: dict[tuple[str, str], cp_model.IntVar] = field(default_factory=dict)\n    work: dict[tuple[str, str], cp_model.IntervalVar] = field(default_factory=dict)\n    end: dict[str, cp_model.IntVar] = field(default_factory=dict)                     # circuit\n    carried: dict[str, cp_model.IntVar] = field(default_factory=dict)                 # circuit\n    rules: dict[str, cp_model.IntVar] = field(default_factory=dict)                   # name -> literal\n    says: dict[str, str] = field(default_factory=dict)                                # name -> words\n\n    def rule(self, name: str, says: str) -> cp_model.IntVar:\n        \"\"\"A literal that switches one of the planner's rules on; the rows it guards hold only if it is 1.\"\"\"\n        self.rules[name] = self.model.new_bool_var(name)\n        self.says[name] = says\n        return self.rules[name]\n\n\ndef start_domain(c: Circuit, h: int) -> cp_model.Domain:\n    \"\"\"Every first week that keeps the trim inside one of the circuit's windows and the season.\"\"\"\n    windows = c.windows or ((0, h - 1),)\n    return cp_model.Domain.from_intervals(\n        [[first, min(last, h - 1) - c.weeks + 1] for first, last in windows\n         if min(last, h - 1) - c.weeks + 1 >= first])\n\n\ndef build(season: Season, overrides: tuple[Override, ...] = ()) -> TrimModel:\n    \"\"\"The model of the lesson before, moved to model.py with crew_ids, horizon and start_domain, and built with the overrides. Every rule a planner can change sits behind a named literal, with its words: `must_<cid>` (`<cid> is overdue and must be trimmed this season`), budget (`the season's budget is $<budget>k`, the budget written with a thousands comma, as f\"{budget:,}\" writes it: `$962k`, `$1,000k`) and `override_<i>` (`override <i>: ` followed by the override's own words, as Override.says gives them: `trim <cid> on <crew> from week <start> (<reason>)` for a pin, `leave <cid> for next season (<reason>)`, `trim <cid> this season (<reason>)`, with `no reason given` when the reason is empty). A skip leaves its circuit untrimmed; a pin or force trims it; a pin also fixes the crew and the first week it names. The rules are made in this order: each must as its circuit comes in the season's order, then the budget, then the overrides in the order given.\"\"\"\n    return None\n",
+  "exercise": {
+    "main_path": "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/vegcrew/model.py",
+    "test_path": "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/tests/test_expected_output.py",
+    "run_command": [
+      "python3",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/main.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/target/report.xml",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/tests"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "tests/test_overrides.py::test_a_pin_puts_the_trim_on_its_crew_and_week",
+        "kind": "main",
+        "says": "a pin puts the trim on its crew and week"
+      },
+      {
+        "id": "tests/test_overrides.py::test_a_skip_leaves_the_circuit_for_next_season",
+        "kind": "main",
+        "says": "a skip leaves the circuit for next season"
+      },
+      {
+        "id": "tests/test_overrides.py::test_force_trims_a_circuit_the_model_would_leave",
+        "kind": "main",
+        "says": "a force trims a circuit the model would leave"
+      },
+      {
+        "id": "tests/test_overrides.py::test_two_pins_that_overlap_on_one_crew_are_named_together",
+        "kind": "main",
+        "says": "two pins that overlap on one crew are named together, and the override that plays no part is not"
+      },
+      {
+        "id": "tests/test_overrides.py::test_a_must_beyond_the_budget_names_the_must_and_the_budget",
+        "kind": "edge",
+        "says": "a must circuit beyond the budget names both the must and the budget"
+      },
+      {
+        "id": "tests/test_overrides.py::test_overrides_that_name_nothing_are_refused_before_the_solve",
+        "kind": "edge",
+        "says": "an override naming no circuit, no crew, a week outside the season or an unknown kind is refused"
+      },
+      {
+        "id": "tests/test_calendars.py::test_a_trim_stays_inside_its_access_window",
+        "kind": "kept",
+        "says": "a trim stays inside its access window"
+      },
+      {
+        "id": "tests/test_calendars.py::test_a_trim_fits_inside_one_window_never_across_two",
+        "kind": "kept",
+        "says": "a trim fits inside one window never across two"
+      },
+      {
+        "id": "tests/test_calendars.py::test_a_window_shorter_than_the_trim_leaves_it_for_next_season",
+        "kind": "kept",
+        "says": "a window shorter than the trim leaves it for next season"
+      },
+      {
+        "id": "tests/test_calendars.py::test_no_crew_works_in_its_weeks_off",
+        "kind": "kept",
+        "says": "no crew works in its weeks off"
+      },
+      {
+        "id": "tests/test_calendars.py::test_the_crew_with_no_time_off_takes_the_early_trim",
+        "kind": "kept",
+        "says": "the crew with no time off takes the early trim"
+      },
+      {
+        "id": "tests/test_calendars.py::test_a_must_circuit_is_trimmed_even_when_it_removes_less_risk",
+        "kind": "kept",
+        "says": "a must circuit is trimmed even when it removes less risk"
+      },
+      {
+        "id": "tests/test_calendars.py::test_must_circuits_that_cannot_all_fit_make_the_season_infeasible",
+        "kind": "kept",
+        "says": "must circuits that cannot all fit make the season infeasible"
+      },
+      {
+        "id": "tests/test_crews.py::test_each_trim_runs_on_one_crew_for_its_weeks",
+        "kind": "kept",
+        "says": "each trim runs on one crew for its weeks"
+      },
+      {
+        "id": "tests/test_crews.py::test_no_crew_works_two_circuits_at_once",
+        "kind": "kept",
+        "says": "no crew works two circuits at once"
+      },
+      {
+        "id": "tests/test_crews.py::test_a_trim_longer_than_a_month_runs_across_two",
+        "kind": "kept",
+        "says": "a trim longer than a month runs across two"
+      },
+      {
+        "id": "tests/test_crews.py::test_two_crews_cannot_share_one_trim",
+        "kind": "kept",
+        "says": "two crews cannot share one trim"
+      },
+      {
+        "id": "tests/test_crews.py::test_crews_can_stop_a_plan_the_budget_allows",
+        "kind": "kept",
+        "says": "crews can stop a plan the budget allows"
+      },
+      {
+        "id": "tests/test_crews.py::test_one_crew_does_two_trims_one_after_the_other",
+        "kind": "kept",
+        "says": "one crew does two trims one after the other"
+      },
+      {
+        "id": "tests/test_data.py::test_the_same_seed_gives_the_same_season",
+        "kind": "kept",
+        "says": "the same seed gives the same season"
+      },
+      {
+        "id": "tests/test_data.py::test_every_size_has_its_number_of_circuits_and_positive_numbers",
+        "kind": "kept",
+        "says": "every size has its number of circuits and positive numbers"
+      },
+      {
+        "id": "tests/test_data.py::test_the_loader_ignores_columns_it_does_not_use",
+        "kind": "kept",
+        "says": "the loader ignores columns it does not use"
+      },
+      {
+        "id": "tests/test_planner.py::test_the_plan_beats_ranking_by_risk_per_dollar",
+        "kind": "kept",
+        "says": "the plan beats ranking by risk per dollar"
+      },
+      {
+        "id": "tests/test_planner.py::test_the_plan_never_spends_more_than_the_budget",
+        "kind": "kept",
+        "says": "the plan never spends more than the budget"
+      },
+      {
+        "id": "tests/test_planner.py::test_the_plan_matches_every_subset_and_order_of_the_tiny_season",
+        "kind": "kept",
+        "says": "the plan matches every subset and order of the tiny season"
+      },
+      {
+        "id": "tests/test_planner.py::test_a_zero_budget_is_an_answer_with_no_trims",
+        "kind": "kept",
+        "says": "a zero budget is an answer with no trims"
+      },
+      {
+        "id": "tests/test_risk.py::test_the_fast_growing_circuit_goes_first",
+        "kind": "kept",
+        "says": "the fast growing circuit goes first"
+      },
+      {
+        "id": "tests/test_risk.py::test_waiting_risk_can_change_which_circuit_is_trimmed",
+        "kind": "kept",
+        "says": "waiting risk can change which circuit is trimmed"
+      },
+      {
+        "id": "tests/test_risk.py::test_the_risk_carried_is_each_circuits_risk_until_its_trim_ends",
+        "kind": "kept",
+        "says": "the risk carried is each circuits risk until its trim ends"
+      },
+      {
+        "id": "tests/test_expected_output.py::test_the_report_matches_the_expected_output",
+        "kind": "main",
+        "says": "Run's report for the tiny season matches the expected report"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/target/report.xml"
+    },
+    "origin": "54-project-vegetation-crews/README_14.1.6.md",
+    "concepts": [
+      "overrides and changeable rules behind literals, explained by assumptions and a deletion filter"
+    ],
+    "files": [
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/main.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/vegcrew/__init__.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/vegcrew/__main__.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/vegcrew/data.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/vegcrew/explain.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/vegcrew/generate.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/vegcrew/planner.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/vegcrew/record.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/vegcrew/report.py"
+    ],
+    "read_only": [
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/tests/test_calendars.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/tests/test_crews.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/tests/test_data.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/tests/test_overrides.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/tests/test_planner.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/tests/test_risk.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/expected/report.txt",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/tests/rules.py",
+      "practice/14-growing-real-projects/54-project-vegetation-crews/prose/unit-06/practice-1/pytest.ini"
+    ]
+  }
+}

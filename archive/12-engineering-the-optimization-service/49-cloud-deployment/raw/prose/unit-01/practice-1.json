@@ -1,0 +1,180 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "49-cloud-deployment"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Settings for the crew-roster worker",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The vegetation crew-roster optimizer (a CP-SAT model of section 4) is moving into a container, and operations will start it as a Batch job with its settings in environment variables. Last season a roster job ran with a mistyped season for six hours before anyone noticed, and once with an access key pasted into its environment."
+    },
+    {
+      "type": "para",
+      "text": "In `roster_settings.py`, write `read_settings(env)`. It returns `(settings, [])` when the environment is usable, and `(None, problems)` otherwise, with **every** problem found, not only the first. The variables:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Variable",
+        "Rule",
+        "Default"
+      ],
+      "rows": [
+        [
+          "`ROSTER_BUCKET`",
+          "required, non-empty",
+          "none"
+        ],
+        [
+          "`SEASON`",
+          "required; a whole number from 2025 to 2040",
+          "none"
+        ],
+        [
+          "`CREWS`",
+          "a whole number from 1 to 50",
+          "`4`"
+        ],
+        [
+          "`DRY_RUN`",
+          "`true` or `false`, in any letter case",
+          "`false`"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`settings` is `{\"bucket\": str, \"season\": int, \"crews\": int, \"dry_run\": bool}`. In addition, any variable whose name contains `SECRET`, `PASSWORD` or `ACCESS_KEY` is a problem: credentials come from the job role, never from the environment."
+    },
+    {
+      "type": "para",
+      "text": "The problem texts, exactly: `ROSTER_BUCKET is not set`, `SEASON is not set`, `NAME='text' is not a whole number`, `NAME value is outside low-high` (for example `CREWS 0 is outside 1-50`), `DRY_RUN='text' is not true or false` (with the text as given), and `NAME must not be set: use the job role`. A whole number is what `int()` accepts: `\"4.5\"` is not one. The default applies only when a variable is absent: `CREWS` set to the empty text is present, and `int(\"\")` refuses it, so it gives `CREWS='' is not a whole number`. (For the two required variables, empty counts as not set.) The helper `whole` is declared for you; about 25 lines remain."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom typing import Mapping\n\nCREDENTIAL_WORDS = (\"SECRET\", \"PASSWORD\", \"ACCESS_KEY\")\n\n\ndef whole(text: str, name: str, low: int, high: int, problems: list[str]) -> int | None:\n    \"\"\"`text` as a whole number in [low, high], or None with a problem added.\"\"\"\n    try:\n        value = int(text)\n    except ValueError:\n        problems.append(f\"{name}={text!r} is not a whole number\")\n        return None\n    if not low <= value <= high:\n        problems.append(f\"{name} {value} is outside {low}-{high}\")\n        return None\n    return value\n\n\ndef read_settings(env: Mapping[str, str]) -> tuple[dict | None, list[str]]:\n    \"\"\"The roster worker's settings from its environment, or None and every problem found.\"\"\"\n    problems: list[str] = []\n    bucket = env.get(\"ROSTER_BUCKET\", \"\")\n    if not bucket:\n        problems.append(\"ROSTER_BUCKET is not set\")\n    season = None\n    if not env.get(\"SEASON\"):\n        problems.append(\"SEASON is not set\")\n    else:\n        season = whole(env[\"SEASON\"], \"SEASON\", 2025, 2040, problems)\n    crews = whole(env.get(\"CREWS\", \"4\"), \"CREWS\", 1, 50, problems)\n    dry = env.get(\"DRY_RUN\", \"false\").lower()\n    if dry not in (\"true\", \"false\"):\n        problems.append(f\"DRY_RUN={env['DRY_RUN']!r} is not true or false\")\n    for name in sorted(env):\n        if any(word in name for word in CREDENTIAL_WORDS):\n            problems.append(f\"{name} must not be set: use the job role\")\n    if problems:\n        return None, problems\n    return {\"bucket\": bucket, \"season\": season, \"crews\": crews, \"dry_run\": dry == \"true\"}, []\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom typing import Mapping\n\nCREDENTIAL_WORDS = (\"SECRET\", \"PASSWORD\", \"ACCESS_KEY\")\n\n\ndef whole(text: str, name: str, low: int, high: int, problems: list[str]) -> int | None:\n    \"\"\"`text` as a whole number in [low, high], or None with a problem added.\"\"\"\n    # TODO: parse the number; add \"NAME='text' is not a whole number\" or \"NAME value is outside low-high\".\n    return None\n\n\ndef read_settings(env: Mapping[str, str]) -> tuple[dict | None, list[str]]:\n    \"\"\"The roster worker's settings from its environment, or None and every problem found.\"\"\"\n    problems: list[str] = []\n    # TODO: check every variable, collect every problem, and only then decide.\n    return {}, problems\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 1,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "f9142549cbe56ba55745a24881defbbb8814749490aec2bc1b2cd851ddb125d3",
+  "starting_code": "from __future__ import annotations\n\nfrom typing import Mapping\n\nCREDENTIAL_WORDS = (\"SECRET\", \"PASSWORD\", \"ACCESS_KEY\")\n\n\ndef whole(text: str, name: str, low: int, high: int, problems: list[str]) -> int | None:\n    \"\"\"`text` as a whole number in [low, high], or None with a problem added.\"\"\"\n    # TODO: parse the number; add \"NAME='text' is not a whole number\" or \"NAME value is outside low-high\".\n    return None\n\n\ndef read_settings(env: Mapping[str, str]) -> tuple[dict | None, list[str]]:\n    \"\"\"The roster worker's settings from its environment, or None and every problem found.\"\"\"\n    problems: list[str] = []\n    # TODO: check every variable, collect every problem, and only then decide.\n    return {}, problems\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-1/roster_settings.py",
+    "test_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-1/test_roster_settings.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-1/roster_settings.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-1/target/report.xml",
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-1/test_roster_settings.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_complete_environment_gives_its_settings",
+        "kind": "main",
+        "says": "a complete environment gives the bucket, season, crews and dry-run flag"
+      },
+      {
+        "id": "test_defaults_fill_crews_and_dry_run",
+        "kind": "main",
+        "says": "CREWS defaults to 4 and DRY_RUN to false"
+      },
+      {
+        "id": "test_every_problem_is_reported_at_once",
+        "kind": "edge",
+        "says": "four problems in one environment are all reported, not only the first"
+      },
+      {
+        "id": "test_season_must_be_in_range",
+        "kind": "edge",
+        "says": "a season outside 2025-2040 is refused, and 2025 itself is accepted"
+      },
+      {
+        "id": "test_dry_run_reads_true_and_false_in_any_case",
+        "kind": "edge",
+        "says": "DRY_RUN accepts true and false in any letter case"
+      },
+      {
+        "id": "test_credentials_in_the_environment_are_refused",
+        "kind": "edge",
+        "says": "a variable that carries a secret, password or access key is refused by name"
+      },
+      {
+        "id": "test_a_number_with_a_fraction_is_not_a_whole_number",
+        "kind": "edge",
+        "says": "CREWS of 4.5 is refused, not rounded"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "49-cloud-deployment/README_12.5.1.md",
+      "section": "Settings Come From the Environment, All Checked Before the Solve"
+    },
+    "concepts": [
+      "settings read from environment variables and checked all at once before work starts"
+    ]
+  }
+}

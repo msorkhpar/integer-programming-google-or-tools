@@ -1,0 +1,185 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "13-capstone",
+    "51-capstone-cipt-lite"
+  ],
+  "variant": "prose",
+  "unit": 5,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A run manifest and a determinism harness",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A small utility's planning service (fictional, like its practice portfolio) is about to put its plans in front of a regulator. The regulator's first question is whether the same inputs always give the same plan. Your milestone answers it with evidence: every run writes a **manifest**, and a **harness** reruns one configuration in fresh processes and compares the manifests byte for byte."
+    },
+    {
+      "type": "para",
+      "text": "`run_harness.py` gives you the practice portfolio `SNAPSHOT` (a reduced rule set: must-do and at-most-once rows and yearly budgets), `snapshot_for(config)`, which applies a config's budget overrides, and `solve(snapshot, objective, order, seed)`, a CP-SAT solve on one worker. A config is a dict such as `{\"objective\": \"npv\"}`, `{\"objective\": \"count\", \"order\": \"set\"}` or `{\"objective\": \"npv\", \"budget\": {\"2028\": 200}}`. A config may also give a `\"seed\"`. A key the config leaves out takes its default: `objective` `\"npv\"`, `order` `\"sorted\"`, `seed` 0. The seed is passed to `solve` and recorded as the manifest's `random_seed`; it is CP-SAT's seed, not the child process's `PYTHONHASHSEED`. The bottom of the file already runs one config given on the command line and prints its manifest's canonical bytes: that is the child process."
+    },
+    {
+      "type": "para",
+      "text": "Write:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "function",
+        "contract",
+        "lesson"
+      ],
+      "rows": [
+        [
+          "`canonical(obj)`",
+          "one byte string per value: sorted keys at every level, no spaces, ASCII only",
+          "10.2.4"
+        ],
+        [
+          "`manifest(config)`",
+          "a dict with four sections: `inputs` (`snapshot`: the SHA-256 hex digest of the canonical bytes of the data the run solved, budget overrides included; `objective`; `order`), `solver` (`name` \"CP-SAT\", `num_workers` 1, `random_seed`), `versions` (`python`, `ortools`), `result` (`status`, `objective`, `plan` as a sorted list of `[project, year]` pairs, `branches`, `conflicts`). No clock reading, and nothing that names a machine or a person",
+          "10.2.4"
+        ],
+        [
+          "`differences(a, b)`",
+          "the dotted paths (`\"result.plan\"`) at which two manifests differ, sorted; a list is compared whole",
+          "10.2.5"
+        ],
+        [
+          "`run_in_child(config, seed)`",
+          "run this file with `json.dumps(config)` as its argument in a fresh `sys.executable` process whose `PYTHONHASHSEED` is `seed`; return its standard output as bytes",
+          "10.2.5"
+        ],
+        [
+          "`harness(config, runs=10)`",
+          "run the config in `runs` children with seeds 1 to `runs`; if any output differs from the first, raise `NotDeterministic` with a message that names the run and every differing path; otherwise return the SHA-256 hex digest of the manifest bytes",
+          "10.2.5, 12.3.4"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The harness must be able to fail: the tests run `{\"objective\": \"count\", \"order\": \"set\"}`, a question with many tied plans whose model is built in a set's order, and expect `NotDeterministic` naming `result.plan`. About forty lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Milestone 5: a run's manifest, and a harness that reruns it in fresh processes.\n\nThe practice portfolio is a fictional utility's, invented for this exercise.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport hashlib\nimport json\nimport os\nimport platform\nimport subprocess\nimport sys\nfrom importlib.metadata import version\n\nfrom ortools.sat.python import cp_model\n\n# ---- given: the practice portfolio and a CP-SAT solve (milestone 2's rules, reduced) -------------\n\nSNAPSHOT = {\n    \"years\": [2027, 2028, 2029], \"rate\": 0.05,\n    \"budget\": {2027: 300, 2028: 300, 2029: 300},\n    \"projects\": {\n        \"J1\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2029, \"must\": True, \"npv\": {2027: 40, 2028: 38, 2029: 36}},\n        \"J2\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2028, \"must\": False, \"npv\": {2027: 30, 2028: 29}},\n        \"J3\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2029, \"must\": False, \"npv\": {2027: 30, 2028: 28, 2029: 27}},\n        \"J4\": {\"cost\": [100, 100], \"earliest\": 2027, \"latest\": 2028, \"must\": False, \"npv\": {2027: 55, 2028: 50}},\n        \"J5\": {\"cost\": [100], \"earliest\": 2028, \"latest\": 2029, \"must\": False, \"npv\": {2028: 25, 2029: 24}},\n        \"J6\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2029, \"must\": False, \"npv\": {2027: 22, 2028: 21, 2029: 20}},\n        \"J7\": {\"cost\": [100, 100], \"earliest\": 2028, \"latest\": 2028, \"must\": False, \"npv\": {2028: 45}},\n        \"J8\": {\"cost\": [100], \"earliest\": 2029, \"latest\": 2029, \"must\": False, \"npv\": {2029: 18}},\n    },\n}\n\n\ndef solve(snapshot: dict, objective: str = \"npv\", order: str = \"sorted\", seed: int = 0) -> dict:\n    \"\"\"Best plan by CP-SAT on one worker. `order` \"set\" builds the projects in a set's order.\"\"\"\n    ids = list(set(snapshot[\"projects\"])) if order == \"set\" else sorted(snapshot[\"projects\"])\n    m = cp_model.CpModel()\n    x = {(j, t): m.new_bool_var(f\"x_{j}_{t}\") for j in ids\n         for t in range(snapshot[\"projects\"][j][\"earliest\"], snapshot[\"projects\"][j][\"latest\"] + 1)}\n    for j in ids:\n        mine = [v for (i, _), v in x.items() if i == j]\n        m.add(sum(mine) == 1) if snapshot[\"projects\"][j][\"must\"] else m.add(sum(mine) <= 1)\n    for y in snapshot[\"years\"]:\n        m.add(sum(c * v for (j, t), v in x.items() for k, c in enumerate(snapshot[\"projects\"][j][\"cost\"])\n                  if t + k == y) <= snapshot[\"budget\"][y])\n    if objective == \"count\":\n        m.maximize(sum(x.values()))\n    else:\n        m.maximize(sum(snapshot[\"projects\"][j][\"npv\"][t] * v for (j, t), v in x.items()))\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.parameters.random_seed = seed\n    status = solver.solve(m)\n    return {\"status\": solver.status_name(status), \"objective\": solver.objective_value,\n            \"plan\": {j: t for (j, t), v in x.items() if solver.value(v)},\n            \"branches\": solver.num_branches, \"conflicts\": solver.num_conflicts}\n\n\ndef snapshot_for(config: dict) -> dict:\n    \"\"\"The practice portfolio with the config's budget overrides ({\"2028\": 200}) applied.\"\"\"\n    budget = {**SNAPSHOT[\"budget\"], **{int(y): v for y, v in config.get(\"budget\", {}).items()}}\n    return {**SNAPSHOT, \"budget\": budget}\n\n\n# ---- yours -----------------------------------------------------------------------------------------\n\n\nclass NotDeterministic(AssertionError):\n    \"\"\"Two runs of one config gave manifests with different bytes.\"\"\"\n\n\ndef canonical(obj) -> bytes:\n    \"\"\"One byte string per value: sorted keys, no spaces, ASCII only.\"\"\"\n    return json.dumps(obj, sort_keys=True, separators=(\",\", \":\"), ensure_ascii=True).encode(\"ascii\")\n\n\ndef manifest(config: dict) -> dict:\n    \"\"\"What went in and what came out of one run, and nothing about the clock or the machine's owner.\"\"\"\n    snapshot = snapshot_for(config)\n    objective, order, seed = config.get(\"objective\", \"npv\"), config.get(\"order\", \"sorted\"), config.get(\"seed\", 0)\n    result = solve(snapshot, objective, order, seed)\n    return {\n        \"inputs\": {\"snapshot\": hashlib.sha256(canonical(snapshot)).hexdigest(), \"objective\": objective,\n                   \"order\": order},\n        \"solver\": {\"name\": \"CP-SAT\", \"num_workers\": 1, \"random_seed\": seed},\n        \"versions\": {\"python\": platform.python_version(), \"ortools\": version(\"ortools\")},\n        \"result\": {\"status\": result[\"status\"], \"objective\": result[\"objective\"],\n                   \"plan\": sorted([j, t] for j, t in result[\"plan\"].items()),\n                   \"branches\": result[\"branches\"], \"conflicts\": result[\"conflicts\"]},\n    }\n\n\ndef differences(a, b, path: str = \"\") -> list[str]:\n    \"\"\"The dotted paths at which two manifests differ; a list is compared whole.\"\"\"\n    if isinstance(a, dict) and isinstance(b, dict):\n        found = []\n        for key in sorted(set(a) | set(b)):\n            found += differences(a.get(key), b.get(key), f\"{path}.{key}\" if path else key)\n        return found\n    return [] if a == b else [path]\n\n\ndef run_in_child(config: dict, seed: int) -> bytes:\n    \"\"\"One run in a fresh Python process whose hash seed is `seed`; its manifest's canonical bytes.\"\"\"\n    env = {**os.environ, \"PYTHONHASHSEED\": str(seed)}\n    return subprocess.run([sys.executable, __file__, json.dumps(config)], env=env, capture_output=True,\n                          check=True).stdout\n\n\ndef harness(config: dict, runs: int = 10) -> str:\n    \"\"\"Run `config` in `runs` fresh processes; return the manifest's sha256, or raise NotDeterministic.\"\"\"\n    outputs = [run_in_child(config, seed) for seed in range(1, runs + 1)]\n    for k, out in enumerate(outputs[1:], start=2):\n        if out != outputs[0]:\n            changed = differences(json.loads(outputs[0]), json.loads(out))\n            raise NotDeterministic(f\"run {k} of {runs} differs at: {', '.join(changed)}\")\n    return hashlib.sha256(outputs[0]).hexdigest()\n\n\nif __name__ == \"__main__\":\n    if len(sys.argv) > 1:\n        sys.stdout.write(canonical(manifest(json.loads(sys.argv[1]))).decode(\"ascii\"))\n    else:\n        print(harness({\"objective\": \"npv\"}, runs=3))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Milestone 5: a run's manifest, and a harness that reruns it in fresh processes.\n\nThe practice portfolio is a fictional utility's, invented for this exercise.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport hashlib\nimport json\nimport os\nimport platform\nimport subprocess\nimport sys\nfrom importlib.metadata import version\n\nfrom ortools.sat.python import cp_model\n\n# ---- given: the practice portfolio and a CP-SAT solve (milestone 2's rules, reduced) -------------\n\nSNAPSHOT = {\n    \"years\": [2027, 2028, 2029], \"rate\": 0.05,\n    \"budget\": {2027: 300, 2028: 300, 2029: 300},\n    \"projects\": {\n        \"J1\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2029, \"must\": True, \"npv\": {2027: 40, 2028: 38, 2029: 36}},\n        \"J2\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2028, \"must\": False, \"npv\": {2027: 30, 2028: 29}},\n        \"J3\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2029, \"must\": False, \"npv\": {2027: 30, 2028: 28, 2029: 27}},\n        \"J4\": {\"cost\": [100, 100], \"earliest\": 2027, \"latest\": 2028, \"must\": False, \"npv\": {2027: 55, 2028: 50}},\n        \"J5\": {\"cost\": [100], \"earliest\": 2028, \"latest\": 2029, \"must\": False, \"npv\": {2028: 25, 2029: 24}},\n        \"J6\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2029, \"must\": False, \"npv\": {2027: 22, 2028: 21, 2029: 20}},\n        \"J7\": {\"cost\": [100, 100], \"earliest\": 2028, \"latest\": 2028, \"must\": False, \"npv\": {2028: 45}},\n        \"J8\": {\"cost\": [100], \"earliest\": 2029, \"latest\": 2029, \"must\": False, \"npv\": {2029: 18}},\n    },\n}\n\n\ndef solve(snapshot: dict, objective: str = \"npv\", order: str = \"sorted\", seed: int = 0) -> dict:\n    \"\"\"Best plan by CP-SAT on one worker. `order` \"set\" builds the projects in a set's order.\"\"\"\n    ids = list(set(snapshot[\"projects\"])) if order == \"set\" else sorted(snapshot[\"projects\"])\n    m = cp_model.CpModel()\n    x = {(j, t): m.new_bool_var(f\"x_{j}_{t}\") for j in ids\n         for t in range(snapshot[\"projects\"][j][\"earliest\"], snapshot[\"projects\"][j][\"latest\"] + 1)}\n    for j in ids:\n        mine = [v for (i, _), v in x.items() if i == j]\n        m.add(sum(mine) == 1) if snapshot[\"projects\"][j][\"must\"] else m.add(sum(mine) <= 1)\n    for y in snapshot[\"years\"]:\n        m.add(sum(c * v for (j, t), v in x.items() for k, c in enumerate(snapshot[\"projects\"][j][\"cost\"])\n                  if t + k == y) <= snapshot[\"budget\"][y])\n    if objective == \"count\":\n        m.maximize(sum(x.values()))\n    else:\n        m.maximize(sum(snapshot[\"projects\"][j][\"npv\"][t] * v for (j, t), v in x.items()))\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.parameters.random_seed = seed\n    status = solver.solve(m)\n    return {\"status\": solver.status_name(status), \"objective\": solver.objective_value,\n            \"plan\": {j: t for (j, t), v in x.items() if solver.value(v)},\n            \"branches\": solver.num_branches, \"conflicts\": solver.num_conflicts}\n\n\ndef snapshot_for(config: dict) -> dict:\n    \"\"\"The practice portfolio with the config's budget overrides ({\"2028\": 200}) applied.\"\"\"\n    budget = {**SNAPSHOT[\"budget\"], **{int(y): v for y, v in config.get(\"budget\", {}).items()}}\n    return {**SNAPSHOT, \"budget\": budget}\n\n\n# ---- yours -----------------------------------------------------------------------------------------\n\n\nclass NotDeterministic(AssertionError):\n    \"\"\"Two runs of one config gave manifests with different bytes.\"\"\"\n\n\ndef canonical(obj) -> bytes:\n    \"\"\"One byte string per value: sorted keys, no spaces, ASCII only.\"\"\"\n    # TODO\n    return b\"\"\n\n\ndef manifest(config: dict) -> dict:\n    \"\"\"What went in and what came out of one run, and nothing about the clock or the machine's owner.\"\"\"\n    # TODO: inputs (the snapshot's sha256, objective, order), solver, versions, result.\n    return {}\n\n\ndef differences(a, b, path: str = \"\") -> list[str]:\n    \"\"\"The dotted paths at which two manifests differ; a list is compared whole.\"\"\"\n    # TODO\n    return []\n\n\ndef run_in_child(config: dict, seed: int) -> bytes:\n    \"\"\"One run in a fresh Python process whose hash seed is `seed`; its manifest's canonical bytes.\"\"\"\n    # TODO: run this file with the config as its argument (see the bottom of the file).\n    return b\"\"\n\n\ndef harness(config: dict, runs: int = 10) -> str:\n    \"\"\"Run `config` in `runs` fresh processes; return the manifest's sha256, or raise NotDeterministic.\"\"\"\n    # TODO\n    return \"\"\n\n\nif __name__ == \"__main__\":\n    if len(sys.argv) > 1:\n        sys.stdout.write(canonical(manifest(json.loads(sys.argv[1]))).decode(\"ascii\"))\n    else:\n        print(harness({\"objective\": \"npv\"}, runs=3))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 1,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "87adb99a90e9cb86dab45d495a762a4328cdf5a2ef7e1f695c0011889d572857",
+  "starting_code": "\"\"\"Milestone 5: a run's manifest, and a harness that reruns it in fresh processes.\n\nThe practice portfolio is a fictional utility's, invented for this exercise.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport hashlib\nimport json\nimport os\nimport platform\nimport subprocess\nimport sys\nfrom importlib.metadata import version\n\nfrom ortools.sat.python import cp_model\n\n# ---- given: the practice portfolio and a CP-SAT solve (milestone 2's rules, reduced) -------------\n\nSNAPSHOT = {\n    \"years\": [2027, 2028, 2029], \"rate\": 0.05,\n    \"budget\": {2027: 300, 2028: 300, 2029: 300},\n    \"projects\": {\n        \"J1\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2029, \"must\": True, \"npv\": {2027: 40, 2028: 38, 2029: 36}},\n        \"J2\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2028, \"must\": False, \"npv\": {2027: 30, 2028: 29}},\n        \"J3\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2029, \"must\": False, \"npv\": {2027: 30, 2028: 28, 2029: 27}},\n        \"J4\": {\"cost\": [100, 100], \"earliest\": 2027, \"latest\": 2028, \"must\": False, \"npv\": {2027: 55, 2028: 50}},\n        \"J5\": {\"cost\": [100], \"earliest\": 2028, \"latest\": 2029, \"must\": False, \"npv\": {2028: 25, 2029: 24}},\n        \"J6\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2029, \"must\": False, \"npv\": {2027: 22, 2028: 21, 2029: 20}},\n        \"J7\": {\"cost\": [100, 100], \"earliest\": 2028, \"latest\": 2028, \"must\": False, \"npv\": {2028: 45}},\n        \"J8\": {\"cost\": [100], \"earliest\": 2029, \"latest\": 2029, \"must\": False, \"npv\": {2029: 18}},\n    },\n}\n\n\ndef solve(snapshot: dict, objective: str = \"npv\", order: str = \"sorted\", seed: int = 0) -> dict:\n    \"\"\"Best plan by CP-SAT on one worker. `order` \"set\" builds the projects in a set's order.\"\"\"\n    ids = list(set(snapshot[\"projects\"])) if order == \"set\" else sorted(snapshot[\"projects\"])\n    m = cp_model.CpModel()\n    x = {(j, t): m.new_bool_var(f\"x_{j}_{t}\") for j in ids\n         for t in range(snapshot[\"projects\"][j][\"earliest\"], snapshot[\"projects\"][j][\"latest\"] + 1)}\n    for j in ids:\n        mine = [v for (i, _), v in x.items() if i == j]\n        m.add(sum(mine) == 1) if snapshot[\"projects\"][j][\"must\"] else m.add(sum(mine) <= 1)\n    for y in snapshot[\"years\"]:\n        m.add(sum(c * v for (j, t), v in x.items() for k, c in enumerate(snapshot[\"projects\"][j][\"cost\"])\n                  if t + k == y) <= snapshot[\"budget\"][y])\n    if objective == \"count\":\n        m.maximize(sum(x.values()))\n    else:\n        m.maximize(sum(snapshot[\"projects\"][j][\"npv\"][t] * v for (j, t), v in x.items()))\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.parameters.random_seed = seed\n    status = solver.solve(m)\n    return {\"status\": solver.status_name(status), \"objective\": solver.objective_value,\n            \"plan\": {j: t for (j, t), v in x.items() if solver.value(v)},\n            \"branches\": solver.num_branches, \"conflicts\": solver.num_conflicts}\n\n\ndef snapshot_for(config: dict) -> dict:\n    \"\"\"The practice portfolio with the config's budget overrides ({\"2028\": 200}) applied.\"\"\"\n    budget = {**SNAPSHOT[\"budget\"], **{int(y): v for y, v in config.get(\"budget\", {}).items()}}\n    return {**SNAPSHOT, \"budget\": budget}\n\n\n# ---- yours -----------------------------------------------------------------------------------------\n\n\nclass NotDeterministic(AssertionError):\n    \"\"\"Two runs of one config gave manifests with different bytes.\"\"\"\n\n\ndef canonical(obj) -> bytes:\n    \"\"\"One byte string per value: sorted keys, no spaces, ASCII only.\"\"\"\n    # TODO\n    return b\"\"\n\n\ndef manifest(config: dict) -> dict:\n    \"\"\"What went in and what came out of one run, and nothing about the clock or the machine's owner.\"\"\"\n    # TODO: inputs (the snapshot's sha256, objective, order), solver, versions, result.\n    return {}\n\n\ndef differences(a, b, path: str = \"\") -> list[str]:\n    \"\"\"The dotted paths at which two manifests differ; a list is compared whole.\"\"\"\n    # TODO\n    return []\n\n\ndef run_in_child(config: dict, seed: int) -> bytes:\n    \"\"\"One run in a fresh Python process whose hash seed is `seed`; its manifest's canonical bytes.\"\"\"\n    # TODO: run this file with the config as its argument (see the bottom of the file).\n    return b\"\"\n\n\ndef harness(config: dict, runs: int = 10) -> str:\n    \"\"\"Run `config` in `runs` fresh processes; return the manifest's sha256, or raise NotDeterministic.\"\"\"\n    # TODO\n    return \"\"\n\n\nif __name__ == \"__main__\":\n    if len(sys.argv) > 1:\n        sys.stdout.write(canonical(manifest(json.loads(sys.argv[1]))).decode(\"ascii\"))\n    else:\n        print(harness({\"objective\": \"npv\"}, runs=3))\n",
+  "exercise": {
+    "main_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-05/practice-1/run_harness.py",
+    "test_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-05/practice-1/test_run_harness.py",
+    "run_command": [
+      "python3",
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-05/practice-1/run_harness.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/13-capstone/51-capstone-cipt-lite/prose/unit-05/practice-1/target/report.xml",
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-05/practice-1/test_run_harness.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_ten_fresh_runs_give_one_manifest",
+        "kind": "main",
+        "says": "ten runs in fresh processes, each with its own hash seed, give manifests with the same bytes, and the harness returns their digest"
+      },
+      {
+        "id": "test_the_manifest_records_inputs_solver_versions_and_result_but_no_clock",
+        "kind": "main",
+        "says": "the manifest records the inputs' digest, the solver and its settings, the versions and the result with its plan and work counts, and nothing about the clock or the machine"
+      },
+      {
+        "id": "test_a_tie_broken_by_set_order_fails_the_harness",
+        "kind": "edge",
+        "says": "a question with many tied plans, built in a set's order, gives another plan in another process, and the harness names the plan field"
+      },
+      {
+        "id": "test_differences_names_every_changed_field_by_its_path",
+        "kind": "edge",
+        "says": "a difference is reported by its full path, field by field, not by its section"
+      },
+      {
+        "id": "test_canonical_bytes_do_not_depend_on_key_order",
+        "kind": "edge",
+        "says": "two equal dictionaries built in a different key order give the same bytes"
+      },
+      {
+        "id": "test_the_input_digest_covers_the_budgets_the_run_used",
+        "kind": "edge",
+        "says": "the inputs' digest is taken of the data the run solved, budget overrides included"
+      },
+      {
+        "id": "test_a_config_leaves_out_what_takes_its_default",
+        "kind": "edge",
+        "says": "a config without an objective, order or seed takes the defaults, and a seed it gives is the one the manifest records"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-05/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "51-capstone-cipt-lite/README_13.1.5.md",
+      "section": "A Run Is Its Manifest, and the Harness Compares Ten of Them Byte for Byte"
+    },
+    "concepts": [
+      "a run recorded as a manifest in canonical bytes, rerun in fresh processes and compared byte for byte"
+    ]
+  }
+}

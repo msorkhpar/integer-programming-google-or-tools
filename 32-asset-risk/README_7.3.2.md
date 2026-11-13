@@ -1,0 +1,268 @@
+# 7.3.2 Remaining Useful Life: What an ML Model Actually Hands You
+
+GridCap's data science team has trained a model on sensor readings and maintenance records, and it
+now predicts a **remaining useful life** (RUL) for every asset: "A004: 1 year. A006: 1 year. A008:
+25 years." A director reads the list and asks for A004 and A006 to be replaced this year, since
+they "have one year left." Lesson 1.1.2 already noticed that A004's RUL of 1 sits next to a PoF of
+only 3.4%. This lesson explains why that is not a contradiction, what an RUL number is, what you
+must ask before using one, and how to turn it into a curve that the risk coefficients of lesson
+7.3.4 can use, in four rules.
+
+GridCap is a fictional utility generated for this course; its assets and predictions describe no
+real company. The asset IDs here are the tiny portfolio's (A004 a breaker, A006 a transformer); the
+small and medium portfolios reuse the same IDs for other assets, and the section that counts the
+small portfolio names none of them.
+
+## RUL Is One Number Taken From a Remaining-Life Distribution
+
+An asset of age $`a`$ that is working today has a **remaining life** $`T - a`$: the years until it
+fails. Like the lifetime $`T`$ of lesson 7.3.1, it is random. Its distribution follows from the
+failure curve by the same conditioning that gave next year's PoF: the chance that the asset is
+still working $`r`$ years from now, given that it works today, is
+
+```math
+P(T > a + r \mid T > a) = \frac{R(a + r)}{R(a)}
+```
+
+An RUL is one number chosen to summarize that distribution. There are several natural choices, and
+they are different numbers:
+
+- the **median remaining life** $`m`$, the $`r`$ at which that ratio falls to one half. For the
+  Weibull, $`R(a+m)/R(a) = 1/2`$ means $`((a+m)/\eta)^\beta - (a/\eta)^\beta = \ln 2`$, so
+  ```math
+  m = \eta\,\Big(\big(a/\eta\big)^{\beta} + \ln 2\Big)^{1/\beta} - a
+  ```
+- the **mean remaining life** (or **mean residual life**), the average of $`T - a`$ over the assets
+  still working at age $`a`$: $`\int_a^\infty R(u)\,du \,/\, R(a)`$;
+- a **quantile** such as P10, the $`r`$ by which the chance of having failed reaches 10%, a cautious
+  planning figure; or P90, by which it reaches 90%.
+
+```python
+def residual_median(age: float, beta: float, eta: float) -> float:
+    """Years until the chance it has failed, given that it works at `age`, reaches one half."""
+    return eta * ((age / eta) ** beta + math.log(2)) ** (1 / beta) - age
+```
+
+scipy computes the others. `isf` is the **inverse survival function**: `curve.isf(p)` is the age at
+which the survival function equals `p`. To find where the conditional ratio falls to $`1 - q`$, ask
+for the age where $`R`$ equals $`(1 - q) R(a)`$. The mean uses `expect`, which averages a function
+over the curve; with `lb=a` and `conditional=True` it averages only over lifetimes beyond $`a`$:
+
+```python
+def residual_quantile(curve, age: float, q: float) -> float:
+    """Years until the chance of having failed, given working at `age`, reaches q."""
+    return curve.isf((1 - q) * curve.sf(age)) - age
+```
+
+```python
+    mean = curve.expect(lambda t: t, lb=a.age, conditional=True) - a.age
+```
+
+Here is every tiny asset's remaining-life distribution next to the RUL the GridCap data carries:
+
+```text
+asset age   eta | RUL eta-age | median  mean   P10   P90
+A001   13  25.9 |  14    12.9 |   11.3  12.2   2.8  22.7
+A002   29  50.8 |  24    21.8 |   19.1  19.8   5.3  34.9
+A003   18  30.5 |  15    12.5 |   11.0  11.5   3.0  20.5
+A004   62  58.8 |   1    -3.2 |   17.6  22.4   3.0  48.7
+A005   10  34.4 |  24    24.4 |   20.5  21.5   6.4  37.7
+A006   68  57.8 |   1   -10.2 |    6.3   7.9   1.1  17.1
+A008   17  46.4 |  25    29.4 |   26.5  32.2   5.1  67.1
+```
+
+Three things to see. First, the spread is wide: A008's remaining life runs from 5 years (P10) to
+67 years (P90). One number cannot carry that. Second, mean and median differ, by up to 5.7 years
+here (A008), so "RUL 20" means different things to two teams that use different statistics.
+Third, A004's curve gives a median remaining life of 17.6 years, and its RUL says 1. Both cannot
+describe the same belief about the asset; the next rule explains where the 1 came from.
+
+<!-- practice 1 -->
+
+<!-- practice 2 -->
+
+## Ask What the Number Is: Which Statistic, Which End Point, What Error
+
+An RUL from a machine-learning model is the output of a regression trained on past assets, and
+each design choice in that training changes what the number means. Before an RUL enters a plan, get
+written answers to four questions.
+
+1. **Which statistic?** Mean, median, a quantile, or "the model's output" with no stated meaning.
+   A regression trained to minimize squared error estimates something like a conditional mean; one
+   trained on a quantile loss estimates that quantile.
+2. **Until what?** "Useful" life often ends at a threshold, such as a health index below a limit, a
+   dissolved-gas reading above one or a condition grade of 5, not at a failure. An asset at its
+   threshold is due for attention, not certain to fail.
+3. **Trained on what?** Assets still in service are censored, exactly as in lesson 7.3.1's fit. A
+   model trained only on assets that already failed learns that assets fail young. Many models also
+   cap their target or their output at a ceiling or a floor.
+4. **How wrong is it?** An interval (say P10 to P90) per asset, or at least the error on held-out
+   assets by age band. Prognostics always carries uncertainty, and a point estimate without its
+   error invites the director's reading of "1 year left."
+
+GridCap's RUL answers the third question badly, and it is worth seeing how, because real
+predictions fail the same way. The course's generator, which plays the role of the ML model, sets
+
+```math
+\text{RUL} = \max\big(1,\ \lfloor \eta - a + \varepsilon \rfloor\big), \qquad \varepsilon \text{ uniform on } [-4, 4]
+```
+
+with $`\lfloor\cdot\rfloor`$ cutting toward zero (Python's `int`). So the GridCap RUL is "years
+until the asset reaches its characteristic life," with noise, cut to whole years and floored at 1.
+For an asset younger than $`\eta`$ that lands near the curve's median remaining life. For one
+already past $`\eta`$, $`\eta - a`$ is negative and the floor turns it into 1, whatever the curve
+says. Across the small portfolio:
+
+```text
+38 assets; 10 have RUL 1, the floor the prediction cannot go below
+  their curves' median remaining life: 3.2 to 21.5 years
+the other 28: RUL minus the curve's median, on average +0.4 years
+```
+
+Away from the floor, the RUL tracks the curve's median well (within 0.4 years on average). At the
+floor it carries no information: ten assets read "1 year," and their own curves give them median
+remaining lives from 3.2 to 21.5 years. A director who funds "everything with RUL 1" funds a list
+the prediction cannot rank. That is the answer to the scenario: A004 is old for its kind, it is past
+the age the RUL measures to, and its RUL hit the floor. Its PoF of 3.4% comes from the curve, which
+says a breaker of 62 that is still working is likely to keep working for many years.
+
+## RUL Alone Does Not Fix the PoF: the Shape Decides
+
+Planning needs a probability for each year (lesson 7.3.1), and the tempting shortcut is a mapping
+"RUL to PoF": a short RUL means a high PoF. But a median remaining life is one point of the
+remaining-life distribution, and many curves pass through the same point. Take two assets of the
+same age, 30, both with a median remaining life of exactly 10 years, one with shape 1 and one with
+shape 6. For each, the program finds the scale that gives that median with scipy's root finder
+`brentq`, which searches an interval for the value where a function crosses zero:
+
+```python
+    eta = brentq(lambda e: residual_median(AGE, beta, e) - RUL, 1, 500)
+```
+
+```text
+both assets: age 30, median remaining life 10 years
+  beta 1.0: eta  14.4, PoF next year 0.067, fails within 5 years 0.293
+  beta 6.0: eta  41.2, PoF next year 0.032, fails within 5 years 0.204
+```
+
+Same age, same RUL, and next year's PoF differs by a factor of two. With shape 1 failures come at a
+steady rate, so some come early; with shape 6 they bunch near the median, so the next year is
+fairly safe and the risk is concentrated 8 to 12 years out. An RUL becomes a PoF only together with
+a shape. Some interview notes say PoF "increases exponentially as RUL approaches 0"; no such rule
+exists without a curve, and with a Weibull curve the hazard grows as a power of age (lesson 7.3.1).
+
+## To Use an RUL, Make It a Point on a Curve
+
+When the analytics team supplies both a predicted RUL for each asset and a fleet shape $`\beta`$
+for its kind, the two can be combined: choose the scale $`\eta`$ that makes the RUL the median
+remaining life of an asset of this age. From $`((a+m)/\eta)^\beta - (a/\eta)^\beta = \ln 2`$ with
+$`m = \text{RUL}`$:
+
+```math
+\eta = \left( \frac{(a + \text{RUL})^{\beta} - a^{\beta}}{\ln 2} \right)^{1/\beta}
+```
+
+```python
+def eta_from_rul(age: float, rul: float, beta: float) -> float:
+    """The scale that makes `rul` the median remaining life of an asset of this age and shape."""
+    return (((age + rul) ** beta - age ** beta) / math.log(2)) ** (1 / beta)
+```
+
+The asset now has its own curve, consistent with its prediction, and every number lesson 7.3.1
+reads from a curve (next year's PoF, the hazard, the chance of failing within five years) follows.
+The program checks with scipy that the RUL really is the median of the new curve, then compares
+the scale and the PoF with the ones GridCap's curve gives directly:
+
+```python
+    eta = eta_from_rul(a.age, a.rul, a.weibull_beta)
+    curve = weibull_min(c=a.weibull_beta, scale=eta)
+    assert abs(curve.sf(a.age + a.rul) / curve.sf(a.age) - 0.5) < 1e-9     # RUL is the median
+```
+
+```text
+asset age RUL  beta | eta from RUL eta given | PoF from RUL PoF given
+A001   13  14  2.79 |         29.3      25.9 |       0.0235    0.0330
+A002   29  24  3.86 |         56.8      50.8 |       0.0104    0.0159
+A003   18  15  3.83 |         35.3      30.5 |       0.0172    0.0301
+A004   62   1  1.94 |         12.6      58.8 |       0.5000    0.0343
+A005   10  24  2.61 |         38.5      34.4 |       0.0083    0.0112
+A006   68   1  3.66 |         34.0      57.8 |       0.5000    0.0947
+A008   17  25  1.55 |         44.3      46.4 |       0.0207    0.0193
+```
+
+For five assets the two sources roughly agree. For A004 and A006 the RUL of 1 becomes a PoF of
+exactly 0.5 next year: a median remaining life of one year *is* a 50% chance of failing within the
+year. That shows what the floored prediction claims if you take it at its word, and why you must
+not: the curve built from the assets' history says 3.4% and 9.5%. When an RUL and a curve disagree
+this much, the answer is a question to the analytics team, not a choice made quietly in the
+optimization code. Lesson 7.3.4 solves the plan with both versions and shows how much it moves.
+
+<!-- practice 3 -->
+
+## Summary
+
+- **RUL is one number taken from a remaining-life distribution.** The median, the mean and P10 or
+  P90 of $`R(a+r)/R(a)`$ are different numbers, and the spread can be decades.
+- **Ask what the number is: which statistic, which end point, what error.** And how the training
+  treated assets still in service. GridCap's RUL is $`\eta - a`$ plus noise, floored at 1, so its
+  floor hides a 3- to 21-year range of medians.
+- **RUL alone does not fix the PoF: the shape decides.** Same age and same median, PoF 6.7% or 3.2%.
+- **To use an RUL, make it a point on a curve.** With a fleet shape,
+  $`\eta = (((a+\text{RUL})^\beta - a^\beta)/\ln 2)^{1/\beta}`$ makes the RUL the median, and every
+  probability follows from that curve.
+
+## Reference
+
+| Quantity | Formula | scipy (`curve = weibull_min(c=beta, scale=eta)`) |
+| --- | --- | --- |
+| still working $`r`$ years on, given working at $`a`$ | $`R(a+r)/R(a)`$ | `curve.sf(a + r) / curve.sf(a)` |
+| median remaining life | $`\eta((a/\eta)^\beta + \ln 2)^{1/\beta} - a`$ | `curve.isf(0.5 * curve.sf(a)) - a` |
+| remaining life by which the chance of failure is $`q`$ | solve $`R(a+r) = (1-q)R(a)`$ | `curve.isf((1 - q) * curve.sf(a)) - a` |
+| mean remaining life | $`\int_a^\infty R(u)\,du / R(a)`$ | `curve.expect(lambda t: t, lb=a, conditional=True) - a` |
+| scale from a median RUL | $`(((a+\text{RUL})^\beta - a^\beta)/\ln 2)^{1/\beta}`$ | check: `curve.sf(a + rul) / curve.sf(a) == 0.5` |
+| GridCap's RUL | $`\max(1, \lfloor \eta - a + \varepsilon \rfloor)`$, $`\varepsilon \sim U[-4, 4]`$ | each GridCap asset's `rul` field |
+
+**Further reading:** [Wikipedia, Survival analysis](https://en.wikipedia.org/wiki/Survival_analysis) (the distribution of the future lifetime given survival to $`t_0`$, and the mean residual lifetime $`\int_{t_0}^\infty S(u)\,du / S(t_0)`$); [Wikipedia, Remaining useful life](https://en.wikipedia.org/wiki/Remaining_useful_life) (RUL as a predicted time, data-driven, physics-based and hybrid estimation, and why prognostics always carries uncertainty); [SciPy, `scipy.stats.weibull_min`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.weibull_min.html) (`sf`, `isf`, `expect` and the other methods used here); [NIST/SEMATECH e-Handbook, the Weibull distribution](https://www.itl.nist.gov/div898/handbook/apr/section1/apr162.htm) (the reliability function and median the conditioning starts from).
+
+## Challenges
+
+1. A model reports RUL as P10, not the median. Rewrite `eta_from_rul` for it. Which assets'
+   scales grow and which shrink compared with the median version?
+2. An asset of age 40 has a predicted median RUL of 20 years, and the team gives no shape. Compute
+   next year's PoF for shapes 1.5, 2.5 and 3.5. What would you report to the director?
+3. Write the four questions of this lesson as a one-page data contract the analytics team signs
+   before their RUL enters the plan.
+
+## Design Note: Keep the Prediction and the Plan Apart
+
+It is tempting to fit the RUL-to-PoF mapping inside the optimization code, a sigmoid here, a
+lookup table there, so that the model "uses the ML output directly." This course keeps them apart:
+the analytics side delivers curves (or RUL plus shape plus its definition), a separate, tested step
+turns them into coefficients, and the model only reads coefficients. When a plan looks wrong,
+lesson 1.1.2's question, whether the coefficient, the rule or the objective is at fault, then has
+an answer you can check: the coefficient step has its own tests against scipy, like the ones in
+this lesson's practices.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change.
+
+**rul_distribution.py.** Prints each tiny asset's RUL beside the median, mean, P10 and P90 of its remaining life (*RUL Is One Number*). *Try:* Add a P50 column with `residual_quantile` and predict whether it equals the median column.
+
+- Program: [rul_distribution.py](src/rul_distribution.py)
+
+**rul_vs_curve.py.** Counts the small portfolio's assets at the RUL floor and compares the rest with their curves' medians (*Ask What the Number Is*). *Try:* Repeat it on the medium portfolio. Predict whether the share at the floor goes up or down.
+
+- Program: [rul_vs_curve.py](src/rul_vs_curve.py)
+
+**same_rul_different_pof.py.** Builds two curves with the same age and median remaining life and different shapes (*RUL Alone Does Not Fix the PoF*). *Try:* Add the shape 2.5. Predict where its PoF falls between the two.
+
+- Program: [same_rul_different_pof.py](src/same_rul_different_pof.py)
+
+**rul_to_curve.py.** Solves each tiny asset's scale from its RUL and compares the PoF with the given curve's (*To Use an RUL, Make It a Point on a Curve*). *Try:* Replace every RUL of 1 by the curve's median before solving. Predict A004's new PoF.
+
+- Program: [rul_to_curve.py](src/rul_to_curve.py)
+
+**asset_curves.py.** The module's library, with `residual_median` and `eta_from_rul`.
+
+- Library: [asset_curves.py](src/asset_curves.py)

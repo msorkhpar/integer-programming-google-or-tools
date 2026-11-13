@@ -1,0 +1,131 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "15-cpsat-core"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "The order of a drainage crew's repairs",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A drainage contractor (not GridCap) has one crew and a list of culvert repairs. The crew does one repair at a time, with no gaps needed. Each job $`j`$ takes $`d_j`$ days, is due on day $`u_j`$, and each day it finishes late costs $`w_j`$. Find the order with the least weighted lateness."
+    },
+    {
+      "type": "para",
+      "text": "Write `best_order(jobs)` in `crews.py`. It returns `(cost, order)`: the least total weighted lateness as an `int`, and the job names in the order the crew does them. Use CP-SAT and the formulation of the lesson's crew order, with $`H = \\sum_j d_j`$:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\min \\;& \\sum_{j \\in J} w_j\\, \\ell_j \\\\\n\\text{s.t. }& \\ell_j \\ge s_j + d_j - u_j && \\forall j \\in J && \\text{(late}_j) \\\\\n& y_{jk} \\Rightarrow s_j + d_j \\le s_k && \\forall j < k && \\text{(before}_{jk}) \\\\\n& \\lnot y_{jk} \\Rightarrow s_k + d_k \\le s_j && \\forall j < k && \\text{(after}_{jk}) \\\\\n& s_j \\in \\{0, \\dots, H\\},\\ \\ell_j \\in \\{0, \\dots, H\\},\\ y_{jk} \\in \\{0, 1\\}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Read the order off the start days. The tests compare your answer with every possible order. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    days: int      # days the job takes\n    due: int       # the day it is due (lateness is measured from here)\n    weight: int    # cost of one day of lateness\n\n\ndef best_order(jobs: list[Job]) -> tuple[int, list[str]]:\n    \"\"\"The least weighted lateness for one crew doing the jobs one at a time, and the order that gives it.\"\"\"\n    horizon = sum(j.days for j in jobs)\n    model = cp_model.CpModel()\n    start = {j.name: model.new_int_var(0, horizon, f\"start_{j.name}\") for j in jobs}\n    late = {j.name: model.new_int_var(0, horizon, f\"late_{j.name}\") for j in jobs}\n    for j in jobs:\n        model.add(late[j.name] >= start[j.name] + j.days - j.due)\n    for a, b in ((a, b) for i, a in enumerate(jobs) for b in jobs[i + 1:]):\n        first = model.new_bool_var(f\"{a.name}_before_{b.name}\")\n        model.add(start[a.name] + a.days <= start[b.name]).only_enforce_if(first)\n        model.add(start[b.name] + b.days <= start[a.name]).only_enforce_if(~first)\n    model.minimize(sum(j.weight * late[j.name] for j in jobs))\n    solver = cp_model.CpSolver()\n    solver.solve(model)\n    order = sorted(start, key=lambda name: solver.value(start[name]))\n    return round(solver.objective_value), order\n\n\nif __name__ == \"__main__\":\n    print(best_order([Job(\"north\", 3, 4, 2), Job(\"ridge\", 2, 2, 5), Job(\"creek\", 4, 6, 1)]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    days: int      # days the job takes\n    due: int       # the day it is due (lateness is measured from here)\n    weight: int    # cost of one day of lateness\n\n\ndef best_order(jobs: list[Job]) -> tuple[int, list[str]]:\n    \"\"\"The least weighted lateness for one crew doing the jobs one at a time, and the order that gives it.\"\"\"\n    # TODO: start and lateness variables, one disjunction per pair, the objective; solve and read the order.\n    return 0, [j.name for j in jobs]\n\nif __name__ == \"__main__\":\n    print(best_order([Job(\"north\", 3, 4, 2), Job(\"ridge\", 2, 2, 5), Job(\"creek\", 4, 6, 1)]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "e392a4209f249c8a7c531f7cfde12735ee3eb8001ae13fbc3e406d8f2a84ebcf",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    days: int      # days the job takes\n    due: int       # the day it is due (lateness is measured from here)\n    weight: int    # cost of one day of lateness\n\n\ndef best_order(jobs: list[Job]) -> tuple[int, list[str]]:\n    \"\"\"The least weighted lateness for one crew doing the jobs one at a time, and the order that gives it.\"\"\"\n    # TODO: start and lateness variables, one disjunction per pair, the objective; solve and read the order.\n    return 0, [j.name for j in jobs]\n\nif __name__ == \"__main__\":\n    print(best_order([Job(\"north\", 3, 4, 2), Job(\"ridge\", 2, 2, 5), Job(\"creek\", 4, 6, 1)]))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-2/crews.py",
+    "test_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-2/test_crews.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-2/crews.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-2/target/report.xml",
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-2/test_crews.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_least_weighted_lateness",
+        "kind": "main",
+        "says": "the returned cost is the least weighted lateness over every order"
+      },
+      {
+        "id": "test_the_order_achieves_the_cost",
+        "kind": "main",
+        "says": "the returned order lists every job once and gives the returned cost"
+      },
+      {
+        "id": "test_finishing_early_earns_nothing",
+        "kind": "edge",
+        "says": "a job finished before its due day counts as zero lateness, not as a credit"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "15-cpsat-core/README_4.4.4.md",
+      "section": "Disjunctions and Sequencing Favor CP-SAT"
+    },
+    "concepts": [
+      "sequencing and disjunctions give big-M models a weak bound, and CP-SAT proves them with propagation"
+    ]
+  }
+}

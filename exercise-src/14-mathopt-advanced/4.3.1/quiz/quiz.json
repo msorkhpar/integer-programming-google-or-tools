@@ -1,0 +1,98 @@
+{
+ "title": "Indicator constraints in MathOpt",
+ "questions": [
+  {
+   "id": "q-existing-binary",
+   "heading": "Any Binary in the Model Can Be the Indicator",
+   "stem": "A fleet model has a binary buy[v] per van and a continuous miles[v] between 0 and 40,000. The rule: a van that is not bought drives 0 miles. Which call states it?",
+   "options": [
+    {
+     "id": "a",
+     "text": "add_indicator_constraint(indicator=miles[v], implied_constraint=buy[v] <= 0)",
+     "correct": false,
+     "says": "The indicator must be a binary; miles[v] is continuous, and MathOpt refuses such an indicator at solve time with INVALID_ARGUMENT."
+    },
+    {
+     "id": "b",
+     "text": "add_indicator_constraint(indicator=miles[v], activate_on_zero=True, implied_constraint=buy[v] <= 0)",
+     "correct": false,
+     "says": "The indicator must be a binary; miles[v] is continuous, so the call is refused whichever value activates it."
+    },
+    {
+     "id": "c",
+     "text": "add_indicator_constraint(indicator=buy[v], activate_on_zero=True, implied_constraint=miles[v] <= 0)",
+     "correct": true,
+     "says": "Right: the existing binary is the indicator, activate_on_zero=True makes the row hold when the van is not bought, and with miles[v] >= 0 the one-sided row means 0 miles."
+    },
+    {
+     "id": "d",
+     "text": "add_indicator_constraint(indicator=buy[v], implied_constraint=miles[v] <= 0)",
+     "correct": false,
+     "says": "Without activate_on_zero the row holds when buy[v] = 1, so every van bought would be forced to drive 0 miles."
+    }
+   ]
+  },
+  {
+   "id": "q-change-limit",
+   "heading": "An Indicator Constraint Reads Back, but Cannot Be Edited",
+   "stem": "A program holds ic, an indicator constraint z = 1 implies load <= 300, and a scenario needs the limit at 250. What does the program do?",
+   "options": [
+    {
+     "id": "a",
+     "text": "Delete ic and add the rule again with 250, keeping the new object",
+     "correct": true,
+     "says": "Right: indicator constraints can be deleted, not edited, and the old object refers to a deleted constraint afterwards."
+    },
+    {
+     "id": "b",
+     "text": "Assign ic.upper_bound = 250, as one does for any linear row of the model",
+     "correct": false,
+     "says": "IndicatorConstraint properties have no setters; the assignment raises an AttributeError (lesson 4.3.1 shows it)."
+    },
+    {
+     "id": "c",
+     "text": "Add a linear row load <= 250 next to ic, keeping both of them in place",
+     "correct": false,
+     "says": "A plain row holds whatever z is, so it forces load <= 250 even when the rule is off."
+    },
+    {
+     "id": "d",
+     "text": "Delete ic and leave the rule out, since an indicator constraint cannot change",
+     "correct": false,
+     "says": "The rule is still wanted at 250: delete ic and add it again with the new limit, keeping the new reference."
+    }
+   ]
+  },
+  {
+   "id": "q-solver-choice",
+   "heading": "The Solver Decides Whether It Accepts Indicators, and the Reason Is on `__context__`",
+   "stem": "A team's service solves every model with HiGHS through MathOpt 9.15. A modeler wants an implication whose switched quantity has a known bound of 900. What should the model contain?",
+   "options": [
+    {
+     "id": "a",
+     "text": "An indicator constraint, since HiGHS turns it into a row with M = 900 by itself",
+     "correct": false,
+     "says": "HiGHS refuses the model outright: 'Highs does not support indicator constraints'."
+    },
+    {
+     "id": "b",
+     "text": "An indicator constraint with the bound of 900, sent through CP-SAT instead",
+     "correct": false,
+     "says": "Through MathOpt 9.15, CP-SAT refuses indicator constraints too (UNIMPLEMENTED); its native form is only in its own API."
+    },
+    {
+     "id": "c",
+     "text": "An indicator constraint, with the exception caught so the solve goes on",
+     "correct": false,
+     "says": "Catching the exception gives no plan at all; the model still has no solver that takes it."
+    },
+    {
+     "id": "d",
+     "text": "A linear row with M = 900, since HiGHS takes linear rows",
+     "correct": true,
+     "says": "Right: with a known bound the linear row is exact and runs on HiGHS, as the reserve rule showed with the same NPV."
+    }
+   ]
+  }
+ ]
+}

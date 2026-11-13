@@ -1,0 +1,648 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "14-growing-real-projects",
+    "55-project-cipt-planner"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Value each start, and the risk it removes",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "Finance and the asset team both had comments on the step-03 plan:"
+    },
+    {
+      "type": "quote",
+      "blocks": [
+        {
+          "type": "para",
+          "text": "Finance: you value every project at its earliest-start NPV, whatever year you start it. A project started in 2030 is worth less than the same project started in 2027; we sent you the NPV for every start year. Use it."
+        },
+        {
+          "type": "para",
+          "text": "Asset management: NPV is not why we replace old equipment. Each project lowers the failure risk of one asset. We want to see how much risk a plan removes, and a plan that removes the most of it."
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "text": "You start from the rule-keeping planner of the lesson before. Price every start: its NPV is the figure finance quotes for that start year, and the risk it removes is the asset's yearly risk, failure probability times the cost of a failure, over every year after the work ends to the end of the plan. The failure probability comes from the asset's Weibull curve. The export says which of the two the plan maximizes, NPV unless it says risk, and the plan and its report carry both."
+    },
+    {
+      "type": "para",
+      "text": "The export gives each asset's `age` in the plan's first year; the asset is one year older in each later year. The report changes in three ways, every amount with thousands commas:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "the funded line keeps its form, `funded <n> of <all> projects, capex $<capex>k of $<budgets>k, value $<value>k`, but its value is now the plan's objective, what the model maximized, in whole $k (the NPV of the actual starts when the export asks for NPV);",
+        "a new line follows it: `NPV $<npv>k, risk reduced $<risk>k (maximized: <objective>)`, NPV in whole $k and risk with one decimal;",
+        "each funded project's line ends `capex <capex>  npv <npv>  <name>`: the label `npv` replaces `value`, and the amount, right-aligned in 6 characters, is the NPV of the year the project starts."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`cipt/goals.py` is the next lesson's stub, as the reference has it; no code of this step imports it, so leave it as it is."
+    },
+    {
+      "type": "para",
+      "text": "Run executes `main.py`, which plans the demo export and prints the report; `expected/report.txt` is the report it should print. Submit runs every test in `tests/`, the earlier steps' included, and compares Run's report with the expected one."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "text": "Blueprint"
+    },
+    {
+      "type": "para",
+      "text": "Write each method below. The tests check each one by itself and the whole program end to end, so you may change any other part of the code as you see fit."
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`annual_pof` in `cipt/value.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def annual_pof(beta: float, eta: float, age: float) -> float"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** Returns the chance that an asset of this age fails within the next year, given that it has not failed yet, on a Weibull curve with shape beta and scale eta.",
+        "**Modeling idea.** The conditional one-year PoF is 1 - exp(H(age) - H(age + 1)), with the cumulative hazard H(a) = (a / eta) ** beta.",
+        "**Taught in** [7.3.1 Probability of Failure and Hazard Curves (Weibull)](../../../../07-the-capital-planning-domain/32-asset-risk/units/unit-01/7.3.1-probability-of-failure-and-hazard-curves-weibull.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`annual_risk` in `cipt/value.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def annual_risk(request: Request, project: Project, year: int) -> float"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** Returns the expected failure cost, in $k, of the project's asset in a calendar year if nothing is done: the consequence of failure times the PoF at the asset's age in that year. The export's age is the asset's age in the plan's first year, so in year y the age is age + y - first year.",
+        "**Modeling idea.** Risk is PoF times CoF, and the age grows by one each year from the plan's first year.",
+        "**Taught in** [7.3.3 Consequence of Failure and Risk = PoF × CoF](../../../../07-the-capital-planning-domain/32-asset-risk/units/unit-03/7.3.3-consequence-of-failure-and-risk-pof-cof.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`risk_reduction` in `cipt/value.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def risk_reduction(request: Request, project: Project, start: int) -> float"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** Returns the risk removed by a start in a given year: the asset's annual risk summed over every year after the work ends, to the plan's last year.",
+        "**Modeling idea.** Work removes the risk of the years after it is done; a later start removes fewer years.",
+        "**Taught in** [7.3.4 Risk Reduction From an Intervention, Year by Year](../../../../07-the-capital-planning-domain/32-asset-risk/units/unit-04/7.3.4-risk-reduction-from-an-intervention-year-by-year.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`coefficients` in `cipt/value.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def coefficients(request: Request) -> dict[tuple[str, int], tuple[int, float]]"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** Returns, for every project and start year the model has a variable for, the pair (NPV of that start, risk reduction of that start).",
+        "**Modeling idea.** Price each start before the model is built, so each variable gets its own coefficient.",
+        "**Taught in** [7.2.4 Precomputing NPV Coefficients by Start Year](../../../../07-the-capital-planning-domain/31-financial-evaluation/units/unit-04/7.2.4-precomputing-npv-coefficients-by-start-year.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`build` in `cipt/model.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def build(request: Request) -> Built"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** Keeps the plan's NPV and its risk removed as two expressions on the Built, and maximizes the one the request's objective names ('npv' or 'risk').",
+        "**Modeling idea.** Two measures over the same variables are two linear expressions; the objective picks one.",
+        "**Taught in** [14.2.4 Value: NPV by Start Year and Risk Reduction](../../../../14-growing-real-projects/55-project-cipt-planner/units/unit-04/14.2.4-value-npv-by-start-year-and-risk-reduction.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`read_plan` in `cipt/solve.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def read_plan(built: Built, result: mathopt.SolveResult) -> Plan"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** Also returns the plan's NPV and risk removed, evaluated from the two expressions at the solution.",
+        "**Modeling idea.** The plan reports both measures whichever one was maximized.",
+        "**Taught in** [4.2.2 Reading `SolveResult`: Termination, Primal and Dual Solutions, Statistics](../../../../04-google-or-tools-in-depth/13-mathopt-core/units/unit-02/4.2.2-reading-solveresult-termination-primal-and-dual-solutions-statistics.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`load_request` in `cipt/data.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def load_request(raw: dict) -> Request"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** Also reads each project's NPV for every start year and its asset (id, age, Weibull shape and scale, consequence of failure), and the request's objective, 'npv' by default; refuses any other objective.",
+        "**Modeling idea.** The export already carries NPV by start year and asset health; read them where they are.",
+        "**Taught in** [7.2.4 Precomputing NPV Coefficients by Start Year](../../../../07-the-capital-planning-domain/31-financial-evaluation/units/unit-04/7.2.4-precomputing-npv-coefficients-by-start-year.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`render` in `cipt/report.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def render(request: Request, plan: Plan) -> str"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** Changes the report in three ways. The funded line's `value $<value>k` is now the plan's objective, what the model maximized (the NPV of the actual starts when the objective is 'npv'). After it comes the line `NPV $<npv>k, risk reduced $<risk>k (maximized: <objective>)`, NPV in whole $k and risk with one decimal, both with thousands commas. Each funded project's line shows `npv` and the NPV of the year the project starts, right-aligned in 6 characters, where it showed `value` and the earliest-start value.",
+        "**Modeling idea.** A report shows the measure that was not maximized as well as the one that was.",
+        "**Taught in** [14.2.4 Value: NPV by Start Year and Risk Reduction](../../../../14-growing-real-projects/55-project-cipt-planner/units/unit-04/14.2.4-value-npv-by-start-year-and-risk-reduction.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"What a start is worth: NPV by start year, and the failure risk the work removes.\n\nNPV comes from finance, one figure per start year (lesson 7.2.4). Risk is computed here from the\nasset's Weibull curve (lesson 7.3.1) and its consequence of failure (lesson 7.3.3): the work removes\nthe asset's yearly risk, PoF x CoF, from the year after the work ends to the plan's last year\n(lesson 7.3.4).\n\"\"\"\n\nfrom __future__ import annotations\n\nimport math\n\nfrom .data import Project, Request\n\n\ndef annual_pof(beta: float, eta: float, age: float) -> float:\n    \"\"\"The chance an asset of this age fails within the next year, given that it has not failed yet.\"\"\"\n    return 1.0 - math.exp((age / eta) ** beta - ((age + 1) / eta) ** beta)\n\n\ndef annual_risk(request: Request, project: Project, year: int) -> float:\n    \"\"\"Expected failure cost of the project's asset in `year` if nothing is done ($k).\"\"\"\n    a = project.asset\n    return a.cof * annual_pof(a.weibull_beta, a.weibull_eta, a.age + year - request.years[0])\n\n\ndef risk_reduction(request: Request, project: Project, start: int) -> float:\n    \"\"\"Risk removed by a start in `start`: every year after the work ends, to the plan's last year.\"\"\"\n    return sum(annual_risk(request, project, y) for y in range(start + project.duration, request.years[-1] + 1))\n\n\ndef coefficients(request: Request) -> dict[tuple[str, int], tuple[int, float]]:\n    \"\"\"(npv, risk reduction) for every project and start year the model has a variable for.\"\"\"\n    return {(p.project_id, t): (p.npv[t], risk_reduction(request, p, t))\n            for p in request.projects for t in request.starts(p)}\n"
+        },
+        {
+          "type": "para",
+          "text": "File: cipt/__init__.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"CIPT planner: which capital projects to fund, grown one planner request at a time.\n\nThe data it ships with (data/demo.json) is GridCap, a fictional utility invented for this course.\n\"\"\"\n"
+        },
+        {
+          "type": "para",
+          "text": "File: cipt/__main__.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"python -m cipt EXPORT.json: plan the export and print the report.\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\n\nfrom .data import read_request\nfrom .report import render\nfrom .solve import solve\n\n\ndef main(argv: list[str] | None = None) -> int:\n    parser = argparse.ArgumentParser(prog=\"cipt\", description=\"Plan a capital portfolio.\")\n    parser.add_argument(\"export\", help=\"the planning export, a JSON file\")\n    args = parser.parse_args(argv)\n    request = read_request(args.export)\n    print(render(request, solve(request)))\n    return 0\n\n\nif __name__ == \"__main__\":\n    raise SystemExit(main())\n"
+        },
+        {
+          "type": "para",
+          "text": "File: cipt/data.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"The planning export, read into typed records.\n\nThe planners' export carries every column the planning system keeps (cost profiles, windows,\nrules, NPV by start year, asset health). This version reads only the columns it uses and ignores\nthe rest, so the same export file serves every version of the planner.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom dataclasses import dataclass\nfrom pathlib import Path\n\n\n@dataclass(frozen=True)\nclass Asset:\n    \"\"\"The equipment a project works on: its age now, its Weibull curve and what a failure costs.\"\"\"\n\n    asset_id: str\n    age: int                        # years, at the start of the plan's first year\n    weibull_beta: float             # shape\n    weibull_eta: float              # scale, years\n    cof: int                        # $k, the consequence of one failure\n\n\n@dataclass(frozen=True)\nclass Project:\n    \"\"\"One candidate project, as this version of the planner sees it.\"\"\"\n\n    project_id: str\n    name: str\n    cost_profile: tuple[int, ...]   # $k spent in each year of work, from the start year on\n    npv: dict[int, int]             # $k, the NPV finance quotes for each start year\n    asset: Asset\n    earliest_start: int\n    latest_start: int\n    must_do: bool = False\n    parent: str | None = None       # a project that must have started `parent_lag` years before\n    parent_lag: int = 0\n    alt_group: str | None = None    # at most one project of a group is funded\n    bundle: str | None = None       # every project of a bundle is funded, or none\n\n    @property\n    def value(self) -> int:\n        \"\"\"The NPV of a start in the earliest year: what the planner used before lesson 14.2.4.\"\"\"\n        return self.npv[self.earliest_start]\n\n    @property\n    def capex(self) -> int:\n        return sum(self.cost_profile)\n\n    @property\n    def duration(self) -> int:\n        return len(self.cost_profile)\n\n    def spend(self, start: int) -> dict[int, int]:\n        \"\"\"What the project spends in each calendar year if it starts in `start`.\"\"\"\n        return {start + k: amount for k, amount in enumerate(self.cost_profile)}\n\n\n@dataclass(frozen=True)\nclass Request:\n    \"\"\"What the planners ask for: the projects, the years, and each year's budget.\"\"\"\n\n    name: str\n    years: tuple[int, ...]\n    budget: dict[int, int]          # $k available in each year\n    projects: tuple[Project, ...]\n    objective: str = \"npv\"          # \"npv\" or \"risk\": what the plan maximizes\n\n    def project(self, project_id: str) -> Project:\n        for p in self.projects:\n            if p.project_id == project_id:\n                return p\n        raise KeyError(project_id)\n\n    def groups(self, column: str) -> dict[str, list[str]]:\n        \"\"\"Projects sharing a value of `column` (\"alt_group\" or \"bundle\"), by that value, in id order.\"\"\"\n        found: dict[str, list[str]] = {}\n        for p in self.projects:\n            if getattr(p, column) is not None:\n                found.setdefault(getattr(p, column), []).append(p.project_id)\n        return {g: sorted(members) for g, members in sorted(found.items())}\n\n    def starts(self, project: Project) -> range:\n        \"\"\"The project's window, cut so that its work starts and ends inside the plan's years.\"\"\"\n        first = max(project.earliest_start, self.years[0])\n        last = min(project.latest_start, self.years[-1] - project.duration + 1)\n        return range(first, last + 1)\n\n\ndef load_request(raw: dict) -> Request:\n    \"\"\"Build a Request from the export's dictionary form, refusing duplicate project ids.\"\"\"\n    projects = tuple(\n        Project(\n            project_id=row[\"id\"],\n            name=row[\"name\"],\n            cost_profile=tuple(row[\"cost_profile\"]),\n            npv={int(t): v for t, v in row[\"npv\"].items()},\n            asset=Asset(row[\"asset\"][\"id\"], row[\"asset\"][\"age\"], row[\"asset\"][\"weibull_beta\"],\n                        row[\"asset\"][\"weibull_eta\"], row[\"asset\"][\"cof\"]),\n            earliest_start=row[\"earliest_start\"],\n            latest_start=row[\"latest_start\"],\n            must_do=row[\"must_do\"],\n            parent=row[\"parent\"],\n            parent_lag=row[\"parent_lag\"],\n            alt_group=row[\"alt_group\"],\n            bundle=row[\"bundle\"],\n        )\n        for row in raw[\"projects\"]\n    )\n    ids = [p.project_id for p in projects]\n    if len(set(ids)) != len(ids):\n        raise ValueError(\"duplicate project ids in the export\")\n    for p in projects:\n        if p.parent is not None and p.parent not in ids:\n            raise ValueError(f\"{p.project_id} names an unknown parent {p.parent}\")\n    objective = raw.get(\"objective\", \"npv\")\n    if objective not in (\"npv\", \"risk\"):\n        raise ValueError(f\"unknown objective {objective!r}\")\n    return Request(name=raw[\"name\"], years=tuple(raw[\"years\"]),\n                   budget={int(y): v for y, v in raw[\"budget\"].items()}, projects=projects,\n                   objective=objective)\n\n\ndef read_request(path: str | Path) -> Request:\n    \"\"\"Read an export file (JSON) into a Request.\"\"\"\n    return load_request(json.loads(Path(path).read_text(encoding=\"utf-8\")))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: cipt/goals.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Two goals at once. Stub: lesson 14.2.5 writes it; until then there is no frontier.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom .data import Request\nfrom .plan import Plan\n\n\n@dataclass(frozen=True)\nclass Point:\n    npv: float\n    risk: float\n    plan: Plan\n\n\ndef frontier(request: Request, points: int = 5) -> list[Point]:\n    \"\"\"Non-dominated plans from the best NPV to the most risk removed. Stub.\"\"\"\n    return []\n"
+        },
+        {
+          "type": "para",
+          "text": "File: cipt/model.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"The model: a start-year decision per project and year, and the rows the rules add.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom ortools.math_opt.python import mathopt\n\nfrom .data import Request\nfrom .rules import RULES\nfrom .value import coefficients\n\n\n@dataclass\nclass Built:\n    \"\"\"A built model and the handles the rest of the planner needs to read it.\"\"\"\n\n    request: Request\n    model: mathopt.Model\n    x: dict[tuple[str, int], mathopt.Variable]\n    rows: dict[str, mathopt.LinearConstraint] = field(default_factory=dict)\n    npv: mathopt.LinearSum | None = None       # the plan's NPV, $k\n    risk: mathopt.LinearSum | None = None      # the risk the plan removes, $k\n\n    def add(self, name: str, row) -> None:\n        \"\"\"Add one named row; the name is how reports and diagnostics refer to it.\"\"\"\n        self.rows[name] = self.model.add_linear_constraint(row, name=name)\n\n    def started(self, pid: str) -> mathopt.LinearSum:\n        \"\"\"1 if project `pid` starts in some year of its window, else 0.\"\"\"\n        return mathopt.fast_sum(v for (p, _), v in self.x.items() if p == pid)\n\n    def started_by(self, pid: str, year: int) -> mathopt.LinearSum:\n        \"\"\"1 if project `pid` starts in `year` or earlier, else 0.\"\"\"\n        return mathopt.fast_sum(v for (p, t), v in self.x.items() if p == pid and t <= year)\n\n    def spend_by_year(self) -> dict[int, mathopt.LinearSum]:\n        \"\"\"Each year's spend as an expression, with every project's cost spread over its years of work.\"\"\"\n        terms: dict[int, list] = {y: [] for y in self.request.years}\n        for (pid, t), v in self.x.items():\n            for year, amount in self.request.project(pid).spend(t).items():\n                terms[year].append(amount * v)\n        return {y: mathopt.fast_sum(ts) for y, ts in terms.items()}\n\n\ndef build(request: Request) -> Built:\n    model = mathopt.Model(name=request.name)\n    x = {(p.project_id, t): model.add_binary_variable(name=f\"x_{p.project_id}_{t}\")\n         for p in request.projects for t in request.starts(p)}\n    built = Built(request, model, x)\n    for rule in RULES:\n        rule(built)\n    value = coefficients(request)\n    built.npv = mathopt.fast_sum(value[key][0] * v for key, v in x.items())\n    built.risk = mathopt.fast_sum(value[key][1] * v for key, v in x.items())\n    model.maximize(built.npv if request.objective == \"npv\" else built.risk)\n    return built\n"
+        },
+        {
+          "type": "para",
+          "text": "File: cipt/plan.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"A plan: what the solve decided, in the planners' terms.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\n\n@dataclass(frozen=True)\nclass Plan:\n    \"\"\"The answer to a request.\n\n    `status` is \"optimal\", \"infeasible\" or another solver outcome in lower case; `starts` maps each\n    funded project to the year its work starts; `objective` is what the model maximized; `npv` and\n    `risk` are the plan's NPV and the risk it removes, both in $k, whichever was maximized.\n    \"\"\"\n\n    status: str\n    starts: dict[str, int] = field(default_factory=dict)\n    objective: float = 0.0\n    npv: float = 0.0\n    risk: float = 0.0\n\n    @property\n    def funded(self) -> tuple[str, ...]:\n        return tuple(sorted(self.starts))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: cipt/report.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"The plan as the planners read it.\"\"\"\n\nfrom __future__ import annotations\n\nfrom .data import Request\nfrom .plan import Plan\n\n\ndef spend_by_year(request: Request, plan: Plan) -> dict[int, int]:\n    \"\"\"What the plan spends in each year, from the funded projects' starts and cost profiles.\"\"\"\n    spend = {y: 0 for y in request.years}\n    for pid, start in plan.starts.items():\n        for year, amount in request.project(pid).spend(start).items():\n            spend[year] += amount\n    return spend\n\n\ndef render(request: Request, plan: Plan) -> str:\n    lines = [f\"{request.name}: {plan.status}\"]\n    funded = [request.project(pid) for pid in plan.funded]\n    capex = sum(p.capex for p in funded)\n    lines.append(f\"funded {len(funded)} of {len(request.projects)} projects, \"\n                 f\"capex ${capex:,}k of ${sum(request.budget.values()):,}k, value ${plan.objective:,.0f}k\")\n    lines.append(f\"NPV ${plan.npv:,.0f}k, risk reduced ${plan.risk:,.1f}k (maximized: {request.objective})\")\n    for year, spend in spend_by_year(request, plan).items():\n        lines.append(f\"  {year}  spend ${spend:,}k of ${request.budget[year]:,}k\")\n    for p in funded:\n        start = plan.starts[p.project_id]\n        lines.append(f\"  {p.project_id}  start {start}  \"\n                     f\"capex {p.capex:>6,}  npv {p.npv[start]:>6,}  {p.name}\")\n    return \"\\n\".join(lines)\n"
+        },
+        {
+          "type": "para",
+          "text": "File: cipt/rules.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"The planners' business rules, one function per rule, each adding rows with the names it owns.\n\nEvery rule reads the request and the start variables through `built` and adds its rows with\n`built.add(name, row)`. A new rule is a new function added to RULES; `build` never changes.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom typing import TYPE_CHECKING\n\nfrom ortools.math_opt.python import mathopt\n\nif TYPE_CHECKING:\n    from .model import Built\n\n\ndef once_or_must(built: Built) -> None:\n    \"\"\"(once_i) a project starts at most once; (must_i) a must-do starts exactly once.\"\"\"\n    for p in built.request.projects:\n        if p.must_do:\n            built.add(f\"must_{p.project_id}\", built.started(p.project_id) == 1)\n        else:\n            built.add(f\"once_{p.project_id}\", built.started(p.project_id) <= 1)\n\n\ndef alternatives(built: Built) -> None:\n    \"\"\"(alt_g) at most one project of an alternative group is funded.\"\"\"\n    for group, members in built.request.groups(\"alt_group\").items():\n        built.add(f\"alt_{group}\", mathopt.fast_sum(built.started(m) for m in members) <= 1)\n\n\ndef bundles(built: Built) -> None:\n    \"\"\"(bundle_{b,j}) each member of a bundle is funded exactly when its first member is.\"\"\"\n    for members in built.request.groups(\"bundle\").values():\n        first = members[0]\n        for j in members[1:]:\n            built.add(f\"bundle_{first}_{j}\", built.started(j) - built.started(first) == 0)\n\n\ndef parents(built: Built) -> None:\n    \"\"\"(after_{c,t}) a child started by year t needs its parent started by year t - lag.\"\"\"\n    request = built.request\n    for c in request.projects:\n        if c.parent is None:\n            continue\n        parent = request.project(c.parent)\n        for t in request.starts(c):\n            built.add(f\"after_{c.project_id}_{t}\",\n                      built.started_by(c.project_id, t) - built.started_by(parent.project_id, t - c.parent_lag)\n                      <= 0)\n\n\ndef budgets(built: Built) -> None:\n    \"\"\"(budget_y) each year's spend, with costs spread over the years of work, within its budget.\"\"\"\n    for y, spend in built.spend_by_year().items():\n        built.add(f\"budget_{y}\", spend <= built.request.budget[y])\n\n\nRULES = (once_or_must, alternatives, bundles, parents, budgets)\n"
+        },
+        {
+          "type": "para",
+          "text": "File: cipt/solve.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Solve a request with HiGHS and read the answer back as a Plan.\"\"\"\n\nfrom __future__ import annotations\n\nimport ctypes\nimport os\nimport sys\n\nfrom ortools.math_opt.python import mathopt\nfrom ortools.math_opt.solvers import highs_pb2\n\nfrom .data import Request\nfrom .model import Built, build\nfrom .plan import Plan\n\n#: One thread, set in HiGHS's own options; the first HiGHS solve of a process fixes the count.\nPARAMS = mathopt.SolveParameters(highs=highs_pb2.HighsOptionsProto(int_options={\"threads\": 1}))\n\n\ndef run_highs(model: mathopt.Model) -> mathopt.SolveResult:\n    \"\"\"Solve with stdout pointed at /dev/null, so HiGHS's stray C output stays out of reports.\"\"\"\n    sys.stdout.flush()\n    saved, sink = os.dup(1), os.open(os.devnull, os.O_WRONLY)\n    os.dup2(sink, 1)\n    try:\n        return mathopt.solve(model, mathopt.SolverType.HIGHS, params=PARAMS)\n    finally:\n        ctypes.CDLL(None).fflush(None)\n        os.dup2(saved, 1)\n        os.close(saved)\n        os.close(sink)\n\n\ndef read_plan(built: Built, result: mathopt.SolveResult) -> Plan:\n    \"\"\"Turn a solver result into a Plan: each funded project with the year its x is 1.\"\"\"\n    status = result.termination.reason.name.lower()\n    if not result.has_primal_feasible_solution():\n        return Plan(status=status)\n    values = result.variable_values()\n    starts = {pid: t for (pid, t), var in built.x.items() if values[var] > 0.5}\n    return Plan(status=status, starts=starts, objective=result.objective_value(),\n                npv=mathopt.evaluate_expression(built.npv, values),\n                risk=mathopt.evaluate_expression(built.risk, values))\n\n\ndef solve(request: Request) -> Plan:\n    built = build(request)\n    return read_plan(built, run_highs(built.model))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: main.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run: plan the demo export and print the planners' report.\n\ndata/demo.json is GridCap tiny, a fictional utility's portfolio. Its path is taken from this\nfile's folder, never from the working directory, so the report is the same wherever Run starts.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom pathlib import Path\n\nfrom cipt.__main__ import main\n\nDEMO = Path(__file__).resolve().parent / \"data\" / \"demo.json\"\n\nif __name__ == \"__main__\":\n    raise SystemExit(main([str(DEMO)]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"What a start is worth. Stub: lesson 14.2.4 writes it; until then every start is worth nothing.\"\"\"\n\nfrom __future__ import annotations\n\nfrom .data import Project, Request\n\n\ndef annual_pof(beta: float, eta: float, age: float) -> float:\n    \"\"\"The chance an asset of this age fails within the next year. Stub.\"\"\"\n    return 0.0\n\n\ndef risk_reduction(request: Request, project: Project, start: int) -> float:\n    \"\"\"Risk removed by a start in `start`. Stub.\"\"\"\n    return 0.0\n\n\ndef annual_risk(request: Request, project: Project, year: int) -> float:\n    \"\"\"Returns the expected failure cost, in $k, of the project's asset in a calendar year if nothing is done: the consequence of failure times the PoF at the asset's age in that year. The export's age is the asset's age in the plan's first year, so in year y the age is age + y - first year.\"\"\"\n    return 0.0\n\n\ndef coefficients(request: Request) -> dict[tuple[str, int], tuple[int, float]]:\n    \"\"\"Returns, for every project and start year the model has a variable for, the pair (NPV of that start, risk reduction of that start).\"\"\"\n    return {}\n"
+    },
+    {
+      "type": "para",
+      "text": "File: cipt/__init__.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"CIPT planner: which capital projects to fund, grown one planner request at a time.\n\nThe data it ships with (data/demo.json) is GridCap, a fictional utility invented for this course.\n\"\"\"\n"
+    },
+    {
+      "type": "para",
+      "text": "File: cipt/__main__.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"python -m cipt EXPORT.json: plan the export and print the report.\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\n\nfrom .data import read_request\nfrom .report import render\nfrom .solve import solve\n\n\ndef main(argv: list[str] | None = None) -> int:\n    parser = argparse.ArgumentParser(prog=\"cipt\", description=\"Plan a capital portfolio.\")\n    parser.add_argument(\"export\", help=\"the planning export, a JSON file\")\n    args = parser.parse_args(argv)\n    request = read_request(args.export)\n    print(render(request, solve(request)))\n    return 0\n\n\nif __name__ == \"__main__\":\n    raise SystemExit(main())\n"
+    },
+    {
+      "type": "para",
+      "text": "File: cipt/data.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"The planning export, read into typed records.\n\nThe planners' export carries every column the planning system keeps (cost profiles, windows,\nrules, NPV by start year, asset health). This version reads only the columns it uses and ignores\nthe rest, so the same export file serves every version of the planner.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom dataclasses import dataclass\nfrom pathlib import Path\n\n\n@dataclass(frozen=True)\nclass Project:\n    \"\"\"One candidate project, as this version of the planner sees it.\"\"\"\n\n    project_id: str\n    name: str\n    cost_profile: tuple[int, ...]   # $k spent in each year of work, from the start year on\n    value: int                      # $k, the NPV finance quotes for a start in the earliest year\n    earliest_start: int\n    latest_start: int\n    must_do: bool = False\n    parent: str | None = None       # a project that must have started `parent_lag` years before\n    parent_lag: int = 0\n    alt_group: str | None = None    # at most one project of a group is funded\n    bundle: str | None = None       # every project of a bundle is funded, or none\n\n    @property\n    def capex(self) -> int:\n        return sum(self.cost_profile)\n\n    @property\n    def duration(self) -> int:\n        return len(self.cost_profile)\n\n    def spend(self, start: int) -> dict[int, int]:\n        \"\"\"What the project spends in each calendar year if it starts in `start`.\"\"\"\n        return {start + k: amount for k, amount in enumerate(self.cost_profile)}\n\n\n@dataclass(frozen=True)\nclass Request:\n    \"\"\"What the planners ask for: the projects, the years, and each year's budget.\"\"\"\n\n    name: str\n    years: tuple[int, ...]\n    budget: dict[int, int]          # $k available in each year\n    projects: tuple[Project, ...]\n\n    def project(self, project_id: str) -> Project:\n        for p in self.projects:\n            if p.project_id == project_id:\n                return p\n        raise KeyError(project_id)\n\n    def groups(self, column: str) -> dict[str, list[str]]:\n        \"\"\"Projects sharing a value of `column` (\"alt_group\" or \"bundle\"), by that value, in id order.\"\"\"\n        found: dict[str, list[str]] = {}\n        for p in self.projects:\n            if getattr(p, column) is not None:\n                found.setdefault(getattr(p, column), []).append(p.project_id)\n        return {g: sorted(members) for g, members in sorted(found.items())}\n\n    def starts(self, project: Project) -> range:\n        \"\"\"The project's window, cut so that its work starts and ends inside the plan's years.\"\"\"\n        first = max(project.earliest_start, self.years[0])\n        last = min(project.latest_start, self.years[-1] - project.duration + 1)\n        return range(first, last + 1)\n\n\ndef load_request(raw: dict) -> Request:\n    \"\"\"Build a Request from the export's dictionary form, refusing duplicate project ids.\"\"\"\n    projects = tuple(\n        Project(\n            project_id=row[\"id\"],\n            name=row[\"name\"],\n            cost_profile=tuple(row[\"cost_profile\"]),\n            value=row[\"npv\"][str(row[\"earliest_start\"])],\n            earliest_start=row[\"earliest_start\"],\n            latest_start=row[\"latest_start\"],\n            must_do=row[\"must_do\"],\n            parent=row[\"parent\"],\n            parent_lag=row[\"parent_lag\"],\n            alt_group=row[\"alt_group\"],\n            bundle=row[\"bundle\"],\n        )\n        for row in raw[\"projects\"]\n    )\n    ids = [p.project_id for p in projects]\n    if len(set(ids)) != len(ids):\n        raise ValueError(\"duplicate project ids in the export\")\n    for p in projects:\n        if p.parent is not None and p.parent not in ids:\n            raise ValueError(f\"{p.project_id} names an unknown parent {p.parent}\")\n    return Request(name=raw[\"name\"], years=tuple(raw[\"years\"]),\n                   budget={int(y): v for y, v in raw[\"budget\"].items()}, projects=projects)\n\n\ndef read_request(path: str | Path) -> Request:\n    \"\"\"Read an export file (JSON) into a Request.\"\"\"\n    return load_request(json.loads(Path(path).read_text(encoding=\"utf-8\")))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: cipt/goals.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Two goals at once. Stub: lesson 14.2.5 writes it; until then there is no frontier.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom .data import Request\nfrom .plan import Plan\n\n\n@dataclass(frozen=True)\nclass Point:\n    npv: float\n    risk: float\n    plan: Plan\n\n\ndef frontier(request: Request, points: int = 5) -> list[Point]:\n    \"\"\"Non-dominated plans from the best NPV to the most risk removed. Stub.\"\"\"\n    return []\n"
+    },
+    {
+      "type": "para",
+      "text": "File: cipt/model.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"The model: a start-year decision per project and year, and the rows the rules add.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom ortools.math_opt.python import mathopt\n\nfrom .data import Request\nfrom .rules import RULES\n\n\n@dataclass\nclass Built:\n    \"\"\"A built model and the handles the rest of the planner needs to read it.\"\"\"\n\n    request: Request\n    model: mathopt.Model\n    x: dict[tuple[str, int], mathopt.Variable]\n    rows: dict[str, mathopt.LinearConstraint] = field(default_factory=dict)\n\n    def add(self, name: str, row) -> None:\n        \"\"\"Add one named row; the name is how reports and diagnostics refer to it.\"\"\"\n        self.rows[name] = self.model.add_linear_constraint(row, name=name)\n\n    def started(self, pid: str) -> mathopt.LinearSum:\n        \"\"\"1 if project `pid` starts in some year of its window, else 0.\"\"\"\n        return mathopt.fast_sum(v for (p, _), v in self.x.items() if p == pid)\n\n    def started_by(self, pid: str, year: int) -> mathopt.LinearSum:\n        \"\"\"1 if project `pid` starts in `year` or earlier, else 0.\"\"\"\n        return mathopt.fast_sum(v for (p, t), v in self.x.items() if p == pid and t <= year)\n\n    def spend_by_year(self) -> dict[int, mathopt.LinearSum]:\n        \"\"\"Each year's spend as an expression, with every project's cost spread over its years of work.\"\"\"\n        terms: dict[int, list] = {y: [] for y in self.request.years}\n        for (pid, t), v in self.x.items():\n            for year, amount in self.request.project(pid).spend(t).items():\n                terms[year].append(amount * v)\n        return {y: mathopt.fast_sum(ts) for y, ts in terms.items()}\n\n\ndef build(request: Request) -> Built:\n    model = mathopt.Model(name=request.name)\n    x = {(p.project_id, t): model.add_binary_variable(name=f\"x_{p.project_id}_{t}\")\n         for p in request.projects for t in request.starts(p)}\n    built = Built(request, model, x)\n    for rule in RULES:\n        rule(built)\n    model.maximize(mathopt.fast_sum(request.project(pid).value * v for (pid, _), v in x.items()))\n    return built\n"
+    },
+    {
+      "type": "para",
+      "text": "File: cipt/plan.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"A plan: what the solve decided, in the planners' terms.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\n\n@dataclass(frozen=True)\nclass Plan:\n    \"\"\"The answer to a request.\n\n    `status` is \"optimal\", \"infeasible\" or another solver outcome in lower case; `starts` maps each\n    funded project to the year its work starts; `objective` is what the model maximized.\n    \"\"\"\n\n    status: str\n    starts: dict[str, int] = field(default_factory=dict)\n    objective: float = 0.0\n\n    @property\n    def funded(self) -> tuple[str, ...]:\n        return tuple(sorted(self.starts))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: cipt/report.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"The plan as the planners read it.\"\"\"\n\nfrom __future__ import annotations\n\nfrom .data import Request\nfrom .plan import Plan\n\n\ndef spend_by_year(request: Request, plan: Plan) -> dict[int, int]:\n    \"\"\"What the plan spends in each year, from the funded projects' starts and cost profiles.\"\"\"\n    spend = {y: 0 for y in request.years}\n    for pid, start in plan.starts.items():\n        for year, amount in request.project(pid).spend(start).items():\n            spend[year] += amount\n    return spend\n\n\ndef render(request: Request, plan: Plan) -> str:\n    lines = [f\"{request.name}: {plan.status}\"]\n    funded = [request.project(pid) for pid in plan.funded]\n    capex = sum(p.capex for p in funded)\n    value = sum(p.value for p in funded)\n    lines.append(f\"funded {len(funded)} of {len(request.projects)} projects, \"\n                 f\"capex ${capex:,}k of ${sum(request.budget.values()):,}k, value ${value:,}k\")\n    for year, spend in spend_by_year(request, plan).items():\n        lines.append(f\"  {year}  spend ${spend:,}k of ${request.budget[year]:,}k\")\n    for p in funded:\n        lines.append(f\"  {p.project_id}  start {plan.starts[p.project_id]}  \"\n                     f\"capex {p.capex:>6,}  value {p.value:>6,}  {p.name}\")\n    return \"\\n\".join(lines)\n"
+    },
+    {
+      "type": "para",
+      "text": "File: cipt/rules.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"The planners' business rules, one function per rule, each adding rows with the names it owns.\n\nEvery rule reads the request and the start variables through `built` and adds its rows with\n`built.add(name, row)`. A new rule is a new function added to RULES; `build` never changes.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom typing import TYPE_CHECKING\n\nfrom ortools.math_opt.python import mathopt\n\nif TYPE_CHECKING:\n    from .model import Built\n\n\ndef once_or_must(built: Built) -> None:\n    \"\"\"(once_i) a project starts at most once; (must_i) a must-do starts exactly once.\"\"\"\n    for p in built.request.projects:\n        if p.must_do:\n            built.add(f\"must_{p.project_id}\", built.started(p.project_id) == 1)\n        else:\n            built.add(f\"once_{p.project_id}\", built.started(p.project_id) <= 1)\n\n\ndef alternatives(built: Built) -> None:\n    \"\"\"(alt_g) at most one project of an alternative group is funded.\"\"\"\n    for group, members in built.request.groups(\"alt_group\").items():\n        built.add(f\"alt_{group}\", mathopt.fast_sum(built.started(m) for m in members) <= 1)\n\n\ndef bundles(built: Built) -> None:\n    \"\"\"(bundle_{b,j}) each member of a bundle is funded exactly when its first member is.\"\"\"\n    for members in built.request.groups(\"bundle\").values():\n        first = members[0]\n        for j in members[1:]:\n            built.add(f\"bundle_{first}_{j}\", built.started(j) - built.started(first) == 0)\n\n\ndef parents(built: Built) -> None:\n    \"\"\"(after_{c,t}) a child started by year t needs its parent started by year t - lag.\"\"\"\n    request = built.request\n    for c in request.projects:\n        if c.parent is None:\n            continue\n        parent = request.project(c.parent)\n        for t in request.starts(c):\n            built.add(f\"after_{c.project_id}_{t}\",\n                      built.started_by(c.project_id, t) - built.started_by(parent.project_id, t - c.parent_lag)\n                      <= 0)\n\n\ndef budgets(built: Built) -> None:\n    \"\"\"(budget_y) each year's spend, with costs spread over the years of work, within its budget.\"\"\"\n    for y, spend in built.spend_by_year().items():\n        built.add(f\"budget_{y}\", spend <= built.request.budget[y])\n\n\nRULES = (once_or_must, alternatives, bundles, parents, budgets)\n"
+    },
+    {
+      "type": "para",
+      "text": "File: cipt/solve.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Solve a request with HiGHS and read the answer back as a Plan.\"\"\"\n\nfrom __future__ import annotations\n\nimport ctypes\nimport os\nimport sys\n\nfrom ortools.math_opt.python import mathopt\nfrom ortools.math_opt.solvers import highs_pb2\n\nfrom .data import Request\nfrom .model import Built, build\nfrom .plan import Plan\n\n#: One thread, set in HiGHS's own options; the first HiGHS solve of a process fixes the count.\nPARAMS = mathopt.SolveParameters(highs=highs_pb2.HighsOptionsProto(int_options={\"threads\": 1}))\n\n\ndef run_highs(model: mathopt.Model) -> mathopt.SolveResult:\n    \"\"\"Solve with stdout pointed at /dev/null, so HiGHS's stray C output stays out of reports.\"\"\"\n    sys.stdout.flush()\n    saved, sink = os.dup(1), os.open(os.devnull, os.O_WRONLY)\n    os.dup2(sink, 1)\n    try:\n        return mathopt.solve(model, mathopt.SolverType.HIGHS, params=PARAMS)\n    finally:\n        ctypes.CDLL(None).fflush(None)\n        os.dup2(saved, 1)\n        os.close(saved)\n        os.close(sink)\n\n\ndef read_plan(built: Built, result: mathopt.SolveResult) -> Plan:\n    \"\"\"Turn a solver result into a Plan: each funded project with the year its x is 1.\"\"\"\n    status = result.termination.reason.name.lower()\n    if not result.has_primal_feasible_solution():\n        return Plan(status=status)\n    values = result.variable_values()\n    starts = {pid: t for (pid, t), var in built.x.items() if values[var] > 0.5}\n    return Plan(status=status, starts=starts, objective=result.objective_value())\n\n\ndef solve(request: Request) -> Plan:\n    built = build(request)\n    return read_plan(built, run_highs(built.model))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: main.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run: plan the demo export and print the planners' report.\n\ndata/demo.json is GridCap tiny, a fictional utility's portfolio. Its path is taken from this\nfile's folder, never from the working directory, so the report is the same wherever Run starts.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom pathlib import Path\n\nfrom cipt.__main__ import main\n\nDEMO = Path(__file__).resolve().parent / \"data\" / \"demo.json\"\n\nif __name__ == \"__main__\":\n    raise SystemExit(main([str(DEMO)]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 12,
+    "paras": 16,
+    "code": 19,
+    "tables": 0,
+    "lists": 9,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 1,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "c4acf499c3ebc3d8a6a62c9dffb09ebe99a3f8be508e42a6c9f797b056159191",
+  "starting_code": "\"\"\"What a start is worth. Stub: lesson 14.2.4 writes it; until then every start is worth nothing.\"\"\"\n\nfrom __future__ import annotations\n\nfrom .data import Project, Request\n\n\ndef annual_pof(beta: float, eta: float, age: float) -> float:\n    \"\"\"The chance an asset of this age fails within the next year. Stub.\"\"\"\n    return 0.0\n\n\ndef risk_reduction(request: Request, project: Project, start: int) -> float:\n    \"\"\"Risk removed by a start in `start`. Stub.\"\"\"\n    return 0.0\n\n\ndef annual_risk(request: Request, project: Project, year: int) -> float:\n    \"\"\"Returns the expected failure cost, in $k, of the project's asset in a calendar year if nothing is done: the consequence of failure times the PoF at the asset's age in that year. The export's age is the asset's age in the plan's first year, so in year y the age is age + y - first year.\"\"\"\n    return 0.0\n\n\ndef coefficients(request: Request) -> dict[tuple[str, int], tuple[int, float]]:\n    \"\"\"Returns, for every project and start year the model has a variable for, the pair (NPV of that start, risk reduction of that start).\"\"\"\n    return {}\n",
+  "exercise": {
+    "main_path": "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/cipt/value.py",
+    "test_path": "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/tests/test_expected_output.py",
+    "run_command": [
+      "python3",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/main.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/target/report.xml",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/tests"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "tests/test_value.py::test_npv_depends_on_the_start_year",
+        "kind": "main",
+        "says": "a start is worth the NPV finance quotes for that start year"
+      },
+      {
+        "id": "tests/test_value.py::test_failure_probability_rises_with_age",
+        "kind": "main",
+        "says": "an older asset is more likely to fail within the year"
+      },
+      {
+        "id": "tests/test_value.py::test_annual_pof_follows_the_weibull_curve",
+        "kind": "main",
+        "says": "the one-year failure probability follows the Weibull curve"
+      },
+      {
+        "id": "tests/test_value.py::test_risk_reduction_counts_the_years_after_the_work",
+        "kind": "main",
+        "says": "risk removed counts the years after the work ends"
+      },
+      {
+        "id": "tests/test_value.py::test_risk_objective_funds_the_riskier_asset",
+        "kind": "edge",
+        "says": "with the risk objective the plan funds the riskier asset"
+      },
+      {
+        "id": "tests/test_value.py::test_report_shows_npv_and_risk",
+        "kind": "main",
+        "says": "the report shows the plan's NPV and the risk it removes"
+      },
+      {
+        "id": "tests/test_data.py::test_reads_the_columns_it_uses",
+        "kind": "kept",
+        "says": "reads the columns it uses"
+      },
+      {
+        "id": "tests/test_data.py::test_ignores_columns_it_does_not_use",
+        "kind": "kept",
+        "says": "ignores columns it does not use"
+      },
+      {
+        "id": "tests/test_data.py::test_refuses_duplicate_ids",
+        "kind": "kept",
+        "says": "refuses duplicate ids"
+      },
+      {
+        "id": "tests/test_data.py::test_report_lists_a_given_plan",
+        "kind": "kept",
+        "says": "report lists a given plan"
+      },
+      {
+        "id": "tests/test_rules.py::test_must_do_is_funded_even_at_low_value",
+        "kind": "kept",
+        "says": "must do is funded even at low value"
+      },
+      {
+        "id": "tests/test_rules.py::test_alternatives_fund_at_most_one",
+        "kind": "kept",
+        "says": "alternatives fund at most one"
+      },
+      {
+        "id": "tests/test_rules.py::test_bundle_is_all_or_nothing",
+        "kind": "kept",
+        "says": "bundle is all or nothing"
+      },
+      {
+        "id": "tests/test_rules.py::test_child_starts_a_lag_after_its_parent",
+        "kind": "kept",
+        "says": "child starts a lag after its parent"
+      },
+      {
+        "id": "tests/test_rules.py::test_child_is_not_funded_without_its_parent",
+        "kind": "kept",
+        "says": "child is not funded without its parent"
+      },
+      {
+        "id": "tests/test_rules.py::test_must_dos_beyond_the_budget_are_infeasible",
+        "kind": "kept",
+        "says": "must dos beyond the budget are infeasible"
+      },
+      {
+        "id": "tests/test_rules.py::test_every_rule_has_a_named_row",
+        "kind": "kept",
+        "says": "every rule has a named row"
+      },
+      {
+        "id": "tests/test_rules.py::test_refuses_an_unknown_parent",
+        "kind": "kept",
+        "says": "refuses an unknown parent"
+      },
+      {
+        "id": "tests/test_select.py::test_plan_respects_the_budget",
+        "kind": "kept",
+        "says": "plan respects the budget"
+      },
+      {
+        "id": "tests/test_select.py::test_best_combination_beats_best_ratio",
+        "kind": "kept",
+        "says": "best combination beats best ratio"
+      },
+      {
+        "id": "tests/test_select.py::test_funds_everything_when_the_budget_allows",
+        "kind": "kept",
+        "says": "funds everything when the budget allows"
+      },
+      {
+        "id": "tests/test_select.py::test_report_names_the_funded_projects",
+        "kind": "kept",
+        "says": "report names the funded projects"
+      },
+      {
+        "id": "tests/test_select.py::test_command_line_prints_the_report",
+        "kind": "kept",
+        "says": "command line prints the report"
+      },
+      {
+        "id": "tests/test_years.py::test_spread_cost_counts_in_every_year_of_work",
+        "kind": "kept",
+        "says": "spread cost counts in every year of work"
+      },
+      {
+        "id": "tests/test_years.py::test_each_year_stays_within_its_budget",
+        "kind": "kept",
+        "says": "each year stays within its budget"
+      },
+      {
+        "id": "tests/test_years.py::test_start_stays_inside_the_window",
+        "kind": "kept",
+        "says": "start stays inside the window"
+      },
+      {
+        "id": "tests/test_years.py::test_work_must_end_inside_the_plan",
+        "kind": "kept",
+        "says": "work must end inside the plan"
+      },
+      {
+        "id": "tests/test_years.py::test_report_shows_spend_against_each_budget",
+        "kind": "kept",
+        "says": "report shows spend against each budget"
+      },
+      {
+        "id": "tests/test_expected_output.py::test_the_report_matches_the_expected_output",
+        "kind": "main",
+        "says": "Run's report for the demo export matches the expected report"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/target/report.xml"
+    },
+    "origin": "55-project-cipt-planner/README_14.2.4.md",
+    "concepts": [
+      "the request chooses which measure the model maximizes",
+      "NPV and risk coefficients per start variable, computed before the model"
+    ],
+    "files": [
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/cipt/__init__.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/cipt/__main__.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/cipt/data.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/cipt/goals.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/cipt/model.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/cipt/plan.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/cipt/report.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/cipt/rules.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/cipt/solve.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/main.py"
+    ],
+    "read_only": [
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/tests/test_data.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/tests/test_rules.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/tests/test_select.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/tests/test_value.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/tests/test_years.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/data/demo.json",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/expected/report.txt",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/tests/conftest.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-04/practice-1/pytest.ini"
+    ]
+  }
+}

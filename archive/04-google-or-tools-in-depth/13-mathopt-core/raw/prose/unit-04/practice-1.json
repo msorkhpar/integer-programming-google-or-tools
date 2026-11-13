@@ -1,0 +1,146 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "13-mathopt-core"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Settings every solver will take",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "An airline's crew-pairing service runs on whichever solver its configuration names, and its operators set four things: a time budget in seconds, a relative gap, a thread count and a random seed. They can also ask a MILP solve to stop at its first plan, for a quick feasibility check. The service must never send a parameter the chosen solver refuses, because in OR-Tools 9.15 a refusal stops the solve."
+    },
+    {
+      "type": "para",
+      "text": "Write `params_for(solver, seconds, rel_gap, threads, seed, first_plan=False)` in `params.py`. It returns a `mathopt.SolveParameters` with:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`time_limit` set to `seconds` as a `datetime.timedelta`, and `relative_gap_tolerance` set to `rel_gap`, for every solver;",
+        "`threads` set to `threads`, except for HiGHS, which refuses the common parameter;",
+        "`random_seed` set to `seed`, except for PDLP, which refuses it;",
+        "`solution_limit=1` when `first_plan` is true, for HiGHS, SCIP and CP-SAT only (GLOP and PDLP solve LPs and refuse a solution limit)."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Every field you do not set stays at its default, `None`, which means the solver's own default. The tests build the parameters for each solver and solve a model with them, so a refused setting shows up as an exception from `mathopt.solve`."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport datetime\n\nfrom ortools.math_opt.python import mathopt\n\nS = mathopt.SolverType\nNO_THREADS = {S.HIGHS}\nNO_SEED = {S.PDLP}\nLP_SOLVERS = {S.GLOP, S.PDLP}\n\n\ndef params_for(solver: mathopt.SolverType, seconds: float, rel_gap: float, threads: int, seed: int,\n               first_plan: bool = False) -> mathopt.SolveParameters:\n    \"\"\"The operators' settings, minus whatever this solver refuses through MathOpt (OR-Tools 9.15).\"\"\"\n    params = mathopt.SolveParameters(time_limit=datetime.timedelta(seconds=seconds),\n                                     relative_gap_tolerance=rel_gap)\n    if solver not in NO_THREADS:\n        params.threads = threads\n    if solver not in NO_SEED:\n        params.random_seed = seed\n    if first_plan and solver not in LP_SOLVERS:\n        params.solution_limit = 1\n    return params\n\n\nif __name__ == \"__main__\":\n    for solver in (S.GLOP, S.PDLP, S.HIGHS, S.GSCIP, S.CP_SAT):\n        print(solver.name, params_for(solver, 30, 0.01, 4, 7))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport datetime\n\nfrom ortools.math_opt.python import mathopt\n\nS = mathopt.SolverType\n\n\ndef params_for(solver: mathopt.SolverType, seconds: float, rel_gap: float, threads: int, seed: int,\n               first_plan: bool = False) -> mathopt.SolveParameters:\n    \"\"\"The operators' settings, minus whatever this solver refuses through MathOpt (OR-Tools 9.15).\"\"\"\n    # TODO: set each setting for the solvers that accept it.\n    return mathopt.SolveParameters()\n\n\nif __name__ == \"__main__\":\n    for solver in (S.GLOP, S.PDLP, S.HIGHS, S.GSCIP, S.CP_SAT):\n        print(solver.name, params_for(solver, 30, 0.01, 4, 7))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "2aa7b89c9598e38c0828143a9d76fd3cbcd3b6cd1dd740146f9abb029b95474f",
+  "starting_code": "from __future__ import annotations\n\nimport datetime\n\nfrom ortools.math_opt.python import mathopt\n\nS = mathopt.SolverType\n\n\ndef params_for(solver: mathopt.SolverType, seconds: float, rel_gap: float, threads: int, seed: int,\n               first_plan: bool = False) -> mathopt.SolveParameters:\n    \"\"\"The operators' settings, minus whatever this solver refuses through MathOpt (OR-Tools 9.15).\"\"\"\n    # TODO: set each setting for the solvers that accept it.\n    return mathopt.SolveParameters()\n\n\nif __name__ == \"__main__\":\n    for solver in (S.GLOP, S.PDLP, S.HIGHS, S.GSCIP, S.CP_SAT):\n        print(solver.name, params_for(solver, 30, 0.01, 4, 7))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-04/practice-1/params.py",
+    "test_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-04/practice-1/test_params.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-04/practice-1/params.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-04/practice-1/target/report.xml",
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-04/practice-1/test_params.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_time_and_gap_are_set_for_every_solver",
+        "kind": "main",
+        "says": "every solver gets the time limit as a timedelta and the relative gap"
+      },
+      {
+        "id": "test_scip_and_cp_sat_get_threads_and_seed",
+        "kind": "main",
+        "says": "SCIP and CP-SAT get the thread count and the seed, and solve with them"
+      },
+      {
+        "id": "test_highs_gets_no_threads",
+        "kind": "edge",
+        "says": "HiGHS gets no thread count, still gets the seed, and solves with them"
+      },
+      {
+        "id": "test_pdlp_gets_no_seed",
+        "kind": "edge",
+        "says": "PDLP gets no seed, still gets the thread count, and solves with them"
+      },
+      {
+        "id": "test_a_first_plan_stop_goes_only_to_milp_solvers",
+        "kind": "edge",
+        "says": "asking for the first plan sets solution_limit=1 on HiGHS, SCIP and CP-SAT and nothing on GLOP or PDLP, and every solver runs"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-04/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "13-mathopt-core/README_4.2.4.md",
+      "section": "Common Parameters Have One Name for Every Solver, and Each Solver Accepts Only Some"
+    },
+    "concepts": [
+      "common parameters share a name across solvers, and each solver accepts only some of them"
+    ]
+  }
+}

@@ -1,0 +1,146 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "49-cloud-deployment"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "List every result of a survey",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The trim planner's results live in S3 at `trim-results/<survey id>/<run id>.json`. The planners' tool shows every run of a survey, and a busy survey can have thousands. Its first version made one `list_objects_v2` call, and nobody noticed for a year."
+    },
+    {
+      "type": "para",
+      "text": "In `run_listing.py`, write `runs_of(s3, bucket, survey_id)`: the run ids that have a result for that survey, sorted as text. The rules:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "List every key, on every page: one list call returns at most 1,000 keys. Use the client's paginator, as lesson 12.5.3's `rebuild` does.",
+        "Only keys directly under `trim-results/<survey id>/` count. Survey ids have different lengths: the runs of `S-70` are not runs of `S-7`.",
+        "A run's result is a file named `<run id>.json` right in that folder. Other files (`t-1.log`) and files in deeper folders (`old/t-0.json`) are not runs.",
+        "A survey with no results gives `[]`. A bucket that does not exist is not \"no results\": let S3's `NoSuchBucket` error propagate."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The tests run against moto, which pages like S3. About 10 lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\n\ndef runs_of(s3, bucket: str, survey_id: str) -> list[str]:\n    \"\"\"The run ids with a result under trim-results/<survey_id>/, sorted as text.\"\"\"\n    prefix = f\"trim-results/{survey_id}/\"\n    runs = []\n    for page in s3.get_paginator(\"list_objects_v2\").paginate(Bucket=bucket, Prefix=prefix):\n        for obj in page.get(\"Contents\", []):\n            name = obj[\"Key\"][len(prefix):]\n            if name.endswith(\".json\") and \"/\" not in name:\n                runs.append(name.removesuffix(\".json\"))\n    return sorted(runs)\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\n\ndef runs_of(s3, bucket: str, survey_id: str) -> list[str]:\n    \"\"\"The run ids with a result under trim-results/<survey_id>/, sorted as text.\"\"\"\n    # TODO: list every key under the survey's prefix, on every page, and keep the run ids.\n    return []\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "20ecea07774824750413201258b8092c1d8ee8c8ac819ce5332c7fc41546712c",
+  "starting_code": "from __future__ import annotations\n\n\ndef runs_of(s3, bucket: str, survey_id: str) -> list[str]:\n    \"\"\"The run ids with a result under trim-results/<survey_id>/, sorted as text.\"\"\"\n    # TODO: list every key under the survey's prefix, on every page, and keep the run ids.\n    return []\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-1/run_listing.py",
+    "test_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-1/test_run_listing.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-1/run_listing.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-1/target/report.xml",
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-1/test_run_listing.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_runs_of_a_survey_are_listed_and_an_empty_survey_has_none",
+        "kind": "main",
+        "says": "the run ids under one survey come back sorted, and a survey with no results gives an empty list"
+      },
+      {
+        "id": "test_more_than_1000_results_are_all_listed",
+        "kind": "edge",
+        "says": "1,003 results are all listed, past the 1,000 keys of one list call"
+      },
+      {
+        "id": "test_a_survey_id_that_starts_another_is_not_mixed_in",
+        "kind": "edge",
+        "says": "the runs of survey S-70 are not listed for survey S-7"
+      },
+      {
+        "id": "test_only_result_files_count",
+        "kind": "edge",
+        "says": "a log file and a file in a deeper folder are not runs"
+      },
+      {
+        "id": "test_a_missing_bucket_raises_instead_of_listing_nothing",
+        "kind": "edge",
+        "says": "a bucket that does not exist raises NoSuchBucket rather than giving an empty list"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "49-cloud-deployment/README_12.5.4.md",
+      "section": "moto Returns AWS's Errors and Pages, So Test Them"
+    },
+    "concepts": [
+      "paging past 1,000 keys and telling a missing key from a missing bucket"
+    ]
+  }
+}

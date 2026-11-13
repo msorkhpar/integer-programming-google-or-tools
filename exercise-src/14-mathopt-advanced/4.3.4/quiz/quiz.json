@@ -1,0 +1,98 @@
+{
+ "title": "Incremental solving",
+ "questions": [
+  {
+   "id": "q-in-place",
+   "heading": "Whether the Solver Updates in Place Depends on the Solver and the Edit",
+   "stem": "A service keeps one mathopt.IncrementalSolver on HiGHS (OR-Tools 9.15) and, between solves, changes one row's limit. What happens at the next solve?",
+   "options": [
+    {
+     "id": "a",
+     "text": "HiGHS applies the new limit to the model it holds and searches on",
+     "correct": false,
+     "says": "In the runner HiGHS rebuilt after every edit, including a bound change; it applied none in place."
+    },
+    {
+     "id": "b",
+     "text": "The solve raises, since HiGHS refuses edits between solves",
+     "correct": false,
+     "says": "Nothing is raised: MathOpt builds a new solver from the whole model and the solve goes on."
+    },
+    {
+     "id": "c",
+     "text": "The solve uses the old limit, since the edit was made after the solver was built",
+     "correct": false,
+     "says": "The edit always reaches the next solve, by update or by rebuild; the result is right either way."
+    },
+    {
+     "id": "d",
+     "text": "MathOpt rebuilds the HiGHS solver from the whole model, without a message",
+     "correct": true,
+     "says": "Right: HiGHS reports it cannot apply the update, and IncrementalSolver.solve() builds a new solver silently."
+    }
+   ]
+  },
+  {
+   "id": "q-piled-edits",
+   "heading": "Undo Every Edit, and Never Delete What a Scenario Only Switches Off",
+   "stem": "A scenario loop runs row.upper_bound *= 0.9 for each of three scenarios labeled '10% cut', never restoring the row. The row started at 1,000. What limit does the third scenario solve with?",
+   "options": [
+    {
+     "id": "a",
+     "text": "729, since each cut applies to the limit the last one left",
+     "correct": true,
+     "says": "Right: 1,000 x 0.9 x 0.9 x 0.9 = 729, a 27.1% cut run under a 10% label, with no error."
+    },
+    {
+     "id": "b",
+     "text": "900, since each scenario starts from the model as built",
+     "correct": false,
+     "says": "An edit stays in the model for every later solve; nothing puts the 1,000 back."
+    },
+    {
+     "id": "c",
+     "text": "700, since three cuts of 10% add up to 30%",
+     "correct": false,
+     "says": "Each 10% is taken of the already-cut limit, so the cuts multiply: 0.9 x 0.9 x 0.9."
+    },
+    {
+     "id": "d",
+     "text": "1,000, since an IncrementalSolver undoes edits after each solve",
+     "correct": false,
+     "says": "An IncrementalSolver sends edits to the solver; it never undoes them. The program must."
+    }
+   ]
+  },
+  {
+   "id": "q-switch-off",
+   "heading": "Undo Every Edit, and Never Delete What a Scenario Only Switches Off",
+   "stem": "For one scenario a planner must leave out project P21, whose start variables appear in budget rows and the objective. The next scenario includes P21 again. How should the scenario code leave it out?",
+   "options": [
+    {
+     "id": "a",
+     "text": "Delete P21's variables, then add them again for the next scenario",
+     "correct": false,
+     "says": "Deleting removes them from every row and the objective, and the old references raise ValueError; adding back means rebuilding those terms."
+    },
+    {
+     "id": "b",
+     "text": "Set the upper bound of its variables to 0, then put the old bounds back",
+     "correct": true,
+     "says": "Right: bounding to 0 rules P21 out for one solve, and restoring the bounds leaves no trace, as the P032 scenario showed."
+    },
+    {
+     "id": "c",
+     "text": "Set P21's objective coefficients to 0 and leave its variables as they are",
+     "correct": false,
+     "says": "P21 could still be started, spending budget for no value; only its bounds stop it."
+    },
+    {
+     "id": "d",
+     "text": "Set the lower bound of its variables to 1, then put the old bounds back",
+     "correct": false,
+     "says": "A lower bound of 1 forces P21 in; to leave it out, its upper bound goes to 0."
+    }
+   ]
+  }
+ ]
+}

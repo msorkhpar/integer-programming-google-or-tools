@@ -1,0 +1,120 @@
+{
+  "quiz_api": 1,
+  "address": [
+    "12-engineering-the-optimization-service",
+    "45-scenario-workflow"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "ordinal": 4,
+  "title": "Storing scenarios and results in SQLite",
+  "exercise": {
+    "provenance": "generated",
+    "trust": "advisory",
+    "kind": "quiz",
+    "questions": [
+      {
+        "id": "q-pragma",
+        "stem": "A service opens its database with sqlite3.connect(path, autocommit=False), then runs PRAGMA foreign_keys = ON. Later it inserts a run that names a scenario id the scenario table does not have. What happens?",
+        "options": [
+          {
+            "id": "a",
+            "text": "The run is stored, since the pragma ran inside an already open transaction",
+            "correct": true,
+            "says": "Right: the program printed foreign_keys=0 and 'orphan run stored'."
+          },
+          {
+            "id": "b",
+            "text": "The run is refused, since the pragma switched foreign keys on for it",
+            "correct": false,
+            "says": "The program printed foreign_keys=0 for exactly this order: the pragma did nothing."
+          },
+          {
+            "id": "c",
+            "text": "The run is refused, since the REFERENCES clause is checked by the schema",
+            "correct": false,
+            "says": "SQLite's foreign key enforcement is off by default and switched on per connection."
+          },
+          {
+            "id": "d",
+            "text": "The insert raises an error, since the pragma failed when it was sent",
+            "correct": false,
+            "says": "The pragma does nothing and reports no error; the orphan run was stored."
+          }
+        ],
+        "origin": {
+          "path": "45-scenario-workflow/README_12.1.4.md",
+          "section": "Foreign Keys Are Off Until a Connection Turns Them On, Outside Any Transaction"
+        }
+      },
+      {
+        "id": "q-atomic",
+        "stem": "Inside one 'with conn:' block, the store inserts a run row and then its plan rows; the third plan row breaks a NOT NULL rule and raises. What does the database hold for that run afterwards?",
+        "options": [
+          {
+            "id": "a",
+            "text": "The run row alone, since the block undoes just the statement that failed",
+            "correct": false,
+            "says": "The context manager rolls back the whole block when it raises; runs stayed at 2."
+          },
+          {
+            "id": "b",
+            "text": "The run row and two plan rows, since each insert commits as it runs",
+            "correct": false,
+            "says": "Nothing commits until the block ends normally; the run count stayed at 2."
+          },
+          {
+            "id": "c",
+            "text": "No row of that run, since the block's earlier inserts are rolled back too",
+            "correct": true,
+            "says": "Right: the program counted two runs before and after the failed save."
+          },
+          {
+            "id": "d",
+            "text": "The run and its plan rows, with the third row's year stored as NULL",
+            "correct": false,
+            "says": "NOT NULL refused that row with IntegrityError, and the run count stayed at 2."
+          }
+        ],
+        "origin": {
+          "path": "45-scenario-workflow/README_12.1.4.md",
+          "section": "A Change and Its Audit Entry Commit Together, or Not at All"
+        }
+      },
+      {
+        "id": "q-guard",
+        "stem": "A maintenance script connects to the store directly and runs UPDATE scenario SET name = 'x' on a scenario in Budget Lock, never calling the service's functions. What happens?",
+        "options": [
+          {
+            "id": "a",
+            "text": "The update is stored, since the service's Python checks were bypassed",
+            "correct": false,
+            "says": "The rule is in the schema too: the raw UPDATE raised 'scenario is locked'."
+          },
+          {
+            "id": "b",
+            "text": "The update is refused, by a trigger that fires on a locked row's change",
+            "correct": true,
+            "says": "Right: locked_is_frozen fires on an update of a locked row and raises 'scenario is locked'."
+          },
+          {
+            "id": "c",
+            "text": "The update is stored, since the trigger watches the state column alone",
+            "correct": false,
+            "says": "locked_is_frozen fires on an update of any column of a locked row; the name change was refused."
+          },
+          {
+            "id": "d",
+            "text": "The update is refused, by the partial unique index on the cycle column",
+            "correct": false,
+            "says": "The refusal's message was the trigger's, 'scenario is locked'; the index limits locked scenarios per cycle."
+          }
+        ],
+        "origin": {
+          "path": "45-scenario-workflow/README_12.1.4.md",
+          "section": "The Database Refuses What No Caller May Do"
+        }
+      }
+    ]
+  }
+}

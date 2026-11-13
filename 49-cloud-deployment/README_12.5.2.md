@@ -1,0 +1,398 @@
+# 12.5.2 AWS Batch on Fargate, Step Functions and Lambda: Who Does What
+
+The GridCap service now has an image (lesson 12.5.1). In lesson 12.4.2 its solves ran on worker threads
+inside the API's own process, one machine for everything. On the medium portfolio a solve can take
+many minutes; in the planning cycle's last week, a dozen planners submit scenarios within an hour.
+The API should answer in milliseconds whatever the solver is doing, and each solve should get its own
+CPUs, its own memory and its own time limit. AWS offers several services that can run code. This
+lesson gives each part of a run to the one built for it: **AWS Batch on Fargate** runs the solve,
+**Step Functions** watches it, **Lambda** does the short clean-up, S3 holds the data (lesson 12.5.3),
+and the API keeps answering. (GridCap is fictional; no number in it is real.)
+
+Everything runnable here talks to **moto**, a library that imitates AWS inside the Python process
+(lesson 12.5.4 covers it). No AWS account is used, and the account id in every ARN, `123456789012`,
+is moto's placeholder.
+
+## The Model
+
+The worker solves the model of lesson 12.2.1 from a validated snapshot, unchanged. It is
+restated here whole.
+
+**Sets.** $`Y`$ the plan's years, in order; $`P`$ the candidate projects; $`T_i`$ the start years
+of project $`i`$: the years $`t`$ with $`e_i \le t \le l_i`$ and $`t + d_i - 1 \le \max Y`$;
+$`M \subseteq P`$ the must-do projects; $`\mathcal{G}`$ the alternative groups; $`C \subseteq P`$
+the child projects, each with parent $`p(c)`$ and lag $`L_c`$; $`Q`$ the programs, with $`q(i)`$
+the program of project $`i`$; $`R`$ the regions, with $`r(i)`$ the region of project $`i`$.
+
+**Parameters.** $`e_i, l_i`$, the earliest and latest start years; $`c_{i,k}`$, what project $`i`$
+spends in its $`k`$-th year of work ($k), $`d_i`$ its years of work, and
+$`\text{capex}_i = \sum_k c_{i,k}`$; $`\text{npv}_{i,t}`$ ($k); $`m_i`$, crew-months per year of
+work; $`B_y`$, the budget of year $`y`$ ($k); $`K_{q,y}`$, the crew-months of program $`q`$ in year
+$`y`$; $`\text{floor}_r`$, the least region $`r`$ receives over the plan ($k).
+
+**Variables.** $`x_{i,t} \in \{0, 1\}`$ for every $`i \in P`$ and $`t \in T_i`$: project $`i`$
+starts in year $`t`$.
+
+**Objective.**
+
+```math
+\max \; \sum_{i \in P} \sum_{t \in T_i} \text{npv}_{i,t}\, x_{i,t}
+```
+
+**Constraints.**
+
+```math
+\begin{aligned}
+\sum_{t \in T_i} x_{i,t} &\le 1 && \forall i \in P \setminus M && \text{(once}_i) \\
+\sum_{t \in T_i} x_{i,t} &= 1 && \forall i \in M && \text{(must}_i) \\
+\sum_{i \in g} \sum_{t \in T_i} x_{i,t} &\le 1 && \forall g \in \mathcal{G} && \text{(alt}_g) \\
+\sum_{u \in T_c,\, u \le t} x_{c,u} &\le \sum_{s \in T_{p(c)},\, s \le t - L_c} x_{p(c),s} && \forall c \in C,\ t \in T_c && \text{(after}_{c,t}) \\
+\sum_{i \in P} \sum_{t \in T_i,\, 0 \le y - t < d_i} c_{i,\,y-t}\, x_{i,t} &\le B_y && \forall y \in Y && \text{(budget}_y) \\
+\sum_{i:\, q(i) = q} \ \sum_{t \in T_i,\, 0 \le y - t < d_i} m_i\, x_{i,t} &\le K_{q,y} && \forall q \in Q,\ y \in Y && \text{(crews}_{q,y}) \\
+\sum_{i:\, r(i) = r} \ \sum_{t \in T_i} \text{capex}_i\, x_{i,t} &\ge \text{floor}_r && \forall r \in R && \text{(floor}_r)
+\end{aligned}
+```
+
+What changes is where it runs: in a container started for one run, with a time limit from the run's
+settings (lesson 12.5.1). On GridCap small it solves to an NPV of $22,741k, as in lesson 12.2.2.
+
+## Each Service Does the Part It Is Built For
+
+A run has five parts, and each needs something different:
+
+| Part | Needs | Who does it |
+| --- | --- | --- |
+| accept the scenario, answer polls | answers in milliseconds, always up | the API (lesson 12.4.2), with the SQLite run index (lesson 12.5.3) |
+| keep the snapshot and the result | durable, write-once objects | S3 (lesson 12.5.3) |
+| solve | minutes to hours, several CPUs, gigabytes of memory | **AWS Batch on Fargate** |
+| wait for the solve, react when it fails | runs as long as the job, retries, branches on errors | **Step Functions** |
+| write a `failed` result when the job never could | a few seconds of code, on demand | **Lambda** |
+
+The choice follows from documented limits:
+
+- **Lambda runs a function for at most 900 seconds (15 minutes)**, with up to 10,240 MB of memory.
+  A solve has no such bound: the medium portfolio with a long limit, or the large one, can take an
+  hour. A function stopped at 15 minutes leaves no result at all. So Lambda never solves; it does the
+  small glue steps, which finish in seconds.
+- **AWS Batch** runs a container as a **job**: it queues jobs, starts each one when capacity is free,
+  and records its status until it ends as `SUCCEEDED` or `FAILED`. On **Fargate**, AWS supplies the machine: no servers to patch or scale, and each job
+  gets exactly the vCPUs and memory its definition asks for. A job's own timeout (at least 60
+  seconds) is its only time bound.
+- **Step Functions** runs a **state machine**: a JSON definition of steps (states) and the moves
+  between them. A Standard workflow may run for up to a year, so it can wait for the longest solve.
+  It is the part that knows what to do when the job fails.
+
+The API does none of the waiting. It stores the snapshot, starts the run, writes one index row, and
+answers 202 Accepted as in lesson 12.4.2. Later polls read the index, and the result object in S3.
+
+## A Job Definition Fixes the Image, Size, Timeout and Retries; a Submission Names the Run
+
+Batch separates what every solve shares from what one run needs. The **job definition** is the
+template, registered once (by Terraform in lesson 12.5.5): the image, its command, its size, the
+two roles, a timeout and a retry count. `batch_stack.py` registers it in moto:
+
+```python
+def job_definition(execution_role: str, job_role: str) -> dict:
+    """The solve job's definition: the image, its command, its size, its timeout and its retries."""
+    return dict(
+        jobDefinitionName="gridcap-solve",
+        type="container",
+        platformCapabilities=["FARGATE"],
+        containerProperties={
+            "image": IMAGE,
+            "command": ["python", "-c", "import solve_worker; raise SystemExit(solve_worker.main())"],
+            "executionRoleArn": execution_role,      # lets Fargate pull the image and write logs
+            "jobRoleArn": job_role,                  # what the solve itself may do in S3
+            "resourceRequirements": [{"type": "VCPU", "value": "2"}, {"type": "MEMORY", "value": "8192"}],
+            "environment": [{"name": "RESULT_BUCKET", "value": "gridcap-runs-example"},
+                            {"name": "PYTHON_CPU_COUNT", "value": "2"}],
+            "networkConfiguration": {"assignPublicIp": "DISABLED"},
+        },
+        timeout={"attemptDurationSeconds": 3600},
+        retryStrategy={"attempts": 2},
+    )
+```
+
+The fields the AWS Batch documentation requires for Fargate are all here: `platformCapabilities`
+of `FARGATE`, the `container` type, an **execution role** (what Fargate itself uses to pull the
+image and write logs), and the size as `resourceRequirements`. The **job role** is separate: it is
+what the solve's own code may do, read snapshots and write results, and nothing else (lesson 12.5.5
+writes it). `assignPublicIp` is `DISABLED`; the documentation says that a job whose subnet has no NAT gateway
+needs it `ENABLED` for outbound network access, so this design assumes subnets with a NAT gateway.
+
+**Fargate sizes come in fixed pairs.** A job asks for vCPUs and memory, and Fargate accepts only
+these combinations (from the AWS Batch API reference for `ResourceRequirement`):
+
+| vCPU | Memory (MiB) |
+| --- | --- |
+| 0.25 | 512, 1024, 2048 |
+| 0.5 | 1024 to 4096, in steps of 1024 |
+| 1 | 2048 to 8192, in steps of 1024 |
+| 2 | 4096 to 16384, in steps of 1024 |
+| 4 | 8192 to 30720, in steps of 1024 |
+| 8 | 16384 to 61440, in steps of 4096 |
+| 16 | 32768 to 122880, in steps of 8192 |
+| 32 | 61440, 122880, 249856 |
+
+So "1 vCPU and 12 GB" is not a size: it becomes 2 vCPUs (the smallest that allows 12,288 MiB), or the
+memory comes down. The worker's 2 vCPUs and 8,192 MiB is a valid pair.
+
+**A submission names one run.** `submit_solve` sends what changes per run, as environment
+overrides that the worker's settings read (lesson 12.5.1):
+
+```python
+def submit_solve(batch, stack: Stack, run_id: str, digest: str, time_limit_s: int) -> str:
+    """Submit one solve job; return Batch's job id. The run id doubles as the job's name."""
+    job = batch.submit_job(
+        jobName=run_id,
+        jobQueue=stack.queue,
+        jobDefinition=stack.definition,
+        containerOverrides={"environment": [
+            {"name": "RUN_ID", "value": run_id},
+            {"name": "SNAPSHOT_DIGEST", "value": digest},
+            {"name": "TIME_LIMIT_S", "value": str(time_limit_s)},
+        ]},
+        timeout={"attemptDurationSeconds": max(60, time_limit_s + 600)},
+    )
+    return job["jobId"]
+```
+
+Two choices to notice:
+
+- **The job's timeout is longer than the solver's limit.** The solver stops itself at its limit and
+  writes a `time_limit` result with its best plan. Batch's timeout is the backstop for a job that
+  hangs: the documentation says a job stopped by its timeout is not retried, and it writes nothing.
+  If the two were equal, Batch could kill the worker in the seconds it needs to write the result, and
+  the planner would lose a plan the solver had found. Ten minutes of margin covers pulling the image,
+  reading the snapshot and writing the result.
+- **Batch has no idempotency token.** `SubmitJob` takes no client token, so the same call sent twice
+  starts two jobs. The next section puts the run's start behind Step Functions, whose execution name
+  does deduplicate.
+
+`start_run` does a run's three writes in an order where each refers only to what already exists:
+the snapshot first, then the job that reads it, then the index row that points at both:
+
+```python
+    digest = store.put_snapshot(snap)
+    job_id = submit_solve(batch, stack, run_id, digest, time_limit_s)
+    run_index.record_submitted(conn, run_id, digest, job_id)
+```
+
+`batch_submit.py` starts run `run-0007` on GridCap small with a 60-second limit, then reads the job
+back from Batch:
+
+```text
+job name: run-0007 | queue: job-queue/gridcap-solves
+job definition: job-definition/gridcap-solve:1
+environment overrides: ['RUN_ID', 'SNAPSHOT_DIGEST', 'TIME_LIMIT_S']
+job timeout: 660 s for a 60 s solver limit
+Batch says: SUCCEEDED | index says: submitted
+after the worker ran, index says: optimal
+status optimal, NPV $22,741k, result at results/730c8b40b1eb...
+```
+
+Read the fifth line carefully. moto, configured as this module configures it, does not start
+containers: it marks every job `SUCCEEDED` without running anything. So "Batch says SUCCEEDED" while
+no result exists, and the index rightly still says `submitted`: a poll trusts the result object, not
+the job's status. The program then does what the container would have done, running the worker with
+the environment Batch recorded for the job, and the next poll finds the result: optimal, $22,741k,
+the base plan.
+
+<!-- practice 1 -->
+
+## Step Functions Waits for the Job and Catches What the Worker Cannot
+
+The worker writes a result for every way a solve can end (lesson 12.4.2's statuses). But some
+failures happen outside the worker: the image cannot be pulled, the container runs out of memory, or
+Batch's timeout stops it. Then no result is written, and a planner would poll `submitted` forever.
+A state machine closes that gap. Its definition is read-along JSON in the Amazon States Language,
+`deploy/stepfunctions/solve-run.asl.json`:
+
+```json
+    "Solve": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::batch:submitJob.sync",
+      "Parameters": {
+        "JobName.$": "$.run_id",
+        "JobQueue": "gridcap-solves",
+        "JobDefinition": "gridcap-solve",
+        "ContainerOverrides": {
+          "Environment": [
+            {"Name": "RUN_ID", "Value.$": "$.run_id"},
+            {"Name": "SNAPSHOT_DIGEST", "Value.$": "$.snapshot_digest"},
+            {"Name": "TIME_LIMIT_S", "Value.$": "$.time_limit_s"}
+          ]
+        }
+      },
+      "ResultPath": "$.batch",
+      "Catch": [
+        {"ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": "RecordFailure"}
+      ],
+      "Next": "Solved"
+    },
+```
+
+- **`batch:submitJob.sync`** is Step Functions' "run a job" pattern: it submits the Batch job and
+  waits until the job finishes, then moves on. A field ending in `.$` takes its value from the
+  execution's input by a JSONPath (`$.run_id`).
+- **`Catch`** sends any error (`States.ALL`) to `RecordFailure`, with the error added to the input
+  under `error` (that is what `ResultPath` does in a catcher).
+
+How a state reacts to an error, as the Step Functions documentation describes it: the state's
+`Retry` list is tried first, and the first retrier whose `ErrorEquals` names the error retries the
+state, up to its `MaxAttempts` (3 unless set; 0 means never), waiting `IntervalSeconds` and then
+multiplying the wait by `BackoffRate`. When no retrier matches, or the matching one has used its
+attempts, the `Catch` list is scanned in order and the first catcher that names the error decides the
+next state. With neither, the whole execution fails. Two names are wildcards: `States.ALL` matches
+any error and must stand alone, in the last retrier or catcher; `States.TaskFailed` matches any error
+except `States.Timeout`, which a task reports when it runs past its own `TimeoutSeconds`.
+
+`step_functions.py` reads the definition and prints each state, where it goes next and where an
+error goes:
+
+```text
+Solve          Task     batch:submitJob.sync next Solved         on error ['RecordFailure']
+RecordFailure  Task     lambda:invoke        next Failed         on error -
+Solved         Succeed                       next end: Succeed   on error -
+Failed         Fail                          next end: Fail      on error -
+```
+
+`RecordFailure` calls a Lambda function, the one short task in the design. It writes a `failed`
+result in the run's place, unless the worker wrote one after all:
+
+```python
+    try:
+        key = store.put_result(event["snapshot_digest"], event["run_id"], record)
+    except FileExistsError:                       # the worker wrote a result after all; keep it
+        key = None
+```
+
+Its retry rule in the definition retries Lambda's own transient errors
+(`Lambda.ServiceException`, `Lambda.SdkClientException`), so a second call must be harmless. It is,
+because a result is written only if none exists (S3's conditional write, lesson 12.5.3). moto stores
+a state machine but runs none of its states, so the program calls the function itself, twice, with
+the input the catcher would pass. The key it returns has the shape `results/<digest>/<run>.json`;
+the program prints the 64-character digest cut to its first 12 characters and `...`:
+
+```text
+RecordFailure returned: results/730c8b40b1eb.../run-0007.json
+a poll now finds: failed
+called again (a retry): {'run_id': 'run-0007', 'result_key': None}
+```
+
+**The execution's name is the run id, and that makes starting a run idempotent.** The Step
+Functions API reference says that for a Standard workflow, starting an execution with the name and
+input of one that is still running returns that execution instead of starting another, and that the
+same name with different input is refused with `ExecutionAlreadyExists`. The API's retry of a
+"start run" call therefore cannot start a second solve. moto behaves the same way here:
+
+```python
+    first = sfn.start_execution(stateMachineArn=machine, name=run["run_id"], input=json.dumps(run))
+    again = sfn.start_execution(stateMachineArn=machine, name=run["run_id"], input=json.dumps(run))
+```
+
+```text
+same name, same input -> same execution: True
+same name, other input -> ExecutionAlreadyExists
+```
+
+So in production the API starts the state machine with the run's input rather than calling
+`submit_job` itself; `submit_solve` above is what the `Solve` state does on its behalf, and is the
+call this module tests. The Step Functions documentation adds that a closed execution's name is
+refused too, and can be reused only 90 days after it closed, so a run id is never recycled.
+
+<!-- practice 2 -->
+
+## Summary
+
+- **Each service does the part it is built for.** The API answers; S3 keeps data; Batch on Fargate
+  solves; Step Functions waits and catches; Lambda (900 s at most) does short glue, never the solve.
+- **A job definition fixes the image, size, timeout and retries; a submission names the run.**
+  Fargate accepts only listed vCPU and memory pairs. The job's timeout exceeds the solver's limit.
+- **Step Functions waits for the job and catches what the worker cannot.** `submitJob.sync` waits; a
+  `Catch` routes a failed job to a Lambda that writes a `failed` result once.
+- **Batch has no idempotency token; a Step Functions execution name does.** Name the execution after
+  the run.
+- **moto marks Batch jobs `SUCCEEDED` without running them.** Trust the result object, not the job
+  status.
+
+## Reference
+
+| Service | Runs | Bound |
+| --- | --- | --- |
+| Lambda | one function call | 900 s; 10,240 MB |
+| Batch on Fargate | one container per job | the job's `attemptDurationSeconds` (at least 60 s) |
+| Step Functions, Standard | one execution of a state machine | up to one year |
+
+| Batch call (boto3) | What it does |
+| --- | --- |
+| `register_job_definition(...)` | the template: image, command, size, roles, timeout, retries |
+| `submit_job(jobName, jobQueue, jobDefinition, containerOverrides, timeout)` | one job; returns `jobId` |
+| `describe_jobs(jobs=[...])` | status and recorded settings of jobs |
+
+| States Language | Meaning |
+| --- | --- |
+| `"Resource": "arn:aws:states:::batch:submitJob.sync"` | submit a Batch job and wait for it |
+| `"Name.$": "$.field"` | take a value from the input (JSONPath) |
+| `"Catch": [{"ErrorEquals": ["States.ALL"], "ResultPath": "$.error", "Next": ...}]` | on any error, add it to the input and go on |
+| `"Retry": [{"ErrorEquals": [...], "MaxAttempts": n}]` | retry the state on those errors; tried before `Catch` |
+| `States.ALL`, `States.TaskFailed` | any error; any error except `States.Timeout` |
+
+**Further reading:** OR-Tools, the [MathOpt overview](https://developers.google.com/optimization/math_opt)
+(the solver the worker calls); AWS Lambda,
+[Lambda quotas](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-limits.html) (900 s,
+10,240 MB); AWS Batch, [Fargate job definitions](https://docs.aws.amazon.com/batch/latest/userguide/fargate-job-definitions.html),
+[Job definition parameters](https://docs.aws.amazon.com/batch/latest/userguide/job_definition_parameters.html)
+(execution and job roles, `assignPublicIp`),
+[ResourceRequirement](https://docs.aws.amazon.com/batch/latest/APIReference/API_ResourceRequirement.html)
+(the Fargate pairs), [RegisterJobDefinition](https://docs.aws.amazon.com/batch/latest/APIReference/API_RegisterJobDefinition.html)
+(a timed-out job is not retried; 60 s minimum), [RetryStrategy](https://docs.aws.amazon.com/batch/latest/APIReference/API_RetryStrategy.html)
+and [SubmitJob](https://docs.aws.amazon.com/batch/latest/APIReference/API_SubmitJob.html); AWS Step
+Functions, [Run AWS Batch workloads](https://docs.aws.amazon.com/step-functions/latest/dg/connect-batch.html)
+(`submitJob.sync`), [Invoke Lambda](https://docs.aws.amazon.com/step-functions/latest/dg/connect-lambda.html),
+[Handling errors](https://docs.aws.amazon.com/step-functions/latest/dg/concepts-error-handling.html)
+(`Retry`, `Catch`, `States.ALL`), [StartExecution](https://docs.aws.amazon.com/step-functions/latest/apireference/API_StartExecution.html)
+(idempotent names) and [quotas](https://docs.aws.amazon.com/step-functions/latest/dg/service-quotas.html);
+moto, [Configuration](https://docs.getmoto.org/en/latest/docs/configuration/index.html) (Batch
+without Docker) and [Step Functions](https://docs.getmoto.org/en/latest/docs/services/stepfunctions.html).
+
+## Challenges
+
+1. A planner cancels a run. Which service do you ask to stop it, and what should the index say
+   afterwards? (Step Functions' `.sync` pattern can also stop the job it started.)
+2. The large portfolio needs 16 vCPUs. Write the `containerOverrides` that ask for it, with the
+   smallest memory Fargate allows at that size, and the matching `PYTHON_CPU_COUNT`.
+3. A run's state machine fails in `RecordFailure` itself, after three retries. What does a poll show,
+   and how would you find such runs?
+
+## Design Note: Why the Index Is Not Written by the Cloud
+
+The index is a SQLite file on the API's own disk (lesson 12.5.3), so neither Batch nor Lambda writes
+to it: they would need a path into the API's machine. Instead, everything the cloud produces lands
+in S3 under a key the API can compute from the run (`results/<digest>/<run>.json`), and the API
+records it on the next poll. The cloud parts never need to know the index exists, and the index can
+be rebuilt from S3 if its file is lost.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson
+shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy
+of the code, so the course's own files never change.
+
+**batch_submit.py.** Creates the Batch stack in moto, starts a run, reads the job back, and runs the
+worker as the container would (*A Job Definition Fixes the Image, Size, Timeout and Retries*). *Try:*
+Submit with `time_limit_s=10`. Predict the job's timeout.
+
+**step_functions.py.** Reads the state machine, starts it twice under one name, and calls the failure
+function twice (*Step Functions Waits for the Job*). *Try:* Start a third execution named `run-0008`
+with the first input. Predict whether it is refused.
+
+**batch_stack.py** creates the network, roles, compute environment, queue and job definition;
+**submitter.py** submits a solve and starts a run; **record_failure.py** is the Lambda function;
+**run_index.py** and **s3_store.py** are lesson 12.5.3's index and store.
+
+- Program: [batch_submit.py](src/batch_submit.py)
+- Program: [step_functions.py](src/step_functions.py)
+- Library: [batch_stack.py](src/batch_stack.py)
+- Library: [submitter.py](src/submitter.py)
+- Library: [record_failure.py](src/record_failure.py)

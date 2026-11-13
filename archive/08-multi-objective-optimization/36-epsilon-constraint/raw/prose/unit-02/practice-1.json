@@ -1,0 +1,132 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "08-multi-objective-optimization",
+    "36-epsilon-constraint"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Hospital devices: a floor that keeps the better tie",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A regional hospital replaces aging medical devices within a capital budget. Each replacement keeps some beds in service (beds that would otherwise close for lack of working equipment) and earns patient-safety points from the hospital's audit; each has a cost. The board requires at least `floor` safety points and wants the most beds. When two choices keep the same number of beds, the board wants the one with more safety points, never a choice another one beats on safety at no cost in beds. And the board never gives up a bed for extra safety points above its floor."
+    },
+    {
+      "type": "para",
+      "text": "Write `augmented_choice(devices, budget, floor, span, rho=1e-3)` in `devices.py`. It returns `(names, slack)`: the sorted tuple of devices to replace, and how many safety points the choice scores above the floor. It returns `None` when no affordable choice reaches the floor. `span` is the range of safety points between the payoff table's two ends; the tests pass it. `rho` is the weight of the slack reward, $`\\rho`$ in lesson 8.3.2's objective: while the slack stays within `span`, the reward is worth at most `rho` beds."
+    },
+    {
+      "type": "para",
+      "text": "Write the formulation first (sets, parameters with units, variables with their domains, the objective and every labeled row), then code it with MathOpt and HiGHS. One solve per call. The tests compare your answer with every affordable choice listed by hand. About eight lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Device:\n    name: str\n    beds: int         # beds kept in service\n    safety: int       # audit points\n    cost: int         # $k\n\n\ndef augmented_choice(devices: list[Device], budget: int, floor: int, span: float, rho: float = 1e-3):\n    \"\"\"(sorted names, slack) of the most beds with at least `floor` safety points, or None.\"\"\"\n    model = mathopt.Model(name=\"devices\")\n    pick = {d.name: model.add_binary_variable(name=f\"replace_{d.name}\") for d in devices}\n    model.add_linear_constraint(sum(d.cost * pick[d.name] for d in devices) <= budget, name=\"budget\")\n    above = model.add_variable(lb=0.0, name=\"above_floor\")\n    model.add_linear_constraint(sum(d.safety * pick[d.name] for d in devices) - above == floor, name=\"safety_floor\")\n    model.maximize(sum(d.beds * pick[d.name] for d in devices) + (rho / span) * above)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    values = result.variable_values()\n    return tuple(sorted(n for n, v in pick.items() if values[v] > 0.5)), values[above]\n\n\nif __name__ == \"__main__\":\n    ward = [Device(\"Ventilator\", 12, 4, 60), Device(\"Monitor\", 8, 7, 30), Device(\"Alarm Panel\", 0, 5, 10)]\n    print(augmented_choice(ward, 100, 8, span=16))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Device:\n    name: str\n    beds: int         # beds kept in service\n    safety: int       # audit points\n    cost: int         # $k\n\n\ndef augmented_choice(devices: list[Device], budget: int, floor: int, span: float, rho: float = 1e-3):\n    \"\"\"(sorted names, slack) of the most beds with at least `floor` safety points, or None.\"\"\"\n    model = mathopt.Model(name=\"devices\")\n    pick = {d.name: model.add_binary_variable(name=f\"replace_{d.name}\") for d in devices}\n    model.add_linear_constraint(sum(d.cost * pick[d.name] for d in devices) <= budget, name=\"budget\")\n    # TODO: the safety floor, with its slack, and the objective.\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    values = result.variable_values()\n    return tuple(sorted(n for n, v in pick.items() if values[v] > 0.5)), 0.0\n\n\nif __name__ == \"__main__\":\n    ward = [Device(\"Ventilator\", 12, 4, 60), Device(\"Monitor\", 8, 7, 30), Device(\"Alarm Panel\", 0, 5, 10)]\n    print(augmented_choice(ward, 100, 8, span=16))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "f6e57cbbf3d5fafb4f0ae383177c170e3b835edbca2c7eda0bc524abd6602f7f",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Device:\n    name: str\n    beds: int         # beds kept in service\n    safety: int       # audit points\n    cost: int         # $k\n\n\ndef augmented_choice(devices: list[Device], budget: int, floor: int, span: float, rho: float = 1e-3):\n    \"\"\"(sorted names, slack) of the most beds with at least `floor` safety points, or None.\"\"\"\n    model = mathopt.Model(name=\"devices\")\n    pick = {d.name: model.add_binary_variable(name=f\"replace_{d.name}\") for d in devices}\n    model.add_linear_constraint(sum(d.cost * pick[d.name] for d in devices) <= budget, name=\"budget\")\n    # TODO: the safety floor, with its slack, and the objective.\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    values = result.variable_values()\n    return tuple(sorted(n for n, v in pick.items() if values[v] > 0.5)), 0.0\n\n\nif __name__ == \"__main__\":\n    ward = [Device(\"Ventilator\", 12, 4, 60), Device(\"Monitor\", 8, 7, 30), Device(\"Alarm Panel\", 0, 5, 10)]\n    print(augmented_choice(ward, 100, 8, span=16))\n",
+  "exercise": {
+    "main_path": "practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-02/practice-1/devices.py",
+    "test_path": "practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-02/practice-1/test_devices.py",
+    "run_command": [
+      "python3",
+      "practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-02/practice-1/devices.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-02/practice-1/target/report.xml",
+      "practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-02/practice-1/test_devices.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_best_choice_and_its_slack_are_returned",
+        "kind": "main",
+        "says": "with one best choice, it is returned with the safety points it scores above the floor"
+      },
+      {
+        "id": "test_of_two_choices_with_equal_beds_the_safer_one_wins",
+        "kind": "edge",
+        "says": "of two choices with the same beds, the one with more safety points is returned"
+      },
+      {
+        "id": "test_no_beds_are_given_up_for_safety_above_the_floor",
+        "kind": "edge",
+        "says": "a choice with fewer beds is never returned for more safety above the floor"
+      },
+      {
+        "id": "test_an_unreachable_floor_returns_none",
+        "kind": "edge",
+        "says": "a floor no affordable choice reaches returns None"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "36-epsilon-constraint/README_8.3.2.md",
+      "section": "Reward the Floor's Slack With a Weight Too Small to Cost Any of the Objective"
+    },
+    "concepts": [
+      "an equality floor with a nonnegative slack and a tiny range-scaled reward breaks ties",
+      "ties on the maximized goal let a plain floor return a dominated plan"
+    ]
+  }
+}

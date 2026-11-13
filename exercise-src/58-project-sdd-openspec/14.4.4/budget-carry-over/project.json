@@ -1,0 +1,92 @@
+{
+  "project_api": 1,
+  "title": "Carry unspent budget forward, and never back",
+  "before": "../../../../58-project-sdd-openspec/steps/03",
+  "after": "../../../../58-project-sdd-openspec/steps/04",
+  "tests": "tests",
+  "entry": "main.py",
+  "statement": "statement.md",
+  "expected": {
+    "output": "expected/report.txt",
+    "abs_tol": 0.05,
+    "rel_tol": 0,
+    "says": "Run's report for the tiny portfolio matches the expected report"
+  },
+  "blueprint": [
+    {
+      "file": "capplan/model.py",
+      "signature": "def build(projects: list[Project], request: Request) -> Built",
+      "contract": "As before, except the budget rows. For every plan year but the last, an integer variable `carry_<year>` between 0 and request.budget * request.carry // 100: what the year passes to the next. Each year's row `budget_<year>` keeps the year's spend plus what it passes on within the budget plus what the year before passed to it (0 for the first year, and the last year passes nothing). Built gains `carry`, the variables by year.",
+      "idea": "Carry-over is a bounded variable per year: its lower bound forbids borrowing, its upper bound is the cap, and the budget row becomes a balance between years.",
+      "lesson": {
+        "title": "14.4.4 Carry-Over: A MODIFIED Budget Rule and a RENAMED Requirement",
+        "href": "../../../../14-growing-real-projects/58-project-sdd-openspec/units/unit-04/14.4.4-carry-over-a-modified-budget-rule-and-a-renamed-requirement.unit.html"
+      }
+    },
+    {
+      "file": "capplan/request.py",
+      "signature": "def check(projects: list[Project], request: Request) -> None",
+      "contract": "As before, and raises ValueError with the message `the carry-over is <carry>%, outside 0 to 100` for a carry-over percent below 0 or above 100; 0 and 100 are accepted.",
+      "idea": "A request no plan could mean is refused before solving.",
+      "lesson": {
+        "title": "14.4.4 Carry-Over: A MODIFIED Budget Rule and a RENAMED Requirement",
+        "href": "../../../../14-growing-real-projects/58-project-sdd-openspec/units/unit-04/14.4.4-carry-over-a-modified-budget-rule-and-a-renamed-requirement.unit.html"
+      }
+    },
+    {
+      "file": "capplan/report.py",
+      "signature": "def carry_by_year(projects: list[Project], starts: dict[str, int], request: Request) -> dict[int, int]",
+      "contract": "For every plan year but the last, what it passes to the next, counted from the starts: its budget plus what it was passed, less its spend, at most the cap.",
+      "idea": "The carry variables are free where money is left over, so the report counts the carry from the plan's spend.",
+      "lesson": {
+        "title": "14.4.4 Carry-Over: A MODIFIED Budget Rule and a RENAMED Requirement",
+        "href": "../../../../14-growing-real-projects/58-project-sdd-openspec/units/unit-04/14.4.4-carry-over-a-modified-budget-rule-and-a-renamed-requirement.unit.html"
+      }
+    },
+    {
+      "file": "main.py",
+      "signature": "def main() -> None",
+      "contract": "As before, with REQUEST also setting a 20% carry-over, and one line for every plan year, a year with no spend included: '  <year>: <n> starts, $<spend>k, plains <pct>%, carries $<carried>k  <ids>', with trailing spaces stripped and <pct> rounded as before (`:.0f`). A year with no spend prints `0 starts, $0k, plains 0%`, and the last plan year, which passes nothing on, prints `carries $0k`.",
+      "idea": "The report shows what each year passes on.",
+      "lesson": {
+        "title": "14.4.4 Carry-Over: A MODIFIED Budget Rule and a RENAMED Requirement",
+        "href": "../../../../14-growing-real-projects/58-project-sdd-openspec/units/unit-04/14.4.4-carry-over-a-modified-budget-rule-and-a-renamed-requirement.unit.html"
+      }
+    }
+  ],
+  "cases": [
+    [
+      "tests/test_capital_plan.py::test_unspent_money_carries_into_the_next_year",
+      "main",
+      "unspent money carries into the next year"
+    ],
+    [
+      "tests/test_capital_plan.py::test_carry_over_above_its_cap_is_refused",
+      "main",
+      "carry-over above its cap is refused"
+    ],
+    [
+      "tests/test_capital_plan.py::test_money_cannot_be_borrowed_from_a_later_year",
+      "main",
+      "money cannot be borrowed from a later year"
+    ],
+    [
+      "tests/test_capital_plan.py::test_a_carry_over_outside_0_to_100_percent_is_refused",
+      "edge",
+      "a carry-over above 100 percent is refused, as well as one below 0"
+    ]
+  ],
+  "plants": {
+    "tests/test_capital_plan.py::test_a_carry_over_outside_0_to_100_percent_is_refused": [
+      [
+        "capplan/request.py",
+        "    if not 0 <= request.carry <= 100:\n",
+        "    if request.carry < 0:\n"
+      ]
+    ]
+  },
+  "cites": {
+    "path": "58-project-sdd-openspec/README_14.4.4.md",
+    "section": null
+  }
+}
