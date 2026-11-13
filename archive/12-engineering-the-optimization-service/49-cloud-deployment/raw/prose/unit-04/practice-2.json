@@ -1,0 +1,152 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "49-cloud-deployment"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Check a Batch submission before moto would accept anything",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "This lesson found that moto accepted a job name and a timeout that AWS Batch refuses. The service will check every `SubmitJob` request itself before sending it, so the moto suite can test the checks and production gets them too."
+    },
+    {
+      "type": "para",
+      "text": "In `submit_check.py`, write `problems(request)`. `request` is the keyword arguments of a `batch.submit_job` call, as a dict. Return every rule it breaks, as these exact texts, in this order:"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "`jobName 'NAME' is not a valid job name` unless the name is 1 to 128 characters of letters, digits, hyphens and underscores, with a letter or digit first.",
+        "`timeout N s is under 60 s` if `timeout.attemptDurationSeconds` is given and under 60.",
+        "`retry attempts N is outside 1-10` if `retryStrategy.attempts` is given and outside 1 to 10.",
+        "Under `containerOverrides.resourceRequirements`: `VCPU and MEMORY must be given together` if only one of the two is there; otherwise, if both are, `VCPU V with MEMORY M is not a Fargate size` (with the values as given) unless the memory is one `FARGATE` lists for that vCPU count. Both values are strings, as boto3 sends them; the vCPU count may be `\"0.5\"`.",
+        "`environment variable NAME is set twice` for each repeat of a name in `containerOverrides.environment`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "A request without a timeout, retry strategy, size or environment has nothing to check there. `FARGATE` (the table of lesson 12.5.2) and the name pattern `NAME` are given; about 20 lines remain."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport re\n\n#: Fargate's vCPU values and the memory (MiB) each allows, from the AWS Batch API reference.\nFARGATE = {\n    0.25: [512, 1024, 2048],\n    0.5: list(range(1024, 4096 + 1, 1024)),\n    1.0: list(range(2048, 8192 + 1, 1024)),\n    2.0: list(range(4096, 16384 + 1, 1024)),\n    4.0: list(range(8192, 30720 + 1, 1024)),\n    8.0: list(range(16384, 61440 + 1, 4096)),\n    16.0: list(range(32768, 122880 + 1, 8192)),\n    32.0: [61440, 122880, 249856],\n}\nNAME = re.compile(r\"[A-Za-z0-9][A-Za-z0-9_-]{0,127}\")\n\n\ndef problems(request: dict) -> list[str]:\n    \"\"\"Every rule of AWS Batch's SubmitJob that a Fargate request breaks, in the order checked.\"\"\"\n    found = []\n    name = request.get(\"jobName\", \"\")\n    if not NAME.fullmatch(name):\n        found.append(f\"jobName {name!r} is not a valid job name\")\n    seconds = request.get(\"timeout\", {}).get(\"attemptDurationSeconds\")\n    if seconds is not None and seconds < 60:\n        found.append(f\"timeout {seconds} s is under 60 s\")\n    attempts = request.get(\"retryStrategy\", {}).get(\"attempts\")\n    if attempts is not None and not 1 <= attempts <= 10:\n        found.append(f\"retry attempts {attempts} is outside 1-10\")\n    overrides = request.get(\"containerOverrides\", {})\n    size = {r[\"type\"]: r[\"value\"] for r in overrides.get(\"resourceRequirements\", [])}\n    if (\"VCPU\" in size) != (\"MEMORY\" in size):\n        found.append(\"VCPU and MEMORY must be given together\")\n    elif size and int(size[\"MEMORY\"]) not in FARGATE.get(float(size[\"VCPU\"]), []):\n        found.append(f\"VCPU {size['VCPU']} with MEMORY {size['MEMORY']} is not a Fargate size\")\n    seen = set()\n    for variable in overrides.get(\"environment\", []):\n        if variable[\"name\"] in seen:\n            found.append(f\"environment variable {variable['name']} is set twice\")\n        seen.add(variable[\"name\"])\n    return found\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport re\n\n#: Fargate's vCPU values and the memory (MiB) each allows, from the AWS Batch API reference.\nFARGATE = {\n    0.25: [512, 1024, 2048],\n    0.5: list(range(1024, 4096 + 1, 1024)),\n    1.0: list(range(2048, 8192 + 1, 1024)),\n    2.0: list(range(4096, 16384 + 1, 1024)),\n    4.0: list(range(8192, 30720 + 1, 1024)),\n    8.0: list(range(16384, 61440 + 1, 4096)),\n    16.0: list(range(32768, 122880 + 1, 8192)),\n    32.0: [61440, 122880, 249856],\n}\nNAME = re.compile(r\"[A-Za-z0-9][A-Za-z0-9_-]{0,127}\")\n\n\ndef problems(request: dict) -> list[str]:\n    \"\"\"Every rule of AWS Batch's SubmitJob that a Fargate request breaks, in the order checked.\"\"\"\n    found: list[str] = []\n    # TODO: name, timeout, retries, size, environment, in that order.\n    return found\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "6707db95f60d37fbb179909d0d213bcd5f68ce45c476361d32096a979dff57a1",
+  "starting_code": "from __future__ import annotations\n\nimport re\n\n#: Fargate's vCPU values and the memory (MiB) each allows, from the AWS Batch API reference.\nFARGATE = {\n    0.25: [512, 1024, 2048],\n    0.5: list(range(1024, 4096 + 1, 1024)),\n    1.0: list(range(2048, 8192 + 1, 1024)),\n    2.0: list(range(4096, 16384 + 1, 1024)),\n    4.0: list(range(8192, 30720 + 1, 1024)),\n    8.0: list(range(16384, 61440 + 1, 4096)),\n    16.0: list(range(32768, 122880 + 1, 8192)),\n    32.0: [61440, 122880, 249856],\n}\nNAME = re.compile(r\"[A-Za-z0-9][A-Za-z0-9_-]{0,127}\")\n\n\ndef problems(request: dict) -> list[str]:\n    \"\"\"Every rule of AWS Batch's SubmitJob that a Fargate request breaks, in the order checked.\"\"\"\n    found: list[str] = []\n    # TODO: name, timeout, retries, size, environment, in that order.\n    return found\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-2/submit_check.py",
+    "test_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-2/test_submit_check.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-2/submit_check.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-2/target/report.xml",
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-2/test_submit_check.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_good_request_passes_and_a_bad_one_lists_every_problem",
+        "kind": "main",
+        "says": "a valid request has no problems, and one with a bad name, a 30 s timeout and 0 attempts has all three"
+      },
+      {
+        "id": "test_the_name_starts_with_a_letter_or_digit_and_has_at_most_128_characters",
+        "kind": "edge",
+        "says": "a name starting with an underscore, or of 129 characters, is refused; 128 is allowed"
+      },
+      {
+        "id": "test_60_seconds_and_10_attempts_are_allowed",
+        "kind": "edge",
+        "says": "a 60 s timeout and 10 attempts are allowed; 11 attempts are not"
+      },
+      {
+        "id": "test_a_size_must_be_a_fargate_pair",
+        "kind": "edge",
+        "says": "a vCPU and memory pair outside Fargate's table is refused, including a memory between 8 vCPU's steps"
+      },
+      {
+        "id": "test_vcpu_without_memory_is_refused",
+        "kind": "edge",
+        "says": "a VCPU override without a MEMORY override is refused"
+      },
+      {
+        "id": "test_a_variable_set_twice_is_refused",
+        "kind": "edge",
+        "says": "an environment variable named twice in the overrides is refused"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "49-cloud-deployment/README_12.5.4.md",
+      "section": "moto Accepts What AWS Would Refuse, So Validate Before You Call"
+    },
+    "concepts": [
+      "checking requests against documented rules that moto does not enforce"
+    ]
+  }
+}

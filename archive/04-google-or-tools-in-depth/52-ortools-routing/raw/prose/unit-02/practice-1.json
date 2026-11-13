@@ -1,0 +1,135 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "52-ortools-routing"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Cap each crew's driving",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A home-care agency sends its nurses from one office to patients' homes. The labor agreement caps how long each nurse may spend driving in a day, the drive back to the office included, and the part-time nurses have a lower cap than the full-time ones. `shifts.py` builds one route per nurse, priced in drive minutes; `shifts[v]` is nurse `v`'s cap. Write `add_drive_limits(routing, drive_index, shifts)` so the model refuses any route that drives longer than its nurse's cap."
+    },
+    {
+      "type": "para",
+      "text": "In the lesson's notation, with $`\\text{drive}_i`$ the minutes driven on arrival at index $`i`$, $`s_v`$ and $`e_v`$ nurse $`v`$'s start and end, and $`c`$ the drive callback:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& \\text{drive}_{s_v} = 0 && \\forall v && \\text{(start at zero)} \\\\\n& \\text{drive}_{\\text{next}_i} = \\text{drive}_i + c_{\\text{node}(i),\\, \\text{node}(\\text{next}_i)} && \\forall i && \\text{(accumulate)} \\\\\n& \\text{drive}_i \\le \\text{shift}_v && \\forall i \\text{ on nurse } v\\text{'s route} && \\text{(cap}_v)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Before you code, say what slack this dimension needs, and which dimension call takes one cap per vehicle."
+    },
+    {
+      "type": "para",
+      "text": "The tests ask the model whether hand-built routes are allowed (`ReadAssignmentFromRoutes`), so any correct dimension passes. One line."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef add_drive_limits(routing, drive_index: int, shifts: list[int]) -> None:\n    \"\"\"Each crew v drives at most shifts[v] minutes, the drive back to the yard included.\"\"\"\n    routing.AddDimensionWithVehicleCapacity(drive_index, 0, list(shifts), True, \"Drive\")\n\n\ndef build(drive: list[list[int]], shifts: list[int]):\n    \"\"\"Given: one route per crew from the yard (node 0), priced in drive minutes.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(drive), len(shifts), 0)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def minutes(from_index, to_index):\n        return drive[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    drive_index = routing.RegisterTransitCallback(minutes)\n    routing.SetArcCostEvaluatorOfAllVehicles(drive_index)\n    add_drive_limits(routing, drive_index, shifts)\n    return manager, routing\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 20, 30], [20, 0, 15], [30, 15, 0]], [60, 40])\n    print(routing.ReadAssignmentFromRoutes([[1, 2], []], True) is not None)\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef add_drive_limits(routing, drive_index: int, shifts: list[int]) -> None:\n    \"\"\"Each crew v drives at most shifts[v] minutes, the drive back to the yard included.\"\"\"\n    # TODO: one dimension that adds up each crew's drive minutes, capped per crew.\n    return None\n\n\ndef build(drive: list[list[int]], shifts: list[int]):\n    \"\"\"Given: one route per crew from the yard (node 0), priced in drive minutes.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(drive), len(shifts), 0)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def minutes(from_index, to_index):\n        return drive[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    drive_index = routing.RegisterTransitCallback(minutes)\n    routing.SetArcCostEvaluatorOfAllVehicles(drive_index)\n    add_drive_limits(routing, drive_index, shifts)\n    return manager, routing\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 20, 30], [20, 0, 15], [30, 15, 0]], [60, 40])\n    print(routing.ReadAssignmentFromRoutes([[1, 2], []], True) is not None)\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "9b79c206fca4862422718be2038707155d11f6f99995e26b8bfda7d9a92c190c",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef add_drive_limits(routing, drive_index: int, shifts: list[int]) -> None:\n    \"\"\"Each crew v drives at most shifts[v] minutes, the drive back to the yard included.\"\"\"\n    # TODO: one dimension that adds up each crew's drive minutes, capped per crew.\n    return None\n\n\ndef build(drive: list[list[int]], shifts: list[int]):\n    \"\"\"Given: one route per crew from the yard (node 0), priced in drive minutes.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(drive), len(shifts), 0)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def minutes(from_index, to_index):\n        return drive[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    drive_index = routing.RegisterTransitCallback(minutes)\n    routing.SetArcCostEvaluatorOfAllVehicles(drive_index)\n    add_drive_limits(routing, drive_index, shifts)\n    return manager, routing\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 20, 30], [20, 0, 15], [30, 15, 0]], [60, 40])\n    print(routing.ReadAssignmentFromRoutes([[1, 2], []], True) is not None)\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-1/shifts.py",
+    "test_path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-1/test_shifts.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-1/shifts.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-1/target/report.xml",
+      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-1/test_shifts.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_routes_within_every_shift_are_allowed_and_one_over_is_refused",
+        "kind": "main",
+        "says": "routes that drive no more than their crew's limit are allowed, and a route that drives more is refused"
+      },
+      {
+        "id": "test_a_part_time_crew_has_its_own_shorter_limit",
+        "kind": "edge",
+        "says": "each crew is held to its own limit, so a route one crew may drive can be refused for a part-time crew"
+      },
+      {
+        "id": "test_a_route_exactly_at_the_limit_is_allowed",
+        "kind": "edge",
+        "says": "a route that drives exactly its crew's limit is allowed, and one minute more is refused"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "52-ortools-routing/README_4.8.2.md",
+      "section": "A Dimension Accumulates a Quantity Along Each Route"
+    },
+    "concepts": [
+      "a dimension's cumul grows by transit plus slack along a route and is capped by its capacity"
+    ]
+  }
+}

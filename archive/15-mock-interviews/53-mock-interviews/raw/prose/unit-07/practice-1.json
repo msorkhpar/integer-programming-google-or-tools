@@ -1,0 +1,137 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "15-mock-interviews",
+    "53-mock-interviews"
+  ],
+  "variant": "prose",
+  "unit": 7,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "What a decision costs",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A rail operator's planners ask, for every track renewal, \"what would it cost to decide the other way?\". `costs.py` already builds the one-budget selection: a binary per renewal, the budget row, a row per must-do, and the most value as the objective. Write `decision_costs(projects, budget)`:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Solve once, to proven optimality (the module gives `EXACT`), and note which renewals are funded.",
+        "For each renewal in turn, reverse its decision: a funded one is forced out, an unfunded one forced in. Re-solve, and record the best value lost, the base optimum minus the forced optimum.",
+        "When the rules refuse the reversal, record `None`, not a number. A refused reversal is a forced model that has no plan: HiGHS ends it with `TerminationReason.INFEASIBLE` (a must-do forced out, for one). Record a number only when the re-solve ends `OPTIMAL`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Build the model once and change only the reversed renewal's bounds for each re-solve, so that each reversal is priced on its own. The tests compare with brute force. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nEXACT = mathopt.SolveParameters(relative_gap_tolerance=0.0, absolute_gap_tolerance=0.0)\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    value: int\n    cost: int\n    must_do: bool = False\n\n\ndef build(projects: list[Project], budget: int) -> tuple[mathopt.Model, dict]:\n    \"\"\"Given: the one-budget selection with its must-dos.\"\"\"\n    model = mathopt.Model(name=\"selection\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in projects) <= budget, name=\"budget\")\n    for p in projects:\n        if p.must_do:\n            model.add_linear_constraint(x[p.pid] == 1, name=f\"must_{p.pid}\")\n    model.maximize(sum(p.value * x[p.pid] for p in projects))\n    return model, x\n\n\ndef decision_costs(projects: list[Project], budget: int) -> dict[str, float | None]:\n    \"\"\"For each project, what the best plan loses when its decision is reversed; None if the rules refuse it.\"\"\"\n    model, x = build(projects, budget)\n    base = mathopt.solve(model, mathopt.SolverType.HIGHS, params=EXACT)\n    best = base.objective_value()\n    funded = {pid: base.variable_values(v) > 0.5 for pid, v in x.items()}\n    costs: dict[str, float | None] = {}\n    for p in projects:\n        var = x[p.pid]\n        low, high = var.lower_bound, var.upper_bound\n        target = 0.0 if funded[p.pid] else 1.0\n        var.lower_bound = var.upper_bound = target\n        result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=EXACT)\n        if result.termination.reason == mathopt.TerminationReason.OPTIMAL:\n            costs[p.pid] = best - result.objective_value()\n        else:\n            costs[p.pid] = None\n        var.lower_bound, var.upper_bound = low, high\n    return costs\n\n\nif __name__ == \"__main__\":\n    print(decision_costs([Project(\"A\", 60, 30), Project(\"B\", 50, 20), Project(\"C\", 40, 20)], 50))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nEXACT = mathopt.SolveParameters(relative_gap_tolerance=0.0, absolute_gap_tolerance=0.0)\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    value: int\n    cost: int\n    must_do: bool = False\n\n\ndef build(projects: list[Project], budget: int) -> tuple[mathopt.Model, dict]:\n    \"\"\"Given: the one-budget selection with its must-dos.\"\"\"\n    model = mathopt.Model(name=\"selection\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in projects) <= budget, name=\"budget\")\n    for p in projects:\n        if p.must_do:\n            model.add_linear_constraint(x[p.pid] == 1, name=f\"must_{p.pid}\")\n    model.maximize(sum(p.value * x[p.pid] for p in projects))\n    return model, x\n\n\ndef decision_costs(projects: list[Project], budget: int) -> dict[str, float | None]:\n    \"\"\"For each project, what the best plan loses when its decision is reversed; None if the rules refuse it.\"\"\"\n    # TODO: solve once, then reverse each decision in turn and re-solve.\n    return {p.pid: 0.0 for p in projects}\n\n\nif __name__ == \"__main__\":\n    print(decision_costs([Project(\"A\", 60, 30), Project(\"B\", 50, 20), Project(\"C\", 40, 20)], 50))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 2,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "ad91fd500e90baa198d92a05f6caf68f0ad808249e376a37d11fcf01207bb43e",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nEXACT = mathopt.SolveParameters(relative_gap_tolerance=0.0, absolute_gap_tolerance=0.0)\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    value: int\n    cost: int\n    must_do: bool = False\n\n\ndef build(projects: list[Project], budget: int) -> tuple[mathopt.Model, dict]:\n    \"\"\"Given: the one-budget selection with its must-dos.\"\"\"\n    model = mathopt.Model(name=\"selection\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in projects) <= budget, name=\"budget\")\n    for p in projects:\n        if p.must_do:\n            model.add_linear_constraint(x[p.pid] == 1, name=f\"must_{p.pid}\")\n    model.maximize(sum(p.value * x[p.pid] for p in projects))\n    return model, x\n\n\ndef decision_costs(projects: list[Project], budget: int) -> dict[str, float | None]:\n    \"\"\"For each project, what the best plan loses when its decision is reversed; None if the rules refuse it.\"\"\"\n    # TODO: solve once, then reverse each decision in turn and re-solve.\n    return {p.pid: 0.0 for p in projects}\n\n\nif __name__ == \"__main__\":\n    print(decision_costs([Project(\"A\", 60, 30), Project(\"B\", 50, 20), Project(\"C\", 40, 20)], 50))\n",
+  "exercise": {
+    "main_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-1/costs.py",
+    "test_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-1/test_costs.py",
+    "run_command": [
+      "python3",
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-1/costs.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-1/target/report.xml",
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-1/test_costs.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_funded_project_costs_what_the_plan_loses_without_it",
+        "kind": "main",
+        "says": "a funded project's cost is the value the best plan loses when it is forced out"
+      },
+      {
+        "id": "test_an_unfunded_project_costs_what_forcing_it_in_displaces",
+        "kind": "main",
+        "says": "an unfunded project's cost is the value the best plan loses when it is forced in"
+      },
+      {
+        "id": "test_every_decision_is_priced_against_the_same_rules",
+        "kind": "edge",
+        "says": "each reversal is priced alone, with every other decision free again"
+      },
+      {
+        "id": "test_a_reversal_the_rules_refuse_has_no_cost",
+        "kind": "edge",
+        "says": "a must-do forced out gets no number"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "53-mock-interviews/README_15.1.7.md",
+      "section": "Coding Round: What a Decision Costs"
+    },
+    "concepts": [
+      "price each reversal as the value the best plan loses, or None when the rules refuse it",
+      "reverse one decision at a time through its variable's bounds on one built model"
+    ]
+  }
+}

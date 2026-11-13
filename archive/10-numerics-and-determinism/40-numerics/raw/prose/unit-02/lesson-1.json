@@ -1,0 +1,529 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "10-numerics-and-determinism",
+    "40-numerics"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Coefficient ranges and scaling",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "10.1.2 Coefficient Ranges and Scaling"
+    },
+    {
+      "type": "para",
+      "text": "A colleague hands over a version of the bridge-loan model from lesson 10.1.1. The NPVs came from the finance system in dollars, so the objective is in dollars. The budgets came from the board pack in millions, so the budget rows and the loan are in $M. And the switch row got $`M = 10^9`$, \"big enough for anything\". It solves, and HiGHS returns the right plan. It also prints two warnings, and its log shows matrix coefficients from about 0.1 to $`10^9`$."
+    },
+    {
+      "type": "para",
+      "text": "Lesson 10.1.1 showed why such numbers are risky: tolerances are absolute, and a huge coefficient on a binary turns the integrality tolerance into room. This lesson shows how to measure a model's numbers, what the solver's own warnings say about them, and how to rescale the model, one unit at a time, until its numbers fit the tolerances, without changing the plan. GridCap is a fictional utility; its numbers are teaching data."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "Lesson 10.1.1's loan model, restated whole, with two unit factors added and the big-M left open. The factors change the numbers in the model, never its meaning."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`P`$ the projects; $`Y = \\{2027, \\dots, 2031\\}`$; $`M \\subseteq P`$ the must-do projects; $`C \\subseteq P`$ the child projects, with parent $`p(c)`$."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`v_i`$, $`c_{i,y}`$, $`B_y`$, $`L_y = B_y/10`$ and $`F = 300`$ as in lesson 10.1.1, all in $k; $`\\rho = 0.05`$ the interest per $k borrowed. New: $`o > 0`$, the objective's units per $k (1,000 for dollars, 1 for $k); $`r > 0`$, the rows' units per $k ($`10^{-3}`$ for $M, 1 for $k); $`\\bar M_y`$, the switch row's big-M, in the rows' unit. ← this lesson"
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_i \\in \\{0, 1\\}`$ for $`i \\in P`$; $`h_y \\in \\{0, 1\\}`$ for $`y \\in Y`$; $`\\ell'_y \\ge 0`$ for $`y \\in Y`$, the loan in the rows' unit, so $`\\ell'_y = r\\,\\ell_y`$ with $`\\ell_y`$ the loan in $k. ← this lesson"
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{i \\in P} o\\, v_i\\, x_i \\;-\\; \\sum_{y \\in Y} \\left( o F\\, h_y + \\frac{o\\,\\rho}{r}\\, \\ell'_y \\right)"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{i \\in P} r\\, c_{i,y}\\, x_i &\\le r B_y + \\ell'_y && \\forall y \\in Y && \\text{(budget}_y) \\\\\n\\ell'_y &\\le r L_y && \\forall y \\in Y && \\text{(credit}_y) \\\\\n\\ell'_y &\\le \\bar M_y\\, h_y && \\forall y \\in Y && \\text{(switch}_y) \\\\\nx_i &= 1 && \\forall i \\in M && \\text{(must}_i) \\\\\nx_c &\\le x_{p(c)} && \\forall c \\in C && \\text{(after}_c)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The variants of `loan_model.py`, as `Units(objective, rows, big_m)`:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Variant",
+        "$`o`$",
+        "$`r`$",
+        "$`\\bar M_y`$"
+      ],
+      "rows": [
+        [
+          "`MIXED`, the colleague's model",
+          "1,000 ($)",
+          "$`10^{-3}`$ ($M)",
+          "$`10^9`$"
+        ],
+        [
+          "`HUGE_M`",
+          "1 ($k)",
+          "1 ($k)",
+          "$`10^9`$"
+        ],
+        [
+          "`TIGHT`",
+          "1 ($k)",
+          "1 ($k)",
+          "$`r L_y`$, the credit line"
+        ]
+      ]
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "o, r = units.objective, units.rows\nmodel = mathopt.Model(name=\"loan\")\nx = {p.project_id: model.add_binary_variable(name=f\"x_{p.project_id}\") for p in portfolio.projects}\nloan = {y: model.add_variable(lb=0, name=f\"loan_{y}\") for y in portfolio.years}\ntake = {y: model.add_binary_variable(name=f\"take_{y}\") for y in portfolio.years}\n# One unit of loan is 1/r $k, so its interest is RATE / r $k, or RATE * o / r objective units.\nmodel.maximize(sum(p.value * o * x[p.project_id] for p in portfolio.projects)\n               - sum(FEE * o * take[y] + RATE * o / r * loan[y] for y in portfolio.years))"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "spend[y] = sum(spend_in(p, y) * r * x[p.project_id] for p in portfolio.projects if spend_in(p, y))\nmodel.add_linear_constraint(spend[y] <= portfolio.budget[y] * r + loan[y], name=f\"budget_{y}\")\nmodel.add_linear_constraint(loan[y] <= credit_line(portfolio, y) * r, name=f\"credit_{y}\")\nbig_m = credit_line(portfolio, y) * r if units.big_m is None else units.big_m\nmodel.add_linear_constraint(loan[y] <= big_m * take[y], name=f\"switch_{y}\")"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Four Ranges Describe a Model's Numbers: Matrix, Cost, Bound and RHS"
+    },
+    {
+      "type": "para",
+      "text": "Lesson 2.4.2 read the four **coefficient ranges** at the top of a HiGHS log: for each kind of number in the model, the smallest and the largest absolute value. The kinds are the **matrix** (the coefficients in the rows), the **cost** (the objective's coefficients), the **bounds** (variables' finite bounds) and the **RHS** (the rows' finite right-hand sides). Zeros and infinite values are left out, and so are bounds of 0, so a binary's bounds $`[0, 1]`$ add only the 1."
+    },
+    {
+      "type": "para",
+      "text": "The same numbers can be computed from a MathOpt model, which a test can then check:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def coefficient_ranges(model: mathopt.Model) -> dict[str, tuple[float, float]]:\n    \"\"\"Smallest and largest absolute value of each kind of number, as HiGHS's log reports them.\n\n    Zeros and infinite values are left out, and so are bounds of 0: a binary's bounds [0, 1]\n    contribute 1.\n    \"\"\"\n    def finite(values):\n        return [abs(v) for v in values if v != 0 and math.isfinite(v)]\n\n    kinds = {\n        \"Matrix\": finite(c for row in model.linear_constraints()\n                         for c in (row.get_coefficient(v) for v in model.row_nonzeros(row))),\n        \"Cost\": finite(model.objective.get_linear_coefficient(v) for v in model.variables()),\n        \"Bound\": finite(b for v in model.variables() for b in (v.lower_bound, v.upper_bound)),\n        \"RHS\": finite(b for row in model.linear_constraints() for b in (row.lower_bound, row.upper_bound)),\n    }\n    return {kind: (min(values), max(values)) for kind, values in kinds.items() if values}"
+    },
+    {
+      "type": "para",
+      "text": "`model.row_nonzeros(row)` lists the variables with a nonzero coefficient in a row, and `row.get_coefficient(v)` reads one. `ranges.py` prints the function's result for the `TIGHT` model next to HiGHS's log:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "HiGHS's log:\n  MIP loan has 21 rows; 50 cols; 85 nonzeros; 45 integer variables (45 binary)\n  Coefficient ranges:\n    Matrix  [1e+00, 6e+03]\n    Cost    [5e-02, 4e+03]\n    Bound   [1e+00, 1e+00]\n    RHS     [1e+00, 9e+03]\ncoefficient_ranges(model):\n  Matrix  [1e+00, 6e+03]   exact: 1 to 5,680   span 5,680\n  Cost    [5e-02, 4e+03]   exact: 0.05 to 4,374   span 87,480\n  Bound   [1e+00, 1e+00]   exact: 1 to 1   span 1\n  RHS     [1e+00, 9e+03]   exact: 1 to 8,890   span 8,890"
+    },
+    {
+      "type": "para",
+      "text": "The two agree; HiGHS rounds each value to one significant digit. The **span** of a range is its largest value divided by its smallest, the number of times the largest is bigger. Each number can be traced to the model:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Matrix, 1 to 5,680:** the 1s are the loan's coefficient in a budget row, the switch's and credit's coefficients, and the must and after rows; 5,680 is the largest one-year spend of a project, in $k. With the tight $`M`$, the switch coefficients are the credit lines, at most 889.",
+        "**Cost, 0.05 to 4,374:** 0.05 is the interest on one $k of loan; 4,374 is the largest NPV.",
+        "**Bound, 1:** only the binaries have a finite nonzero bound. The loans have none above.",
+        "**RHS, 1 to 8,890:** the must rows' 1s, and the budgets."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Every span is below $`10^5`$. The rows' numbers sit between 1 and $`10^4`$, where lesson 10.1.1's tolerances are a tenth of a cent and floats keep twelve digits to spare."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Model Written in Mixed Units Spreads Its Numbers Over Many Powers of Ten"
+    },
+    {
+      "type": "para",
+      "text": "The colleague's `MIXED` model is the same model in other units. `rescale.py` prints its ranges and every warning line in HiGHS's log:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "mixed ($ objective, $M rows, M = 1e9)\n  Matrix [1e-01, 1e+09]  Cost [3e+04, 4e+06]  Bound [1e+00, 1e+00]  RHS [8e-01, 9e+00]\n  WARNING: Problem has some excessively large costs\n  WARNING:    Consider scaling the objective by 1e-1, or setting the user_objective_scale option to -3\n  OPTIMAL, objective 23,161,500.0 = $23,161.5k, 27 projects, loans $k {2030: 750}"
+    },
+    {
+      "type": "para",
+      "text": "The plan is right: $23,161.5k, as lesson 10.1.1's tight model found, and one loan, $750k in 2030. The numbers are not:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**The matrix spans ten powers of ten**, from about 0.1 (a small project's spend in $M) to $`10^9`$ (the big-M). Gurobi's numerical guidelines say the ratio of the largest to the smallest matrix coefficient should ideally stay below $`10^6`$ and never exceed $`10^9`$; this one is above it.",
+        "**The costs reach $`4 \\times 10^6`$**, an NPV in dollars. The same guidelines ask for objective values of good plans below about $`10^6`$; this objective is $`2.3 \\times 10^7`$.",
+        "**The RHS is small**, 0.8 to 9: the rows are in $M, where a row's tolerance of $`10^{-6}`$ is worth $1 to HiGHS (lesson 10.1.1's table)."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "HiGHS warned about the costs, and suggested a fix. It said nothing about the $`10^9`$ in the matrix. Lesson 10.1.3 measures which numbers HiGHS warns about; here the point is that the model is badly scaled whether or not a warning appears."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Rescaling Multiplies a Row, a Column or the Objective, and Leaves the Plan Unchanged"
+    },
+    {
+      "type": "para",
+      "text": "**Rescaling** changes the units in which a model's numbers are written. It comes in three kinds, each of which leaves the set of allowed plans, and the best plan, exactly as they were:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**A row times a positive number.** $`a^\\top x \\le b`$ and $`(s\\,a)^\\top x \\le s\\,b`$, with $`s > 0`$, allow the same $`x`$. Writing a budget row in $k instead of $M multiplies it by 1,000.",
+        "**A column times a positive number.** Replacing a variable $`\\ell`$ by $`\\ell = \\ell'/r`$ multiplies its coefficient in every row and in the objective by $`1/r`$, and its bounds by $`r`$. Measuring the loan in $k instead of $M is that substitution.",
+        "**The objective times a positive number.** $`\\max\\, f(x)`$ and $`\\max\\, s f(x)`$, with $`s > 0`$, have the same best plans; only the reported value is $`s`$ times larger. Writing NPV in $k instead of dollars multiplies the objective by $`1/1000`$."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "In the model above, $`o`$ is an objective scaling and $`r`$ scales every money row and the loan's column together. `rescale.py` builds the model four times, changing one thing at a time, and solves each with HiGHS's defaults:"
+    },
+    {
+      "type": "example",
+      "id": "rescale-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "40-numerics/src/rescale.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "40-numerics/src/rescale.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "STEPS = (\n    MIXED,\n    Units(objective=1, rows=0.001, big_m=1e9, name=\"objective in $k\"),\n    HUGE_M,\n    TIGHT,\n)"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "mixed ($ objective, $M rows, M = 1e9)\n  Matrix [1e-01, 1e+09]  Cost [3e+04, 4e+06]  Bound [1e+00, 1e+00]  RHS [8e-01, 9e+00]\n  WARNING: Problem has some excessively large costs\n  WARNING:    Consider scaling the objective by 1e-1, or setting the user_objective_scale option to -3\n  OPTIMAL, objective 23,161,500.0 = $23,161.5k, 27 projects, loans $k {2030: 750}\nobjective in $k\n  Matrix [1e-01, 1e+09]  Cost [3e+01, 4e+03]  Bound [1e+00, 1e+00]  RHS [8e-01, 9e+00]\n  OPTIMAL, objective 23,161.5 = $23,161.5k, 27 projects, loans $k {2030: 750}\nhuge M ($k, M = 1e9)\n  Matrix [1e+00, 1e+09]  Cost [5e-02, 4e+03]  Bound [1e+00, 1e+00]  RHS [1e+00, 9e+03]\n  OPTIMAL, objective 23,161.5 = $23,161.5k, 27 projects, loans $k {2030: 750}\ntight ($k, M = credit line)\n  Matrix [1e+00, 6e+03]  Cost [5e-02, 4e+03]  Bound [1e+00, 1e+00]  RHS [1e+00, 9e+03]\n  OPTIMAL, objective 23,161.5 = $23,161.5k, 27 projects, loans $k {2030: 750}\nsame projects in every step: True"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Step by step:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**The objective in $k** divides every cost by 1,000: the cost range falls from $`[3 \\times 10^4, 4 \\times 10^6]`$ to $`[30, 4{,}000]`$, the reported objective falls from 23,161,500 to 23,161.5, and the warnings stop. The interest coefficient is $`o\\rho/r`$: with $`o = 1`$ and $`r = 10^{-3}`$ it is 50, the interest in $k on one $M of loan.",
+        "**The rows in $k** multiply every money row and the loan's column by 1,000: the RHS moves from 0.8–9 to 1–8,890, and the smallest matrix entry from 0.1 to 1. In $k a row's tolerance of $`10^{-6}`$ is a tenth of a cent instead of a dollar. The matrix still reaches $`10^9`$.",
+        "**The tight M** replaces $`10^9`$ by the credit line. The matrix span drops from $`10^9`$ to 5,680."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The plan never changed: the same 27 projects, the same $750k loan in 2030, and the same value once converted to $k with `in_k`. That is what rescaling must do. A test of a rescaled model should check both halves: the ranges shrank, and the plans allowed and refused are the same."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Valid M Is Part of Scaling: Replace 1e9 With the Bound the Data Give"
+    },
+    {
+      "type": "para",
+      "text": "Units cannot fix the last step. $`10^9`$ is not a unit problem: in $k, $M or dollars, it is far larger than any loan the model allows. The data say how large a loan can be: the credit line, $`L_y`$. Lesson 6.2.1 derived such an $`M`$ from bounds, and showed it is the smallest valid one: the credit row already caps the loan at $`L_y`$, so the switch row needs no more."
+    },
+    {
+      "type": "para",
+      "text": "The step table shows why it belongs to scaling. After the units were fixed, the $`10^9`$ alone kept the matrix span at $`10^9`$; with the credit line it fell to 5,680. And lesson 10.1.1 showed what that span costs: a switch of $`10^{-6}`$ times $`10^9`$ is room for $1,000k of loan, more than any credit line, while $`10^{-6}`$ times 889 is less than a dollar."
+    },
+    {
+      "type": "para",
+      "text": "The second line of the step table makes one more point. The model \"objective in $k\" still has $`10^9`$ in its matrix and 0.1 at the other end, and HiGHS printed no warning about it. A model without warnings is not a well-scaled model; the ranges are the measure."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "HiGHS Can Scale the Objective and Bounds for You, Not the Matrix"
+    },
+    {
+      "type": "para",
+      "text": "HiGHS's warning offered a second fix: \"setting the user_objective_scale option to -3\". HiGHS's option list describes `user_objective_scale` and `user_bound_scale` as exponents of a power-of-two scaling of the objective and of the bounds. `user_scale.py` solves the `MIXED` model with it:"
+    },
+    {
+      "type": "example",
+      "id": "user_scale-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "40-numerics/src/user_scale.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "40-numerics/src/user_scale.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "params = mathopt.SolveParameters(highs=highs_pb2.HighsOptionsProto(int_options={\"user_objective_scale\": -3}))\nresult, log = solve(lm.model, params=params)"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "MIP loan has 21 rows; 50 cols; 85 nonzeros; 45 integer variables (45 binary)\nAssessing costs and bounds after applying user_objective_scale option value of -3\nCoefficient ranges:\n  Matrix  [1e-01, 1e+09]\n  Cost    [3e+03, 5e+05]\n  Bound   [1e+00, 1e+00]\n  RHS     [8e-01, 9e+00]\nPresolving model\n...\nAfter solving the user-scaled model, the unscaled solution has objective value 23161500\nresult.objective_value(): 23,161,500.0"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "HiGHS multiplied every cost by $`2^{-3} = 1/8`$, which brought them under its warning threshold, solved, and reported the objective in the model's own units again: MathOpt returns 23,161,500, as before. A power of two changes only a float's exponent, so this scaling adds no rounding error of its own."
+    },
+    {
+      "type": "para",
+      "text": "It is a convenience, not a substitute for choosing units. The matrix line still reads $`[10^{-1}, 10^9]`$: no option rescales the colleague's big-M away. HiGHS also scales the matrix internally while it solves (its option `simplex_scale_strategy` chooses how, with equilibration the default), but that is the solver's working copy. The model you wrote, the tolerance that applies to its rows, and the plan you round are still in your units, and only you know that the credit line is the right $`M`$."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Four ranges describe a model's numbers: matrix, cost, bound and RHS.** Compute them from the model, compare them with the log, and know which data each extreme comes from.",
+        "**A model written in mixed units spreads its numbers over many powers of ten.** Dollars next to millions and an $`M`$ of $`10^9`$ spread the matrix over ten powers of ten and put the objective near $`10^7`$, outside the ranges the numerical guidelines recommend.",
+        "**Rescaling multiplies a row, a column or the objective, and leaves the plan unchanged.** The same 27 projects and the same loan came back at every step; only the numbers moved.",
+        "**A valid M is part of scaling: replace 1e9 with the bound the data give.** The credit line cut the matrix span from $`10^9`$ to 5,680, which no change of units could do.",
+        "**HiGHS can scale the objective and bounds for you, not the matrix.** `user_objective_scale` silenced the warning; the $`10^9`$ stayed."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Range",
+        "What it covers",
+        "Left out"
+      ],
+      "rows": [
+        [
+          "Matrix",
+          "coefficients in the rows",
+          "zeros"
+        ],
+        [
+          "Cost",
+          "objective coefficients",
+          "zeros"
+        ],
+        [
+          "Bound",
+          "variables' bounds",
+          "zeros and infinite bounds"
+        ],
+        [
+          "RHS",
+          "rows' right-hand sides, both sides of a ranged row",
+          "zeros and infinite sides"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Rescaling",
+        "What changes",
+        "What stays"
+      ],
+      "rows": [
+        [
+          "row $`i`$ times $`s > 0`$",
+          "row $`i`$'s coefficients and right-hand side",
+          "allowed plans, optimum, objective value"
+        ],
+        [
+          "column $`j`$: $`x_j = x'_j / s`$",
+          "column $`j`$'s coefficients ($`\\times 1/s`$) and bounds ($`\\times s`$)",
+          "allowed plans (in the new unit), optimum"
+        ],
+        [
+          "objective times $`s > 0`$",
+          "every cost, and the reported objective",
+          "allowed plans, best plans"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Guideline (Gurobi's numerical guidelines)",
+        "Value"
+      ],
+      "rows": [
+        [
+          "matrix span, largest / smallest",
+          "ideally below $`10^6`$, never above $`10^9`$"
+        ],
+        [
+          "right-hand sides and bounds",
+          "about $`10^6`$ or less"
+        ],
+        [
+          "objective of good plans",
+          "below about $`10^6`$"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [Advanced LP Solving (OR-Tools)](https://developers.google.com/optimization/lp/lp_advanced) (section *Scaling of problem data*: units too small or too large for the solver's tolerances, and the advice to check that the data's scale suits them); [MathOpt `Model` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/model.py) (`linear_constraints`, `row_nonzeros`, `variables` and the objective's coefficients, which `coefficient_ranges` reads); [Gurobi: Tolerances and User-Scaling](https://docs.gurobi.com/projects/optimizer/en/current/concepts/numericguide/tolerances_scaling.html) (recommended ranges, and changing units, dollars to millions, to bring numbers into them); [Gurobi: Does my Model have Numerical Issues?](https://docs.gurobi.com/projects/optimizer/en/current/concepts/numericguide/modelissues.html) (the coefficient span to aim for and the one never to exceed); [HiGHS options](https://ergo-code.github.io/HiGHS/dev/options/definitions/) (`user_objective_scale`, `user_bound_scale` and `simplex_scale_strategy`)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Write the colleague's model with the objective in $M as well as the rows. Predict its cost range and whether HiGHS warns.",
+        "A planner wants loans reported in dollars. Where does that conversion belong: in the model's units, or in the report? Give one reason from this lesson.",
+        "Run `rescale.py` with a fifth step: the `TIGHT` model with the rows in $M. Predict which ranges change from the last step."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Scale in the Data Layer, Once"
+    },
+    {
+      "type": "para",
+      "text": "Each rescaling step above changed two numbers in one place, `Units`, and the model builder applied them everywhere. That is the shape to keep: the builder takes data in one unit and never mixes units itself, and conversions for reports happen after the solve (`in_k`). A model whose rows are written by different people from different systems, as the colleague's was, needs that rule more than any other."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**ranges.py.** The `TIGHT` model's coefficient ranges from `coefficient_ranges` and from HiGHS's log, with their exact values and spans (*Four Ranges Describe a Model's Numbers*). *Try:* Build the `HUGE_M` model instead. Predict which of the four ranges changes."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [ranges.py](src/ranges.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**rescale.py.** The loan model in four units and M choices, with each one's ranges, HiGHS's warnings and its plan (*A Model Written in Mixed Units*, *Rescaling Multiplies a Row*, *A Valid M Is Part of Scaling*). *Try:* Add a step with the objective in $M (`objective=0.001`). Predict whether HiGHS warns about small costs."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [rescale.py](src/rescale.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**user_scale.py.** The `MIXED` model solved with HiGHS's `user_objective_scale` set to $`-3`$ (*HiGHS Can Scale the Objective and Bounds for You*). *Try:* Set it to $`-10`$ instead. Predict the cost range HiGHS prints."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [user_scale.py](src/user_scale.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**loan_model.py.** The model builder and the helpers, shared with lesson 10.1.1."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [loan_model.py](src/loan_model.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 12,
+    "paras": 34,
+    "code": 7,
+    "tables": 4,
+    "lists": 10,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 2
+  },
+  "content_sha256": "0ee9dcca34533d3f3ecee9b846499360190edf6c4c7f96b848de898aa0a7d1d3"
+}

@@ -1,0 +1,140 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "18-linear-solver-wrapper"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 3,
+  "ingested": "2026-11-13",
+  "title": "How few crew seasons?",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A pipeline firm hires inspection crews by the season. Each job is a whole number of crew-months that one crew must do whole, and a season holds `season` crew-months. How few seasons (crews) cover every job?"
+    },
+    {
+      "type": "para",
+      "text": "Write `fewest_crews(sizes, season)` in `packing.py`, as a MathOpt model. Return the number of seasons used and the jobs in each used season, as `(count, [[job indices], ...])`, or `None` when no packing exists."
+    },
+    {
+      "type": "para",
+      "text": "The model, with $`B`$ the seasons offered, $`x_{i,b} = 1`$ when job $`i`$ goes in season $`b`$ and $`y_b = 1`$ when season $`b`$ is used:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\min\\;& \\sum_{b \\in B} y_b \\\\\n\\text{s.t. }& \\sum_{b \\in B} x_{i,b} = 1 && \\forall i && \\text{(once}_i) \\\\\n& \\sum_i s_i\\, x_{i,b} \\le S\\, y_b && \\forall b \\in B && \\text{(cap}_b) \\\\\n& x_{i,b},\\ y_b \\in \\{0, 1\\}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Offer enough seasons that a packing always exists when every job fits in one season: one season per job, `len(sizes)` seasons in all, as the reference offers, is always enough (each job alone in its own season). Read the answer only when the solve is optimal, and return `None` otherwise (a job longer than the season makes the model infeasible). Return the count as an `int`, with `round(result.objective_value())`, and leave out the empty seasons from the list. Solve with `mathopt.SolverType.CP_SAT`. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef fewest_crews(sizes: list[int], season: int):\n    \"\"\"Pack every job (size in crew-months) into seasons of `season` crew-months, using as few as possible.\n\n    Returns (number of seasons, [[job indices] for each season used]), or None if no packing exists.\n    \"\"\"\n    model = mathopt.Model(name=\"seasons\")\n    jobs, seasons = range(len(sizes)), range(len(sizes))          # one season per job is always enough\n    x = {(i, b): model.add_binary_variable(name=f\"x_{i}_{b}\") for i in jobs for b in seasons}\n    y = {b: model.add_binary_variable(name=f\"y_{b}\") for b in seasons}\n    for i in jobs:\n        model.add_linear_constraint(sum(x[i, b] for b in seasons) == 1, name=f\"once_{i}\")\n    for b in seasons:\n        model.add_linear_constraint(sum(sizes[i] * x[i, b] for i in jobs) <= season * y[b], name=f\"cap_{b}\")\n    model.minimize(sum(y.values()))\n    result = mathopt.solve(model, mathopt.SolverType.CP_SAT)\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    packing = [[i for i in jobs if result.variable_values(x[i, b]) > 0.5] for b in seasons]\n    return round(result.objective_value()), [p for p in packing if p]\n\n\nif __name__ == \"__main__\":\n    print(fewest_crews([3, 3, 2, 2, 2, 2], 7))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef fewest_crews(sizes: list[int], season: int):\n    \"\"\"Pack every job (size in crew-months) into seasons of `season` crew-months, using as few as possible.\n\n    Returns (number of seasons, [[job indices] for each season used]), or None if no packing exists.\n    \"\"\"\n    # TODO: the bin-packing model in MathOpt, solved, and the seasons read back.\n    return 0, []\n\n\nif __name__ == \"__main__\":\n    print(fewest_crews([3, 3, 2, 2, 2, 2], 7))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "0b19f2fe2ad4bc4cb61227bd3620de865a8abd2cc777499f0654e4b12bc50458",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef fewest_crews(sizes: list[int], season: int):\n    \"\"\"Pack every job (size in crew-months) into seasons of `season` crew-months, using as few as possible.\n\n    Returns (number of seasons, [[job indices] for each season used]), or None if no packing exists.\n    \"\"\"\n    # TODO: the bin-packing model in MathOpt, solved, and the seasons read back.\n    return 0, []\n\n\nif __name__ == \"__main__\":\n    print(fewest_crews([3, 3, 2, 2, 2, 2], 7))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-04/practice-3/packing.py",
+    "test_path": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-04/practice-3/test_packing.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-04/practice-3/packing.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-04/practice-3/target/report.xml",
+      "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-04/practice-3/test_packing.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_jobs_are_packed_into_the_fewest_seasons",
+        "kind": "main",
+        "says": "jobs are packed into the fewest seasons, each job once and no season over its length"
+      },
+      {
+        "id": "test_only_used_seasons_are_listed",
+        "kind": "edge",
+        "says": "only the seasons that hold a job are listed, so jobs that fit one season come back as one list"
+      },
+      {
+        "id": "test_enough_seasons_are_offered_when_the_total_misleads",
+        "kind": "edge",
+        "says": "when no two jobs fit together, as many seasons as jobs are used, more than the total length suggests"
+      },
+      {
+        "id": "test_a_job_longer_than_a_season_gives_no_packing",
+        "kind": "main",
+        "says": "a job longer than a season gives no packing"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-04/practice-3/target/report.xml"
+    },
+    "origin": {
+      "path": "18-linear-solver-wrapper/README_4.7.4.md",
+      "section": "Bin Packing Minimizes the Number of Bins, and a Lower Bound Can Prove a Heuristic Optimal"
+    },
+    "concepts": [
+      "bin packing counts used bins through a capacity row tied to each bin's use variable, and offers enough bins"
+    ]
+  }
+}

@@ -1,0 +1,147 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "25-knapsack-and-assignment"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Main replacements to crews and years",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility (not GridCap) has approved a set of water-main replacements for the next three years and must now decide **which contractor crew does each job, and in which year**. Each job $`j`$ is done once, in one year, by one crew:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Job $`j`$ may be done in any year from `earliest` to `latest`, both included, and in no other year.",
+        "Crews work at different paces: crew $`c`$ needs $`d_{j,c}`$ weeks for job $`j`$ (`job.weeks[crew]`).",
+        "Crew $`c`$ has $`F_{c,t}`$ free weeks in year $`t`$ (`crew.weeks[year]`), and the jobs it does that year must fit in them.",
+        "A **large-diameter** main (`job.large`) may only be given to a **certified** crew (`crew.certified`).",
+        "Crew $`c`$ charges $`r_c`$ ($k per week), so job $`j`$ done by crew $`c`$ costs $`r_c\\, d_{j,c}`$. The utility wants the cheapest schedule."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Write `build(jobs, crews, years)` in `schedule.py`. It returns the model and a dictionary `x` of binary variables keyed `(job id, crew id, year)`, where `x[j, c, t] = 1` means crew $`c`$ does job $`j`$ in year $`t`$. You decide which keys exist."
+    },
+    {
+      "type": "para",
+      "text": "Each agent of this assignment is a crew *in a year*, with its own capacity. Write the formulation first: the sets (including the set of allowed job, crew and year triples), the parameters, the variable with its domain, the objective and each labelled row. Then code it."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix a schedule and ask the solver whether the model allows it; a schedule that needs a key your `x` does not have counts as refused. So any correct formulation passes, whether a forbidden triple has no variable or a row holding it at 0. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Job:\n    jid: str\n    earliest: int                  # first year the job may be done\n    latest: int                    # last year the job may be done\n    weeks: dict = field(default_factory=dict)    # crew -> weeks that crew needs for the job\n    large: bool = False            # a large-diameter main: certified crews only\n\n\n@dataclass(frozen=True)\nclass Crew:\n    cid: str\n    weeks: dict                    # year -> weeks the crew is free that year\n    rate: int                      # $k per week\n    certified: bool = False\n\n\ndef build(jobs: list[Job], crews: list[Crew], years: list[int]) -> tuple[mathopt.Model, dict]:\n    \"\"\"Every job done once, by one crew in one year: in its window, by a crew allowed to, within the crew's weeks.\"\"\"\n    model = mathopt.Model(name=\"crews-and-years\")\n    x = {(j.jid, c.cid, t): model.add_binary_variable(name=f\"x_{j.jid}_{c.cid}_{t}\")\n         for j in jobs for c in crews for t in years\n         if j.earliest <= t <= j.latest and (c.certified or not j.large)}\n    for j in jobs:\n        model.add_linear_constraint(sum(v for (jid, _, _), v in x.items() if jid == j.jid) == 1, name=f\"once_{j.jid}\")\n    for c in crews:\n        for t in years:\n            model.add_linear_constraint(\n                sum(j.weeks[c.cid] * x[j.jid, c.cid, t] for j in jobs if (j.jid, c.cid, t) in x) <= c.weeks[t],\n                name=f\"weeks_{c.cid}_{t}\")\n    model.minimize(sum(c.rate * j.weeks[c.cid] * x[j.jid, c.cid, t]\n                       for j in jobs for c in crews for t in years if (j.jid, c.cid, t) in x))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    crews = [Crew(\"K1\", {2027: 20, 2028: 20}, 9, certified=True)]\n    model, x = build([Job(\"J1\", 2027, 2028, {\"K1\": 8}, large=True)], crews, [2027, 2028])\n    print(len(x), \"variables\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Job:\n    jid: str\n    earliest: int                  # first year the job may be done\n    latest: int                    # last year the job may be done\n    weeks: dict = field(default_factory=dict)    # crew -> weeks that crew needs for the job\n    large: bool = False            # a large-diameter main: certified crews only\n\n\n@dataclass(frozen=True)\nclass Crew:\n    cid: str\n    weeks: dict                    # year -> weeks the crew is free that year\n    rate: int                      # $k per week\n    certified: bool = False\n\n\ndef build(jobs: list[Job], crews: list[Crew], years: list[int]) -> tuple[mathopt.Model, dict]:\n    \"\"\"Every job done once, by one crew in one year: in its window, by a crew allowed to, within the crew's weeks.\"\"\"\n    model = mathopt.Model(name=\"crews-and-years\")\n    x: dict = {}\n    # TODO: the variables, the rows and the cost.\n    return model, x\n\nif __name__ == \"__main__\":\n    crews = [Crew(\"K1\", {2027: 20, 2028: 20}, 9, certified=True)]\n    model, x = build([Job(\"J1\", 2027, 2028, {\"K1\": 8}, large=True)], crews, [2027, 2028])\n    print(len(x), \"variables\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "e32104d4715ad3b9ebe3a0c138b1de8948f271ea7d3f620572ff1b69fb16dbc4",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Job:\n    jid: str\n    earliest: int                  # first year the job may be done\n    latest: int                    # last year the job may be done\n    weeks: dict = field(default_factory=dict)    # crew -> weeks that crew needs for the job\n    large: bool = False            # a large-diameter main: certified crews only\n\n\n@dataclass(frozen=True)\nclass Crew:\n    cid: str\n    weeks: dict                    # year -> weeks the crew is free that year\n    rate: int                      # $k per week\n    certified: bool = False\n\n\ndef build(jobs: list[Job], crews: list[Crew], years: list[int]) -> tuple[mathopt.Model, dict]:\n    \"\"\"Every job done once, by one crew in one year: in its window, by a crew allowed to, within the crew's weeks.\"\"\"\n    model = mathopt.Model(name=\"crews-and-years\")\n    x: dict = {}\n    # TODO: the variables, the rows and the cost.\n    return model, x\n\nif __name__ == \"__main__\":\n    crews = [Crew(\"K1\", {2027: 20, 2028: 20}, 9, certified=True)]\n    model, x = build([Job(\"J1\", 2027, 2028, {\"K1\": 8}, large=True)], crews, [2027, 2028])\n    print(len(x), \"variables\")\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-2/schedule.py",
+    "test_path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-2/test_schedule.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-2/schedule.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-2/target/report.xml",
+      "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-2/test_schedule.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_every_job_is_done_exactly_once",
+        "kind": "main",
+        "says": "a schedule doing every job once is allowed, and one that leaves a job out is refused"
+      },
+      {
+        "id": "test_a_crew_works_within_its_weeks_each_year_at_its_own_pace",
+        "kind": "main",
+        "says": "a crew's jobs in one year, counted at that crew's own weeks per job, must fit its free weeks that year"
+      },
+      {
+        "id": "test_a_job_is_done_inside_its_window",
+        "kind": "edge",
+        "says": "a job scheduled in a year outside its window is refused"
+      },
+      {
+        "id": "test_a_large_main_needs_a_certified_crew",
+        "kind": "edge",
+        "says": "a large-diameter main given to an uncertified crew is refused, even with weeks to spare"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "25-knapsack-and-assignment/README_6.3.2.md",
+      "section": "An Agent That May Not Take an Item Gets No Variable"
+    },
+    "concepts": [
+      "pairs an agent may not take get no variable, and simple checks before solving catch tasks nobody can take",
+      "a generalized assignment gives every task to exactly one agent, with agent-dependent sizes and costs"
+    ]
+  }
+}

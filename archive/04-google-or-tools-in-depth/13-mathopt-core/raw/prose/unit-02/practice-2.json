@@ -1,0 +1,139 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "13-mathopt-core"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Price the rows that hold a plan back",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A dairy cooperative plans its weekly milk allocation with an LP: how many thousand litres go to cheese, butter and bottled milk, under limits on milk supply, plant hours and churn capacity, and a minimum for the bottled-milk contract. Its finance team asks one question after every run: which limits hold the plan back, and what would one more unit of each be worth?"
+    },
+    {
+      "type": "para",
+      "text": "Write `binding_prices(result, rows, tol=1e-6)` in `prices.py`. `rows` is a list of the model's `mathopt.LinearConstraint`s."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "When `result` has no dual feasible solution (a MILP, or a solve that failed), return `None`.",
+        "Otherwise return a dict from row name to the row's dual value, for every **binding** row in `rows`, and no other."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "A row is binding when its **activity**, $`\\sum_j a_j x_j`$ at the result's variable values, is within `tol` of one of its finite bounds: its upper bound, its lower bound, or the single value of an equality row. Compute the activity from the row's `terms()` and `result.variable_values()`. Do not use the basis (`constraint_status`): a first-order solver such as PDLP returns dual values without one."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef activity(row: mathopt.LinearConstraint, result: mathopt.SolveResult) -> float:\n    \"\"\"sum of coefficient * value over the row's terms, at the result's best plan.\"\"\"\n    return sum(t.coefficient * result.variable_values(t.variable) for t in row.terms())\n\n\ndef binding_prices(result: mathopt.SolveResult, rows: list[mathopt.LinearConstraint],\n                   tol: float = 1e-6) -> dict[str, float] | None:\n    \"\"\"Row name -> dual value for every binding row, or None when the result has no duals.\"\"\"\n    if not result.has_dual_feasible_solution():\n        return None\n    prices = {}\n    for row in rows:\n        level = activity(row, result)\n        bounds = [b for b in (row.lower_bound, row.upper_bound) if not math.isinf(b)]\n        if any(abs(level - b) <= tol for b in bounds):\n            prices[row.name] = result.dual_values(row)\n    return prices\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_variable(lb=0, ub=10, name=\"x\")\n    row = model.add_linear_constraint(x <= 4, name=\"cap\")\n    model.maximize(x)\n    print(binding_prices(mathopt.solve(model, mathopt.SolverType.GLOP), [row]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef binding_prices(result: mathopt.SolveResult, rows: list[mathopt.LinearConstraint],\n                   tol: float = 1e-6) -> dict[str, float] | None:\n    \"\"\"Row name -> dual value for every binding row, or None when the result has no duals.\"\"\"\n    # TODO: None without duals; otherwise the dual value of each row whose activity sits on a finite bound.\n    return {}\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_variable(lb=0, ub=10, name=\"x\")\n    row = model.add_linear_constraint(x <= 4, name=\"cap\")\n    model.maximize(x)\n    print(binding_prices(mathopt.solve(model, mathopt.SolverType.GLOP), [row]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "7d0b3cd6fb153387a96f14b46a6f4f312eb0d486d98a148d3969febff268663d",
+  "starting_code": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef binding_prices(result: mathopt.SolveResult, rows: list[mathopt.LinearConstraint],\n                   tol: float = 1e-6) -> dict[str, float] | None:\n    \"\"\"Row name -> dual value for every binding row, or None when the result has no duals.\"\"\"\n    # TODO: None without duals; otherwise the dual value of each row whose activity sits on a finite bound.\n    return {}\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_variable(lb=0, ub=10, name=\"x\")\n    row = model.add_linear_constraint(x <= 4, name=\"cap\")\n    model.maximize(x)\n    print(binding_prices(mathopt.solve(model, mathopt.SolverType.GLOP), [row]))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-2/prices.py",
+    "test_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-2/test_prices.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-2/prices.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-2/target/report.xml",
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-2/test_prices.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_binding_rows_are_priced_and_rows_with_slack_are_left_out",
+        "kind": "main",
+        "says": "an LP solved by GLOP gives the dual value of every binding row, keyed by row name, and leaves out rows with slack"
+      },
+      {
+        "id": "test_a_result_without_duals_gives_none",
+        "kind": "main",
+        "says": "a MILP result, which has no dual solution, gives None"
+      },
+      {
+        "id": "test_a_row_tight_at_its_lower_bound_is_binding",
+        "kind": "edge",
+        "says": "a greater-or-equal row held at its lower bound is binding"
+      },
+      {
+        "id": "test_a_pdlp_result_without_a_basis_is_priced_too",
+        "kind": "edge",
+        "says": "a PDLP result, which has dual values but no basis and activities accurate only to its tolerance, is priced with the tol it is given"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "13-mathopt-core/README_4.2.2.md",
+      "section": "Dual Values, Reduced Costs and a Basis Come Only From an LP Solve"
+    },
+    "concepts": [
+      "dual values, reduced costs and a basis come only from an LP solve, and are checked for before they are read"
+    ]
+  }
+}

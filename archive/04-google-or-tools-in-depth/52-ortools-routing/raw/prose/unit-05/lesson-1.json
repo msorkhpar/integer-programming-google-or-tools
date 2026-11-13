@@ -1,0 +1,565 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "52-ortools-routing"
+  ],
+  "variant": "prose",
+  "unit": 5,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "First-solution strategies, local search and search limits",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "4.8.5 First-Solution Strategies, Local Search and Search Limits"
+    },
+    {
+      "type": "para",
+      "text": "The Valley plans of lessons 4.8.3 and 4.8.4 came from one search setting: build a first solution with `PATH_CHEAPEST_ARC`, then improve it with the default local search. Lesson 4.8.3 already caught that setting out: a model with an extra cost found a plan with *less* driving (261 minutes) than the plain model's plan (287). So the plain search stopped early, at a plan that was not the best the model allows. The planner now asks three questions: how much better can the search do, how do I make it do so, and will the plan be the same if I run it again tomorrow morning?"
+    },
+    {
+      "type": "para",
+      "text": "This lesson answers them with the routing library's search parameters: the first-solution strategy, the local search metaheuristic, and the limits that stop the search. Every number here comes from runs stopped by a count of solutions or by reaching a local minimum, never by a clock, so each prints the same on every run. The model is lesson 4.8.3's: four crews, 18 sites, windows, inspection time, 9 kits per van. The drive times are fictional."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A First-Solution Strategy Builds the Starting Routes"
+    },
+    {
+      "type": "para",
+      "text": "The search has two phases. First it builds **one complete set of routes** with a constructive rule, the **first-solution strategy**. Then local search improves it. The routing options guide lists the strategies; the ones in the table below work like this:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Strategy",
+        "How it builds routes"
+      ],
+      "rows": [
+        [
+          "`PATH_CHEAPEST_ARC`",
+          "extend each route from its start by the cheapest arc to an unvisited stop"
+        ],
+        [
+          "`PATH_MOST_CONSTRAINED_ARC`",
+          "like the above, but prefer the most constrained arc"
+        ],
+        [
+          "`SAVINGS`",
+          "the Clarke and Wright savings algorithm: start with one route per stop, merge the pairs that save most"
+        ],
+        [
+          "`CHRISTOFIDES`",
+          "a variant of Christofides' algorithm, built on a matching"
+        ],
+        [
+          "`PARALLEL_CHEAPEST_INSERTION`",
+          "insert the cheapest stop at its cheapest position, all routes at once"
+        ],
+        [
+          "`LOCAL_CHEAPEST_INSERTION`",
+          "insert stops one by one, in creation order, each at its cheapest position"
+        ],
+        [
+          "`GLOBAL_CHEAPEST_ARC`",
+          "repeatedly connect the two stops that make the cheapest segment"
+        ],
+        [
+          "`LOCAL_CHEAPEST_ARC`",
+          "take the first stop with no successor yet and connect it to its cheapest one"
+        ],
+        [
+          "`FIRST_UNBOUND_MIN_VALUE`",
+          "take the first stop with no successor and connect it to the first stop available"
+        ],
+        [
+          "`BEST_INSERTION`",
+          "insert by the model's whole cost; the guide says it works with optional stops only"
+        ],
+        [
+          "`ALL_UNPERFORMED`",
+          "drop every stop; it finds a solution only if every stop is optional"
+        ],
+        [
+          "`AUTOMATIC`",
+          "let the solver choose from the model (the default)"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`strategy_table.py` runs each strategy on the four-crew Valley day three ways. Its first column stops the search at the first solution found (`solution_limit = 1`), so it shows each strategy's own construction:"
+    },
+    {
+      "type": "example",
+      "id": "strategy_table-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "52-ortools-routing/src/strategy_table.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "52-ortools-routing/src/strategy_table.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "STAGES = [(\"first solution\", None, 1),                  # stop at the first solution found\n          (\"greedy descent\", \"GREEDY_DESCENT\", None),   # improve until no move helps\n          (\"guided local search\", \"GUIDED_LOCAL_SEARCH\", 300)]   # keep going for 300 solutions"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "first-solution strategy             first solution        greedy descent   guided local search\nPATH_CHEAPEST_ARC                              328                   287                   253\nPATH_MOST_CONSTRAINED_ARC                      328                   287                   253\nSAVINGS                                        306                   284                   253\nCHRISTOFIDES                          ROUTING_FAIL          ROUTING_FAIL          ROUTING_FAIL\nPARALLEL_CHEAPEST_INSERTION           ROUTING_FAIL          ROUTING_FAIL          ROUTING_FAIL\nLOCAL_CHEAPEST_INSERTION                       320                   254                   253\nGLOBAL_CHEAPEST_ARC                            277                   253                   253\nLOCAL_CHEAPEST_ARC                             312                   278                   253\nFIRST_UNBOUND_MIN_VALUE                        522                   267                   253\nBEST_INSERTION                        ROUTING_FAIL          ROUTING_FAIL          ROUTING_FAIL\nALL_UNPERFORMED                       ROUTING_FAIL          ROUTING_FAIL          ROUTING_FAIL"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Read the first column. The first solutions range from 277 to 522 drive minutes, and four strategies build **no** feasible routes at all on this model. Two of those failures are the guide's own rules: every Valley site is mandatory here, and `ALL_UNPERFORMED` and `BEST_INSERTION` need optional stops. The other two, `CHRISTOFIDES` and `PARALLEL_CHEAPEST_INSERTION`, failed to build a complete plan that keeps every window, kit and shift rule of this model, although `PARALLEL_CHEAPEST_INSERTION` built the routes of both pickup-and-delivery models in lesson 4.8.4. When the first phase fails, local search never starts, which is why those rows fail in every column. **A strategy is a choice per model**, and trying three or four on your own data is part of building one."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Local Search Improves Them, and a Metaheuristic Escapes Local Minima"
+    },
+    {
+      "type": "para",
+      "text": "**Local search** changes the current routes a little at a time. Each kind of change is an **operator**: relocate one stop, exchange two stops, cross two routes' tails, reverse a segment (2-opt), move a pickup and its delivery together. The default parameters switch on most of them (`DefaultRoutingSearchParameters().local_search_operators`). A change that breaks a rule (a missed window, an overfull van) is refused, so the search only ever moves between feasible plans."
+    },
+    {
+      "type": "para",
+      "text": "**Greedy descent** accepts a change only if it lowers the cost, and stops when no change does. That point is a **local minimum**: no single move improves it, but a very different plan may be better. In the table's second column, each strategy's start descends to a different local minimum, from 253 to 287. Which minimum you reach depends on where you start."
+    },
+    {
+      "type": "para",
+      "text": "A **metaheuristic** is a rule for leaving a local minimum on purpose. The guide lists `GREEDY_DESCENT`, `GUIDED_LOCAL_SEARCH`, `SIMULATED_ANNEALING`, `TABU_SEARCH` and `GENERIC_TABU_SEARCH`, and calls guided local search generally the most efficient for vehicle routing. **Guided local search** adds a penalty to the arcs that the current local minima use, so the search is pushed to try routes without them, then judges plans by their real cost. With it (third column), every strategy that finds a first solution ends at 253 drive minutes after 300 solutions: 34 minutes less than the 287 that lesson 4.8.3's plain search found for this same model (four crews, trucks of 9 kits). Lesson 4.8.4's no-drop run, 283 minutes, is not a fair comparison: it used three crews with vans of 12 kits, a different model."
+    },
+    {
+      "type": "para",
+      "text": "Is 253 optimal? The routing library cannot say. It does not compute a lower bound, so there is no gap (lesson 3.4.1) to report; \"seven different starts all ended at 253\" is evidence, not proof. When proof matters, a MIP or CP-SAT model of a small instance can give one, as the brute force of lesson 4.8.1 did for eight sites."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Stop on Solutions, Not Seconds, When a Result Must Repeat"
+    },
+    {
+      "type": "para",
+      "text": "A metaheuristic does not stop at a local minimum, because leaving local minima is its job. It stops when a **search limit** is reached. The routing options guide lists three:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Parameter",
+        "Stops the search ...",
+        "Default"
+      ],
+      "rows": [
+        [
+          "`solution_limit`",
+          "after that many solutions",
+          "unlimited"
+        ],
+        [
+          "`time_limit`",
+          "after that much wall time (`time_limit.FromSeconds(30)`)",
+          "unlimited"
+        ],
+        [
+          "`lns_time_limit`",
+          "(per neighbor) after that much time completing one large-neighborhood move",
+          "100 ms in OR-Tools 9.15"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The guides use `time_limit`, and for a production run that is the natural choice: the planner gets a plan in 30 seconds whatever happens. But a time limit makes the result depend on the machine. A faster computer, a busier one or another OR-Tools build finds more or fewer solutions in the same seconds, and so stops at a different plan. Lesson 4.8.4 met an example: the dropped-visits guide's page, whose program stops after one second, reports nodes 6 and 15 dropped for 7,936; the course's copy, stopped after 100 solutions instead, drops 15 and 16 for 7,548, and prints that on every run."
+    },
+    {
+      "type": "para",
+      "text": "When a result must repeat (a test, a report two people must reproduce, a plan you will compare with tomorrow's), fix the strategy and stop on a count. The module's builder does exactly that:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def parameters(strategy: str = \"PATH_CHEAPEST_ARC\", metaheuristic: str | None = None,\n               solution_limit: int | None = None):\n    \"\"\"Search parameters by name. A metaheuristic gets a solution limit, never a time limit, so runs repeat.\"\"\"\n    params = pywrapcp.DefaultRoutingSearchParameters()\n    params.first_solution_strategy = getattr(routing_enums_pb2.FirstSolutionStrategy, strategy)\n    if metaheuristic:\n        params.local_search_metaheuristic = getattr(routing_enums_pb2.LocalSearchMetaheuristic, metaheuristic)\n    if solution_limit:\n        params.solution_limit = solution_limit\n    return params"
+    },
+    {
+      "type": "para",
+      "text": "and the table program checks it by running the same setting twice:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "two runs of PATH_CHEAPEST_ARC + guided local search, 300 solutions: costs 253 and 253, same routes: True"
+    },
+    {
+      "type": "para",
+      "text": "A solution limit can still be combined with a generous time limit as a safety net, as long as the time limit is never the one that stops a run whose result you print. Lesson 4.6.3 makes the same point for CP-SAT, which offers a deterministic time limit; OR-Tools 9.15's `routing_parameters.proto` has no such field, so a solution count is the repeatable stop. (Setting `log_search = True` prints the search's progress, which helps when you tune a limit.)"
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Status Says Whether You Have Routes, Not Whether They Are Optimal"
+    },
+    {
+      "type": "para",
+      "text": "After a solve, `routing.status()` returns a `RoutingSearchStatus`. The table program collected every status it saw at each stage:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "statuses seen, by stage:\n  first solution: ['ROUTING_FAIL', 'ROUTING_PARTIAL_SUCCESS_LOCAL_OPTIMUM_NOT_REACHED']\n  greedy descent: ['ROUTING_FAIL', 'ROUTING_SUCCESS']\n  guided local search: ['ROUTING_FAIL', 'ROUTING_SUCCESS']"
+    },
+    {
+      "type": "para",
+      "text": "The statuses, from `routing_enums.proto` and the routing options guide:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Status",
+        "Meaning",
+        "What to do"
+      ],
+      "rows": [
+        [
+          "`ROUTING_SUCCESS`",
+          "routes found; the search ended normally",
+          "use them"
+        ],
+        [
+          "`ROUTING_PARTIAL_SUCCESS_LOCAL_OPTIMUM_NOT_REACHED`",
+          "routes found, but a limit stopped the search before a local minimum",
+          "usable; more search would improve them"
+        ],
+        [
+          "`ROUTING_OPTIMAL`",
+          "solved to optimality",
+          "use them (none of this module's runs reported it)"
+        ],
+        [
+          "`ROUTING_FAIL`",
+          "no routes found",
+          "try another strategy, or check the data"
+        ],
+        [
+          "`ROUTING_FAIL_TIMEOUT`",
+          "the time limit came before any routes",
+          "more time, another strategy, or check the data"
+        ],
+        [
+          "`ROUTING_INFEASIBLE`",
+          "the problem was proven infeasible",
+          "fix the data or the rules"
+        ],
+        [
+          "`ROUTING_INVALID`",
+          "the model or parameters are not valid",
+          "fix the code"
+        ],
+        [
+          "`ROUTING_NOT_SOLVED`",
+          "not solved yet",
+          ""
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The first column's runs stopped after one solution, before any local minimum, and their status says so. `ROUTING_SUCCESS` does not mean optimal: the greedy-descent column reports it for plans from 253 to 287. And a failure is rarely a proof: lesson 4.8.2's two crews with 24 kits for 33 needed got `ROUTING_FAIL_TIMEOUT`, not `ROUTING_INFEASIBLE`. Read the status before you read the plan, and when it is a failure, check the simple arithmetic (total demand, windows reachable from the yard) before you blame the search."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Start From Yesterday's Routes"
+    },
+    {
+      "type": "para",
+      "text": "Planners rarely start from nothing. Yesterday's routes are a good plan for a day that changed a little, and crews prefer routes they know. The common routing tasks guide shows how to hand the search a starting plan: build an assignment from routes with `ReadAssignmentFromRoutes`, then search from it with `SolveFromAssignmentWithParameters`. The routes are lists of nodes, one per vehicle, without the depot. One step is easy to miss: when you give a starting plan, close the model with your parameters first (`CloseModelWithParameters`), or reading the routes closes it with the default parameters."
+    },
+    {
+      "type": "example",
+      "id": "warm_start-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "52-ortools-routing/src/warm_start.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "52-ortools-routing/src/warm_start.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "routing.CloseModelWithParameters(search)\ninitial = routing.ReadAssignmentFromRoutes([[node[name] for name in crew] for crew in YESTERDAY], True)\nif initial is None:\n    print(\"  yesterday's routes break a rule today: solving from scratch\")\n    solution = routing.SolveWithParameters(search)\nelse:\n    print(f\"  yesterday's routes still fit: cost {initial.ObjectiveValue()}\")\n    solution = routing.SolveFromAssignmentWithParameters(initial, search)"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Yesterday's routes are lesson 4.8.3's 287-minute plan. Today, once with the same sites and windows and once with A305's window changed to close at 13:00 (yesterday's plan reached it at 15:00):"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "today, same sites and windows as yesterday:\n  yesterday's routes still fit: cost 287\n  after 100 solutions of guided local search: cost 253\n    crew 0: A305 > A281 > A302 > A308 > A087\n    crew 1: A348 > A096 > A064 > A136 > A149\n    crew 2: A344 > A133 > A157 > A378 > A183\n    crew 3: A106 > A091 > A230\ntoday, A305's window now closes at 13:00 (yesterday it was reached at 15:00):\n  yesterday's routes break a rule today: solving from scratch\n  after 100 solutions of guided local search: cost 253\n    crew 0: A305 > A281 > A302 > A308 > A087\n    crew 1: A096 > A064 > A106 > A091\n    crew 2: A344 > A133 > A157 > A378 > A183\n    crew 3: A348 > A149 > A136 > A230"
+    },
+    {
+      "type": "para",
+      "text": "When yesterday's plan still fits, `ReadAssignmentFromRoutes` returns it with its cost (287), and the search improves it to 253 in 100 solutions. When a rule changed and the plan breaks it, the call returns `None`; the program falls back to a fresh solve instead of failing. Two notes for practice:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Starting from a plan does not keep the plan.** Local search is free to move every stop, and here it did. If crews must keep most of their routes, that is a rule (a penalty per change, or fixed assignments), not a starting point.",
+        "**`ReadAssignmentFromRoutes` is a feasibility test.** Lesson 4.8.4 used it to check hand-built plans; here it tells you that yesterday's plan no longer fits before the search starts."
+      ]
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "This lesson changes the search, not the model. The model searched is lesson 4.8.3's, restated here so the lesson stands alone. It is a vehicle routing model, searched by the routing library's heuristics."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`N`$ the nodes, node 0 the yard and 1 to 18 the Valley sites; $`V`$ the crews, $`|V| = 4`$; $`I`$ the indices: one per site, a start $`s_v`$ and an end $`e_v`$ per crew."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`c_{ab}`$ drive minutes (integers, fictional); $`\\text{service}_a`$ inspection minutes; $`[a_i, b_i]`$ arrival windows; $`H = 480`$ the shift's end; $`W = 120`$ the most waiting at one stop; $`k_a`$ kits; $`K = 9`$ kits per van."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`\\text{next}_i`$, $`\\text{vehicle}_i`$; $`0 \\le \\text{time}_i \\le H`$ (Time cumul); $`0 \\le \\text{wait}_i \\le W`$ (Time slack); $`0 \\le \\text{load}_i \\le K`$ (Kits cumul). All integer."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\min \\; \\sum_{i \\in I \\setminus \\{e_v\\}} c_{\\text{node}(i),\\, \\text{node}(\\text{next}_i)}"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& \\text{next}, \\text{vehicle} \\text{ form one route per crew, every site on one route} && && \\text{(routes)} \\\\\n& \\text{time}_{\\text{next}_i} = \\text{time}_i + \\text{service}_{\\text{node}(i)} + c_{\\text{node}(i),\\, \\text{node}(\\text{next}_i)} + \\text{wait}_i && \\forall i \\in I \\setminus \\{e_v\\} && \\text{(Time)} \\\\\n& a_i \\le \\text{time}_i \\le b_i && \\forall i \\text{ a site index} && \\text{(window}_i) \\\\\n& \\text{load}_{s_v} = 0, \\quad \\text{load}_{\\text{next}_i} = \\text{load}_i + k_{\\text{node}(i)} && \\forall v,\\ \\forall i && \\text{(Kits)}\n\\end{aligned}"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Search setting",
+        "Code"
+      ],
+      "rows": [
+        [
+          "first-solution strategy",
+          "`params.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.<NAME>`"
+        ],
+        [
+          "metaheuristic",
+          "`params.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.<NAME>`"
+        ],
+        [
+          "repeatable stop",
+          "`params.solution_limit = n`"
+        ],
+        [
+          "wall-clock stop",
+          "`params.time_limit.FromSeconds(s)`"
+        ]
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**A first-solution strategy builds the starting routes.** Strategies differ by model; on the Valley day their first plans ranged from 277 to 522 minutes and four built none.",
+        "**Local search improves them, and a metaheuristic escapes local minima.** Greedy descent stops at the first local minimum (253 to 287 here); guided local search with 300 solutions reached 253 from every start. No bound, so no proof of optimality.",
+        "**Stop on solutions, not seconds, when a result must repeat.** A time limit's result depends on the machine; a fixed strategy with a solution limit prints the same plan every run.",
+        "**The status says whether you have routes, not whether they are optimal.** `ROUTING_SUCCESS` is not optimality, and `ROUTING_FAIL_TIMEOUT` is not infeasibility.",
+        "**Start from yesterday's routes** with `CloseModelWithParameters`, `ReadAssignmentFromRoutes` and `SolveFromAssignmentWithParameters`, and fall back to a fresh solve when they no longer fit."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Call or field",
+        "What it does"
+      ],
+      "rows": [
+        [
+          "`params.first_solution_strategy`",
+          "the construction rule (`routing_enums_pb2.FirstSolutionStrategy`)"
+        ],
+        [
+          "`params.local_search_metaheuristic`",
+          "`GREEDY_DESCENT`, `GUIDED_LOCAL_SEARCH`, `SIMULATED_ANNEALING`, `TABU_SEARCH`, `GENERIC_TABU_SEARCH`"
+        ],
+        [
+          "`params.solution_limit`",
+          "stop after this many solutions"
+        ],
+        [
+          "`params.time_limit.FromSeconds(s)`",
+          "stop after `s` seconds of wall time"
+        ],
+        [
+          "`params.lns_time_limit`",
+          "time for completing each large-neighborhood move"
+        ],
+        [
+          "`params.log_search = True`",
+          "print the search's progress"
+        ],
+        [
+          "`routing.status()`",
+          "a `RoutingSearchStatus`; name it with `routing_enums_pb2.RoutingSearchStatus.Value.Name(...)`"
+        ],
+        [
+          "`routing.CloseModelWithParameters(params)`",
+          "close the model with these parameters before reading routes"
+        ],
+        [
+          "`routing.ReadAssignmentFromRoutes(routes, True)`",
+          "routes (node lists, no depot) as an assignment, or `None`"
+        ],
+        [
+          "`routing.SolveFromAssignmentWithParameters(assignment, params)`",
+          "search from a given plan"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [OR-Tools: Routing options](https://developers.google.com/optimization/routing/routing_options) (search limits, first-solution strategies, metaheuristics, statuses), [Common routing tasks](https://developers.google.com/optimization/routing/routing_tasks) (time and solution limits, initial routes), [TSP: changing the search strategy](https://developers.google.com/optimization/routing/tsp), the sample [vrp_initial_routes.py](https://github.com/google/or-tools/blob/v9.15/ortools/constraint_solver/samples/vrp_initial_routes.py), and [routing_parameters.proto](https://github.com/google/or-tools/blob/v9.15/ortools/constraint_solver/routing_parameters.proto) and [routing_enums.proto](https://github.com/google/or-tools/blob/v9.15/ortools/constraint_solver/routing_enums.proto) for every parameter and status."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Add `SIMULATED_ANNEALING` and `TABU_SEARCH` columns to `strategy_table.py` with 300 solutions each. Predict whether they reach 253.",
+        "Run guided local search with 30, 100 and 300 solutions from `FIRST_UNBOUND_MIN_VALUE`. At which limit does it first reach 253?",
+        "Make every routine site optional (lesson 4.8.4) and rerun the table. Predict which failing strategies start working."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: A Search You Can Explain"
+    },
+    {
+      "type": "para",
+      "text": "A routing plan reaches a planner as \"the solver says\". It should reach them as \"this setting, this many solutions, this cost, and this is what the cost is made of\". That means a fixed strategy and a solution limit in anything you report, the status printed next to the plan, the penalties separated from the driving (lesson 4.8.4), and, when you can afford it, a second strategy as a check: when two different starts end at the same cost, that is worth saying; when they do not, the search needed more solutions."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**strategy_table.py.** Every first-solution strategy on the four-crew Valley day, with no local search, greedy descent and guided local search, the statuses each produced, and a repeat run (*A First-Solution Strategy Builds the Starting Routes*, *Local Search Improves Them, and a Metaheuristic Escapes Local Minima*, *Stop on Solutions, Not Seconds*, *The Status Says Whether You Have Routes*). *Try:* Change the guided local search limit to 50. Predict which rows still reach 253."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [strategy_table.py](src/strategy_table.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**warm_start.py.** Yesterday's routes as the starting plan, and a fresh solve when they break a new window (*Start From Yesterday's Routes*). *Try:* Give A230 the window 08:00-11:00 instead. Predict whether yesterday's plan still fits."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [warm_start.py](src/warm_start.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 12,
+    "paras": 31,
+    "code": 6,
+    "tables": 5,
+    "lists": 5,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 2
+  },
+  "content_sha256": "aa39490003380c0c26754377ae53ce337860f05c940519a3a51add1dc4652641"
+}

@@ -1,0 +1,150 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "09-diagnostics-and-explainability",
+    "39-explaining-decisions"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "The price of reversing a renovation decision",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A regional library board picks branch renovations each year with a small MILP: each renovation has a cost and a benefit, the year's budget is fixed, and renovations required by accessibility law are mandatory. Branch managers keep asking the same two questions: \"why was my renovation left out?\" and \"why did theirs get in?\". The board wants one answer to both: what the best plan would lose if that one decision went the other way, and which renovations would change."
+    },
+    {
+      "type": "para",
+      "text": "`renovations.py` already has the board's model (`build`) and `best`, which solves a model and returns the best value and the chosen names, or `None` when no plan is feasible. `best` solves at a relative gap of 0, so both values in a cost are proven optima, as the lesson requires. Write `forcing_cost(items, budget, name)`. It returns a dictionary:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`\"action\"`: `\"out\"` if the best plan chose `name`, `\"in\"` if it did not;",
+        "`\"cost\"`: the best plan's value less the best value with that decision reversed, rounded to an integer, or `None` when no plan allows the reversal;",
+        "`\"dropped\"` and `\"added\"`: the names in the best plan but not in the reversed one, and the other way round, each sorted; both empty when there is no reversed plan."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The board's model, with $`R`$ the renovations, $`M \\subseteq R`$ the mandatory ones, $`c_r`$ and $`v_r`$ each renovation's cost and value, and $`B`$ the budget:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& \\sum_{r \\in R} v_r\\, x_r \\\\\n\\text{s.t. }& \\sum_{r \\in R} c_r\\, x_r \\le B && \\text{(budget)} \\\\\n& x_r = 1 && \\forall r \\in M && \\text{(must}_r) \\\\\n& x_r \\in \\{0, 1\\} && \\forall r \\in R\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Write the one row your reversal adds, with its label, for each of the two actions. Then code it: add it as a named row to a fresh copy of the model. The tests use their own branches."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Renovation:\n    name: str\n    cost: int           # $k\n    value: int          # $k of benefit\n    mandatory: bool = False\n\n\ndef build(items: list[Renovation], budget: int) -> tuple[mathopt.Model, dict[str, mathopt.Variable]]:\n    \"\"\"The library board's model: pick renovations within the budget; mandatory ones always.\"\"\"\n    model = mathopt.Model(name=\"renovations\")\n    x = {r.name: model.add_binary_variable(name=f\"x_{r.name}\") for r in items}\n    model.add_linear_constraint(sum(r.cost * x[r.name] for r in items) <= budget, name=\"budget\")\n    for r in items:\n        if r.mandatory:\n            model.add_linear_constraint(x[r.name] == 1, name=f\"must_{r.name}\")\n    model.maximize(sum(r.value * x[r.name] for r in items))\n    return model, x\n\n\ndef best(model: mathopt.Model, x: dict[str, mathopt.Variable]) -> tuple[float, set[str]] | None:\n    \"\"\"(best value, chosen names), or None when the model has no feasible plan.\"\"\"\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS,\n                           params=mathopt.SolveParameters(relative_gap_tolerance=0.0))   # a proven optimum\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    return result.objective_value(), {name for name, v in x.items() if result.variable_values(v) > 0.5}\n\n\ndef forcing_cost(items: list[Renovation], budget: int, name: str) -> dict:\n    \"\"\"Reverse the best plan's decision on `name`, re-solve, and say what it costs and what changes.\"\"\"\n    model, x = build(items, budget)\n    base_value, base_plan = best(model, x)\n    action = \"out\" if name in base_plan else \"in\"\n    forced_model, fx = build(items, budget)\n    forced_model.add_linear_constraint(fx[name] == (0 if action == \"out\" else 1), name=f\"{action}_{name}\")\n    forced = best(forced_model, fx)\n    if forced is None:\n        return {\"action\": action, \"cost\": None, \"dropped\": [], \"added\": []}\n    value, plan = forced\n    return {\"action\": action, \"cost\": round(base_value - value),\n            \"dropped\": sorted(base_plan - plan), \"added\": sorted(plan - base_plan)}\n\n\nif __name__ == \"__main__\":\n    items = [Renovation(\"roof\", 40, 60), Renovation(\"lift\", 30, 20, mandatory=True)]\n    print(forcing_cost(items, 60, \"roof\"))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Renovation:\n    name: str\n    cost: int           # $k\n    value: int          # $k of benefit\n    mandatory: bool = False\n\n\ndef build(items: list[Renovation], budget: int) -> tuple[mathopt.Model, dict[str, mathopt.Variable]]:\n    \"\"\"The library board's model: pick renovations within the budget; mandatory ones always.\"\"\"\n    model = mathopt.Model(name=\"renovations\")\n    x = {r.name: model.add_binary_variable(name=f\"x_{r.name}\") for r in items}\n    model.add_linear_constraint(sum(r.cost * x[r.name] for r in items) <= budget, name=\"budget\")\n    for r in items:\n        if r.mandatory:\n            model.add_linear_constraint(x[r.name] == 1, name=f\"must_{r.name}\")\n    model.maximize(sum(r.value * x[r.name] for r in items))\n    return model, x\n\n\ndef best(model: mathopt.Model, x: dict[str, mathopt.Variable]) -> tuple[float, set[str]] | None:\n    \"\"\"(best value, chosen names), or None when the model has no feasible plan.\"\"\"\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS,\n                           params=mathopt.SolveParameters(relative_gap_tolerance=0.0))   # a proven optimum\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    return result.objective_value(), {name for name, v in x.items() if result.variable_values(v) > 0.5}\n\n\ndef forcing_cost(items: list[Renovation], budget: int, name: str) -> dict:\n    \"\"\"Reverse the best plan's decision on `name`, re-solve, and say what it costs and what changes.\"\"\"\n    # TODO: solve the board's model, write the forcing as a named row, re-solve, compare.\n    return {\"action\": \"in\", \"cost\": 0, \"dropped\": [], \"added\": []}\n\nif __name__ == \"__main__\":\n    items = [Renovation(\"roof\", 40, 60), Renovation(\"lift\", 30, 20, mandatory=True)]\n    print(forcing_cost(items, 60, \"roof\"))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "ae84e62fdd5d891a1283ae6aebdd32c2b57852377135debe24aa3cea6b353517",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Renovation:\n    name: str\n    cost: int           # $k\n    value: int          # $k of benefit\n    mandatory: bool = False\n\n\ndef build(items: list[Renovation], budget: int) -> tuple[mathopt.Model, dict[str, mathopt.Variable]]:\n    \"\"\"The library board's model: pick renovations within the budget; mandatory ones always.\"\"\"\n    model = mathopt.Model(name=\"renovations\")\n    x = {r.name: model.add_binary_variable(name=f\"x_{r.name}\") for r in items}\n    model.add_linear_constraint(sum(r.cost * x[r.name] for r in items) <= budget, name=\"budget\")\n    for r in items:\n        if r.mandatory:\n            model.add_linear_constraint(x[r.name] == 1, name=f\"must_{r.name}\")\n    model.maximize(sum(r.value * x[r.name] for r in items))\n    return model, x\n\n\ndef best(model: mathopt.Model, x: dict[str, mathopt.Variable]) -> tuple[float, set[str]] | None:\n    \"\"\"(best value, chosen names), or None when the model has no feasible plan.\"\"\"\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS,\n                           params=mathopt.SolveParameters(relative_gap_tolerance=0.0))   # a proven optimum\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    return result.objective_value(), {name for name, v in x.items() if result.variable_values(v) > 0.5}\n\n\ndef forcing_cost(items: list[Renovation], budget: int, name: str) -> dict:\n    \"\"\"Reverse the best plan's decision on `name`, re-solve, and say what it costs and what changes.\"\"\"\n    # TODO: solve the board's model, write the forcing as a named row, re-solve, compare.\n    return {\"action\": \"in\", \"cost\": 0, \"dropped\": [], \"added\": []}\n\nif __name__ == \"__main__\":\n    items = [Renovation(\"roof\", 40, 60), Renovation(\"lift\", 30, 20, mandatory=True)]\n    print(forcing_cost(items, 60, \"roof\"))\n",
+  "exercise": {
+    "main_path": "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-02/practice-1/renovations.py",
+    "test_path": "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-02/practice-1/test_renovations.py",
+    "run_command": [
+      "python3",
+      "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-02/practice-1/renovations.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-02/practice-1/target/report.xml",
+      "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-02/practice-1/test_renovations.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_forcing_a_left_out_renovation_in",
+        "kind": "main",
+        "says": "a renovation left out is forced in: the cost against the best plan, and what is dropped and added"
+      },
+      {
+        "id": "test_a_chosen_renovation_is_forced_out",
+        "kind": "edge",
+        "says": "a renovation the best plan chose is forced out, not in"
+      },
+      {
+        "id": "test_forcing_out_a_mandatory_renovation_has_no_cost",
+        "kind": "edge",
+        "says": "forcing out a mandatory renovation has no feasible plan, so it has no cost"
+      },
+      {
+        "id": "test_forcing_in_a_renovation_bigger_than_the_budget_has_no_cost",
+        "kind": "edge",
+        "says": "forcing in a renovation that cannot fit the budget has no feasible plan either"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "39-explaining-decisions/README_9.3.2.md",
+      "section": "A Forced Re-Solve Says What Gives Way, and the Rules Say Why"
+    },
+    "concepts": [
+      "the cost of a decision is the best value lost when the opposite decision is forced and the model re-solved",
+      "a forcing is a named row added to a fresh copy of the model, never an edit of the solved plan"
+    ]
+  }
+}

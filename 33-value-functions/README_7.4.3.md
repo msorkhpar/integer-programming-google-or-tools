@@ -1,0 +1,290 @@
+# 7.4.3 Weights, Swing Weighting and Stakeholder Buy-In
+
+With the measures normalized (lesson 7.4.2), the GridCap board must say how much each one counts.
+The safety lead opens: "Safety first. Forty percent safety, thirty reliability, twenty finance, ten
+environment." Heads nod. It sounds principled, and it is the most common way weights are set. It is
+also meaningless until someone says "forty percent of *what*?". The same 40% can mean that an injury
+avoided is worth $10M or $100M, depending on a number the board never looked at.
+
+This lesson shows what a weight really is (an exchange rate between units), how **swing weighting**
+gets weights a board can defend, why a weight must change when its reference does, and how to show
+the result so that the people who set the weights trust what the model does with them. The
+weighted-sum *optimization* that uses these weights, and what it can and cannot find, is the subject of
+lessons 8.1.1 and 8.1.2 (*Weighted sums*); this lesson only builds the weights.
+
+GridCap is a fictional utility generated for this course. Its references, ratings and the prices
+they imply are invented. The project IDs below are GridCap small's (lesson 7.4.1 used tiny, whose
+P006 is a different project).
+
+## A Weight Is an Exchange Rate Between Units
+
+The value of project $`i`$ is the weighted sum of its normalized scores:
+
+```math
+v_i = \sum_k w_k\, n_{i,k} = \sum_k w_k\, \frac{m_{i,k}}{R_k} = \sum_k \frac{w_k}{R_k}\, m_{i,k}
+```
+
+with weights $`w_k \ge 0`$ that sum to 1. The last form is the one to read: one more unit of measure
+$`k`$ adds $`w_k / R_k`$ to the value. The weight never acts alone, only together with its reference.
+Dividing one measure's value per unit by another's gives the **exchange rate** between them, how many
+units of measure $`j`$ the value function treats as equal to one unit of measure $`k`$:
+
+```math
+\text{rate}_{k \to j} = \frac{w_k / R_k}{w_j / R_j}
+```
+
+With $`j`$ the financial measure, this is "what one unit of $`k`$ is worth in $k of NPV". Here are
+the rates the safety lead's weights imply against GridCap's references (3,000,000 customer-minutes,
+1 incident, 200 tCO2e, $5,000k), and again if the safety reference had been 0.1 incident:
+
+```python
+def exchange_rates(reference=REFERENCE, weights=WEIGHTS, base: str = "financial") -> dict[str, float]:
+    """How many units of `base` one unit of each measure is worth: (w_k / R_k) / (w_base / R_base)."""
+    per_unit = {k: weights[k] / reference[k] for k in weights}
+    return {k: per_unit[k] / per_unit[base] for k in weights}
+```
+
+```text
+importance weights, safety swing 1 incident:
+  1 customer-minute = $2.50
+  1 safety incident = $10,000k
+  1 tonne CO2e      = $12.50k
+importance weights, safety swing 0.1 incident:
+  1 customer-minute = $2.50
+  1 safety incident = $100,000k
+  1 tonne CO2e      = $12.50k
+```
+
+Check the first safety rate: $`(0.4 / 1) / (0.2 / 5{,}000) = 10{,}000`$, so $10,000k, $10M, per
+incident avoided. Shrink the safety reference tenfold and the same 40% prices an incident at $100M.
+Nobody in the room changed their view about safety; the weight's meaning changed because the amount
+it refers to changed. So "safety is 40%" is not a statement anyone can agree or disagree with. "We
+would give up $10M of NPV to avoid one expected safety incident" is.
+
+That is the whole idea of this lesson: **a weight is a price**. Every weighted sum, whether its
+author meant it or not, sets an exchange rate between every pair of measures, and the plan the model
+picks is the plan that is best at those prices.
+
+## Swing Weighting Compares the Swings, Not the Measures
+
+The safety lead's question, "which measure is most important?", has no answer, because importance
+depends on how much of each measure is at stake. The UK government's multi-criteria analysis manual
+puts it with a car purchase: if every car on your shortlist costs within £200 of the others, price
+deserves little weight, however much you care about money in general. A weight has to reflect both
+how much the options differ on a measure and how much that difference matters. That is why a measure
+everyone calls "very important", such as safety, can end up with a lower weight than a duller one,
+if the options hardly differ on it.
+
+**Swing weighting** builds the weights from that idea. Each measure's **swing** is the move from no
+benefit (0) to its reference $`R_k`$. The board compares swings, not measures:
+
+1. **Describe every swing concretely.** "From no customer-minutes avoided to 3,000,000 avoided, about
+   five minutes of SAIDI for every GridCap customer." "From no incident avoided to one."
+2. **Find the biggest swing.** Ask: if you could move only one measure from 0 to its reference, which
+   would you move? Compare two at a time and keep the winner when there are many. The winner gets a
+   rating of 100. The sizes of the references decide nothing here: 3,000,000 customer-minutes is a
+   bigger number than 1 incident only because the units differ.
+3. **Rate every other swing against it.** "Moving safety from 0 to 1 incident avoided is worth 80% of
+   moving reliability from 0 to 3,000,000 customer-minutes." The manual's group version has each
+   person write a rating down privately, shows the spread, asks those at the extremes to explain, and
+   then lets the decision maker or a small senior group settle the number.
+4. **Divide by the total.** $`w_k = r_k / \sum_j r_j`$, so the weights sum to 1 and keep the ratios
+   of the ratings.
+
+```python
+def swing_weights(ratings: dict[str, float]) -> dict[str, float]:
+    """Weights from swing ratings: each rating over their total, so the weights sum to 1."""
+    total = sum(ratings.values())
+    return {k: r / total for k, r in ratings.items()}
+```
+
+GridCap's board rated the reliability swing biggest, safety 80, finance 60 and environment 20:
+
+```text
+the swings the board compared (from no benefit to the reference):
+  reliability   0 -> 3,000,000 customer-minutes
+  safety        0 ->       1.0 incidents
+  environmental 0 ->     200.0 tCO2e
+  financial     0 ->     5,000 $k
+ratings: {'reliability': 100, 'safety': 80, 'financial': 60, 'environmental': 20}
+weights: {'reliability': 0.3846, 'safety': 0.3077, 'financial': 0.2308, 'environmental': 0.0769} sum 1.0
+what the weights say, in NPV:
+  avoiding 1 customer-minute is worth $2.78
+  avoiding 1 safety incident is worth $6,667k
+  avoiding 1 tonne CO2e is worth $8.33k
+```
+
+The ratings total 260, so reliability's weight is 100/260 = 0.3846. The prices follow from the
+ratings and the swings: the $5,000k financial swing is rated 60 and the 1-incident safety swing 80, so
+one incident is worth $`80/60 \times 5{,}000 = 6{,}667`$ $k. These are GridCap's weights from here on.
+
+Two conditions make a weighted sum a fair summary at all, and the manual names both. **No double
+counting** (lesson 7.4.1). And **preference independence**: you must be able to say how much you
+prefer one level of a measure to another without knowing the other measures. "More customer-minutes
+avoided is better, whatever the NPV" is independent. "Emissions only matter for projects in the
+wildfire region" is not; it needs the two folded into one measure, or a hurdle that screens projects
+first.
+
+<!-- practice 1 -->
+
+## A Weight Belongs to Its Reference: Change One, Re-rate the Other
+
+Because the price of a unit is $`w_k / R_k`$, the weight and the reference only mean something as a
+pair. Suppose the board decides that the reliability swing should cover 6,000,000 customer-minutes,
+because next cycle's storm-hardening projects are bigger. Three ways to handle it, on GridCap small:
+
+```python
+wider = {**REFERENCE, "reliability": 6_000_000}         # the board doubles the reliability swing
+
+cases = {
+    "old swing, old ratings": (REFERENCE, SWING_RATINGS),
+    "wider swing, old ratings": (wider, SWING_RATINGS),
+    "wider swing, re-rated": (wider, {**SWING_RATINGS, "reliability": 200}),
+}
+```
+
+```text
+old swing, old ratings  : $2.78 per customer-minute; top five P006 P030 P028 P022 P032; value / old value between 1.0000 and 1.0000
+wider swing, old ratings: $1.39 per customer-minute; top five P006 P030 P028 P032 P036; value / old value between 0.6067 and 0.9885
+wider swing, re-rated   : $2.78 per customer-minute; top five P006 P030 P028 P022 P032; value / old value between 0.7222 and 0.7222
+```
+
+- **Old ratings on the wider swing** halve the price of a customer-minute, to $1.39. Nobody decided
+  that customers' minutes are worth half as much; the board only redrew the scale. The ranking
+  changes (P022 drops out of the top five, P036 comes in), and each project's value moves by its own
+  factor, from 0.61 to 0.99 of the old, depending on how much of it is reliability.
+- **Re-rated** properly: a swing twice as large is worth twice the rating, 200 instead of 100. The
+  price of a customer-minute is back at $2.78, and every project's value is the old one times the same
+  number, $`260/360 = 0.7222`$ (the ratings now total 360 instead of 260). Multiplying every value by
+  one positive number never reorders anything, so the ranking, and any plan chosen on these values,
+  is the same.
+
+The same holds the other way: a weight copied from another utility, or from last year's model, means
+nothing unless its reference came with it. When a reference changes, ask the board whether the new
+swing's rating should scale with it. If their answer is "yes, proportionally", the exchange rates,
+and every decision, stay the same.
+
+<!-- practice 2 -->
+
+## Buy-In Comes From Prices People Can Read and Rankings That Survive Disagreement
+
+Weights decide which projects get funded, so the people affected will challenge them. Three things
+make the weights hold up.
+
+**Show the prices, not the percentages.** "Reliability 0.3846" invites a debate about decimals.
+"Avoiding one customer-minute is worth $2.78 of NPV; avoiding one safety incident is worth $6.7M; a
+tonne of CO2e, $8.3k" invites the right debate: would we really pay that? Prices can also be checked
+against numbers the utility already uses elsewhere, such as a value of lost load from a rate case or
+an internal carbon price, if it has them. If the board flinches at a price, the rating behind it is wrong; change
+the rating and show the prices again.
+
+**Show what the weights do to the projects.** Read out the projects that rise and fall against an
+NPV-only ranking, with the reason in measures. GridCap's top project under these weights, small's
+P006 (lesson 7.4.4), has an NPV of $60k; it is on top because it avoids 3.2 million
+customer-minutes. That is exactly the kind of result that is either the point of the value function
+or a sign of a bad number, and the board has to see it to decide which.
+
+**Test how far the weights can move before the answer changes.** Board members will disagree about
+ratings. Often the disagreement does not matter: the same projects come out on top across the range
+of views. Here the safety rating swings from 0 to 200 while the others stay put, and the program
+prints a line only when the top five change (and at 200):
+
+```python
+for rating in range(0, 201, 10):
+    weights = swing_weights({**SWING_RATINGS, "safety": rating})
+    top = ranking({p: value(b, REFERENCE, weights) for p, b in benefits.items()})[:5]
+    if top != previous or rating == 200:
+        print(f"safety rating {rating:3} (weight {weights['safety']:.3f}): top five {' '.join(top)}")
+```
+
+```text
+safety rating   0 (weight 0.000): top five P006 P030 P028 P032 P022
+safety rating  20 (weight 0.100): top five P006 P030 P028 P022 P032
+safety rating 160 (weight 0.471): top five P006 P030 P028 P022 P027
+safety rating 200 (weight 0.526): top five P006 P030 P028 P022 P027
+```
+
+From "safety counts for nothing" to "safety counts for more than half", P006, P030 and P028 stay the
+top three. Only fourth and fifth place move. That is a sentence a board can act on: "you disagree
+about safety by a factor of anything you like, and it does not change the three projects at the top".
+The multi-criteria manual makes the same point: sensitivity analysis often shows that the same two or
+three options win under every group's weights, so the argument can move on to the projects where
+the weights do matter.
+
+This is a ranking of projects one at a time. Whether a plan, which must also fit a budget, changes
+with the weights is a question for the solver, and lessons 8.1.1 and 8.1.2 (*Weighted sums*) ask it.
+
+## Summary
+
+- **A weight is an exchange rate between units.** One unit of measure $`k`$ is worth $`w_k / R_k`$;
+  the safety lead's 40% priced an incident at $10M or $100M depending on the reference.
+- **Swing weighting compares the swings, not the measures.** Rate each swing from 0 to its reference
+  against the biggest (100) and divide by the total; GridCap's ratings 100, 80, 60, 20 give an
+  incident a price of $6,667k and a customer-minute $2.78.
+- **A weight belongs to its reference: change one, re-rate the other.** Doubling the reliability
+  swing and its rating multiplies every value by 0.7222 and keeps the ranking; doubling only the swing
+  halves a customer-minute's price and reorders the projects.
+- **Buy-in comes from prices people can read and rankings that survive disagreement.** Show prices,
+  show winners and losers, and sweep the contested weights: on GridCap small the top three hold for
+  any safety rating from 0 to 200.
+
+## Reference
+
+| Symbol | Meaning |
+| --- | --- |
+| $`r_k`$ | swing rating of measure $`k`$: the biggest swing is 100, the others a share of it |
+| $`w_k = r_k / \sum_j r_j`$ | swing weight; $`w_k \ge 0`$, $`\sum_k w_k = 1`$ |
+| $`w_k / R_k`$ | value of one unit of measure $`k`$ |
+| $`\text{rate}_{k \to j} = (w_k/R_k)/(w_j/R_j)`$ | units of $`j`$ worth one unit of $`k`$ |
+| GridCap | ratings 100 / 80 / 60 / 20 (reliability, safety, financial, environmental); $2.78 per customer-minute, $6,667k per incident, $8.33k per tCO2e |
+
+**Further reading:** UK Department for Communities and Local Government, [Multi-criteria analysis: a
+manual](https://assets.publishing.service.gov.uk/government/uploads/system/uploads/attachment_data/file/7612/1132618.pdf)
+(2009): section 6.2.10 on swing weighting, the car-price example and the group procedure; section
+5.4.4.4 and 6.2.12 on mutual preference independence; section 6.2.14 on sensitivity analysis between
+interest groups.
+
+## Challenges
+
+1. The environmental lead wants a tonne of CO2e to be worth $50k. Keeping the other ratings, what
+   environmental rating gives that price?
+2. Two board members rate safety 60 and 120. Using the sensitivity output, does their disagreement
+   change the top five? Which places?
+3. Why can a swing weight be 0 for a measure everyone agrees is important? Describe a portfolio where
+   that would be right.
+
+## Design Note: Store Ratings and References, Derive Weights
+
+A model that stores only the weights loses the information needed to keep them meaningful: when a
+reference changes, nobody can tell whether the weight was meant for the old swing or the new. Store
+the board's ratings and the references, with the date and the meeting that set them, and compute
+the weights and the prices from them every run. Print the prices in the run's report. A price that
+changes between two runs is then a visible event, never a side effect.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson
+shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy
+of the code, so the course's own files never change.
+
+**exchange_rates.py.** The prices implied by "importance" weights, for two safety references (*A
+Weight Is an Exchange Rate*). *Try:* Set the financial reference to $10,000k. Predict the price of an
+incident.
+
+- Program: [exchange_rates.py](src/exchange_rates.py)
+
+**swing_weights.py.** GridCap's swings, ratings, weights and prices (*Swing Weighting*). *Try:* Rate
+safety 100 as well. Predict the new price of a customer-minute.
+
+- Program: [swing_weights.py](src/swing_weights.py)
+
+**weights_follow.py.** A wider reliability swing with old and with re-rated weights (*A Weight Belongs
+to Its Reference*). *Try:* Re-rate reliability to 150 instead of 200. Predict whether the ranking is
+the old one.
+
+- Program: [weights_follow.py](src/weights_follow.py)
+
+**weight_sensitivity.py.** Sweeps the safety rating and prints each change in the top five (*Buy-In
+Comes From Prices*). *Try:* Sweep the financial rating instead. Predict whether P006 stays first.
+
+- Program: [weight_sensitivity.py](src/weight_sensitivity.py)

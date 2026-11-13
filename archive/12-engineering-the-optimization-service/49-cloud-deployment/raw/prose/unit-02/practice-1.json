@@ -1,0 +1,152 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "49-cloud-deployment"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A Batch submitter for trim-planning solves",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The vegetation team's trim planner is a CP-SAT model that assigns line-clearance crews to circuits. It now runs as a Batch job on Fargate: the job definition `trim-solve` and the queue `trim-queue` exist. What is missing is the call that submits one plan's solve, sized for the plan."
+    },
+    {
+      "type": "para",
+      "text": "In `trim_jobs.py`, write `submit_trim(batch, queue, definition, plan_id, circuits, limit_s)`. It makes **one** `batch.submit_job` call and returns the `jobId` Batch gives back. The call carries:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`jobName`: `job_name(plan_id)`. Batch accepts only letters, digits, hyphens and underscores, with a letter or digit first, and at most 128 characters. Replace every other character with `-`, drop leading hyphens and underscores, and cut to 128. (`\"#7 west/north\"` gives `\"7-west-north\"`.)",
+        "the given `jobQueue` and `jobDefinition`;",
+        "`containerOverrides` with `environment` `PLAN_ID` (the plan id as given), `TIME_LIMIT_S` (`str(limit_s)`) and `CPSAT_WORKERS` (the vCPU count, as a string), and `resourceRequirements` `VCPU` and `MEMORY` (strings), from `SIZES`: up to 500 circuits, 1 vCPU and 2,048 MiB; up to 5,000, 2 vCPUs and 8,192 MiB; more, 4 vCPUs and 16,384 MiB. Each is a valid Fargate pair.",
+        "`timeout`: `{\"attemptDurationSeconds\": ...}`, twice the solver's limit, and never under Batch's minimum of 60 seconds."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The tests run against moto and read the parameters your code sent. moto accepts names and timeouts that AWS refuses (lesson 12.5.4 shows it), so these rules are yours to keep. `SIZES` is given; about 30 lines remain."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport re\n\n#: (most circuits, vCPU, memory MiB): the smallest size whose bound covers the plan wins.\nSIZES = [(500, 1, 2048), (5000, 2, 8192), (None, 4, 16384)]\n\n\ndef job_name(plan_id: str) -> str:\n    \"\"\"A name Batch accepts: letters, digits, hyphens, underscores; alphanumeric first; 128 at most.\"\"\"\n    name = re.sub(r\"[^A-Za-z0-9_-]\", \"-\", plan_id).lstrip(\"-_\") or \"trim\"\n    return name[:128]\n\n\ndef size_for(circuits: int) -> tuple[int, int]:\n    for most, vcpu, memory in SIZES:\n        if most is None or circuits <= most:\n            return vcpu, memory\n    raise AssertionError(\"unreachable\")\n\n\ndef submit_trim(batch, queue: str, definition: str, plan_id: str, circuits: int, limit_s: int) -> str:\n    \"\"\"Submit one trim-planning solve; return Batch's job id.\"\"\"\n    vcpu, memory = size_for(circuits)\n    job = batch.submit_job(\n        jobName=job_name(plan_id),\n        jobQueue=queue,\n        jobDefinition=definition,\n        containerOverrides={\n            \"environment\": [\n                {\"name\": \"PLAN_ID\", \"value\": plan_id},\n                {\"name\": \"TIME_LIMIT_S\", \"value\": str(limit_s)},\n                {\"name\": \"CPSAT_WORKERS\", \"value\": str(vcpu)},\n            ],\n            \"resourceRequirements\": [\n                {\"type\": \"VCPU\", \"value\": str(vcpu)},\n                {\"type\": \"MEMORY\", \"value\": str(memory)},\n            ],\n        },\n        timeout={\"attemptDurationSeconds\": max(60, 2 * limit_s)},\n    )\n    return job[\"jobId\"]\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport re  # noqa: F401\n\n#: (most circuits, vCPU, memory MiB): the smallest size whose bound covers the plan wins.\nSIZES = [(500, 1, 2048), (5000, 2, 8192), (None, 4, 16384)]\n\n\ndef job_name(plan_id: str) -> str:\n    \"\"\"A name Batch accepts: letters, digits, hyphens, underscores; alphanumeric first; 128 at most.\"\"\"\n    return plan_id\n\n\ndef size_for(circuits: int) -> tuple[int, int]:\n    # TODO: the first row of SIZES whose bound covers `circuits` (None covers everything).\n    return 0, 0\n\n\ndef submit_trim(batch, queue: str, definition: str, plan_id: str, circuits: int, limit_s: int) -> str:\n    \"\"\"Submit one trim-planning solve; return Batch's job id.\"\"\"\n    # TODO: one batch.submit_job call with the name, the overrides and the timeout.\n    return \"\"\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "e10d64bc05514fab405c398cf8d182008b501182f9cb2e44bdc5d294d823a2b5",
+  "starting_code": "from __future__ import annotations\n\nimport re  # noqa: F401\n\n#: (most circuits, vCPU, memory MiB): the smallest size whose bound covers the plan wins.\nSIZES = [(500, 1, 2048), (5000, 2, 8192), (None, 4, 16384)]\n\n\ndef job_name(plan_id: str) -> str:\n    \"\"\"A name Batch accepts: letters, digits, hyphens, underscores; alphanumeric first; 128 at most.\"\"\"\n    return plan_id\n\n\ndef size_for(circuits: int) -> tuple[int, int]:\n    # TODO: the first row of SIZES whose bound covers `circuits` (None covers everything).\n    return 0, 0\n\n\ndef submit_trim(batch, queue: str, definition: str, plan_id: str, circuits: int, limit_s: int) -> str:\n    \"\"\"Submit one trim-planning solve; return Batch's job id.\"\"\"\n    # TODO: one batch.submit_job call with the name, the overrides and the timeout.\n    return \"\"\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-02/practice-1/trim_jobs.py",
+    "test_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-02/practice-1/test_trim_jobs.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-02/practice-1/trim_jobs.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-02/practice-1/target/report.xml",
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-02/practice-1/test_trim_jobs.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_small_plan_is_submitted_with_its_settings",
+        "kind": "main",
+        "says": "one submission carries the name, queue, definition, environment, size and timeout"
+      },
+      {
+        "id": "test_sizes_follow_the_circuit_count_at_the_bounds",
+        "kind": "edge",
+        "says": "500 and 5,000 circuits stay in the smaller size; 5,001 moves up"
+      },
+      {
+        "id": "test_the_solver_gets_one_worker_per_vcpu",
+        "kind": "edge",
+        "says": "CPSAT_WORKERS equals the vCPUs the job asks for"
+      },
+      {
+        "id": "test_a_short_limit_still_gets_the_60_second_minimum",
+        "kind": "edge",
+        "says": "a 20-second limit still gets Batch's 60-second minimum timeout"
+      },
+      {
+        "id": "test_a_plan_id_becomes_a_valid_job_name",
+        "kind": "edge",
+        "says": "spaces, slashes and a leading symbol become a valid job name; the environment keeps the plan id"
+      },
+      {
+        "id": "test_a_long_plan_id_is_cut_to_128_characters",
+        "kind": "edge",
+        "says": "a 200-character plan id gives a 128-character job name"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "49-cloud-deployment/README_12.5.2.md",
+      "section": "A Job Definition Fixes the Image, Size, Timeout and Retries; a Submission Names the Run"
+    },
+    "concepts": [
+      "the vCPU and memory pairs Fargate accepts",
+      "a job definition's image, size, roles, timeout and retries, and a submission's overrides"
+    ]
+  }
+}

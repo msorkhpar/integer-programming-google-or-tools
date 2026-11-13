@@ -1,0 +1,177 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "03-integer-programming-foundations",
+    "10-cuts-presolve-heuristics"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "What one row lets presolve conclude",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A pole-inspection model has many rows of the form"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_{j} a_j\\, x_j \\le b, \\qquad x_j \\in \\{0, 1\\}, \\quad lo_j \\le x_j \\le hi_j"
+    },
+    {
+      "type": "para",
+      "text": "where earlier reductions may already have fixed some variables ($`lo_j = hi_j`$). Write the presolve step for one row."
+    },
+    {
+      "type": "para",
+      "text": "Write `reduce_row(coefs, rhs, lo, hi)` in `reduce.py`. `coefs` maps each variable to $`a_j`$ (any sign, never 0), and `lo` and `hi` map it to its bounds, 0 or 1. With"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\underline{L} = \\sum_{a_j > 0} a_j\\, lo_j + \\sum_{a_j < 0} a_j\\, hi_j, \\qquad\n\\overline{L} = \\sum_{a_j > 0} a_j\\, hi_j + \\sum_{a_j < 0} a_j\\, lo_j"
+    },
+    {
+      "type": "para",
+      "text": "return a pair `(verdict, fixings)`:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`(\"infeasible\", {})` if $`\\underline{L} > b`$;",
+        "otherwise `(\"redundant\", {})` if $`\\overline{L} \\le b`$;",
+        "otherwise `(\"keep\", fixings)`, where `fixings` maps each variable with $`lo_j < hi_j`$ that the row forces to a value: $`x_j = 0`$ if $`a_j > 0`$ and $`\\underline{L} + a_j > b`$, and $`x_j = 1`$ if $`a_j < 0`$ and $`\\underline{L} - a_j > b`$. Compute $`\\underline{L}`$ once, from the bounds as given."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Compare as the lesson's presolve code does, with the tolerance $`\\varepsilon = 10^{-9}`$ always in favour of keeping a row and leaving a variable free. Written out, the reference solution's tests are:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n&\\text{infeasible} && \\text{if } \\underline{L} > b + \\varepsilon \\\\\n&\\text{redundant} && \\text{if } \\overline{L} \\le b \\quad \\text{(no tolerance: a row whose } \\overline{L} \\text{ is above } b \\text{ by any amount is kept)} \\\\\n&x_j = 0 && \\text{if } a_j > 0 \\text{ and } \\underline{L} + a_j > b + \\varepsilon \\\\\n&x_j = 1 && \\text{if } a_j < 0 \\text{ and } \\underline{L} - a_j > b + \\varepsilon\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "So a row whose most activity is $`0.1 + 0.2`$ against $`b = 0.3`$ is kept: in floating point that sum is a hair above 0.3, and deleting a row on a rounding error is the mistake the tolerance guards against."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nEPS = 1e-9\n\n\ndef reduce_row(coefs: dict[str, float], rhs: float, lo: dict[str, int],\n               hi: dict[str, int]) -> tuple[str, dict[str, int]]:\n    \"\"\"What presolve concludes from one <= row: a verdict and the variables the row fixes.\"\"\"\n    least = sum(a * (lo[j] if a > 0 else hi[j]) for j, a in coefs.items())\n    most = sum(a * (hi[j] if a > 0 else lo[j]) for j, a in coefs.items())\n    if least > rhs + EPS:\n        return \"infeasible\", {}\n    if most <= rhs:\n        return \"redundant\", {}\n    fixings = {}\n    for j, a in coefs.items():\n        if lo[j] == hi[j]:\n            continue\n        if a > 0 and least + a > rhs + EPS:\n            fixings[j] = 0\n        elif a < 0 and least - a > rhs + EPS:\n            fixings[j] = 1\n    return \"keep\", fixings\n\n\nif __name__ == \"__main__\":\n    print(reduce_row({\"p\": 7, \"q\": 7, \"r\": 1}, 6, {\"p\": 0, \"q\": 0, \"r\": 0}, {\"p\": 1, \"q\": 1, \"r\": 1}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nEPS = 1e-9\n\n\ndef reduce_row(coefs: dict[str, float], rhs: float, lo: dict[str, int],\n               hi: dict[str, int]) -> tuple[str, dict[str, int]]:\n    \"\"\"What presolve concludes from one <= row: a verdict and the variables the row fixes.\"\"\"\n    # TODO: compute the least and the most activity from the bounds; decide \"infeasible\",\n    # \"redundant\" or \"keep\"; for \"keep\", fix every free variable the row forces.\n    return \"keep\", {}\n\n\nif __name__ == \"__main__\":\n    print(reduce_row({\"p\": 7, \"q\": 7, \"r\": 1}, 6, {\"p\": 0, \"q\": 0, \"r\": 0}, {\"p\": 1, \"q\": 1, \"r\": 1}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 6,
+    "code": 4,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "c128f113022501eb7722df4410c49546c239f2685106279328e0cef780ed7db8",
+  "starting_code": "from __future__ import annotations\n\nEPS = 1e-9\n\n\ndef reduce_row(coefs: dict[str, float], rhs: float, lo: dict[str, int],\n               hi: dict[str, int]) -> tuple[str, dict[str, int]]:\n    \"\"\"What presolve concludes from one <= row: a verdict and the variables the row fixes.\"\"\"\n    # TODO: compute the least and the most activity from the bounds; decide \"infeasible\",\n    # \"redundant\" or \"keep\"; for \"keep\", fix every free variable the row forces.\n    return \"keep\", {}\n\n\nif __name__ == \"__main__\":\n    print(reduce_row({\"p\": 7, \"q\": 7, \"r\": 1}, 6, {\"p\": 0, \"q\": 0, \"r\": 0}, {\"p\": 1, \"q\": 1, \"r\": 1}))\n",
+  "exercise": {
+    "main_path": "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-02/practice-1/reduce.py",
+    "test_path": "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-02/practice-1/test_reduce.py",
+    "run_command": [
+      "python3",
+      "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-02/practice-1/reduce.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-02/practice-1/target/report.xml",
+      "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-02/practice-1/test_reduce.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_row_that_always_holds_is_redundant",
+        "kind": "main",
+        "says": "a row whose most activity is within the right-hand side is redundant and fixes nothing"
+      },
+      {
+        "id": "test_items_too_heavy_for_the_row_are_fixed_at_zero",
+        "kind": "main",
+        "says": "a free 0-1 variable whose coefficient alone overruns the row is fixed at 0"
+      },
+      {
+        "id": "test_a_fixed_variable_raises_the_least_activity",
+        "kind": "edge",
+        "says": "a variable already fixed at 1 counts in the least activity, so it can force others to 0"
+      },
+      {
+        "id": "test_a_row_that_can_never_hold_is_infeasible",
+        "kind": "edge",
+        "says": "when even the least activity overruns the right-hand side, the verdict is infeasible"
+      },
+      {
+        "id": "test_a_negative_coefficient_can_force_a_one",
+        "kind": "edge",
+        "says": "a variable with a negative coefficient is fixed at 1 when 0 would overrun the row"
+      },
+      {
+        "id": "test_a_row_is_deleted_only_when_it_provably_cannot_bind",
+        "kind": "edge",
+        "says": "a row whose most activity is above the right-hand side only by rounding is kept, not deleted"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "10-cuts-presolve-heuristics/README_3.3.2.md",
+      "section": "Activity Bounds Prove a Row Redundant or Fix a Variable"
+    },
+    "concepts": [
+      "the least and most activity of a row decide redundancy, infeasibility and forced values"
+    ]
+  }
+}

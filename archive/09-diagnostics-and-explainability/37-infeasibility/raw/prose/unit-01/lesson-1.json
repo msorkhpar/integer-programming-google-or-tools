@@ -1,0 +1,699 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "09-diagnostics-and-explainability",
+    "37-infeasibility"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Infeasible, unbounded, or the solver can't tell",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "9.1.1 Infeasible, Unbounded, or the Solver Can't Tell"
+    },
+    {
+      "type": "para",
+      "text": "It is Budget Lock week at GridCap (lesson 7.1.3): one scenario is about to become the plan of record. Finance has locked the 2028 budget at $6,000k, a contractor change leaves transmission 12 crew-months in each of 2030 and 2031, and the board wants P032 started in 2028 and P023 in the plan. The run comes back with no plan. In the same week a developer adds interest on carried-over money to another model, and that run also comes back with no plan. HiGHS gives the two runs different answers, and one of those answers is \"infeasible or unbounded\". Before anyone looks for the rule to blame, someone has to work out which of the two problems each model has. This lesson reads what a solver says when a model has no optimal plan, measures what five solvers say on the same small models, and settles the ambiguous answer. Section 9 uses this Budget Lock scenario throughout. GridCap is a fictional utility; none of its numbers are real."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The model is the timing model of lesson 6.4.1 with crew rows (lesson 6.2.1, held hard as in lesson 6.7.2) and the rule families planners touch at Budget Lock. `lock_model.build(portfolio, scenario)` builds it in MathOpt and gives every row a name. The names are the labels below, and the rest of the section talks about rows only by these names."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`P`$ the projects; $`Y = \\{2027, \\dots, 2031\\}`$ the years; $`T_i \\subseteq Y`$ the start years project $`i`$ may use (its window); $`M \\subseteq P`$ the must-do projects; $`\\mathcal{G}`$ the alternative groups, each a set of projects; $`C \\subseteq P`$ the child projects, with parent $`p(c)`$ and lag $`L_c`$ years; $`Q`$ the programs (transmission, distribution, vegetation), with $`q(i)`$ the program of project $`i`$; $`R`$ the regions, with $`r(i)`$ the region of project $`i`$; $`F \\subseteq P`$ the projects the scenario forces in, and $`F_1 \\subseteq F`$ those forced into one year $`f_i`$; $`D \\subseteq P`$ the projects it forces out."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`\\text{npv}_{i,t}`$, the NPV of project $`i`$ started in year $`t`$ ($k); $`c_{i,k}`$, what it spends in its $`k`$-th year of work, $`k = 0, \\dots, d_i - 1`$, where $`d_i`$ is its number of years of work ($k; $`c_{i,k} = 0`$ for any other $`k`$); $`\\text{capex}_i = \\sum_k c_{i,k}`$; $`B_y`$, the budget of year $`y`$ ($k); $`m_i`$, the crew-months project $`i`$ needs in each year of work; $`K_{q,y}`$, the crew-months program $`q`$ has in year $`y`$; $`\\text{floor}_r`$, the least region $`r`$ must receive over the plan ($k)."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_{i,t} \\in \\{0, 1\\}`$ for every $`i \\in P`$ and $`t \\in T_i`$: project $`i`$ starts in year $`t`$."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{i \\in P} \\sum_{t \\in T_i} \\text{npv}_{i,t}\\, x_{i,t}"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{t \\in T_i} x_{i,t} &\\le 1 && \\forall i \\in P \\setminus M && \\text{(once}_i) \\\\\n\\sum_{t \\in T_i} x_{i,t} &= 1 && \\forall i \\in M && \\text{(must}_i) \\\\\n\\sum_{i \\in g} \\sum_{t \\in T_i} x_{i,t} &\\le 1 && \\forall g \\in \\mathcal{G} && \\text{(alt}_g) \\\\\n\\sum_{u \\in T_c,\\, u \\le t} x_{c,u} &\\le \\sum_{s \\in T_{p(c)},\\, s \\le t - L_c} x_{p(c),s} && \\forall c \\in C,\\ t \\in T_c && \\text{(after}_{c,t}) \\\\\n\\sum_{i \\in P} \\sum_{t \\in T_i} c_{i,\\,y-t}\\, x_{i,t} &\\le B_y && \\forall y \\in Y && \\text{(budget}_y) \\\\\n\\sum_{i:\\, q(i) = q} \\ \\sum_{t \\in T_i,\\ t \\le y < t + d_i} m_i\\, x_{i,t} &\\le K_{q,y} && \\forall q \\in Q,\\ y \\in Y && \\text{(crews}_{q,y}) \\\\\n\\sum_{i:\\, r(i) = r} \\ \\sum_{t \\in T_i} \\text{capex}_i\\, x_{i,t} &\\ge \\text{floor}_r && \\forall r \\in R && \\text{(floor}_r) \\\\\n\\sum_{t \\in T_i} x_{i,t} &\\ge 1 && \\forall i \\in F \\setminus F_1 && \\text{(force}_i) \\\\\nx_{i,f_i} &\\ge 1 && \\forall i \\in F_1 && \\text{(force}_{i,f_i}) \\\\\n\\sum_{t \\in T_i} x_{i,t} &\\le 0 && \\forall i \\in D && \\text{(drop}_i)\n\\end{aligned}"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Label",
+        "Row name in the code"
+      ],
+      "rows": [
+        [
+          "once$`_i`$, must$`_i`$, alt$`_g`$",
+          "`once_P001`, `must_P017`, `alt_G001`"
+        ],
+        [
+          "after$`_{c,t}`$",
+          "`after_P023_2029`"
+        ],
+        [
+          "budget$`_y`$, crews$`_{q,y}`$, floor$`_r`$",
+          "`budget_2028`, `crews_transmission_2030`, `floor_Coast`"
+        ],
+        [
+          "force$`_i`$, force$`_{i,f_i}`$, drop$`_i`$",
+          "`force_P023`, `force_P032_2028`, `drop_P040`"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "A crew row exists only for a program and year that has crew-months in the data, and only when some project could use them. The Budget Lock scenario (`lock_model.LOCK`) changes data only: $`B_{2028} = 6{,}000`$, $`K_{\\text{transmission},2030} = K_{\\text{transmission},2031} = 12`$, $`F = \\{\\text{P023}, \\text{P032}\\}`$ with $`F_1 = \\{\\text{P032}\\}`$ and $`f_{\\text{P032}} = 2028`$, and $`D = \\emptyset`$. On GridCap small, without the scenario, the best plan is worth $22,741k. With it, the model has 80 variables and 70 rows:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "base scenario: OPTIMAL, NPV $22,741k; budget lock: 80 variables, 70 rows"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Termination Reason Is a Claim About the Model, Not About Your Plan"
+    },
+    {
+      "type": "para",
+      "text": "Lesson 4.2.2 read `result.termination`: a **reason** (how the solve ended), a **limit** (which limit stopped it, if one did), and a `problem_status` with the solver's claims about the **primal** problem (your model) and the **dual** problem (lesson 2.3.1; for a MIP, the dual of its LP relaxation). When there is no optimal plan, the reason is one of four:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "`TerminationReason`",
+        "What the solver claims"
+      ],
+      "rows": [
+        [
+          "`INFEASIBLE`",
+          "no plan meets every row and bound: the primal problem has no feasible point"
+        ],
+        [
+          "`UNBOUNDED`",
+          "there are plans, and the objective can be made as good as you like (a **ray**: a direction you can move in forever, staying feasible and improving)"
+        ],
+        [
+          "`INFEASIBLE_OR_UNBOUNDED`",
+          "one of the two, and the solver does not know which"
+        ],
+        [
+          "`NO_SOLUTION_FOUND`",
+          "a limit stopped the search before any plan was found: nothing proven either way"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`problem_status` says the same thing in pieces. `primal_status` and `dual_status` are each `FEASIBLE`, `INFEASIBLE` or `UNDETERMINED`, and `primal_or_dual_infeasible` is `True` when the solver knows that one of the two is infeasible but not which. Lesson 2.2.3 showed the geometry: an infeasible LP has an empty region, and an unbounded LP has a region that stretches forever in an improving direction."
+    },
+    {
+      "type": "para",
+      "text": "The two answers ask for different work. `INFEASIBLE` is about the data and the rules: some set of them cannot hold together, and the rest of this module finds which. `UNBOUNDED` is almost always a modeling bug, because no real plan is worth infinite money. Usually a bound or a row is missing. Treat `INFEASIBLE_OR_UNBOUNDED` as an unanswered question, not as either of the two."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Five Solvers Give Three Answers for the Same Unbounded Model"
+    },
+    {
+      "type": "para",
+      "text": "`status_zoo.py` builds three two-variable models, maximizing $`x + y`$ over $`x, y \\ge 0`$. \"infeasible\" has rows $`x + y \\le 4`$ and $`x + y \\ge 6`$. \"unbounded\" has the single row $`x - y \\le 2`$, so $`x = y = t`$ is feasible for every $`t`$. \"both\" has $`x - y \\ge 1`$ and $`x - y \\le -1`$, so the primal is infeasible, and so is its dual. Each model is solved as an LP and as a MIP, by every solver that takes it, with **presolve** (the pass that simplifies a model before the main algorithm, lesson 3.3.2) on and off:"
+    },
+    {
+      "type": "example",
+      "id": "status_zoo-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "37-infeasibility/src/status_zoo.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "37-infeasibility/src/status_zoo.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "def tiny(kind: str, integer: bool) -> mathopt.Model:\n    \"\"\"max x + y over x, y >= 0 with the rows of one kind of model.\"\"\"\n    m = mathopt.Model(name=kind)\n    x = m.add_variable(lb=0, is_integer=integer, name=\"x\")\n    y = m.add_variable(lb=0, is_integer=integer, name=\"y\")"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "    params = mathopt.SolveParameters() if presolve else mathopt.SolveParameters(presolve=mathopt.Emphasis.OFF)"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "model      type solver  presolve on               presolve off\ninfeasible LP   GLOP    INFEASIBLE                INFEASIBLE\ninfeasible LP   PDLP    INFEASIBLE                error: parameter presolve not supported for PDLP [INVALID_ARGUMENT]\ninfeasible LP   HIGHS   INFEASIBLE                INFEASIBLE\ninfeasible LP   GSCIP   INFEASIBLE                INFEASIBLE\ninfeasible LP   CP_SAT  INFEASIBLE                INFEASIBLE\ninfeasible MIP  HIGHS   INFEASIBLE                INFEASIBLE\ninfeasible MIP  GSCIP   INFEASIBLE                INFEASIBLE\ninfeasible MIP  CP_SAT  INFEASIBLE                INFEASIBLE\nunbounded  LP   GLOP    INFEASIBLE_OR_UNBOUNDED   UNBOUNDED\nunbounded  LP   PDLP    INFEASIBLE_OR_UNBOUNDED   error: parameter presolve not supported for PDLP [INVALID_ARGUMENT]\nunbounded  LP   HIGHS   UNBOUNDED                 UNBOUNDED\nunbounded  LP   GSCIP   UNBOUNDED                 error: Expected no NaN or inf but found value: inf ...\nunbounded  LP   CP_SAT  INFEASIBLE_OR_UNBOUNDED   INFEASIBLE_OR_UNBOUNDED\nunbounded  MIP  HIGHS   INFEASIBLE_OR_UNBOUNDED   UNBOUNDED\nunbounded  MIP  GSCIP   UNBOUNDED                 error: Expected no NaN or inf but found value: inf ...\nunbounded  MIP  CP_SAT  INFEASIBLE_OR_UNBOUNDED   INFEASIBLE_OR_UNBOUNDED\nboth       LP   GLOP    INFEASIBLE_OR_UNBOUNDED   INFEASIBLE\nboth       LP   PDLP    INFEASIBLE                error: parameter presolve not supported for PDLP [INVALID_ARGUMENT]\nboth       LP   HIGHS   INFEASIBLE                INFEASIBLE\nboth       LP   GSCIP   INFEASIBLE                INFEASIBLE\nboth       LP   CP_SAT  INFEASIBLE                INFEASIBLE\nboth       MIP  HIGHS   INFEASIBLE                INFEASIBLE\nboth       MIP  GSCIP   INFEASIBLE                INFEASIBLE\nboth       MIP  CP_SAT  INFEASIBLE                INFEASIBLE"
+    },
+    {
+      "type": "para",
+      "text": "An error is shown up to the end of its first clause; \"...\" marks a message that goes on. Read it by rows:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Every solver called the infeasible model `INFEASIBLE`**, as an LP and as a MIP, with presolve on or off. On these models that answer was never wrong, and never hedged.",
+        "**The unbounded model got three different answers.** HiGHS and SCIP said `UNBOUNDED` for the LP. GLOP and PDLP said `INFEASIBLE_OR_UNBOUNDED`, and so did CP-SAT, which also gives no definite answer with presolve off. HiGHS said `UNBOUNDED` for the LP but `INFEASIBLE_OR_UNBOUNDED` for the same model with integer variables.",
+        "**Switching presolve off settled it for GLOP and for HiGHS's MIP**, both of which then said `UNBOUNDED`. The other columns show that \"presolve off\" is no general cure. PDLP refuses the parameter. SCIP with presolve off fails in OR-Tools while reading SCIP's answer, because the objective value of an unbounded solve is infinite. OR-Tools 9.15 raises that as an `AttributeError`, and the solver's own message, the one the table prints, is on the error's `__context__` (lesson 4.2.4). CP-SAT's answer does not change.",
+        "**\"both\" shows why a solver may have to hedge.** Its primal and its dual are both infeasible. A solver that learns only \"primal or dual is infeasible\" cannot say which. GLOP with presolve said `INFEASIBLE_OR_UNBOUNDED`, and without presolve it said `INFEASIBLE`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Why does presolve cause this? Some presolve steps use the objective: they fix a variable, or drop a row, because no optimal plan could need it. Such a step is safe only when an optimal plan exists. When the reduced model then turns out to have no plan, or to be unbounded, the solver cannot be sure the original model was the same. Switching presolve off, or only those steps, removes the doubt at the cost of a slower solve."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Gurobi Says INF_OR_UNBD Until Dual Reductions Are Off"
+    },
+    {
+      "type": "para",
+      "text": "Gurobi has a status for this case, `INF_OR_UNBD` (status 4), and a parameter that switches off exactly the presolve steps that use the objective in this way: **dual reductions**. Gurobi's parameter reference says to set `DualReductions` to 0 to get a definite answer after `INF_OR_UNBD`. `gurobi_status.py` solves the same three models in gurobipy, on the size-limited license mounted in the runner, with the default settings and then with dual reductions off:"
+    },
+    {
+      "type": "example",
+      "id": "gurobi_status-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "37-infeasibility/src/gurobi_status.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "37-infeasibility/src/gurobi_status.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "        strict.Params.DualReductions = 0                     # presolve may not use dual arguments\n        strict.optimize()"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "model      type default      DualReductions=0\ninfeasible LP   INF_OR_UNBD  INFEASIBLE\ninfeasible MIP  INF_OR_UNBD  INFEASIBLE\nunbounded  LP   INF_OR_UNBD  UNBOUNDED\nunbounded  MIP  UNBOUNDED    OPTIMAL   objective inf, x = 1e+30\nboth       LP   INF_OR_UNBD  INFEASIBLE\nboth       MIP  INF_OR_UNBD  INFEASIBLE"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "With default settings, Gurobi hedged on five of the six models, the plainly infeasible ones too. With `DualReductions=0` it gave a definite answer for every LP and for both infeasible MIPs. The unbounded MIP is a warning of its own: with dual reductions off, Gurobi 13 reported `OPTIMAL` with an objective of `inf` and `x = 1e+30`, which is Gurobi's \"infinity\". An `OPTIMAL` status does not by itself mean the plan is usable. Check that the objective is finite before you read the plan."
+    },
+    {
+      "type": "para",
+      "text": "The two tables say the same thing about the method. A hedged answer comes from presolve. Asking again with the doubtful steps switched off settles it for most solvers and models, but not for all. The next section's method works on every solver that can say `INFEASIBLE`."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Zero-Objective Copy Settles INFEASIBLE_OR_UNBOUNDED"
+    },
+    {
+      "type": "para",
+      "text": "A model with no objective cannot be unbounded: every plan scores 0, so every plan is optimal. Solve a copy of the model with its objective cleared. If the copy has a plan, the original has plans too, and since the solver hedged it must be unbounded. If the copy has none, the original is infeasible. `diagnose.separate` does this, and never edits the caller's model:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def separate(model: mathopt.Model, solver: mathopt.SolverType = mathopt.SolverType.HIGHS) -> str:\n    \"\"\"Solve; if the answer is 'infeasible or unbounded', ask a zero-objective copy which it is.\"\"\"\n    first = verdict(solve(model, solver))\n    if first != \"infeasible or unbounded\":\n        return first\n    feasibility = copy(model)\n    feasibility.objective.clear()                       # minimize 0: every plan is optimal, none unbounded\n    second = verdict(solve(feasibility, solver))\n    return {\"optimal\": \"unbounded\", \"infeasible\": \"infeasible\"}.get(second, \"unknown\")"
+    },
+    {
+      "type": "para",
+      "text": "`copy` is `mathopt.Model.from_model_proto(model.export_model())`, the copy lesson 4.3.2 used, and `verdict` maps the termination reason to a word (the next sections show the cases where no word fits). Now the two broken models of this week. The second one is the developer's: finance pays 3% interest on money carried into the next year, so each year gets a carry variable $`r_y \\ge 0`$ (continuous, with no upper bound) and the objective gains $`0.03 \\sum_y r_y`$. Lesson 6.4.4's cash row is $`\\text{spend}_y + r_y \\le B_y + r_{y-1}`$. The developer wrote it without the $`+ r_y`$ on the left:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\text{spend}_y \\le B_y + r_{y-1} \\quad \\forall y \\in Y \\qquad \\text{(cash}_y\\text{, the bug: } r_y \\text{ never leaves year } y)"
+    },
+    {
+      "type": "example",
+      "id": "separate_lock-3",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "37-infeasibility/src/separate_lock.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "37-infeasibility/src/separate_lock.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "    # The bug: + carry[y] is missing on the left, so money carried out of y never leaves y.\n    bug.model.add_linear_constraint(bug.spend[y] <= small.budget[y] + incoming, name=f\"cash_{y}\")\nbug.model.maximize(bug.npv + 0.03 * mathopt.fast_sum(carry.values()))"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "example",
+      "id": "separate_lock-4",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "37-infeasibility/src/separate_lock.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "37-infeasibility/src/separate_lock.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "for name, model in ((\"budget lock\", lock.model), (\"carry bug\", bug.model)):\n    result = solve(model)\n    print(f\"{name:<12} HiGHS: {result.termination.reason.name:<24} separate(): {separate(model)}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "budget lock  HiGHS: INFEASIBLE               separate(): infeasible\ncarry bug    HiGHS: INFEASIBLE_OR_UNBOUNDED  separate(): unbounded"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "HiGHS answered the Budget Lock scenario with `INFEASIBLE`, so `separate` needed no second solve. For the carry bug it hedged, as it did on the small unbounded MIP above, and the zero-objective copy found a plan, so the model is unbounded. The two models need different work: the lock needs the rest of this module, and the carry bug needs one missing term."
+    },
+    {
+      "type": "para",
+      "text": "The copy answers only \"is there any plan?\". When it comes back `INFEASIBLE`, that is a full answer about the original model, because the rows and bounds are the same. When it hits a limit, the answer is \"unknown\", and `separate` says so rather than guess."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Capping Every Free Variable Names the Ones That Run Away"
+    },
+    {
+      "type": "para",
+      "text": "\"Unbounded\" says some direction improves forever, not which variables move along it. A solver can return that direction as a ray (`result.has_ray()`, `ray_variable_values()`). On the carry bug's LP relaxation (every $`x`$ continuous in $`[0, 1]`$), none of HiGHS, GLOP or SCIP returned one through MathOpt in OR-Tools 9.15, even when it answered `UNBOUNDED`:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "LP relaxation, HIGHS presolve on : UNBOUNDED                ray returned: False\nLP relaxation, GLOP  presolve on : INFEASIBLE_OR_UNBOUNDED  ray returned: False\nLP relaxation, GLOP  presolve off: UNBOUNDED                ray returned: False\nLP relaxation, GSCIP presolve on : INFEASIBLE_OR_UNBOUNDED  ray returned: False"
+    },
+    {
+      "type": "para",
+      "text": "A method that needs no ray: give every variable that has no upper bound a large one on a copy, solve, and list the variables that end at the cap. The capped model cannot be unbounded, and the variables at the cap are the ones the objective was pushing without limit:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "    capped = copy(model)\n    free = [v for v in capped.variables() if math.isinf(v.upper_bound)]\n    for v in free:\n        v.upper_bound = cap\n    result = solve(capped, solver)\n    values = result.variable_values()\n    return sorted(v.name for v in free if values[v] >= cap - 1e-6)"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "variables that run away: ['carry_2027', 'carry_2028', 'carry_2029', 'carry_2030', 'carry_2031']"
+    },
+    {
+      "type": "para",
+      "text": "Every carry variable runs away, which points straight at the cash rows: nothing ever takes carried money out of the year it leaves. Adding $`+ r_y`$ to the left side of each cash row fixes it. The cap ($`10^7`$ by default) has to be far above any real value of the variables. Pick it below the point where the solver's tolerances start to matter (section 10). Here $`10^7`$ against amounts in thousands of dollars is safe."
+    },
+    {
+      "type": "para",
+      "text": "This is a diagnosis, not a repair: the right fix is the missing term, never a cap left in the model. A cap would turn \"unbounded\" into an \"optimal\" plan that carries $10 billion."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Limit Without a Plan Means \"Unknown\", Never \"Infeasible\""
+    },
+    {
+      "type": "para",
+      "text": "The fourth way to end without a plan is to run out of time. GridCap medium (400 projects) with a time limit of one millisecond:"
+    },
+    {
+      "type": "example",
+      "id": "separate_lock-5",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "37-infeasibility/src/separate_lock.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "37-infeasibility/src/separate_lock.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "rushed = solve(build(medium).model, params=mathopt.SolveParameters(time_limit=datetime.timedelta(milliseconds=1)))\nprint(f\"medium, 1 ms: {rushed.termination.reason.name}, limit {rushed.termination.limit.name},\"\n      f\" primal status {rushed.termination.problem_status.primal_status.name} -> {verdict(rushed)}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "medium, 1 ms: NO_SOLUTION_FOUND, limit TIME, primal status UNDETERMINED -> unknown"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`NO_SOLUTION_FOUND` with limit `TIME` and primal status `UNDETERMINED`: the solver claims nothing about the model. The base model has plans (it is lesson 6.4.1's model plus crews and floors), so reporting this run as \"infeasible\" would be false, and a planner would go hunting for a conflict that does not exist. `verdict` keeps the cases apart:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def verdict(result: mathopt.SolveResult) -> str:\n    \"\"\"'optimal', 'feasible' (a plan, not proven best), 'infeasible', 'unbounded', or 'unknown'.\"\"\"\n    reason = result.termination.reason\n    if reason == R.OPTIMAL:\n        return \"optimal\"\n    if reason == R.INFEASIBLE:\n        return \"infeasible\"\n    if reason == R.UNBOUNDED:\n        return \"unbounded\"\n    if reason == R.INFEASIBLE_OR_UNBOUNDED:\n        return \"infeasible or unbounded\"\n    if result.has_primal_feasible_solution():\n        return \"feasible\"\n    return \"unknown\"                                    # a limit stopped the solve before any plan"
+    },
+    {
+      "type": "para",
+      "text": "A service that turns solves into planner messages (section 12) needs exactly these five outcomes, and each one leads somewhere different: publish the plan; publish it with its gap (lesson 3.4.1); explain the conflict (lessons 9.1.3 to 9.1.6); fix the model; or run again with more time."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**A termination reason is a claim about the model, not about your plan.** `INFEASIBLE` means no plan exists. `UNBOUNDED` means plans exist and improve forever, almost always a modeling bug. `INFEASIBLE_OR_UNBOUNDED` means the solver could not tell which.",
+        "**Five solvers give three answers for the same unbounded model.** Every solver called the infeasible models `INFEASIBLE`. GLOP, PDLP, CP-SAT and HiGHS (on the MIP) hedged on the unbounded one. Presolve off settled it for GLOP and for HiGHS, and not for the others.",
+        "**Gurobi says `INF_OR_UNBD` until dual reductions are off.** `DualReductions=0` gave definite answers, except an unbounded MIP reported `OPTIMAL` with an infinite objective.",
+        "**A zero-objective copy settles `INFEASIBLE_OR_UNBOUNDED`** on any solver: a plan means unbounded, none means infeasible.",
+        "**Capping every free variable names the ones that run away**, without needing a ray from the solver.",
+        "**A limit without a plan means \"unknown\", never \"infeasible\".**"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Termination reason",
+        "Meaning",
+        "Next step"
+      ],
+      "rows": [
+        [
+          "`OPTIMAL`",
+          "best plan found and proven",
+          "publish (check the objective is finite)"
+        ],
+        [
+          "`FEASIBLE`",
+          "a plan, stopped by a limit",
+          "publish with its gap, or run longer"
+        ],
+        [
+          "`INFEASIBLE`",
+          "no plan meets every rule",
+          "find the conflict (9.1.2 to 9.1.6)"
+        ],
+        [
+          "`UNBOUNDED`",
+          "plans improve forever",
+          "find the missing bound or term"
+        ],
+        [
+          "`INFEASIBLE_OR_UNBOUNDED`",
+          "one of the two",
+          "zero-objective copy, presolve off, or `DualReductions=0`"
+        ],
+        [
+          "`NO_SOLUTION_FOUND`",
+          "a limit stopped the search with no plan",
+          "more time; never report it as infeasible"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Solver (OR-Tools 9.15, gurobipy 13)",
+        "Unbounded LP",
+        "Unbounded MIP",
+        "Presolve off"
+      ],
+      "rows": [
+        [
+          "GLOP",
+          "`INFEASIBLE_OR_UNBOUNDED`",
+          "n/a",
+          "settles it"
+        ],
+        [
+          "PDLP",
+          "`INFEASIBLE_OR_UNBOUNDED`",
+          "n/a",
+          "refused"
+        ],
+        [
+          "HiGHS",
+          "`UNBOUNDED`",
+          "`INFEASIBLE_OR_UNBOUNDED`",
+          "settles it"
+        ],
+        [
+          "SCIP",
+          "`UNBOUNDED`",
+          "`UNBOUNDED`",
+          "fails reading the result"
+        ],
+        [
+          "CP-SAT",
+          "`INFEASIBLE_OR_UNBOUNDED`",
+          "`INFEASIBLE_OR_UNBOUNDED`",
+          "no change"
+        ],
+        [
+          "Gurobi",
+          "`INF_OR_UNBD`",
+          "`UNBOUNDED`",
+          "`DualReductions=0` settles the LP"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Term",
+        "Meaning"
+      ],
+      "rows": [
+        [
+          "ray",
+          "a direction along which a plan stays feasible and improves without end"
+        ],
+        [
+          "presolve",
+          "the pass that simplifies a model before the main algorithm"
+        ],
+        [
+          "dual reductions",
+          "presolve steps that use the objective; valid only if an optimal plan exists"
+        ],
+        [
+          "zero-objective copy",
+          "the model with its objective cleared: it can be infeasible, never unbounded"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** OR-Tools, [MathOpt](https://developers.google.com/optimization/math_opt), and in its Python sources [`result.py`](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/result.py) (`TerminationReason`, `FeasibilityStatus`, `ProblemStatus` and its `primal_or_dual_infeasible`, `has_ray`). Gurobi, [Parameters reference](https://docs.gurobi.com/projects/optimizer/en/current/reference/parameters.html) (`DualReductions` and the `INF_OR_UNBD` advice) and the [infeasibility example tour](https://docs.gurobi.com/projects/examples/en/current/overview/infeasibility.html). The [CP-SAT troubleshooting page](https://github.com/google/or-tools/blob/stable/ortools/sat/docs/troubleshooting.md) lists other ways to narrow down a model that has no plan."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Add the missing $`+ r_y`$ to the carry bug's cash rows. Predict what `separate` returns, and whether the NPV is above or below the $22,741k of the base model.",
+        "Run `status_zoo.py`'s unbounded MIP on HiGHS with presolve off, then add a time limit of one millisecond. Which of the five verdicts do you expect?",
+        "A colleague proposes to treat every `INFEASIBLE_OR_UNBOUNDED` as infeasible, \"because our models are bounded\". Name the bug from this lesson that this rule would have hidden."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Ask Again Rather Than Guess"
+    },
+    {
+      "type": "para",
+      "text": "`separate` could have read `primal_status` and `dual_status` and inferred an answer. When the solver hedges, though, there is nothing to infer from. HiGHS's hedged answer on the carry bug claims nothing about either problem:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "MIP, HiGHS: primal UNDETERMINED, dual UNDETERMINED, primal_or_dual_infeasible True"
+    },
+    {
+      "type": "para",
+      "text": "A second, simpler question (a zero-objective copy) costs one more solve and gives an answer you can defend. The same habit runs through this module. The pre-solve checks, the filters, the elastic model and the assumptions each change the question until the solver's answer means one thing."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**status_zoo.py.** The three two-variable models, solved as LPs and MIPs by GLOP, PDLP, HiGHS, SCIP and CP-SAT, with presolve on and off (*Five Solvers Give Three Answers*). *Try:* Change the \"unbounded\" row to $`x - y \\le 2`$ plus $`x \\le 10`$. Predict whether any solver still hedges."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [status_zoo.py](src/status_zoo.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**gurobi_status.py.** The same models in gurobipy, with default settings and with `DualReductions=0` (*Gurobi Says INF_OR_UNBD*). It needs the license the runner mounts. *Try:* Set `Presolve = 0` instead of `DualReductions = 0`. Predict which rows change."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [gurobi_status.py](src/gurobi_status.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**separate_lock.py.** The Budget Lock scenario and the carry bug, told apart by `separate`, the variables that run away, and the 1 ms solve on GridCap medium (*A Zero-Objective Copy*, *Capping Every Free Variable*, *A Limit Without a Plan*). *Try:* Give the medium model a 10-second limit. Predict the verdict."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [separate_lock.py](src/separate_lock.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**diagnose_rays.py.** Asks HiGHS, GLOP and SCIP for a ray on the carry bug's LP relaxation (*Capping Every Free Variable*). *Try:* Ask on the two-variable unbounded LP instead. Predict whether a ray comes back."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [diagnose_rays.py](src/diagnose_rays.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The model itself is in `lock_model.py`, and the verdicts in `diagnose.py`."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [lock_model.py](src/lock_model.py)",
+        "Library: [diagnose.py](src/diagnose.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 13,
+    "paras": 37,
+    "code": 12,
+    "tables": 5,
+    "lists": 8,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 5
+  },
+  "content_sha256": "49153156e2157e2364cf1ababbe7c6b5e68a18cb8531a1bf775bcc952f4d9cdf"
+}

@@ -1,0 +1,441 @@
+# 1.2.3 Convex Sets, Polyhedra and Extreme Points
+
+GridCap's maintenance manager has to split part of the 2028 money between two programs:
+distribution maintenance ($`d`$, in $k) and vegetation management ($`v`$, in $k). Unlike the
+projects of lesson 1.2.1, these are amounts, not yes/no choices: any value between the limits will
+do. There are infinitely many allowed splits, so the brute force of lesson 1.1.1 cannot list them.
+Yet the best one can be found by checking five points. This lesson shows why: what shape the
+allowed splits form, where on that shape the best split must lie, and why the yes/no decisions of
+earlier lessons lose that shape. Five rules, one per heading.
+
+The numbers below are round on purpose; GridCap is a fictional utility and this is a teaching
+example on it, not any real utility's data.
+
+## Each Linear Row Cuts Space in Half, and the Rows Together Make a Polyhedron
+
+The manager's rules, written as rows of $`Ax \le b`$ (lesson 1.2.1), with the plan $`(d, v)`$:
+
+- **budget:** $`d + v \le 3000`$, the money available;
+- **crews:** $`d + 2v \le 4000`$, crew-days, since a $k of vegetation work takes two crew-days and a
+  $k of distribution work one;
+- **veg_cap:** $`v \le 1500`$, only so many miles of line need clearing;
+- **dist_floor:** $`d \ge 500`$, a commitment to the regulator, written $`-d \le -500`$;
+- **veg_nonneg:** $`v \ge 0`$, written $`-v \le 0`$.
+
+The objective is risk removed, 2 points per $k on distribution and 3 per $k on vegetation:
+maximize $`2d + 3v`$.
+
+```python
+A = np.array([[1, 1],      # d +  v <= 3000   (budget)
+              [1, 2],      # d + 2v <= 4000   (crew-days)
+              [0, 1],      #       v <= 1500  (vegetation cap)
+              [-1, 0],     # -d     <= -500   (distribution floor: d >= 500)
+              [0, -1]])    #      -v <= 0     (v >= 0)
+b = np.array([3000, 4000, 1500, -500, 0])
+c = np.array([2, 3])       # risk points removed per $k
+```
+
+```text
+(d, v) = (2000, 1000): feasible True, breaks []
+(d, v) = (2500, 1000): feasible False, breaks ['budget', 'crews']
+(d, v) = (400, 200): feasible False, breaks ['dist_floor']
+```
+
+The plan has two variables, $`d`$ and $`v`$, so each plan is a point in a plane: two
+**dimensions**, one per variable. A model with $`n`$ variables has its points in $`n`$ dimensions,
+one coordinate per variable, and "$`n`$ dimensions" in this lesson always means "$`n`$ variables".
+
+Picture one row on a chart with $`d`$ across and $`v`$ up. The points where $`d + v = 3000`$ form a
+straight line, and the line splits the plane in two: on one side $`d + v < 3000`$, on the other
+$`d + v > 3000`$. The row keeps one side and the line itself. That kept side is a **half-space**
+(in two dimensions, a half-plane).
+
+Every row keeps a half-space, and a feasible point must be in all of them at once. The set of
+points that satisfy every row of $`Ax \le b`$ is therefore an intersection of half-spaces, which
+is what a **polyhedron** is:
+
+```math
+\{\, x : Ax \le b \,\} = \bigcap_{r} \{\, x : a_r^\top x \le b_r \,\}
+```
+
+In two dimensions a bounded polyhedron is a polygon. Here it has five straight edges, one per row,
+because each of these five rows bounds it somewhere.
+
+## A Polyhedron Is Convex: The Segment Between Two Feasible Points Stays Feasible
+
+Take two feasible splits, $`p = (500, 0)`$ and $`q = (1000, 1500)`$, and walk the straight segment
+between them. Each point on it is $`(1 - \lambda)\,p + \lambda\, q`$ for a $`\lambda`$ between 0
+and 1: $`\lambda = 0`$ is $`p`$, $`\lambda = 1`$ is $`q`$, and $`\lambda = 0.5`$ is the midpoint.
+Such a point is a **convex combination** of $`p`$ and $`q`$.
+
+It is a special case of a wider idea. A **linear combination** of vectors $`p`$ and $`q`$ is
+$`\alpha\, p + \beta\, q`$ for *any* two numbers $`\alpha`$ and $`\beta`$, negative or larger than 1
+included; with more vectors, each gets its own number. A convex combination is the linear
+combination whose numbers are not negative and add up to 1, here $`\alpha = 1 - \lambda`$ and
+$`\beta = \lambda`$. Linear combinations reach the whole plane; convex combinations of two points
+reach only the segment between them.
+
+```python
+p, q = np.array([500, 0]), np.array([1000, 1500])
+print("segment from", tuple(p.tolist()), "to", tuple(q.tolist()))
+for lam in (0, 0.25, 0.5, 0.75, 1):
+    point = (1 - lam) * p + lam * q
+    print(f"  lambda {lam:<4}: {tuple(point.tolist())} feasible {is_feasible(point)}")
+```
+
+```text
+segment from (500, 0) to (1000, 1500)
+  lambda 0   : (500, 0) feasible True
+  lambda 0.25: (625.0, 375.0) feasible True
+  lambda 0.5 : (750.0, 750.0) feasible True
+  lambda 0.75: (875.0, 1125.0) feasible True
+  lambda 1   : (1000, 1500) feasible True
+```
+
+A set is **convex** when this always happens: for any two of its points, the whole segment between
+them is in the set. Five sample points are not a proof, but the proof is two lines. If
+$`Ap \le b`$ and $`Aq \le b`$, and $`0 \le \lambda \le 1`$, then
+
+```math
+A\big((1-\lambda)p + \lambda q\big) = (1-\lambda)\,Ap + \lambda\,Aq \;\le\; (1-\lambda)\,b + \lambda\, b = b
+```
+
+The first step is how matrix products distribute; the inequality holds because $`1 - \lambda`$ and
+$`\lambda`$ are not negative, so multiplying by them keeps each $`\le`$ the right way round. So
+**every** polyhedron is convex, whatever $`A`$ and $`b`$ are.
+
+Why care? Because in a convex set there are no hidden pockets: if a point is better than where you
+stand, the straight path towards it stays feasible. Section 2's algorithms rely on this.
+
+## Extreme Points Are Where Two Rows Are Tight at Once
+
+An **extreme point** (or **vertex**) of a polyhedron is a feasible point that is not the midpoint of
+any segment between two other feasible points: a corner. In two dimensions a corner is where two
+edges meet, so two rows are **tight** there (met with equality, lesson 1.2.1) and their lines cross.
+
+That gives a recipe. For each pair of rows, solve the two equations $`a_i^\top x = b_i`$ and
+$`a_k^\top x = b_k`$ together. If the rows are parallel there is no single crossing point. If the
+crossing breaks some other row, it lies outside the polygon. Otherwise it is a vertex.
+
+```python
+for i, k in itertools.combinations(range(len(b)), 2):
+    pair = A[[i, k]]
+    if abs(np.linalg.det(pair)) < 1e-12:
+        found.append((names[i], names[k], None, "parallel"))
+        continue
+    point = np.linalg.solve(pair, b[[i, k]]) + 0.0   # both rows hold with equality; + 0.0 turns -0 into 0
+    found.append((names[i], names[k], point, "vertex" if is_feasible(point) else "outside"))
+```
+
+`np.linalg.solve` solves the 2-by-2 system. `np.linalg.det` is the **determinant** of the pair. For
+a 2-by-2 matrix with rows $`(p, q)`$ and $`(r, s)`$ it is the number $`ps - qr`$. It is 0 exactly
+when one row is a multiple of the other, so the two lines are parallel and do not cross at a single
+point, and then there is nothing to solve:
+
+```python
+for i, k in ((0, 1), (2, 4)):
+    (p, q), (r, s) = A[[i, k]]
+    print(f"det {names[i]} & {names[k]}: {p}*{s} - {q}*{r} = {p * s - q * r},"
+          f" np.linalg.det gives {np.linalg.det(A[[i, k]]):.1f}")
+```
+
+```text
+det budget & crews: 1*2 - 1*1 = 1, np.linalg.det gives 1.0
+det veg_cap & veg_nonneg: 0*-1 - 1*0 = 0, np.linalg.det gives 0.0
+```
+
+The budget and crews rows, $`(1, 1)`$ and $`(1, 2)`$, cross at one point. The rows of `veg_cap`,
+$`(0, 1)`$, and `veg_nonneg`, $`(0, -1)`$, are multiples of each other ($`-1`$ times), so their
+determinant is 0. The loop over all ten pairs prints:
+
+```text
+    budget & crews      vertex   (d, v) = (2000, 1000)    objective 7,000
+    budget & veg_cap    outside  (d, v) = (1500, 1500)
+    budget & dist_floor outside  (d, v) = (500, 2500)
+    budget & veg_nonneg vertex   (d, v) = (3000, 0)       objective 6,000
+     crews & veg_cap    vertex   (d, v) = (1000, 1500)    objective 6,500
+     crews & dist_floor outside  (d, v) = (500, 1750)
+     crews & veg_nonneg outside  (d, v) = (4000, 0)
+   veg_cap & dist_floor vertex   (d, v) = (500, 1500)     objective 5,500
+   veg_cap & veg_nonneg parallel
+dist_floor & veg_nonneg vertex   (d, v) = (500, 0)        objective 1,000
+5 vertices; best (d, v) = (2000, 1000), objective 7,000
+```
+
+Ten pairs, five vertices. `budget & veg_cap` crosses at (1500, 1500), which needs 4,500 crew-days,
+so it lies outside. `veg_cap` and `veg_nonneg` are both "v equals a number": parallel lines.
+
+In $`n`$ dimensions the rule is the same with $`n`$ in place of two: a feasible point is a vertex
+when, among the rows tight there, $`n`$ are **linearly independent**, meaning none of those $`n`$
+rows is a linear combination of the others, so together they pin down a single point. The **rank**
+of a set of rows is the largest number of them that are linearly independent, and NumPy's
+`np.linalg.matrix_rank` computes it:
+
+```python
+rows = np.array([[1, 0],
+                 [0, 1],
+                 [1, 1]])
+combo = 1 * rows[0] + 1 * rows[1]            # a linear combination of rows 0 and 1
+print("1*(1, 0) + 1*(0, 1) =", tuple(combo.tolist()), " equals row 2:", bool(np.all(combo == rows[2])))
+print("rank of (1, 0), (0, 1), (1, 1):", np.linalg.matrix_rank(rows))
+print("rank of (1, 0), (0, 1):        ", np.linalg.matrix_rank(rows[:2]))
+print("rank of (1, 1), (2, 2):        ", np.linalg.matrix_rank(np.array([[1, 1], [2, 2]])))
+```
+
+```text
+1*(1, 0) + 1*(0, 1) = (1, 1)  equals row 2: True
+rank of (1, 0), (0, 1), (1, 1): 2
+rank of (1, 0), (0, 1):         2
+rank of (1, 1), (2, 2):         1
+```
+
+The three rows have rank 2, not 3: $`(1, 1)`$ is $`(1, 0) + (0, 1)`$, so it adds no new direction.
+Any two of them are independent. $`(1, 1)`$ and $`(2, 2)`$ have rank 1, because the second is twice
+the first: the same line, the zero-determinant case above.
+
+To test a point, keep only its tight rows. A boolean mask (lesson 1.2.1) picks rows out of a
+matrix: `A[mask]` is the rows where the mask is `True`.
+
+```python
+for point in (np.array([2000, 1000]), np.array([1000, 500])):
+    tight = np.abs(A @ point - b) <= 1e-9        # a boolean mask, one entry per row
+    T = A[tight]                                 # only the rows where the mask is True
+    print(f"(d, v) = {tuple(point.tolist())}: tight {[n for n, t in zip(names, tight) if t]},"
+          f" A[tight] has shape {T.shape}, rank {np.linalg.matrix_rank(T)}")
+```
+
+```text
+(d, v) = (2000, 1000): tight ['budget', 'crews'], A[tight] has shape (2, 2), rank 2
+(d, v) = (1000, 500): tight [], A[tight] has shape (0, 2), rank 0
+```
+
+At (2000, 1000) two rows are tight and their rank is 2, the number of variables: a vertex. At
+(1000, 500), inside the polygon, no row is tight. `A[tight]` is then an empty matrix, 0 rows by 2
+columns, and `matrix_rank` returns 0 for it, fewer than 2: not a vertex.
+
+<!-- practice 1 -->
+
+## A Linear Objective Is Best at an Extreme Point
+
+The best vertex removes 7,000 risk points. Could a split that is not a corner do better? Search a
+grid of 496 splits, every $100k in each direction, and then ask GLOP, OR-Tools' linear programming
+solver (lesson 1.1.3):
+
+```text
+grid: 496 points, 281 feasible, best objective 7,000 at [(2000, 1000)]
+GLOP: OPTIMAL, (d, v) = (2000, 1000), objective 7,000
+```
+
+Both land on the vertex `budget & crews`. That is not luck. The points where $`2d + 3v`$ takes one
+value form a straight line, and raising the value slides that line, parallel to itself, across the
+polygon. The last point it touches before leaving is a corner, or a whole edge if the objective is
+parallel to one, and an edge ends in corners. Written as a rule: **if a linear program over a
+polyhedron with at least one vertex has an optimum, some vertex is optimal.** So with the vertices
+in hand, the best one is a single `max`:
+
+```python
+best = max(vertices, key=lambda p: c @ p)
+```
+
+The OR-Tools documentation makes the same point with its first LP example ("Solving an LP
+Problem"), which finds the optimum by sliding the objective line across the feasible region until
+it last touches it. Adapted here to MathOpt, with every vertex listed beside GLOP's answer:
+
+```math
+\begin{aligned}
+\max \;& 3x + 4y \\
+\text{s.t. }& x + 2y \le 14 && \text{(c1)} \\
+& 3x - y \ge 0 && \text{(c2)} \\
+& x - y \le 2 && \text{(c3)} \\
+& x \ge 0, \; y \ge 0 && \text{(x\_nonneg, y\_nonneg)}
+\end{aligned}
+```
+
+```python
+def solve_with_glop() -> tuple[str, float, float, float]:
+    model = mathopt.Model(name="lp-example")
+    x = model.add_variable(lb=0, name="x")
+    y = model.add_variable(lb=0, name="y")
+    model.add_linear_constraint(x + 2 * y <= 14, name="c1")
+    model.add_linear_constraint(3 * x - y >= 0, name="c2")
+    model.add_linear_constraint(x - y <= 2, name="c3")
+    model.maximize(3 * x + 4 * y)
+    result = mathopt.solve(model, mathopt.SolverType.GLOP)
+    return (result.termination.reason.name, result.objective_value(),
+            result.variable_values(x), result.variable_values(y))
+```
+
+```text
+GLOP: OPTIMAL, (x, y) = (6.0, 4.0), objective 34.0
+  vertex (x, y) = (2, 6)  objective 30  tight ['c1', 'c2']
+  vertex (x, y) = (6, 4)  objective 34  tight ['c1', 'c3']
+  vertex (x, y) = (0, 0)  objective  0  tight ['c2', 'x_nonneg', 'y_nonneg']
+  vertex (x, y) = (2, 0)  objective  6  tight ['c3', 'y_nonneg']
+```
+
+GLOP's answer is the best of the four vertices, (6, 4), where c1 and c3 are tight. Note the
+`>=` row: MathOpt takes it as written, and only the vertex search flips it into
+$`-3x + y \le 0`$. The corner (0, 0) has three tight rows in two dimensions; any two of them are
+independent, so it is a vertex all the same, and the search reaches it from three different pairs
+(the program lists it once).
+
+This is the idea the simplex method of lesson 2.2.2 is built on: it walks from vertex to vertex,
+each time to a better neighbour, instead of trying every pair of rows, which grows fast with the
+number of rows and variables.
+
+<!-- practice 2 -->
+
+## Yes/No Decisions Break Convexity, and That Is Why Integer Programming Is Hard
+
+Return to the tiny GridCap projects of lesson 1.2.1, where each $`x_j`$ is 0 or 1. Take two of
+its 8 feasible plans and their midpoint:
+
+```python
+plans = X[:, feasible]
+p, q = plans[:, 1], plans[:, 2]
+mid = (p + q) / 2
+```
+
+```text
+plan p : [0 1 0 0 0 0 0 1]
+plan q : [0 1 0 0 0 0 1 0]
+middle : [0.  1.  0.  0.  0.  0.  0.5 0.5]
+middle satisfies A x <= b: True
+middle is a plan (all 0 or 1): False
+```
+
+The midpoint satisfies every row, as convexity promises, and it funds half of P007 and half of
+P008, which is not a plan. The set of allowed plans is a scattering of separate points inside the
+polyhedron, and a set of separate points is not convex.
+
+That breaks the shortcut of the previous section. Drop the 0/1 requirement, let each $`x_j`$ be
+anything from 0 to 1 (the **LP relaxation** of lesson 1.1.3), and GLOP finds the best vertex of the
+polyhedron:
+
+```text
+LP relaxation: OPTIMAL, value 2,039.0
+   {'P002': 1.0, 'P005': 1.0, 'P006': 0.655, 'P007': 0.345, 'P008': 1.0}
+```
+
+It funds 0.655 of P006 and 0.345 of P007, and claims $2,039.0k against the $1,396k of the best real
+plan (lesson 1.2.1). Every allowed plan is itself a corner of this polyhedron, since each of its
+$`x_j`$ sits on a bound, 0 or 1. But the polyhedron has other corners too, fractional ones, and here
+the best corner is one of those. So "the best is at a vertex" finds the best fractional point, not
+the best plan. Rounding the fractions is no fix either; section 3 shows why, and what solvers do
+instead.
+
+## The Model
+
+The two-variable split this lesson solved, complete.
+
+**Sets.** $`K = \{d, v\}`$, the two programs (distribution maintenance, vegetation management).
+
+**Parameters** (round teaching numbers on fictional GridCap). Budget 3,000 ($k); crew-days 4,000,
+with 1 crew-day per $k of distribution and 2 per $k of vegetation; vegetation cap 1,500 ($k);
+distribution floor 500 ($k); risk points removed per $k, 2 for distribution and 3 for vegetation.
+
+**Variables.** $`d \ge 0`$ and $`v \ge 0`$, continuous, in $k.
+
+**Objective.**
+
+```math
+\max \; 2d + 3v
+```
+
+**Constraints.**
+
+```math
+\begin{aligned}
+d + v &\le 3000 && \text{(budget)} \\
+d + 2v &\le 4000 && \text{(crews)} \\
+v &\le 1500 && \text{(veg\_cap)} \\
+-d &\le -500 && \text{(dist\_floor)} \\
+-v &\le 0 && \text{(veg\_nonneg)}
+\end{aligned}
+```
+
+Its feasible set is a polygon with five vertices, and its optimum is the vertex $`(d, v) = (2000,
+1000)`$, where budget and crews are both tight, with objective 7,000.
+
+## Summary
+
+- **Each linear row keeps a half-space, and the rows together make a polyhedron**, the set
+  $`\{x : Ax \le b\}`$.
+- **A polyhedron is convex.** The segment between two feasible points stays feasible, for any
+  $`A`$ and $`b`$.
+- **Extreme points are where enough rows are tight at once**: two in two dimensions, $`n`$
+  linearly independent ones in $`n`$.
+- **A linear objective is best at an extreme point.** GLOP and a grid search both agree with the
+  best of the five vertices.
+- **Yes/no decisions break convexity.** The midpoint of two plans is not a plan, and the LP
+  relaxation's best vertex can be fractional.
+
+## Reference
+
+| Term | Meaning | In this lesson |
+| --- | --- | --- |
+| Half-space | The points on one side of a line (plane), and the line itself | $`d + v \le 3000`$ |
+| Polyhedron | The points satisfying every row of $`Ax \le b`$ | the five-sided polygon |
+| Linear combination | $`\alpha p + \beta q`$ for any numbers $`\alpha, \beta`$ | $`(1, 1) = 1 \cdot (1, 0) + 1 \cdot (0, 1)`$ |
+| Convex combination | $`(1-\lambda)p + \lambda q`$ with $`0 \le \lambda \le 1`$ | the segment from (500, 0) to (1000, 1500) |
+| Convex set | Contains the segment between any two of its points | every polyhedron |
+| Tight row | A row met with equality, slack 0 | budget and crews at (2000, 1000) |
+| Extreme point (vertex) | A feasible point that is no midpoint of two other feasible points | five of them |
+| Linearly independent rows | No row is a linear combination of the others | (1, 0) and (0, 1) |
+| Rank | The largest number of linearly independent rows | 2 for (1, 0), (0, 1), (1, 1) |
+| LP relaxation | The model with each 0/1 variable allowed anywhere in [0, 1] | value 2,039.0 on tiny |
+
+| NumPy | Does |
+| --- | --- |
+| `np.linalg.solve(M, r)` | Solves the square system $`Mx = r`$ |
+| `np.linalg.det(M)` | Determinant, $`ps - qr`$ for rows $`(p, q)`$, $`(r, s)`$: 0 when its rows are dependent |
+| `np.linalg.matrix_rank(M)` | Number of linearly independent rows of `M`; 0 for a matrix with no rows |
+| `A[mask]` | The rows of `A` where the boolean `mask` is `True` |
+| `itertools.combinations(range(m), 2)` | Every pair of row indices |
+
+**Further reading:** [Solving an LP Problem (OR-Tools)](https://developers.google.com/optimization/lp/lp_example) (the example adapted above, with the feasible region drawn and the objective line slid to the optimal corner); [MathOpt sample linear_programming.py](https://github.com/google/or-tools/blob/stable/ortools/math_opt/samples/python/linear_programming.py) (a three-variable LP solved with GLOP, reading the status before the values); [Solving a MIP Problem (OR-Tools)](https://developers.google.com/optimization/mip/mip_example) (an LP relaxation whose best corner is fractional and far from the integer optimum); [NumPy `matrix_rank`](https://numpy.org/doc/stable/reference/generated/numpy.linalg.matrix_rank.html) (how NumPy computes rank, from singular values and a tolerance); [NumPy `linalg.solve`](https://numpy.org/doc/stable/reference/generated/numpy.linalg.solve.html) (solving a square system, and the error a singular one raises).
+
+## Challenges
+
+1. Change the objective to $`3d + 3v`$. It is now parallel to the budget row. Which points are
+   optimal, and are any of them vertices?
+2. Add the row $`d \le 2500`$. How many vertices does the polygon have now, and does the optimum
+   move?
+3. A rule says vegetation gets either nothing or at least $800k. Draw the allowed values of $`v`$
+   on a line. Is that set convex?
+
+## Design Note: Enumerating Vertices Is a Lesson, Not a Method
+
+Trying every pair of rows works for five rows in two dimensions. With $`m`$ rows and $`n`$
+variables the number of candidate corners is "$`m`$ choose $`n`$", which for a model of a few
+hundred rows and variables is far beyond counting. The point of this lesson is the geometry, not
+the enumeration: it tells you where an LP's optimum lives, and why the 0/1 models of section 3
+need more than an LP solver.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change.
+
+**polygon.py.** The two-program split as $`A`$, $`b`$ and $`c`$; checks three points and walks a segment between two feasible ones (*Each Linear Row Cuts Space in Half* and *A Polyhedron Is Convex*). *Try:* Walk the segment from (500, 0) to (2000, 1000) instead. Predict whether every point is feasible before you run it.
+
+- Program: [polygon.py](src/polygon.py)
+
+**vertices.py.** Solves every pair of rows and sorts the results into parallel, outside and vertex (*Extreme Points Are Where Two Rows Are Tight at Once*). *Try:* Change the crews limit to 3,500. Which pairs change kind?
+
+- Program: [vertices.py](src/vertices.py)
+
+**independence.py.** A linear combination, the rank of three rows, two determinants worked by hand, and the tight rows at a vertex and at an inside point picked with a mask (*Extreme Points Are Where Two Rows Are Tight at Once*). *Try:* Add the row `[2, 0]` to `rows`. Predict the rank before you run it.
+
+- Program: [independence.py](src/independence.py)
+
+**grid_vs_vertex.py.** A grid search and a GLOP solve of the same split (*A Linear Objective Is Best at an Extreme Point*). *Try:* Change `c` to `[3, 3]` and predict how many grid points tie for best.
+
+- Program: [grid_vs_vertex.py](src/grid_vs_vertex.py)
+
+**lp_example.py.** Adapted from the OR-Tools example "Solving an LP Problem": the same LP solved with GLOP through MathOpt, and every vertex of its feasible region with the rows tight there (*A Linear Objective Is Best at an Extreme Point*). *Try:* Change the objective to $`x + 2y`$, parallel to c1, in both `c` and `model.maximize`. Predict which vertices tie for best, and which one GLOP returns.
+
+- Program: [lp_example.py](src/lp_example.py)
+
+**not_convex.py.** The midpoint of two tiny GridCap plans, and the LP relaxation of the lesson 1.2.1 model (*Yes/No Decisions Break Convexity*). *Try:* Take the midpoint of `plans[:, 0]` and `plans[:, 7]` instead. Is it a plan?
+
+- Program: [not_convex.py](src/not_convex.py)

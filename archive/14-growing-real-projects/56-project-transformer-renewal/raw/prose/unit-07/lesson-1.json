@@ -1,0 +1,477 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "14-growing-real-projects",
+    "56-project-transformer-renewal"
+  ],
+  "variant": "prose",
+  "unit": 7,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Uncertain failure curves: scenarios and what changes",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "14.3.7 Uncertain Failure Curves: Scenarios and What Changes"
+    },
+    {
+      "type": "para",
+      "text": "With a plan proved close to the best, the asset-health team raised the question the plan rests on:"
+    },
+    {
+      "type": "quote",
+      "blocks": [
+        {
+          "type": "para",
+          "text": "**Request 7.** The Weibull curves were fitted to few failures; the scales could be 15% off either way, and the shape too. Show us what the plan looks like if the curves are wrong, which units are in it whatever the curves, and give us one plan we can defend under all of them."
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The code before this lesson is snapshot `steps/06`; after it, `steps/07`. The 5,000-unit fleet and its curves are invented (GridCap is fictional)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Every Coefficient Comes From the Curves, So the Plan Is Only as Good as Them"
+    },
+    {
+      "type": "para",
+      "text": "Every objective coefficient $`\\text{rr}_{i,t}`$ is a sum of PoF differences read off a kind's curve (the ten-year lesson). A curve fitted to few failures is an estimate (lesson 7.3.1), and an error in $`\\eta`$ moves every coefficient of that kind at once. The model so far has one set of curves built in, so it can answer only one question: the best plan if the curves are right. The request asks three others: how the plan changes, which part of it does not, and which plan to pick when the truth is not known."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Scenario Is a Version of the Curves, and a Plan Is Valued Under Each"
+    },
+    {
+      "type": "para",
+      "text": "A **scenario** here is a version of every kind's curve: $`\\eta`$ times a factor and $`\\beta`$ times a factor, with a weight for how much the asset team believes it. The program uses four:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Scenario",
+        "$`\\eta`$ factor",
+        "$`\\beta`$ factor",
+        "weight",
+        "Meaning"
+      ],
+      "rows": [
+        [
+          "base",
+          "1",
+          "1",
+          "2",
+          "the fitted curves"
+        ],
+        [
+          "younger",
+          "0.85",
+          "1",
+          "1",
+          "units fail about 15% younger"
+        ],
+        [
+          "older",
+          "1.15",
+          "1",
+          "1",
+          "units last about 15% longer"
+        ],
+        [
+          "steeper",
+          "1",
+          "1.25",
+          "1",
+          "failures bunch closer to $`\\eta`$"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The coefficients under scenario $`s`$ are $`\\text{rr}^s_{i,t}`$, the same formula on the scenario's curves. A finished plan can then be **valued** under any scenario by adding up its coefficients: that is exact arithmetic, no solver involved, and it is how plans are compared."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Design Decision: A Plan per Scenario, an Expected-Value Plan, or a Worst-Case Plan"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Objective",
+        "Says",
+        "Model change"
+      ],
+      "rows": [
+        [
+          "one plan per scenario",
+          "the best plan if that scenario is true",
+          "coefficients only"
+        ],
+        [
+          "expected value",
+          "the best plan on average, by the weights",
+          "coefficients: the weighted mean $`\\sum_s p_s \\text{rr}^s_{i,t}`$"
+        ],
+        [
+          "worst case (max-min)",
+          "the plan whose worst scenario is best",
+          "a variable $`z`$ and one row per scenario"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The project builds all three, because the request asks for all three things: per-scenario plans show what changes, and the two combined plans are the candidates to defend. The expected-value objective needs no new rows: the mean of linear objectives is linear, so it is one set of coefficients. The worst case is not a mean; it is a minimum of several linear objectives, and the standard way to maximize a minimum is a new variable that every scenario's value must stay above."
+    },
+    {
+      "type": "para",
+      "text": "A fourth option, two-stage stochastic programming, where some decisions wait until the truth is known, does not fit: the failure curves are not revealed during the plan, so there is no second stage to wait for."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The model of the last lesson with the objective replaced. Changes are marked."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** As in the last lesson, and $`\\Sigma`$, the scenarios $`\\leftarrow`$."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** As in the last lesson, with $`\\text{rr}^s_{i,t}`$, the risk removed under scenario $`s`$ ($k) $`\\leftarrow`$, and $`p_s = \\text{weight}_s / \\sum_{u} \\text{weight}_u`$, the normalized weights $`\\leftarrow`$."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_{i,t} \\in \\{0,1\\}`$ and $`o_{s,t} \\in \\{0,1\\}`$ as before; for the worst-case objective only, $`0 \\le z \\le \\bar z`$, the risk removed in the least favorable scenario $`\\leftarrow`$, where $`\\bar z = \\min_s \\sum_i \\max_t \\max(0, \\text{rr}^s_{i,t})`$, what every unit at its best year would remove in the least generous scenario."
+    },
+    {
+      "type": "para",
+      "text": "**Objective, expected value.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{i \\in I} \\sum_{t \\in Y} \\Big( \\sum_{s \\in \\Sigma} p_s \\, \\text{rr}^s_{i,t} \\Big) x_{i,t} \\quad \\leftarrow \\text{this lesson}"
+    },
+    {
+      "type": "para",
+      "text": "**Objective, worst case.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max\\; & z \\quad \\leftarrow \\text{this lesson} \\\\\n\\text{s.t.}\\; & z \\le \\sum_{i \\in I} \\sum_{t \\in Y} \\text{rr}^s_{i,t} \\, x_{i,t} && \\forall s \\in \\Sigma && \\text{(worst}_s) \\quad \\leftarrow \\text{this lesson}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.** Every row of the last lesson, unchanged: $`\\text{once}_i`$, $`\\text{outage}_{i,t}`$ (per unit), $`\\text{coord}_{g,t}`$, $`\\text{crews}_{g,t}`$, $`\\text{spares}_k`$ and $`\\text{budget}_t`$. In the code the new rows are `worst_base`, `worst_younger` and so on, and the variable is `worst`."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Change, File by File"
+    },
+    {
+      "type": "para",
+      "text": "**`request.py`: a scenario type and two fields.** The stubs of the last snapshot become real:"
+    },
+    {
+      "type": "code",
+      "lang": "diff",
+      "text": "--- 06/renewal/request.py\n+++ 07/renewal/request.py\n@@\n @dataclass(frozen=True)\n class Scenario:\n-    \"\"\"Stub: the next lesson plans over versions of the failure curves; this model ignores them.\"\"\"\n+    \"\"\"One version of the failure curves: every kind's Weibull scale and shape times a factor.\"\"\"\n     name: str\n-    eta: float = 1.0\n-    beta: float = 1.0\n-    weight: float = 1.0\n+    eta: float = 1.0            # factor on eta: below 1, units fail younger\n+    beta: float = 1.0           # factor on beta: above 1, failures bunch closer to eta\n+    weight: float = 1.0         # its weight in the expected objective"
+    },
+    {
+      "type": "code",
+      "lang": "diff",
+      "text": "--- 06/renewal/request.py\n+++ 07/renewal/request.py\n@@\n-    # Stubs: the next lesson gives these fields their meaning; this model ignores them.\n-    scenarios: tuple[Scenario, ...] = ()\n-    objective: str = \"expected\"\n+    scenarios: tuple[Scenario, ...] = ()    # versions of the curves; none: the base curves alone\n+    objective: str = \"expected\"             # over the scenarios: \"expected\" (weighted mean) or \"worst\""
+    },
+    {
+      "type": "para",
+      "text": "An empty `scenarios` means the base curves alone, so every earlier request means what it meant."
+    },
+    {
+      "type": "para",
+      "text": "**`risk.py`: every function takes a scenario.** One helper reads a kind's curve under a scenario, and `pof_next`, `risk_removed` and `risk_table` pass it on; the default is `BASE`, so old callers are untouched. `evaluate` values a finished plan under a scenario:"
+    },
+    {
+      "type": "code",
+      "lang": "diff",
+      "text": "--- 06/renewal/risk.py\n+++ 07/renewal/risk.py\n@@\n-def pof_next(age: float, kind: str) -> float:\n+def curve(kind: str, scenario: Scenario = BASE) -> tuple[float, float]:\n+    \"\"\"(beta, eta) of a kind's failure curve under a scenario.\"\"\"\n+    return KINDS[kind].beta * scenario.beta, KINDS[kind].eta * scenario.eta\n+\n+\n+def pof_next(age: float, kind: str, scenario: Scenario = BASE) -> float:\n     \"\"\"The probability that a unit of this kind, working at `age`, fails within the year.\"\"\"\n-    return weibull_pof(age, KINDS[kind].beta, KINDS[kind].eta)\n+    return weibull_pof(age, *curve(kind, scenario))"
+    },
+    {
+      "type": "code",
+      "lang": "diff",
+      "text": "--- 06/renewal/risk.py\n+++ 07/renewal/risk.py\n@@\n def evaluate(fleet: list[Transformer], request: Request, replace: dict[str, int], scenario: Scenario) -> float:\n-    \"\"\"Stub: the next lesson values a finished plan under a scenario. Until then, 0.\"\"\"\n-    return 0.0\n+    \"\"\"What a finished plan removes if `scenario` is how the fleet really fails, $k.\"\"\"\n+    by_id = {t.tid: t for t in fleet}\n+    return sum(risk_removed(by_id[tid], y, request, scenario) for tid, y in replace.items())"
+    },
+    {
+      "type": "para",
+      "text": "**`model.py`: the objective block.** One coefficient table per scenario, and a helper that turns a table into the plan's risk removed under it:"
+    },
+    {
+      "type": "code",
+      "lang": "diff",
+      "text": "--- 06/renewal/model.py\n+++ 07/renewal/model.py\n@@\n-    rr = risk_table(units, request)\n-    model.maximize(mathopt.fast_sum(rr[i, j] * x[t.tid, y]\n-                                    for i, t in enumerate(units) for j, y in enumerate(years)))\n+    scenarios = request.scenarios or (BASE,)\n+    tables = [risk_table(units, request, s) for s in scenarios]\n+\n+    def removed(rr) -> mathopt.LinearSum:\n+        return mathopt.fast_sum(rr[i, j] * x[t.tid, y] for i, t in enumerate(units) for j, y in enumerate(years))"
+    },
+    {
+      "type": "para",
+      "text": "Then either the weighted mean or the max-min, and that choice is yours to write in the practice; each branch is one objective of the model above:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**`request.objective == \"worst\"`:** a continuous variable $`z`$, `worst`, from 0 to $`\\bar z`$; one row $`\\text{worst}_s`$ per scenario, `worst <= removed(rr)` with that scenario's table, named `worst_<scenario name>`; and `worst` maximized. $`\\bar z`$ comes from the tables: for each, the sum over units of the largest entry of the unit's row, a negative entry counted as 0, and then the smallest of those sums over the scenarios.",
+        "**Otherwise, `\"expected\"`:** maximize `removed` of one table, the sum over scenarios of $`p_s`$, the scenario's `weight` over the total weight, times its table. A weighted mean of linear objectives is one linear objective, so this branch adds no variable and no row."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`worst` gets an upper bound from the data rather than none: every variable in this course has a domain, and a bound computed from the coefficients is the tightest one the data give (lesson 10.1.2)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Plans Differ in Timing, Hardly in Value"
+    },
+    {
+      "type": "para",
+      "text": "`scenarios.py` solves the 5,000-unit fleet six times: once per scenario, once for the expected value and once for the worst case. One solve at the 0.1% target took about nine minutes in the last lesson, so six would take most of an hour; the study runs at a 0.5% gap, and it keeps that in mind when it reads its numbers. The first block is each solve:"
+    },
+    {
+      "type": "example",
+      "id": "scenarios-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "56-project-transformer-renewal/src/scenarios.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "56-project-transformer-renewal/src/scenarios.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "SCENARIOS = (Scenario(\"base\", weight=2), Scenario(\"younger\", eta=0.85), Scenario(\"older\", eta=1.15),\n             Scenario(\"steeper\", beta=1.25))"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "base      : 1547 units, objective $5,215,720k, gap 0.211%, OPTIMAL\nyounger   : 1530 units, objective $8,646,771k, gap 0.293%, OPTIMAL\nolder     : 1565 units, objective $3,338,510k, gap 0.311%, OPTIMAL\nsteeper   : 1547 units, objective $7,490,336k, gap 0.386%, OPTIMAL\nexpected  : 1545 units, objective $5,981,548k, gap 0.246%, OPTIMAL\nworst case: 1569 units, objective $3,344,780k, gap 0.124%, OPTIMAL"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The risk at stake depends heavily on the curves: if units fail 15% younger, the same budget removes $8,646,771k; if they last 15% longer, $3,338,510k. That is a statement about the fleet, not about the plan. The plan question is the next block: each plan (row) valued under each scenario (column), exactly, by `evaluate`, with its regret, how much less it removes than that scenario's own plan in the scenario where that shortfall is largest:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "risk removed ($k) by each plan (rows) if the fleet fails as in each scenario (columns):\n                  base   younger     older   steeper  most regret\n  base       5,215,720 8,651,041 3,340,904 7,491,878           0\n  younger    5,209,486 8,646,771 3,334,942 7,482,177       8,159\n  older      5,209,796 8,637,089 3,338,510 7,480,113      10,223\n  steeper    5,198,514 8,620,848 3,330,080 7,490,336      25,923\n  expected   5,213,154 8,647,388 3,338,967 7,495,075       2,566\n  worst case 5,219,221 8,651,951 3,344,780 7,495,617      -3,501"
+    },
+    {
+      "type": "para",
+      "text": "Read it with the gaps in hand. Every plan removes, in every scenario, within 0.33% of that scenario's own plan; the largest share is the \"steeper\" plan's under the base curves, $17,206k short of $5,215,720k. The largest regret in money, $25,923k for the \"steeper\" plan, is in the \"younger\" column: the younger plan removes $8,646,771k there and the steeper plan $8,620,848k, a shortfall of 0.30% of $8,646,771k. Each scenario's own plan was solved only to within 0.5%, so none of these differences is evidence that one plan is better. The table even shows it directly: the worst-case plan removes *more* than the base plan does under the base curves, a negative regret, which an exact solve could not give. The base plan was not the best base plan; its solve stopped at 0.211%, and the worst-case solve happened to find a better one."
+    },
+    {
+      "type": "para",
+      "text": "So, on this fleet, the uncertainty in the curves barely changes what the plan is worth. It changes *which* units go *when*:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "units in every scenario's plan: 1474; in some but not all: 131\n  younger    against base: 292 units placed differently, 15 added, 32 dropped\n  older      against base: 211 units placed differently, 31 added, 13 dropped\n  steeper    against base: 529 units placed differently, 39 added, 39 dropped\n  expected   against base: 180 units placed differently, 14 added, 16 dropped\n  worst case against base: 212 units placed differently, 31 added, 9 dropped"
+    },
+    {
+      "type": "para",
+      "text": "1,474 units are in all four scenario plans: that is the core the asset team asked for, units worth replacing whatever the curves. 131 more are in some plans and not others: the margin. And many units change year without leaving the plan: 529 against the base plan under the steeper curves, the most of any scenario."
+    },
+    {
+      "type": "para",
+      "text": "What to defend? The expected-value plan stays closest to the base plan (180 units placed differently) and its regret is within the noise; the worst-case plan gives up nothing measurable in any scenario here. Either is defensible on these numbers; the honest summary for the asset team is the core of 1,474 units, the margin of 131, and the fact that no plan in the table is distinguishable from another in value at this tolerance. Telling them which plan is \"best\" would need gaps much smaller than the regrets, and the regrets here are smaller than any gap this fleet can be solved to six times in a morning."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Tests Pin the Scenario Curve, the Weighted Mean and the Max-Min"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**a curve that fails younger makes a replacement worth more:** a scenario with factors of 1 gives the base coefficient exactly; an $`\\eta`$ factor of 0.85 gives more, 1.15 less.",
+        "**the expected objective is the weighted mean over scenarios:** on three units, the plan's objective equals $`(1 \\cdot v_{\\text{younger}} + 3 \\cdot v_{\\text{older}})/4`$, with each $`v`$ computed by `evaluate`, outside the model.",
+        "**the worst-case plan does best in its worst scenario:** its objective equals its lowest value across the scenarios, and that lowest value is at least the expected-value plan's lowest."
+      ]
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "step 07 tests on the code of step 06 (before): 29 passed, 3 failed\n  FAILED test_scenarios.py::test_a_curve_that_fails_younger_makes_a_replacement_worth_more (AssertionError)\n         assert 999.8443474488892 > 999.8443474488892\n  FAILED test_scenarios.py::test_the_expected_objective_is_the_weighted_mean_over_scenarios (AssertionError)\n         assert 3617.990024887789 < 1e-06\n  FAILED test_scenarios.py::test_the_worst_case_plan_does_best_in_its_worst_scenario (AssertionError)\n         assert 2067.4257633399297 < 1e-06\nstep 07 tests on the code of step 07 (after): 32 passed, 0 failed\ntests step 07 adds or changes: 3"
+    },
+    {
+      "type": "para",
+      "text": "The last snapshot accepts a scenario and ignores it, so the \"younger\" coefficient equals the base one, and its stub `evaluate` returns 0, so neither objective can match a value computed from it."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "What the Step Did to the Code"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "06       13    415         29     29         216  reference.build_reference (23)\n07       15    439         34     32         245  model.build (24)"
+    },
+    {
+      "type": "para",
+      "text": "24 code lines and one branch in `build`; the file count rises by two only because the next lesson's stubs arrive. The scenario reached every function that reads a curve, by one parameter with a default, and nothing else: the rows did not change, which is what a change of objective should look like. `build` is again the most branching function, at 24."
+    },
+    {
+      "type": "para",
+      "text": "**Practice.** This lesson's project practice starts from the code before this step, the whole package (snapshot `steps/06`). It is graded by the tests in the practice's `tests/` folder and by a check that `main.py` prints the practice's `expected/report.txt`; the practice's statement gives the request `main.py` makes and the format of every line it prints. This step's `main.py` plans a tiny fleet of 25 units, drawn from seed 56, under four equally weighted versions of the failure curves, for their mean and for their worst case, and values each plan under every version."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**The coefficients come from the curves, so a scenario is a version of the curves**, and a finished plan is valued under each by exact arithmetic.",
+        "**An expected-value objective is one set of coefficients; a worst-case objective is a variable and a row per scenario.** Per-scenario plans show what moves.",
+        "**Read a regret table with the gaps in hand.** Here every plan was within 0.33% of the best in every scenario, inside the 0.5% gap: the curves change the plan's timing, not, measurably, its value.",
+        "**The answer to \"what if the curves are wrong\" is a core and a margin:** 1,474 units in every plan, 131 in some."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Piece",
+        "Formula",
+        "Code"
+      ],
+      "rows": [
+        [
+          "a scenario",
+          "$`\\eta \\cdot f_\\eta`$, $`\\beta \\cdot f_\\beta`$, weight",
+          "`Scenario(name, eta, beta, weight)`"
+        ],
+        [
+          "expected value",
+          "$`\\max \\sum_{i,t} (\\sum_s p_s \\text{rr}^s_{i,t}) x_{i,t}`$",
+          "`objective=\"expected\"`"
+        ],
+        [
+          "worst case",
+          "$`\\max z`$, $`z \\le \\sum_{i,t} \\text{rr}^s_{i,t} x_{i,t}\\ \\forall s`$",
+          "`objective=\"worst\"`, rows `worst_{s}`"
+        ],
+        [
+          "a plan's value under a scenario",
+          "$`\\sum_{(i,t) \\in \\text{plan}} \\text{rr}^s_{i,t}`$",
+          "`risk.evaluate`"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [MathOpt `model.py` (OR-Tools source, v9.15)](https://github.com/google/or-tools/blob/v9.15/ortools/math_opt/python/model.py) (`add_variable` with `lb` and `ub` for the continuous `worst` variable, and `maximize` of a single variable); [MathOpt `expressions.py` (OR-Tools source, v9.15)](https://github.com/google/or-tools/blob/v9.15/ortools/math_opt/python/expressions.py) (`fast_sum`, which builds each scenario's linear expression). Both were read from the copy installed in the course's runner image. Lessons 7.3.1 (fitting curves, and why few failures make them uncertain) and 3.4.1 (gaps) are the course's background for this step."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Give \"steeper\" a weight of 4. Predict which plan the expected-value objective moves toward, and how many units of the core change.",
+        "The asset team wants \"the plan that loses least, against each scenario's best\". That is a min-max-regret objective. Which parameter would it need that this lesson's model does not have?",
+        "Re-solve only the base scenario at 0.1%. Predict whether the worst-case plan's negative regret disappears."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Value Plans Outside the Model"
+    },
+    {
+      "type": "para",
+      "text": "Every comparison in this lesson uses `evaluate`, a plain sum over a finished plan, never a solver's objective. Objectives come from different models (a mean, a minimum, one scenario) and from searches stopped at different gaps; a plan's value under a scenario is one number, the same however the plan was found. Comparing plans by evaluating them, not by their solves' objectives, is what makes a table like the one above mean anything at all."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**scenarios.py.** Solves the 5,000-unit fleet under four scenarios and for the expected value and the worst case, values every plan under every scenario, counts the core and the margin, and runs the step's tests before and after the change (*every section*). It takes a few minutes. *Try:* Add a scenario with $`\\eta`$ factor 0.7. Predict how many units leave the core."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [scenarios.py](src/scenarios.py)",
+        "Program: [growth.py](src/growth.py)",
+        "Library: [steps.py](src/steps.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 14,
+    "paras": 33,
+    "code": 11,
+    "tables": 3,
+    "lists": 5,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 1,
+    "html": 1,
+    "disclosures": 0,
+    "examples": 1
+  },
+  "content_sha256": "d150492d18c77d367c83317fa0687a2e9eea71cd8181b3f4a4286bf6d6bf437e"
+}

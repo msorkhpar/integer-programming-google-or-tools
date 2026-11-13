@@ -1,0 +1,187 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "09-diagnostics-and-explainability",
+    "37-infeasibility"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "What the scheduling service does with each answer",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A transit agency runs its bus-replacement scheduler as a service. Every night it solves a MathOpt model and must decide, from the `SolveResult` alone, what to do next. The agency's rules:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "The solve ended",
+        "The service"
+      ],
+      "rows": [
+        [
+          "with a proven optimal plan",
+          "`\"publish\"`"
+        ],
+        [
+          "with a plan stopped by a limit, whose relative gap is at most `max_gap`",
+          "`\"publish\"`"
+        ],
+        [
+          "with a plan stopped by a limit, whose gap is larger",
+          "`\"rerun\"` (with more time)"
+        ],
+        [
+          "with no plan because a limit stopped the search",
+          "`\"rerun\"`"
+        ],
+        [
+          "with a proof that no plan exists",
+          "`\"conflict\"` (send it to the conflict finder)"
+        ],
+        [
+          "with a proof that plans improve without end",
+          "`\"model-bug\"`"
+        ],
+        [
+          "unable to tell infeasible from unbounded",
+          "`\"separate\"` (the zero-objective solve)"
+        ],
+        [
+          "any other way",
+          "`\"escalate\"`"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Write `next_step(result, max_gap)`. The reason is `result.termination.reason`, a `mathopt.TerminationReason`, and it alone tells the cases apart: \"a plan stopped by a limit\" is `TerminationReason.FEASIBLE`, \"no plan because a limit stopped the search\" is `NO_SOLUTION_FOUND`. The tests' results carry no solutions, so don't ask `result.has_primal_feasible_solution()` as the lesson's `verdict` does; that check reads a real solve's plans, which these results don't have. For a plan stopped by a limit, the bounds are in `result.termination.objective_bounds` (`primal_bound`, the plan's objective, and `dual_bound`, the best bound). The relative gap is the distance between the two divided by the size of `primal_bound`. When `primal_bound` is 0, publish only if the two bounds are equal. The agency's models both maximize ridership and minimize cost, so the bound can lie on either side of the plan."
+    },
+    {
+      "type": "para",
+      "text": "The tests build results directly with `mathopt.SolveResult(termination=mathopt.Termination(...))`, so no solver runs. About twenty lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nR = mathopt.TerminationReason\n\n\ndef next_step(result: mathopt.SolveResult, max_gap: float) -> str:\n    \"\"\"What the scheduling service does with a solve: publish, rerun, conflict, model-bug, separate or escalate.\"\"\"\n    termination = result.termination\n    match termination.reason:\n        case R.OPTIMAL:\n            return \"publish\"\n        case R.FEASIBLE:\n            primal = termination.objective_bounds.primal_bound\n            dual = termination.objective_bounds.dual_bound\n            if primal == 0:\n                return \"publish\" if dual == primal else \"rerun\"\n            gap = abs(dual - primal) / abs(primal)\n            return \"publish\" if gap <= max_gap else \"rerun\"\n        case R.NO_SOLUTION_FOUND:\n            return \"rerun\"\n        case R.INFEASIBLE:\n            return \"conflict\"\n        case R.UNBOUNDED:\n            return \"model-bug\"\n        case R.INFEASIBLE_OR_UNBOUNDED:\n            return \"separate\"\n        case _:\n            return \"escalate\"\n\n\nif __name__ == \"__main__\":\n    done = mathopt.SolveResult(termination=mathopt.Termination(reason=R.OPTIMAL))\n    print(next_step(done, 0.01))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nR = mathopt.TerminationReason\n\n\ndef next_step(result: mathopt.SolveResult, max_gap: float) -> str:\n    \"\"\"What the scheduling service does with a solve: publish, rerun, conflict, model-bug, separate or escalate.\"\"\"\n    # TODO: one case per termination reason, and the gap rule for a plan stopped by a limit.\n    return \"publish\"\n\n\nif __name__ == \"__main__\":\n    done = mathopt.SolveResult(termination=mathopt.Termination(reason=R.OPTIMAL))\n    print(next_step(done, 0.01))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 1,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "2e85e05504b98b500e6e65c62e6839e1cf38c51f2677165d0060ae99ecea52ab",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nR = mathopt.TerminationReason\n\n\ndef next_step(result: mathopt.SolveResult, max_gap: float) -> str:\n    \"\"\"What the scheduling service does with a solve: publish, rerun, conflict, model-bug, separate or escalate.\"\"\"\n    # TODO: one case per termination reason, and the gap rule for a plan stopped by a limit.\n    return \"publish\"\n\n\nif __name__ == \"__main__\":\n    done = mathopt.SolveResult(termination=mathopt.Termination(reason=R.OPTIMAL))\n    print(next_step(done, 0.01))\n",
+  "exercise": {
+    "main_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-2/guard.py",
+    "test_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-2/test_guard.py",
+    "run_command": [
+      "python3",
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-2/guard.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-2/target/report.xml",
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-2/test_guard.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_proven_plan_is_published_and_a_proven_conflict_is_explained",
+        "kind": "main",
+        "says": "an optimal plan is published, a proven infeasibility goes to the conflict finder, and unboundedness is a model bug"
+      },
+      {
+        "id": "test_infeasible_or_unbounded_is_settled_before_anyone_hunts_a_conflict",
+        "kind": "edge",
+        "says": "a hedged answer is settled first, never sent to the conflict finder"
+      },
+      {
+        "id": "test_a_limit_without_a_plan_is_a_rerun_not_a_conflict",
+        "kind": "edge",
+        "says": "a limit with no plan claims nothing about the model"
+      },
+      {
+        "id": "test_a_plan_stopped_by_a_limit_is_published_only_within_the_gap",
+        "kind": "edge",
+        "says": "a plan stopped by a limit is published only when its gap is small enough"
+      },
+      {
+        "id": "test_the_gap_of_a_minimization_is_its_size_not_its_sign",
+        "kind": "edge",
+        "says": "in a minimization the bound lies below the plan, so the gap is a size"
+      },
+      {
+        "id": "test_a_plan_worth_zero_is_published_only_when_the_bound_meets_it",
+        "kind": "edge",
+        "says": "a plan worth 0 has no relative gap, so only an equal bound proves it"
+      },
+      {
+        "id": "test_an_answer_with_no_rule_is_escalated",
+        "kind": "edge",
+        "says": "a reason the table does not name goes to a person"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "37-infeasibility/README_9.1.1.md",
+      "section": "A Limit Without a Plan Means \"Unknown\", Never \"Infeasible\""
+    },
+    "concepts": [
+      "each termination reason, and a plan's gap, leads the service to a different next step"
+    ]
+  }
+}

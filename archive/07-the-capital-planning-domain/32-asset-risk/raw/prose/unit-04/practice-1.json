@@ -1,0 +1,132 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "07-the-capital-planning-domain",
+    "32-asset-risk"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A pump swapped for a new design, year by year",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility plans to swap an old pump for a unit of a newer design. The old pump has age `age` in the plan's first year and a Weibull curve (`beta`, `eta`); the new design has its own curve (`beta_new`, `eta_new`). The work starts in `start` and lasts `duration` years; the old pump runs until the work ends, and the new unit is in service, at age 0, from the year after. Failed pumps are repaired and kept, so a year's risk is `cof` times the expected failures in that year."
+    },
+    {
+      "type": "para",
+      "text": "Write `yearly_cut(pump, years, start, duration)` in `refurb.py`: a dict from each year in `years` (the first is the plan's first year) to the risk removed that year, $k."
+    },
+    {
+      "type": "para",
+      "text": "In the lesson's notation, write $`\\delta_y`$ as the risk of the old pump at its age $`a^0_y`$ minus the risk with the work, which now comes from a different curve. `failures(age, beta, eta)` is written for you. The tests compute expected failures from `scipy.stats.weibull_min.logsf`. About ten lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Pump:\n    age: float          # in the plan's first year\n    beta: float\n    eta: float\n    beta_new: float     # the new design's curve\n    eta_new: float\n    cof: float          # $k per failure\n\n\ndef failures(age: float, beta: float, eta: float) -> float:\n    \"\"\"Expected failures in the year from `age` to `age + 1`, failed units repaired and kept.\"\"\"\n    return ((age + 1) / eta) ** beta - (age / eta) ** beta\n\n\ndef yearly_cut(pump: Pump, years: list[int], start: int, duration: int) -> dict[int, float]:\n    \"\"\"Risk removed in each year ($k) by swapping the pump for the new design, work from `start`.\"\"\"\n    done = start + duration\n    cut = {}\n    for y in years:\n        old_age = pump.age + (y - years[0])\n        before = pump.cof * failures(old_age, pump.beta, pump.eta)\n        if y < done:\n            after = before\n        else:\n            after = pump.cof * failures(y - done, pump.beta_new, pump.eta_new)\n        cut[y] = before - after\n    return cut\n\n\nif __name__ == \"__main__\":\n    print(yearly_cut(Pump(35, 3.0, 40, 2.0, 60, 900), list(range(2027, 2033)), 2028, 1))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Pump:\n    age: float          # in the plan's first year\n    beta: float\n    eta: float\n    beta_new: float     # the new design's curve\n    eta_new: float\n    cof: float          # $k per failure\n\n\ndef failures(age: float, beta: float, eta: float) -> float:\n    \"\"\"Expected failures in the year from `age` to `age + 1`, failed units repaired and kept.\"\"\"\n    return ((age + 1) / eta) ** beta - (age / eta) ** beta\n\n\ndef yearly_cut(pump: Pump, years: list[int], start: int, duration: int) -> dict[int, float]:\n    \"\"\"Risk removed in each year ($k) by swapping the pump for the new design, work from `start`.\"\"\"\n    # TODO: the old pump's risk in each year, minus the risk with the work.\n    return {y: -1.0 for y in years}\n\n\nif __name__ == \"__main__\":\n    print(yearly_cut(Pump(35, 3.0, 40, 2.0, 60, 900), list(range(2027, 2033)), 2028, 1))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "e41e088417e6bf540351862dbdc1a6ddde77df29e85e1b979457ee1b357506dc",
+  "starting_code": "from dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Pump:\n    age: float          # in the plan's first year\n    beta: float\n    eta: float\n    beta_new: float     # the new design's curve\n    eta_new: float\n    cof: float          # $k per failure\n\n\ndef failures(age: float, beta: float, eta: float) -> float:\n    \"\"\"Expected failures in the year from `age` to `age + 1`, failed units repaired and kept.\"\"\"\n    return ((age + 1) / eta) ** beta - (age / eta) ** beta\n\n\ndef yearly_cut(pump: Pump, years: list[int], start: int, duration: int) -> dict[int, float]:\n    \"\"\"Risk removed in each year ($k) by swapping the pump for the new design, work from `start`.\"\"\"\n    # TODO: the old pump's risk in each year, minus the risk with the work.\n    return {y: -1.0 for y in years}\n\n\nif __name__ == \"__main__\":\n    print(yearly_cut(Pump(35, 3.0, 40, 2.0, 60, 900), list(range(2027, 2033)), 2028, 1))\n",
+  "exercise": {
+    "main_path": "practice/07-the-capital-planning-domain/32-asset-risk/prose/unit-04/practice-1/refurb.py",
+    "test_path": "practice/07-the-capital-planning-domain/32-asset-risk/prose/unit-04/practice-1/test_refurb.py",
+    "run_command": [
+      "python3",
+      "practice/07-the-capital-planning-domain/32-asset-risk/prose/unit-04/practice-1/refurb.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/07-the-capital-planning-domain/32-asset-risk/prose/unit-04/practice-1/target/report.xml",
+      "practice/07-the-capital-planning-domain/32-asset-risk/prose/unit-04/practice-1/test_refurb.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_nothing_is_removed_before_the_work_ends_and_something_after",
+        "kind": "main",
+        "says": "no risk is removed before the work ends, and some is removed in every year after it"
+      },
+      {
+        "id": "test_the_new_unit_fails_on_its_own_curve",
+        "kind": "edge",
+        "says": "after the work, the risk is that of the new design's curve"
+      },
+      {
+        "id": "test_the_new_unit_ages_after_installation",
+        "kind": "edge",
+        "says": "the new unit is one year older in each year after it is installed"
+      },
+      {
+        "id": "test_without_the_work_the_old_pump_keeps_aging",
+        "kind": "edge",
+        "says": "the risk without the work is that of the old pump at its age in that year"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/07-the-capital-planning-domain/32-asset-risk/prose/unit-04/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "32-asset-risk/README_7.3.4.md",
+      "section": "The Risk Removed in a Year Is the Risk Without the Work Minus the Risk With It"
+    },
+    "concepts": [
+      "work resets the asset's age after it ends, and the asset ages from there",
+      "the yearly reduction is the risk without the work minus the risk with it"
+    ]
+  }
+}

@@ -1,0 +1,149 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "25-knapsack-and-assignment"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Cuts for a minimum-inspection row",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A pipeline operator (not GridCap) chooses which lines to inspect this year. Line $`i`$ is $`k_i`$ km long (a whole number), $`x_i \\in \\{0, 1\\}`$ says whether it is inspected, and the regulator's rule is a **floor**, a knapsack row turned around:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_{i \\in I} k_i\\, x_i \\ge F \\qquad \\text{(floor)}"
+    },
+    {
+      "type": "para",
+      "text": "The LP relaxation meets the floor with fractions of lines, so the planners want valid rows that cut such points off, built from the same idea as a cover. Call a set $`C`$ of lines **needed** when the lines *outside* it add up to less than the floor. Then every whole plan that meets the floor inspects at least one line of $`C`$, so the row"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_{i \\in C} x_i \\ge 1 \\qquad \\text{(needed}_C)"
+    },
+    {
+      "type": "para",
+      "text": "is valid. Write `separate_floor(km, floor, xstar)` in `inspection.py`. Given an LP point `xstar` (line -> value between 0 and 1), it returns a needed set whose row the point breaks, as a list of line names, choosing the one the point breaks the most; or `None` when no needed set's row is broken."
+    },
+    {
+      "type": "para",
+      "text": "Before coding, write the separation problem the way the lesson wrote the cover one: a binary per line for \"is in $`C`$\", the row that says $`C`$ is needed (the lengths are whole kilometres), and the objective. You may solve it with MathOpt and HiGHS, which the workspace has."
+    },
+    {
+      "type": "para",
+      "text": "The tests check by trying every whole plan that a returned set is really needed, and that the LP point really breaks its row. About ten lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef separate_floor(km: dict[str, int], floor: int, xstar: dict[str, float]) -> list[str] | None:\n    \"\"\"A set of lines the LP point under-uses although every plan meeting the floor needs one of them.\n\n    A set C is needed when the lines outside it add up to less than the floor: then every plan that\n    inspects at least `floor` km includes a line of C, so sum over C of x >= 1 holds for whole plans.\n    Returns the needed set with the smallest LP sum when that sum is below 1, else None.\n    \"\"\"\n    total = sum(km.values())\n    model = mathopt.Model(name=\"separate-floor\")\n    z = {i: model.add_binary_variable(name=f\"z_{i}\") for i in km}           # z_i = 1: line i is in C\n    # Outside C: total - sum km_i z_i <= floor - 1, since lengths are whole kilometres.\n    model.add_linear_constraint(sum(km[i] * z[i] for i in km) >= total - floor + 1, name=\"needed\")\n    model.minimize(sum(xstar[i] * z[i] for i in km))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    needed = [i for i in km if result.variable_values(z[i]) > 0.5]\n    return needed if sum(xstar[i] for i in needed) < 1 - 1e-9 else None\n\n\nif __name__ == \"__main__\":\n    print(separate_floor({\"L1\": 10, \"L2\": 3, \"L3\": 2}, 8, {\"L1\": 0.5, \"L2\": 1.0, \"L3\": 1.0}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef separate_floor(km: dict[str, int], floor: int, xstar: dict[str, float]) -> list[str] | None:\n    \"\"\"A set of lines the LP point under-uses although every plan meeting the floor needs one of them.\n\n    A set C is needed when the lines outside it add up to less than the floor: then every plan that\n    inspects at least `floor` km includes a line of C, so sum over C of x >= 1 holds for whole plans.\n    Returns the needed set with the smallest LP sum when that sum is below 1, else None.\n    \"\"\"\n    # TODO: find the needed set the LP point under-uses most.\n    return None\n\nif __name__ == \"__main__\":\n    print(separate_floor({\"L1\": 10, \"L2\": 3, \"L3\": 2}, 8, {\"L1\": 0.5, \"L2\": 1.0, \"L3\": 1.0}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 3,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "217efc8cf05adc63f1e0c7526df11985d9fa782adcff69e18ad1f45c4de2acd2",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef separate_floor(km: dict[str, int], floor: int, xstar: dict[str, float]) -> list[str] | None:\n    \"\"\"A set of lines the LP point under-uses although every plan meeting the floor needs one of them.\n\n    A set C is needed when the lines outside it add up to less than the floor: then every plan that\n    inspects at least `floor` km includes a line of C, so sum over C of x >= 1 holds for whole plans.\n    Returns the needed set with the smallest LP sum when that sum is below 1, else None.\n    \"\"\"\n    # TODO: find the needed set the LP point under-uses most.\n    return None\n\nif __name__ == \"__main__\":\n    print(separate_floor({\"L1\": 10, \"L2\": 3, \"L3\": 2}, 8, {\"L1\": 0.5, \"L2\": 1.0, \"L3\": 1.0}))\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-2/inspection.py",
+    "test_path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-2/test_inspection.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-2/inspection.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-2/target/report.xml",
+      "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-2/test_inspection.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_line_every_plan_needs_is_found",
+        "kind": "main",
+        "says": "a line without which no plan reaches the floor, and which the LP point inspects only in part, is returned"
+      },
+      {
+        "id": "test_a_whole_plan_breaks_no_such_row",
+        "kind": "main",
+        "says": "a whole plan meeting the floor gets None, and a fractional point that under-uses a needed set gets that set"
+      },
+      {
+        "id": "test_lengths_outside_the_set_must_fall_short_of_the_floor",
+        "kind": "edge",
+        "says": "a set whose outside lines reach exactly the floor is not needed, since a plan can avoid it"
+      },
+      {
+        "id": "test_the_set_the_lp_point_under_uses_is_found",
+        "kind": "edge",
+        "says": "the needed set returned is one the LP point inspects less than once in total, not one it inspects fully"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "25-knapsack-and-assignment/README_6.3.3.md",
+      "section": "Finding the Most Violated Cover Is a Knapsack of Its Own"
+    },
+    "concepts": [
+      "the most broken cover is found by a small knapsack over the LP values"
+    ]
+  }
+}

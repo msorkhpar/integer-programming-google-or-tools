@@ -1,0 +1,158 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "49-cloud-deployment"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 3,
+  "ingested": "2026-11-13",
+  "title": "AWS Batch on Fargate, Step Functions and Lambda: who does what",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Check yourself"
+    },
+    {
+      "type": "para",
+      "text": "Questions on what this page has just taught. Choose one answer for each."
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 1,
+    "paras": 1,
+    "code": 0,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 0
+  },
+  "content_sha256": "01381f530bdd3fd2ea9a42929589b34280a234f0332b7b83c66b27688cf7ac41",
+  "exercise": {
+    "provenance": "generated",
+    "trust": "advisory",
+    "kind": "quiz",
+    "questions": [
+      {
+        "id": "q-where",
+        "stem": "A planner submits a scenario of the large portfolio with a 40-minute solver limit. In the lesson's design, which service runs the solve itself?",
+        "options": [
+          {
+            "id": "a",
+            "text": "A Lambda function, because it starts in seconds and may use up to 10,240 MB of memory",
+            "correct": false,
+            "says": "Lambda runs a function for at most 900 seconds (15 minutes); the lesson keeps it to short glue, never the solve."
+          },
+          {
+            "id": "b",
+            "text": "A Batch job on Fargate, because the job's own timeout is the only bound on its time",
+            "correct": true,
+            "says": "Right: Batch on Fargate solves; a job's timeout (at least 60 s) is its only time bound."
+          },
+          {
+            "id": "c",
+            "text": "A chain of Lambda calls, which Step Functions restarts after their 900 seconds run out",
+            "correct": false,
+            "says": "The page: a function stopped at 15 minutes leaves no result at all, so Lambda never solves; Step Functions waits for a Batch job."
+          },
+          {
+            "id": "d",
+            "text": "The API's own process, because lesson 12.4.2's thread pool already runs each solve as a job",
+            "correct": false,
+            "says": "The API answers in milliseconds and does none of the waiting; each solve gets its own container."
+          }
+        ],
+        "origin": {
+          "path": "49-cloud-deployment/README_12.5.2.md",
+          "section": "Each Service Does the Part It Is Built For"
+        }
+      },
+      {
+        "id": "q-timeout",
+        "stem": "A run's solver time limit is 30 minutes. How does the lesson set the Batch job's timeout for that run?",
+        "options": [
+          {
+            "id": "a",
+            "text": "At 30 minutes, so Batch ends the job at the same point as the search itself ends",
+            "correct": false,
+            "says": "If the two were equal, Batch could kill the worker while it writes the result, losing a plan the solver found."
+          },
+          {
+            "id": "b",
+            "text": "Under 30 minutes, so Batch's retry restarts the job before the search gives up",
+            "correct": false,
+            "says": "The documentation says a job stopped by its timeout is not retried; and it writes nothing."
+          },
+          {
+            "id": "c",
+            "text": "Over 30 minutes, because Batch retries a job it stopped, with the minutes left",
+            "correct": false,
+            "says": "A job stopped by its timeout is not retried, by the RegisterJobDefinition reference the lesson cites."
+          },
+          {
+            "id": "d",
+            "text": "Over 30 minutes, so the worker can still write its best plan after the search ends",
+            "correct": true,
+            "says": "Right: the solver stops at its limit and writes its best plan; Batch's timeout is only the backstop, with margin."
+          }
+        ],
+        "origin": {
+          "path": "49-cloud-deployment/README_12.5.2.md",
+          "section": "A Job Definition Fixes the Image, Size, Timeout and Retries; a Submission Names the Run"
+        }
+      },
+      {
+        "id": "q-retry-start",
+        "stem": "The API's call to start run-0042 times out, and it calls start_execution again with the same name and the same input while the first execution is still running. What happens?",
+        "options": [
+          {
+            "id": "a",
+            "text": "Step Functions returns the execution it started before, so only one solve job is submitted",
+            "correct": true,
+            "says": "Right: for a Standard workflow, the same name and input as a running execution return that execution."
+          },
+          {
+            "id": "b",
+            "text": "Step Functions starts a second execution, and Batch's client token drops the duplicate job",
+            "correct": false,
+            "says": "SubmitJob takes no client token; the lesson says the same call sent twice starts two jobs."
+          },
+          {
+            "id": "c",
+            "text": "Step Functions refuses the call with ExecutionAlreadyExists, so the API retries under a new name",
+            "correct": false,
+            "says": "ExecutionAlreadyExists is for the same name with different input, or a closed execution."
+          },
+          {
+            "id": "d",
+            "text": "Step Functions starts a second execution, and the conditional result write drops the duplicate",
+            "correct": false,
+            "says": "The same name and input return the running execution instead of starting another."
+          }
+        ],
+        "origin": {
+          "path": "49-cloud-deployment/README_12.5.2.md",
+          "section": "Step Functions Waits for the Job and Catches What the Worker Cannot"
+        }
+      }
+    ],
+    "concepts": [
+      "an execution named after the run makes starting a run idempotent",
+      "a repeated start of the same run",
+      "the job timeout against the solver's limit",
+      "which service runs a long solve",
+      "which AWS service runs, waits for, or cleans up after a solve, and why"
+    ]
+  }
+}

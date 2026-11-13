@@ -1,0 +1,130 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "09-diagnostics-and-explainability",
+    "37-infeasibility"
+  ],
+  "variant": "prose",
+  "unit": 5,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Families first, then rules",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A wind farm's maintenance model has thousands of rules in a few families: sensor checks per turbine, an uptime target, quarterly budgets, staffing minimums. A deletion filter over every rule would cost one solve per rule. The reliability engineer wants the cheaper two-pass version:"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "**Families.** Go through the families in the given order. Switch one family off (all its rules) while the families still kept stay on. If the rest is still infeasible, drop that family for good. If it becomes feasible, keep the family.",
+        "**Rules.** Go through the rules of the kept families, in the given order (family by family, rule by rule). Run the deletion filter on them, with every dropped family still switched off."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "You get the families as a dict from family name to its list of rules, and an oracle, `infeasible(rules) -> bool`, which says whether the model has no solution with exactly the rules in the set switched on. Write `two_pass(families, infeasible)` returning `(kept, conflict)`: the kept family names and the rules of the conflict, both in the given order. The model is known to be infeasible with every rule on. No solver runs and no gap tolerance is involved: the oracle answers each question exactly. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom typing import Callable\n\n\ndef two_pass(families: dict[str, list[str]], infeasible: Callable[[set[str]], bool]) -> tuple[list[str], list[str]]:\n    \"\"\"A deletion filter over whole families, then over the rules of the families it kept.\"\"\"\n    kept = list(families)\n    for family in families:\n        trial = [f for f in kept if f != family]\n        if infeasible({r for f in trial for r in families[f]}):\n            kept = trial\n    rules = [r for f in kept for r in families[f]]\n    conflict = list(rules)\n    for rule in rules:\n        trial = [r for r in conflict if r != rule]\n        if infeasible(set(trial)):\n            conflict = trial\n    return kept, conflict\n\n\nif __name__ == \"__main__\":\n    families = {\"budget\": [\"budget_2027\", \"budget_2028\"], \"crews\": [\"crews_east\"], \"must\": [\"must_A\"]}\n    clash = [{\"budget_2028\", \"must_A\"}]\n    print(two_pass(families, lambda on: any(c <= on for c in clash)))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom typing import Callable\n\n\ndef two_pass(families: dict[str, list[str]], infeasible: Callable[[set[str]], bool]) -> tuple[list[str], list[str]]:\n    \"\"\"A deletion filter over whole families, then over the rules of the families it kept.\"\"\"\n    # TODO: first pass over families, second pass over the rules of the kept families.\n    return list(families), []\n\n\nif __name__ == \"__main__\":\n    families = {\"budget\": [\"budget_2027\", \"budget_2028\"], \"crews\": [\"crews_east\"], \"must\": [\"must_A\"]}\n    clash = [{\"budget_2028\", \"must_A\"}]\n    print(two_pass(families, lambda on: any(c <= on for c in clash)))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 2,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "c9656c23fed426288c6854a760fbb4780938991c5e9b8641e97f33a914c5f57f",
+  "starting_code": "from __future__ import annotations\n\nfrom typing import Callable\n\n\ndef two_pass(families: dict[str, list[str]], infeasible: Callable[[set[str]], bool]) -> tuple[list[str], list[str]]:\n    \"\"\"A deletion filter over whole families, then over the rules of the families it kept.\"\"\"\n    # TODO: first pass over families, second pass over the rules of the kept families.\n    return list(families), []\n\n\nif __name__ == \"__main__\":\n    families = {\"budget\": [\"budget_2027\", \"budget_2028\"], \"crews\": [\"crews_east\"], \"must\": [\"must_A\"]}\n    clash = [{\"budget_2028\", \"must_A\"}]\n    print(two_pass(families, lambda on: any(c <= on for c in clash)))\n",
+  "exercise": {
+    "main_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-05/practice-2/families.py",
+    "test_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-05/practice-2/test_families.py",
+    "run_command": [
+      "python3",
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-05/practice-2/families.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-05/practice-2/target/report.xml",
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-05/practice-2/test_families.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_families_and_the_rules_of_one_conflict_are_found",
+        "kind": "main",
+        "says": "the families a conflict needs, and its rules inside them, are returned in the given order"
+      },
+      {
+        "id": "test_a_family_dropped_in_the_first_pass_stays_dropped",
+        "kind": "edge",
+        "says": "with two separate conflicts, dropping one family at a time must leave one conflict whole"
+      },
+      {
+        "id": "test_the_second_pass_switches_dropped_families_off",
+        "kind": "edge",
+        "says": "in the second pass the dropped families stay switched off"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-05/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "37-infeasibility/README_9.1.5.md",
+      "section": "Filter Whole Families First, Then the Rows Inside Them"
+    },
+    "concepts": [
+      "a deletion filter over families of rules, then over the rules of the families it kept"
+    ]
+  }
+}

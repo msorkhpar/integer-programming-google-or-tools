@@ -1,0 +1,149 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "18-linear-solver-wrapper"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Read a solve safely",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A maintenance team's nightly job solves a small pywraplp model and mails the result to the supervisors. Last month the model was infeasible for a week, and the mail said \"hire 0 crews, cost 0\" every night, because the job read `solution_value()` without looking at the status."
+    },
+    {
+      "type": "para",
+      "text": "Write `outcome(solver, status, x)` in `report.py`. `status` is what `solver.Solve()` returned and `x` maps names to the solver's variables. Return a dict with three keys:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`\"status\"`: the status's name, one of `OPTIMAL`, `FEASIBLE`, `INFEASIBLE`, `UNBOUNDED`, `ABNORMAL`, `MODEL_INVALID`, `NOT_SOLVED` (the `NAMES` table is given);",
+        "`\"value\"`: the objective value, or `None` when the solve has no solution to report;",
+        "`\"plan\"`: `{name: value}` for every variable in `x`, or `None` in the same cases."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "A solve has a solution to report when the solver found one, whether or not it proved it best. `crews_model(need, most)` is a small model to try your function on:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\min\\;& 5\\,x_{\\text{line}} + 3\\,x_{\\text{field}} \\\\\n\\text{s.t. }& 2\\,x_{\\text{line}} + x_{\\text{field}} \\ge \\text{need} && \\text{(cover)} \\\\\n& x_{\\text{line}}, x_{\\text{field}} \\in \\{0, 1, \\dots, \\text{most}\\}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "About five lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.linear_solver import pywraplp\n\nNAMES = {pywraplp.Solver.OPTIMAL: \"OPTIMAL\", pywraplp.Solver.FEASIBLE: \"FEASIBLE\",\n         pywraplp.Solver.INFEASIBLE: \"INFEASIBLE\", pywraplp.Solver.UNBOUNDED: \"UNBOUNDED\",\n         pywraplp.Solver.ABNORMAL: \"ABNORMAL\", pywraplp.Solver.MODEL_INVALID: \"MODEL_INVALID\",\n         pywraplp.Solver.NOT_SOLVED: \"NOT_SOLVED\"}\n\n\ndef outcome(solver: pywraplp.Solver, status: int, x: dict) -> dict:\n    \"\"\"What a report may say about a solve: the status by name, and a value and plan only if there is one.\"\"\"\n    has_solution = status in (pywraplp.Solver.OPTIMAL, pywraplp.Solver.FEASIBLE)\n    return {\n        \"status\": NAMES[status],\n        \"value\": solver.Objective().Value() if has_solution else None,\n        \"plan\": {name: var.solution_value() for name, var in x.items()} if has_solution else None,\n    }\n\n\ndef crews_model(need: int, most: int):\n    \"\"\"Hire crews of two kinds, at most `most` of each, to cover `need`; a small model to try outcome() on.\"\"\"\n    solver = pywraplp.Solver.CreateSolver(\"SCIP\")\n    x = {\"line\": solver.IntVar(0, most, \"line\"), \"field\": solver.IntVar(0, most, \"field\")}\n    solver.Add(2 * x[\"line\"] + x[\"field\"] >= need, \"cover\")\n    solver.Minimize(5 * x[\"line\"] + 3 * x[\"field\"])\n    return solver, x\n\n\nif __name__ == \"__main__\":\n    solver, x = crews_model(need=7, most=5)\n    print(outcome(solver, solver.Solve(), x))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.linear_solver import pywraplp\n\nNAMES = {pywraplp.Solver.OPTIMAL: \"OPTIMAL\", pywraplp.Solver.FEASIBLE: \"FEASIBLE\",\n         pywraplp.Solver.INFEASIBLE: \"INFEASIBLE\", pywraplp.Solver.UNBOUNDED: \"UNBOUNDED\",\n         pywraplp.Solver.ABNORMAL: \"ABNORMAL\", pywraplp.Solver.MODEL_INVALID: \"MODEL_INVALID\",\n         pywraplp.Solver.NOT_SOLVED: \"NOT_SOLVED\"}\n\n\ndef outcome(solver: pywraplp.Solver, status: int, x: dict) -> dict:\n    \"\"\"What a report may say about a solve: the status by name, and a value and plan only if there is one.\"\"\"\n    # TODO: name the status; give a value and a plan only when the solve has a solution.\n    return {\"status\": \"\", \"value\": None, \"plan\": None}\n\n\ndef crews_model(need: int, most: int):\n    \"\"\"Hire crews of two kinds, at most `most` of each, to cover `need`; a small model to try outcome() on.\"\"\"\n    solver = pywraplp.Solver.CreateSolver(\"SCIP\")\n    x = {\"line\": solver.IntVar(0, most, \"line\"), \"field\": solver.IntVar(0, most, \"field\")}\n    solver.Add(2 * x[\"line\"] + x[\"field\"] >= need, \"cover\")\n    solver.Minimize(5 * x[\"line\"] + 3 * x[\"field\"])\n    return solver, x\n\n\nif __name__ == \"__main__\":\n    solver, x = crews_model(need=7, most=5)\n    print(outcome(solver, solver.Solve(), x))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "3857893626632945d43a0f6b2062678ac00464c210e031145ad2b5d116d0cf91",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.linear_solver import pywraplp\n\nNAMES = {pywraplp.Solver.OPTIMAL: \"OPTIMAL\", pywraplp.Solver.FEASIBLE: \"FEASIBLE\",\n         pywraplp.Solver.INFEASIBLE: \"INFEASIBLE\", pywraplp.Solver.UNBOUNDED: \"UNBOUNDED\",\n         pywraplp.Solver.ABNORMAL: \"ABNORMAL\", pywraplp.Solver.MODEL_INVALID: \"MODEL_INVALID\",\n         pywraplp.Solver.NOT_SOLVED: \"NOT_SOLVED\"}\n\n\ndef outcome(solver: pywraplp.Solver, status: int, x: dict) -> dict:\n    \"\"\"What a report may say about a solve: the status by name, and a value and plan only if there is one.\"\"\"\n    # TODO: name the status; give a value and a plan only when the solve has a solution.\n    return {\"status\": \"\", \"value\": None, \"plan\": None}\n\n\ndef crews_model(need: int, most: int):\n    \"\"\"Hire crews of two kinds, at most `most` of each, to cover `need`; a small model to try outcome() on.\"\"\"\n    solver = pywraplp.Solver.CreateSolver(\"SCIP\")\n    x = {\"line\": solver.IntVar(0, most, \"line\"), \"field\": solver.IntVar(0, most, \"field\")}\n    solver.Add(2 * x[\"line\"] + x[\"field\"] >= need, \"cover\")\n    solver.Minimize(5 * x[\"line\"] + 3 * x[\"field\"])\n    return solver, x\n\n\nif __name__ == \"__main__\":\n    solver, x = crews_model(need=7, most=5)\n    print(outcome(solver, solver.Solve(), x))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-01/practice-2/report.py",
+    "test_path": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-01/practice-2/test_report.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-01/practice-2/report.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-01/practice-2/target/report.xml",
+      "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-01/practice-2/test_report.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_an_optimal_solve_reports_its_value_and_plan",
+        "kind": "main",
+        "says": "an optimal solve reports its status by name, its value and its plan"
+      },
+      {
+        "id": "test_an_infeasible_solve_reports_no_plan",
+        "kind": "edge",
+        "says": "an infeasible solve reports no value and no plan, not zeros"
+      },
+      {
+        "id": "test_a_feasible_solve_stopped_by_a_limit_still_has_a_plan",
+        "kind": "edge",
+        "says": "a solve stopped by a limit with a solution in hand still reports its plan"
+      },
+      {
+        "id": "test_an_unbounded_solve_reports_no_plan",
+        "kind": "edge",
+        "says": "an unbounded solve reports no value and no plan"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "18-linear-solver-wrapper/README_4.7.1.md",
+      "section": "Solve Returns an Integer Status, and Values Exist Only When It Says So"
+    },
+    "concepts": [
+      "a solve's values are read only after a status that has a solution"
+    ]
+  }
+}

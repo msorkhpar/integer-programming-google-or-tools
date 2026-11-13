@@ -1,0 +1,143 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "17-cpsat-tuning-and-diagnostics"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Does last year's plan still fit?",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A rural cooperative replaces poles in batches. This year's rules are in `build(costs, values, must, budget)` in `carryover.py`: fund batches within the budget, fund every must-do batch, and maximize value. Before re-planning, the planners ask a simple question: does last year's plan (a set of batch names) still keep this year's rules?"
+    },
+    {
+      "type": "para",
+      "text": "Write two functions:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`add_plan_hint(model, pick, plan)`: hint the plan to the model, one hint per batch.",
+        "`fits(costs, values, must, budget, plan)`: build the model, hint the plan, have CP-SAT fix every variable to its hint, solve with one worker, and return whether a solution exists."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The model, with $`P`$ the batches, $`c_p`$ their costs, $`v_p`$ their values and $`M`$ the must-dos:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& \\sum_{p \\in P} v_p\\, \\text{pick}_p \\\\\n\\text{s.t. } & \\sum_{p \\in P} c_p\\, \\text{pick}_p \\le \\text{budget} && \\text{(budget)} \\\\\n& \\text{pick}_p = 1 && \\forall p \\in M && \\text{(must}_p) \\\\\n& \\text{pick}_p \\in \\{0, 1\\} && \\forall p \\in P\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The hint is $`\\bar x_p = 1`$ if $`p`$ is in the plan, for every $`p \\in P`$. Think about what the solver may do with a variable that has no hint at all. About ten lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef build(costs: dict[str, int], values: dict[str, int], must: set[str],\n          budget: int) -> tuple[cp_model.CpModel, dict[str, cp_model.IntVar]]:\n    \"\"\"Given: this year's model. pick[p] = 1 funds project p.\"\"\"\n    model = cp_model.CpModel()\n    pick = {p: model.new_bool_var(f\"pick_{p}\") for p in costs}\n    model.add(sum(costs[p] * pick[p] for p in costs) <= budget)\n    for p in must:\n        model.add(pick[p] == 1)\n    model.maximize(sum(values[p] * pick[p] for p in costs))\n    return model, pick\n\n\ndef add_plan_hint(model: cp_model.CpModel, pick: dict[str, cp_model.IntVar], plan: set[str]) -> None:\n    \"\"\"Hint the plan: 1 for every project it funds, 0 for every other project.\"\"\"\n    for p, var in pick.items():\n        model.add_hint(var, 1 if p in plan else 0)\n\n\ndef fits(costs: dict[str, int], values: dict[str, int], must: set[str], budget: int, plan: set[str]) -> bool:\n    \"\"\"Does last year's plan keep every rule of this year's model?\"\"\"\n    model, pick = build(costs, values, must, budget)\n    add_plan_hint(model, pick, plan)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.parameters.fix_variables_to_their_hinted_value = True\n    status = solver.solve(model)\n    return status in (cp_model.OPTIMAL, cp_model.FEASIBLE)\n\n\nif __name__ == \"__main__\":\n    costs, values = {\"A\": 40, \"B\": 30, \"C\": 50}, {\"A\": 70, \"B\": 60, \"C\": 50}\n    print(fits(costs, values, {\"C\"}, 90, {\"A\", \"C\"}), fits(costs, values, {\"C\"}, 90, {\"A\", \"B\"}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef build(costs: dict[str, int], values: dict[str, int], must: set[str],\n          budget: int) -> tuple[cp_model.CpModel, dict[str, cp_model.IntVar]]:\n    \"\"\"Given: this year's model. pick[p] = 1 funds project p.\"\"\"\n    model = cp_model.CpModel()\n    pick = {p: model.new_bool_var(f\"pick_{p}\") for p in costs}\n    model.add(sum(costs[p] * pick[p] for p in costs) <= budget)\n    for p in must:\n        model.add(pick[p] == 1)\n    model.maximize(sum(values[p] * pick[p] for p in costs))\n    return model, pick\n\n\ndef add_plan_hint(model: cp_model.CpModel, pick: dict[str, cp_model.IntVar], plan: set[str]) -> None:\n    \"\"\"Hint the plan: 1 for every project it funds, 0 for every other project.\"\"\"\n    # TODO: one hint per project.\n    return None\n\n\ndef fits(costs: dict[str, int], values: dict[str, int], must: set[str], budget: int, plan: set[str]) -> bool:\n    \"\"\"Does last year's plan keep every rule of this year's model?\"\"\"\n    # TODO: hint the plan, fix every variable to its hint, solve with one worker.\n    return False\n\n\nif __name__ == \"__main__\":\n    costs, values = {\"A\": 40, \"B\": 30, \"C\": 50}, {\"A\": 70, \"B\": 60, \"C\": 50}\n    print(fits(costs, values, {\"C\"}, 90, {\"A\", \"C\"}), fits(costs, values, {\"C\"}, 90, {\"A\", \"B\"}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "01abeb6b3d578e949c62f57b1944bc21ccf56fd5ef0aa8ea2b0ff8c468efdc93",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef build(costs: dict[str, int], values: dict[str, int], must: set[str],\n          budget: int) -> tuple[cp_model.CpModel, dict[str, cp_model.IntVar]]:\n    \"\"\"Given: this year's model. pick[p] = 1 funds project p.\"\"\"\n    model = cp_model.CpModel()\n    pick = {p: model.new_bool_var(f\"pick_{p}\") for p in costs}\n    model.add(sum(costs[p] * pick[p] for p in costs) <= budget)\n    for p in must:\n        model.add(pick[p] == 1)\n    model.maximize(sum(values[p] * pick[p] for p in costs))\n    return model, pick\n\n\ndef add_plan_hint(model: cp_model.CpModel, pick: dict[str, cp_model.IntVar], plan: set[str]) -> None:\n    \"\"\"Hint the plan: 1 for every project it funds, 0 for every other project.\"\"\"\n    # TODO: one hint per project.\n    return None\n\n\ndef fits(costs: dict[str, int], values: dict[str, int], must: set[str], budget: int, plan: set[str]) -> bool:\n    \"\"\"Does last year's plan keep every rule of this year's model?\"\"\"\n    # TODO: hint the plan, fix every variable to its hint, solve with one worker.\n    return False\n\n\nif __name__ == \"__main__\":\n    costs, values = {\"A\": 40, \"B\": 30, \"C\": 50}, {\"A\": 70, \"B\": 60, \"C\": 50}\n    print(fits(costs, values, {\"C\"}, 90, {\"A\", \"C\"}), fits(costs, values, {\"C\"}, 90, {\"A\", \"B\"}))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-1/carryover.py",
+    "test_path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-1/test_carryover.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-1/carryover.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-1/target/report.xml",
+      "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-1/test_carryover.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_plan_within_budget_fits_and_one_over_budget_does_not",
+        "kind": "main",
+        "says": "a plan within this year's budget fits, and one over it does not"
+      },
+      {
+        "id": "test_fixing_to_the_hint_reproduces_the_plan",
+        "kind": "main",
+        "says": "with every variable fixed to its hint, the solver returns exactly the hinted plan"
+      },
+      {
+        "id": "test_a_plan_missing_a_must_do_does_not_fit",
+        "kind": "edge",
+        "says": "a plan that leaves out a must-do project does not fit"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "17-cpsat-tuning-and-diagnostics/README_4.6.2.md",
+      "section": "Fixing Every Variable to Its Hint Tests Whether the Hint Is Feasible"
+    },
+    "concepts": [
+      "hinting every variable and fixing variables to their hints tests one plan's feasibility"
+    ]
+  }
+}

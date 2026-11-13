@@ -1,0 +1,185 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "13-capstone",
+    "51-capstone-cipt-lite"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Pre-solve checks for a Budget Lock scenario",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "Budget Lock week at the practice utility (a fictional one): finance and the board send a scenario that changes the snapshot's numbers before the run. A scenario may lock a year's `budget`, cut `crews` (by program and year), `force_in` projects, `fix_start` a project to one year, and `force_out` projects. Before any solve, CIPT Lite runs pre-solve checks that each read **one** project, group or region against **one** limit, so a typed number is caught with its own name instead of a bare `INFEASIBLE` (lesson 9.1.2)."
+    },
+    {
+      "type": "para",
+      "text": "Every check must be **sound**: it fires only when no plan can exist, so a scenario that has a plan never gets a finding. A check compares the least a required project must take with the most a limit can give."
+    },
+    {
+      "type": "para",
+      "text": "Write, in `checks.py`, `required(snapshot, scenario)`: each must-do and each forced project with its window's start years, and each fixed project with only its fixed year. `required` keeps them all: a required project that is also forced out keeps its window, and a fixed year outside the window is kept as given, because those are exactly the cases `checks` must report as `no-start`. Then `checks(snapshot, scenario)`, which returns a list of `(rule, subject)` findings, in this order:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "rule",
+        "subject",
+        "fires when"
+      ],
+      "rows": [
+        [
+          "`no-start`",
+          "the project",
+          "a required project is forced out, or its fixed year is outside its window (then skip its other checks)"
+        ],
+        [
+          "`alone-over-budget`",
+          "the project",
+          "no start left to it keeps its own spend within every year's budget"
+        ],
+        [
+          "`alone-over-crews`",
+          "the project",
+          "no start left to it keeps its crews (needed in every year of work) within its program's crews"
+        ],
+        [
+          "`required-over-budget`",
+          "the year, as text",
+          "the least that the required projects must spend in that year exceeds its budget"
+        ],
+        [
+          "`required-alternatives`",
+          "the group",
+          "two or more required projects share a group"
+        ],
+        [
+          "`floor-out-of-reach`",
+          "the region",
+          "the capex of every project in the region that is not forced out is below its floor"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The first three come per required project, in id order; then years in order, groups and regions sorted. A required project's least spend in a year is the minimum over the starts left to it. The budgets and crews in force are the snapshot's, replaced by the scenario's where it sets them; `starts`, `spend`, `budgets` and `crews` are given."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nFinding = tuple[str, str]                         # (rule, subject)\n\n\ndef starts(project: dict) -> list[int]:\n    return list(range(project[\"earliest\"], project[\"latest\"] + 1))\n\n\ndef spend(project: dict, start: int) -> dict[int, int]:\n    \"\"\"What the project spends in each calendar year if it starts in `start`.\"\"\"\n    return {start + k: amount for k, amount in enumerate(project[\"cost\"])}\n\n\ndef budgets(snapshot: dict, scenario: dict) -> dict[int, int]:\n    return {y: scenario.get(\"budget\", {}).get(y, snapshot[\"budget\"][y]) for y in snapshot[\"years\"]}\n\n\ndef crews(snapshot: dict, scenario: dict, program: str, year: int) -> int:\n    return scenario.get(\"crews\", {}).get(program, {}).get(year, snapshot[\"crews\"][program][year])\n\n\ndef required(snapshot: dict, scenario: dict) -> dict[str, list[int]]:\n    \"\"\"Every project each plan must fund, with the start years left to it.\"\"\"\n    need = {pid: starts(p) for pid, p in snapshot[\"projects\"].items()\n            if p[\"must\"] or pid in scenario.get(\"force_in\", [])}\n    for pid, year in scenario.get(\"fix_start\", {}).items():\n        need[pid] = [year]\n    return need\n\n\ndef checks(snapshot: dict, scenario: dict) -> list[Finding]:\n    projects, limit = snapshot[\"projects\"], budgets(snapshot, scenario)\n    need = required(snapshot, scenario)\n    found = []\n    for pid, years in sorted(need.items()):\n        p = projects[pid]\n        if pid in scenario.get(\"force_out\", []) or not set(years) <= set(starts(p)):\n            found.append((\"no-start\", pid))\n            continue\n        if not any(all(a <= limit[y] for y, a in spend(p, t).items()) for t in years):\n            found.append((\"alone-over-budget\", pid))\n        if not any(all(p[\"crews\"] <= crews(snapshot, scenario, p[\"program\"], y) for y in spend(p, t))\n                   for t in years):\n            found.append((\"alone-over-crews\", pid))\n    for y in snapshot[\"years\"]:\n        least = sum(min(spend(projects[pid], t).get(y, 0) for t in years)\n                    for pid, years in need.items() if set(years) <= set(starts(projects[pid])))\n        if least > limit[y]:\n            found.append((\"required-over-budget\", str(y)))\n    groups: dict[str, int] = {}\n    for pid in need:\n        if projects[pid][\"group\"]:\n            groups[projects[pid][\"group\"]] = groups.get(projects[pid][\"group\"], 0) + 1\n    found += [(\"required-alternatives\", g) for g, n in sorted(groups.items()) if n > 1]\n    for region, floor in sorted(snapshot[\"floor\"].items()):\n        most = sum(sum(p[\"cost\"]) for pid, p in projects.items()\n                   if p[\"region\"] == region and pid not in scenario.get(\"force_out\", []))\n        if most < floor:\n            found.append((\"floor-out-of-reach\", region))\n    return found\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"years\": [2027], \"budget\": {2027: 100}, \"crews\": {\"lines\": {2027: 2}}, \"floor\": {},\n                \"projects\": {\"J1\": {\"program\": \"lines\", \"region\": \"North\", \"cost\": [150], \"earliest\": 2027,\n                                    \"latest\": 2027, \"must\": True, \"group\": None, \"crews\": 1}}}\n    print(checks(snapshot, {\"name\": \"lock\"}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nFinding = tuple[str, str]                         # (rule, subject)\n\n\ndef starts(project: dict) -> list[int]:\n    return list(range(project[\"earliest\"], project[\"latest\"] + 1))\n\n\ndef spend(project: dict, start: int) -> dict[int, int]:\n    \"\"\"What the project spends in each calendar year if it starts in `start`.\"\"\"\n    return {start + k: amount for k, amount in enumerate(project[\"cost\"])}\n\n\ndef budgets(snapshot: dict, scenario: dict) -> dict[int, int]:\n    return {y: scenario.get(\"budget\", {}).get(y, snapshot[\"budget\"][y]) for y in snapshot[\"years\"]}\n\n\ndef crews(snapshot: dict, scenario: dict, program: str, year: int) -> int:\n    return scenario.get(\"crews\", {}).get(program, {}).get(year, snapshot[\"crews\"][program][year])\n\n\ndef required(snapshot: dict, scenario: dict) -> dict[str, list[int]]:\n    \"\"\"Every project each plan must fund, with the start years left to it.\"\"\"\n    # TODO: must-dos and forced projects get their windows; a fixed start leaves one year.\n    return {}\n\n\ndef checks(snapshot: dict, scenario: dict) -> list[Finding]:\n    \"\"\"Every finding of the six rules, in the order the statement gives.\"\"\"\n    # TODO\n    return [(\"not checked\", \"\")]\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"years\": [2027], \"budget\": {2027: 100}, \"crews\": {\"lines\": {2027: 2}}, \"floor\": {},\n                \"projects\": {\"J1\": {\"program\": \"lines\", \"region\": \"North\", \"cost\": [150], \"earliest\": 2027,\n                                    \"latest\": 2027, \"must\": True, \"group\": None, \"crews\": 1}}}\n    print(checks(snapshot, {\"name\": \"lock\"}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 1,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "fb9f1d4b24a4f3a180e194504e165847c98f7c165b3a15b0de442b3925a0d6b8",
+  "starting_code": "from __future__ import annotations\n\nFinding = tuple[str, str]                         # (rule, subject)\n\n\ndef starts(project: dict) -> list[int]:\n    return list(range(project[\"earliest\"], project[\"latest\"] + 1))\n\n\ndef spend(project: dict, start: int) -> dict[int, int]:\n    \"\"\"What the project spends in each calendar year if it starts in `start`.\"\"\"\n    return {start + k: amount for k, amount in enumerate(project[\"cost\"])}\n\n\ndef budgets(snapshot: dict, scenario: dict) -> dict[int, int]:\n    return {y: scenario.get(\"budget\", {}).get(y, snapshot[\"budget\"][y]) for y in snapshot[\"years\"]}\n\n\ndef crews(snapshot: dict, scenario: dict, program: str, year: int) -> int:\n    return scenario.get(\"crews\", {}).get(program, {}).get(year, snapshot[\"crews\"][program][year])\n\n\ndef required(snapshot: dict, scenario: dict) -> dict[str, list[int]]:\n    \"\"\"Every project each plan must fund, with the start years left to it.\"\"\"\n    # TODO: must-dos and forced projects get their windows; a fixed start leaves one year.\n    return {}\n\n\ndef checks(snapshot: dict, scenario: dict) -> list[Finding]:\n    \"\"\"Every finding of the six rules, in the order the statement gives.\"\"\"\n    # TODO\n    return [(\"not checked\", \"\")]\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"years\": [2027], \"budget\": {2027: 100}, \"crews\": {\"lines\": {2027: 2}}, \"floor\": {},\n                \"projects\": {\"J1\": {\"program\": \"lines\", \"region\": \"North\", \"cost\": [150], \"earliest\": 2027,\n                                    \"latest\": 2027, \"must\": True, \"group\": None, \"crews\": 1}}}\n    print(checks(snapshot, {\"name\": \"lock\"}))\n",
+  "exercise": {
+    "main_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-04/practice-1/checks.py",
+    "test_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-04/practice-1/test_checks.py",
+    "run_command": [
+      "python3",
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-04/practice-1/checks.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/13-capstone/51-capstone-cipt-lite/prose/unit-04/practice-1/target/report.xml",
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-04/practice-1/test_checks.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_clean_lock_passes_and_each_rule_fires_on_its_own_error",
+        "kind": "main",
+        "says": "a clean Budget Lock scenario and one that has a plan get no finding, and each of the six rules fires on its own planted error"
+      },
+      {
+        "id": "test_a_forced_project_is_required_too",
+        "kind": "edge",
+        "says": "a project planners forced in is required like a must-do, so its crews are checked"
+      },
+      {
+        "id": "test_a_fixed_start_leaves_only_that_year",
+        "kind": "edge",
+        "says": "a fixed start leaves the project only that year, so a budget that fits another year no longer saves it"
+      },
+      {
+        "id": "test_crews_must_last_every_year_of_the_work",
+        "kind": "edge",
+        "says": "a project needs its crews in every year of its work, not only in its start year"
+      },
+      {
+        "id": "test_a_project_taken_out_does_not_count_toward_its_regions_floor",
+        "kind": "edge",
+        "says": "a project taken out of the plan cannot help its region reach its floor"
+      },
+      {
+        "id": "test_required_keeps_projects_that_have_no_start_left",
+        "kind": "edge",
+        "says": "a required project that is forced out, or fixed outside its window, stays required, so the checks can report it"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-04/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "51-capstone-cipt-lite/README_13.1.4.md",
+      "section": "Pre-Solve Checks Run First and Catch What One Limit Can Refuse"
+    },
+    "concepts": [
+      "pre-solve checks that each compare one required project, group or region with one limit, and never refuse a scenario that has a plan"
+    ]
+  }
+}

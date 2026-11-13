@@ -1,0 +1,135 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "17-cpsat-tuning-and-diagnostics"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "An LNS loop over districts",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The same inspection week as before. `improve(jobs, hours, plan, free)` is now given: one LNS step that frees the jobs in `free`, keeps every other job as `plan` has it, and returns the best plan it finds. The planner wants a loop around it."
+    },
+    {
+      "type": "para",
+      "text": "Write `lns(jobs, hours, start, rounds)`. `rounds` is a list of neighborhoods (sets of job names), used in order, one step each. Return a pair: the final plan (a set of job names) and a list of plan values, the start plan's value first and then the value after each round. A round whose step finds nothing better leaves the plan as it was: replace the current plan only when the step's plan is worth strictly more, so a plan of equal value never replaces it (the reference compares with `>`). Compute values as whole numbers, by summing the picked jobs' values, not from the float `objective_value`."
+    },
+    {
+      "type": "para",
+      "text": "Each step solves the model of the previous practice with the rows that keep the jobs outside the neighborhood as they are:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& \\sum_{j \\in J} v_j\\, \\text{pick}_j \\quad \\text{s.t.} \\quad \\sum_{j \\in J} h_j\\, \\text{pick}_j \\le \\text{hours},\\\\\n& \\text{pick}_j = [\\, j \\in \\text{current} \\,] && \\forall j \\in J \\setminus \\text{free}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Think about which plan \"current\" is in the second round. About eight lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    district: str\n    value: int      # risk points removed\n    hours: int      # crew-hours\n\n\ndef build(jobs: list[Job], hours: int) -> tuple[cp_model.CpModel, dict[str, cp_model.IntVar]]:\n    \"\"\"Given: the week's model. pick[j] = 1 runs job j; the crews have `hours` in total.\"\"\"\n    model = cp_model.CpModel()\n    pick = {j.name: model.new_bool_var(f\"pick_{j.name}\") for j in jobs}\n    model.add(sum(j.hours * pick[j.name] for j in jobs) <= hours)\n    model.maximize(sum(j.value * pick[j.name] for j in jobs))\n    return model, pick\n\n\ndef improve(jobs: list[Job], hours: int, plan: set[str], free: set[str]) -> set[str]:\n    \"\"\"Given: one LNS step, the best plan that keeps every job outside `free` as `plan` has it.\"\"\"\n    model, pick = build(jobs, hours)\n    for name, var in pick.items():\n        model.add_hint(var, 1 if name in plan else 0)\n        if name not in free:\n            model.add(var == (1 if name in plan else 0))\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.solve(model)\n    return {name for name, var in pick.items() if solver.value(var)}\n\n\ndef value(jobs: list[Job], plan: set[str]) -> int:\n    return sum(j.value for j in jobs if j.name in plan)\n\n\ndef lns(jobs: list[Job], hours: int, start: set[str], rounds: list[set[str]]) -> tuple[set[str], list[int]]:\n    \"\"\"Run one step per neighborhood in `rounds`. Return the final plan and the value after each round.\"\"\"\n    current = set(start)\n    history = [value(jobs, current)]\n    for free in rounds:\n        candidate = improve(jobs, hours, current, free)\n        if value(jobs, candidate) > value(jobs, current):\n            current = candidate\n        history.append(value(jobs, current))\n    return current, history\n\n\nif __name__ == \"__main__\":\n    week = [Job(\"N1\", \"north\", 50, 20), Job(\"N3\", \"north\", 30, 15), Job(\"S3\", \"south\", 20, 5)]\n    print(lns(week, 30, {\"N3\", \"S3\"}, [{\"N1\", \"N3\"}]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    district: str\n    value: int      # risk points removed\n    hours: int      # crew-hours\n\n\ndef build(jobs: list[Job], hours: int) -> tuple[cp_model.CpModel, dict[str, cp_model.IntVar]]:\n    \"\"\"Given: the week's model. pick[j] = 1 runs job j; the crews have `hours` in total.\"\"\"\n    model = cp_model.CpModel()\n    pick = {j.name: model.new_bool_var(f\"pick_{j.name}\") for j in jobs}\n    model.add(sum(j.hours * pick[j.name] for j in jobs) <= hours)\n    model.maximize(sum(j.value * pick[j.name] for j in jobs))\n    return model, pick\n\n\ndef improve(jobs: list[Job], hours: int, plan: set[str], free: set[str]) -> set[str]:\n    \"\"\"Given: one LNS step, the best plan that keeps every job outside `free` as `plan` has it.\"\"\"\n    model, pick = build(jobs, hours)\n    for name, var in pick.items():\n        model.add_hint(var, 1 if name in plan else 0)\n        if name not in free:\n            model.add(var == (1 if name in plan else 0))\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.solve(model)\n    return {name for name, var in pick.items() if solver.value(var)}\n\n\ndef value(jobs: list[Job], plan: set[str]) -> int:\n    return sum(j.value for j in jobs if j.name in plan)\n\n\ndef lns(jobs: list[Job], hours: int, start: set[str], rounds: list[set[str]]) -> tuple[set[str], list[int]]:\n    \"\"\"Run one step per neighborhood in `rounds`. Return the final plan and the value after each round.\"\"\"\n    # TODO: one improve() per neighborhood, keeping the better plan each time.\n    return set(), [0] * (len(rounds) + 1)\n\n\nif __name__ == \"__main__\":\n    week = [Job(\"N1\", \"north\", 50, 20), Job(\"N3\", \"north\", 30, 15), Job(\"S3\", \"south\", 20, 5)]\n    print(lns(week, 30, {\"N3\", \"S3\"}, [{\"N1\", \"N3\"}]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "8ff72ab3be0328cbfdf179f05b4db1b141a2747ff0ded6243e17539f9dd04826",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    district: str\n    value: int      # risk points removed\n    hours: int      # crew-hours\n\n\ndef build(jobs: list[Job], hours: int) -> tuple[cp_model.CpModel, dict[str, cp_model.IntVar]]:\n    \"\"\"Given: the week's model. pick[j] = 1 runs job j; the crews have `hours` in total.\"\"\"\n    model = cp_model.CpModel()\n    pick = {j.name: model.new_bool_var(f\"pick_{j.name}\") for j in jobs}\n    model.add(sum(j.hours * pick[j.name] for j in jobs) <= hours)\n    model.maximize(sum(j.value * pick[j.name] for j in jobs))\n    return model, pick\n\n\ndef improve(jobs: list[Job], hours: int, plan: set[str], free: set[str]) -> set[str]:\n    \"\"\"Given: one LNS step, the best plan that keeps every job outside `free` as `plan` has it.\"\"\"\n    model, pick = build(jobs, hours)\n    for name, var in pick.items():\n        model.add_hint(var, 1 if name in plan else 0)\n        if name not in free:\n            model.add(var == (1 if name in plan else 0))\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.solve(model)\n    return {name for name, var in pick.items() if solver.value(var)}\n\n\ndef value(jobs: list[Job], plan: set[str]) -> int:\n    return sum(j.value for j in jobs if j.name in plan)\n\n\ndef lns(jobs: list[Job], hours: int, start: set[str], rounds: list[set[str]]) -> tuple[set[str], list[int]]:\n    \"\"\"Run one step per neighborhood in `rounds`. Return the final plan and the value after each round.\"\"\"\n    # TODO: one improve() per neighborhood, keeping the better plan each time.\n    return set(), [0] * (len(rounds) + 1)\n\n\nif __name__ == \"__main__\":\n    week = [Job(\"N1\", \"north\", 50, 20), Job(\"N3\", \"north\", 30, 15), Job(\"S3\", \"south\", 20, 5)]\n    print(lns(week, 30, {\"N3\", \"S3\"}, [{\"N1\", \"N3\"}]))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-01/practice-2/week_lns.py",
+    "test_path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-01/practice-2/test_week_lns.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-01/practice-2/week_lns.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-01/practice-2/target/report.xml",
+      "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-01/practice-2/test_week_lns.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_history_starts_at_the_start_and_never_falls",
+        "kind": "main",
+        "says": "the history starts at the start plan's value, has one entry per round, never falls and ends at the final plan's value"
+      },
+      {
+        "id": "test_no_rounds_returns_the_start_plan",
+        "kind": "main",
+        "says": "with no rounds, the start plan and its value come back"
+      },
+      {
+        "id": "test_each_round_starts_from_the_plan_the_last_round_left",
+        "kind": "edge",
+        "says": "a round improves the plan the previous round left, so improvements in two districts add up"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "17-cpsat-tuning-and-diagnostics/README_4.6.1.md",
+      "section": "LNS Frees Part of a Good Plan and Lets CP-SAT Rebuild It"
+    },
+    "concepts": [
+      "an LNS loop starts each step from the best plan so far and keeps only improvements"
+    ]
+  }
+}

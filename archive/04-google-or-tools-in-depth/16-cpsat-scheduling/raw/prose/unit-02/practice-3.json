@@ -1,0 +1,141 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "16-cpsat-scheduling"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 3,
+  "ingested": "2026-11-13",
+  "title": "Track work inside possessions",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A railway closes a line to trains only during **possessions**, agreed stretches of days, and track work on that line must lie wholly inside one possession. A line also takes one work gang at a time; gangs on different lines work independently. Days are numbered from 0."
+    },
+    {
+      "type": "para",
+      "text": "Write `possession_plan(jobs, possessions)` in `possessions.py`. `jobs` maps a job to `(line, days)`; `possessions` maps a line to its possessions, each `(first_day, last_day)` with both days included. Return each job's start day, chosen so that the last job ends as early as possible. Every instance in the tests has a plan."
+    },
+    {
+      "type": "para",
+      "text": "The model, with $`J`$ the jobs, $`\\ell(j)`$ and $`d_j`$ each job's line and days, $`P_\\ell`$ the possessions of line $`\\ell`$, and $`L`$ the lines. A job fits in possession $`(f, l)`$ when it starts on a day from $`f`$ to $`l - d_j + 1`$:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& s_j \\in \\textstyle\\bigcup_{(f, l) \\in P_{\\ell(j)},\\ l - d_j + 1 \\ge f} \\{f, \\dots, l - d_j + 1\\} && \\forall j \\in J && \\text{(start inside a possession)} \\\\\n& C \\in \\{0, \\dots, H\\},\\quad H = \\max_{\\ell, (f, l) \\in P_\\ell} (l + 1) \\\\\n& \\min \\; C \\\\\n& \\text{NoOverlap}\\big(\\{[s_j, s_j + d_j) : \\ell(j) = \\ell\\}\\big) && \\forall \\ell \\in L && \\text{(line}_\\ell) \\\\\n& C = \\max_{j \\in J} (s_j + d_j) && && \\text{(makespan)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Build each start's domain with `cp_model.Domain.from_intervals`, whose ranges include both ends. The tests check the plan you return and how early it ends. About twenty lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef possession_plan(jobs: dict[str, tuple[str, int]], possessions: dict[str, list[tuple[int, int]]]) -> dict[str, int]:\n    \"\"\"Start day of each job, inside one possession of its line, so the last ends as early as possible.\"\"\"\n    horizon = max(last + 1 for spans in possessions.values() for _, last in spans)\n    model = cp_model.CpModel()\n    start, on_line = {}, {}\n    for name, (line, days) in jobs.items():\n        ranges = [[first, last - days + 1] for first, last in possessions[line] if last - days + 1 >= first]\n        start[name] = model.new_int_var_from_domain(cp_model.Domain.from_intervals(ranges), f\"start_{name}\")\n        on_line.setdefault(line, []).append(model.new_fixed_size_interval_var(start[name], days, f\"work_{name}\"))\n    for intervals in on_line.values():\n        model.add_no_overlap(intervals)\n\n    makespan = model.new_int_var(0, horizon, \"makespan\")\n    model.add_max_equality(makespan, [start[name] + days for name, (_, days) in jobs.items()])\n    model.minimize(makespan)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.solve(model)\n    return {name: solver.value(start[name]) for name in jobs}\n\n\nif __name__ == \"__main__\":\n    print(possession_plan({\"rails\": (\"north\", 3), \"points\": (\"north\", 2), \"drain\": (\"south\", 4)},\n                          {\"north\": [(0, 3), (8, 12)], \"south\": [(2, 9)]}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef possession_plan(jobs: dict[str, tuple[str, int]], possessions: dict[str, list[tuple[int, int]]]) -> dict[str, int]:\n    \"\"\"Start day of each job, inside one possession of its line, so the last ends as early as possible.\"\"\"\n    # TODO: a start per job whose domain keeps the job inside a possession, an interval per job,\n    # a NoOverlap per line, and minimize the latest end. Every start below is a placeholder.\n    return {name: -1 for name in jobs}\n\n\nif __name__ == \"__main__\":\n    print(possession_plan({\"rails\": (\"north\", 3), \"points\": (\"north\", 2), \"drain\": (\"south\", 4)},\n                          {\"north\": [(0, 3), (8, 12)], \"south\": [(2, 9)]}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "2a3b23e8ddb2cd81d027a168b1ca7e619310c5e12c0f36fadf6448f3bf088ce9",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef possession_plan(jobs: dict[str, tuple[str, int]], possessions: dict[str, list[tuple[int, int]]]) -> dict[str, int]:\n    \"\"\"Start day of each job, inside one possession of its line, so the last ends as early as possible.\"\"\"\n    # TODO: a start per job whose domain keeps the job inside a possession, an interval per job,\n    # a NoOverlap per line, and minimize the latest end. Every start below is a placeholder.\n    return {name: -1 for name in jobs}\n\n\nif __name__ == \"__main__\":\n    print(possession_plan({\"rails\": (\"north\", 3), \"points\": (\"north\", 2), \"drain\": (\"south\", 4)},\n                          {\"north\": [(0, 3), (8, 12)], \"south\": [(2, 9)]}))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-02/practice-3/possessions.py",
+    "test_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-02/practice-3/test_possessions.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-02/practice-3/possessions.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-02/practice-3/target/report.xml",
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-02/practice-3/test_possessions.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_jobs_on_different_lines_run_together",
+        "kind": "main",
+        "says": "jobs on different lines, each with room in an early possession, all start on its first day"
+      },
+      {
+        "id": "test_every_job_gets_a_start",
+        "kind": "main",
+        "says": "every job gets a whole-number start day"
+      },
+      {
+        "id": "test_a_job_stays_inside_one_possession",
+        "kind": "edge",
+        "says": "a job lies wholly inside one possession of its line, so a job that does not fit in what is left of one waits for the next"
+      },
+      {
+        "id": "test_one_job_per_line_at_a_time",
+        "kind": "edge",
+        "says": "two jobs on the same line never run on the same day"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-02/practice-3/target/report.xml"
+    },
+    "origin": {
+      "path": "16-cpsat-scheduling/README_4.5.2.md",
+      "section": "One Outage per Region Is a NoOverlap Over That Region's Clears"
+    },
+    "concepts": [
+      "time windows can be a domain with holes on the start variable",
+      "one interval can sit in several resource constraints, such as a NoOverlap per region"
+    ]
+  }
+}

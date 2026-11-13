@@ -1,0 +1,157 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "10-numerics-and-determinism",
+    "40-numerics"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 3,
+  "ingested": "2026-11-13",
+  "title": "Floating point, tolerances, and why 1e-6 matters",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Check yourself"
+    },
+    {
+      "type": "para",
+      "text": "Questions on what this page has just taught. Choose one answer for each."
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 1,
+    "paras": 1,
+    "code": 0,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 0
+  },
+  "content_sha256": "01381f530bdd3fd2ea9a42929589b34280a234f0332b7b83c66b27688cf7ac41",
+  "exercise": {
+    "provenance": "generated",
+    "trust": "advisory",
+    "kind": "quiz",
+    "questions": [
+      {
+        "id": "q-tolerance",
+        "stem": "A test model has two rows that no point satisfies together: x + y <= 1 and x + y >= 1.0000003. HiGHS solves it with its default settings twice, once as an LP and once with x declared integer. What should you expect?",
+        "options": [
+          {
+            "id": "a",
+            "text": "Both runs report INFEASIBLE, since no point satisfies both rows exactly",
+            "correct": false,
+            "says": "Solvers accept rows broken by less than their tolerance; the MIP run's tolerance is 1e-6, above 3e-7."
+          },
+          {
+            "id": "b",
+            "text": "The LP run reports INFEASIBLE and the MIP run OPTIMAL, since HiGHS checks MIPs more loosely",
+            "correct": true,
+            "says": "Right: HiGHS's LP tolerance is 1e-7 and its MIP tolerance 1e-6, so only the MIP run accepts a row broken by 3e-7."
+          },
+          {
+            "id": "c",
+            "text": "Both runs report OPTIMAL, since every solver accepts rows broken by up to 1e-6",
+            "correct": false,
+            "says": "HiGHS's LP tolerance is 1e-7: it refused rows 5e-7 apart."
+          },
+          {
+            "id": "d",
+            "text": "The LP run reports OPTIMAL and the MIP run INFEASIBLE, since HiGHS checks MIPs more strictly",
+            "correct": false,
+            "says": "It is the other way round: the MIP tolerance, 1e-6, is the looser one."
+          }
+        ],
+        "origin": {
+          "path": "40-numerics/README_10.1.1.md",
+          "section": "A Solver Accepts a Row Broken by Less Than Its Feasibility Tolerance"
+        }
+      },
+      {
+        "id": "q-units",
+        "stem": "A council's budget model is checked with HiGHS's default MIP tolerance. A test plan overspends a $4.2M budget by $300, and with the budget row written in $k the check refuses it. The team rewrites the row in $B. What does the check do now?",
+        "options": [
+          {
+            "id": "a",
+            "text": "It refuses the plan, since a tolerance is the same amount of money in any unit",
+            "correct": false,
+            "says": "A tolerance is a number in the row's units: 1e-6 is a tenth of a cent in $k and $1,000 in $B."
+          },
+          {
+            "id": "b",
+            "text": "It refuses the plan, since HiGHS measures the overspend against the row's size",
+            "correct": false,
+            "says": "That is SCIP's relative comparison; HiGHS's verdicts matched an absolute tolerance in every unit."
+          },
+          {
+            "id": "c",
+            "text": "It allows the plan, since floats near a few thousandths are spaced wider than $300",
+            "correct": false,
+            "says": "The gap between floats shrinks with the number; near 0.0042 it is far below $300 in any unit."
+          },
+          {
+            "id": "d",
+            "text": "It allows the plan, since a millionth of a billion dollars is more than $300",
+            "correct": true,
+            "says": "Right: in $B a tolerance of 1e-6 is $1,000, so a $300 overspend passes."
+          }
+        ],
+        "origin": {
+          "path": "40-numerics/README_10.1.1.md",
+          "section": "A Tolerance Is Measured in the Row's Units, So Its Worth in Money Depends on Them"
+        }
+      },
+      {
+        "id": "q-rounding",
+        "stem": "A switch row reads loan <= M * arranged, with M = 1e8 in $k. The solver returns arranged = 4e-7 with a loan of $40,000k and reports OPTIMAL. A planner rounds every binary before reading the plan. What is the planner's plan?",
+        "options": [
+          {
+            "id": "a",
+            "text": "No loan is arranged, so the loan goes and some budget rows can break",
+            "correct": true,
+            "says": "Right: 4e-7 rounds to 0, the loan disappears with it, and any year that relied on it overspends."
+          },
+          {
+            "id": "b",
+            "text": "A loan is arranged, so the plan pays its fee and keeps its value",
+            "correct": false,
+            "says": "4e-7 rounds to 0, not 1: the plan has no loan arranged."
+          },
+          {
+            "id": "c",
+            "text": "The solver's plan is unchanged, since rounding by 4e-7 never matters",
+            "correct": false,
+            "says": "4e-7 times 1e8 is the whole $40,000k loan: rounding removes it."
+          },
+          {
+            "id": "d",
+            "text": "The plan breaks every budget row, since rounding always overspends",
+            "correct": false,
+            "says": "Only years that relied on the loan overspend; in the lesson, 2027 borrowed and still fit its budget."
+          }
+        ],
+        "origin": {
+          "path": "40-numerics/README_10.1.1.md",
+          "section": "A Binary Within the Integrality Tolerance Counts as Whole, and Rounding It Changes the Plan"
+        }
+      }
+    ],
+    "concepts": [
+      "the feasibility tolerances of HiGHS and SCIP, for LPs and for MIPs",
+      "what rounding does to a switch the solver returned",
+      "how one solver treats a nearly feasible model as an LP and as a MIP",
+      "what changing a row's unit does to a feasibility check"
+    ]
+  }
+}

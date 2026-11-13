@@ -1,0 +1,143 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "03-integer-programming-foundations",
+    "09-branch-and-bound"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Search for the best stock plan",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The substation team now wants the stocking plan itself. Some spares *must* be stocked (a regulator requires them); the rest compete for what is left of the budget. `bound` and `by_ratio` are written for you in `search.py`; you write the search."
+    },
+    {
+      "type": "para",
+      "text": "The model, with $`S`$ the spares, $`M \\subseteq S`$ the must-stock ones and $`D = S \\setminus M`$:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& \\sum_{i \\in M} v_i + \\sum_{i \\in D} v_i\\, x_i \\\\\n\\text{s.t. }& \\sum_{i \\in D} c_i\\, x_i \\le \\text{budget} - \\sum_{i \\in M} c_i && \\text{(budget)} \\\\\n& x_i \\in \\{0, 1\\} \\quad \\forall i \\in D\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Write `best_plan(items, budget, must)`. `items` is a list of `(name, value, cost)` with whole values and costs above 0, and `must` a set of names. Return `(value, names)`: the best plan's total value, must-stock items included, and the sorted list of every stocked name. Return `None` when the must-stock items alone cost more than the budget."
+    },
+    {
+      "type": "para",
+      "text": "Use the given pieces as lesson 3.2.4's search does: sort the free items once with `by_ratio`, keep a stack of fixings (dicts from name to 0 or 1, starting with `{}`), and at each node call `bound(order, budget_left, fixed)`, which returns `None` for an infeasible node or `(value, split, taken)`. Prune infeasible nodes, prune a node when $`\\lfloor \\text{value} \\rfloor`$ is not above the incumbent, take `taken` as the new plan when `split` is `None`, and otherwise push the children `split = 0` and `split = 1`."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport math\n\n\ndef by_ratio(items: list[tuple[str, int, int]]) -> list[tuple[str, int, int]]:\n    \"\"\"Best value per cost first; ties by name.\"\"\"\n    return sorted(items, key=lambda it: (-it[1] / it[2], it[0]))\n\n\ndef bound(order, budget: float, fixed: dict[str, int]):\n    \"\"\"Dantzig's bound at a node: (value, split or None, names whole in the LP), or None if infeasible.\n\n    `order` is the free items in ratio order.\n    \"\"\"\n    left = budget - sum(c for n, _, c in order if fixed.get(n) == 1)\n    if left < 0:\n        return None\n    value = float(sum(v for n, v, _ in order if fixed.get(n) == 1))\n    taken = [n for n, _, _ in order if fixed.get(n) == 1]\n    for n, v, c in order:\n        if n in fixed:\n            continue\n        if c <= left:\n            left -= c\n            value += v\n            taken.append(n)\n        elif left > 0:\n            return value + v * left / c, n, taken\n        else:\n            break\n    return value, None, taken\n\n\ndef best_plan(items: list[tuple[str, int, int]], budget: int, must: set[str]):\n    \"\"\"(total value, sorted names) of the best plan that stocks every item in `must`; None if impossible.\"\"\"\n    must_cost = sum(c for n, _, c in items if n in must)\n    must_value = sum(v for n, v, _ in items if n in must)\n    if must_cost > budget:\n        return None\n    order = by_ratio([it for it in items if it[0] not in must])\n    best_value, best = -1, []\n    stack: list[dict[str, int]] = [{}]\n    while stack:\n        fixed = stack.pop()\n        node = bound(order, budget - must_cost, fixed)\n        if node is None:\n            continue\n        value, split, taken = node\n        if math.floor(value + 1e-9) <= best_value:\n            continue\n        if split is None:\n            best_value, best = round(value), taken\n            continue\n        stack.append({**fixed, split: 0})\n        stack.append({**fixed, split: 1})\n    return best_value + must_value, sorted(best + list(must))\n\n\nif __name__ == \"__main__\":\n    spares = [(\"T1\", 120, 40), (\"T2\", 100, 50), (\"T3\", 45, 45), (\"T4\", 30, 60), (\"R1\", 10, 25)]\n    print(best_plan(spares, 120, {\"R1\"}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport math\n\n\ndef by_ratio(items: list[tuple[str, int, int]]) -> list[tuple[str, int, int]]:\n    \"\"\"Best value per cost first; ties by name.\"\"\"\n    return sorted(items, key=lambda it: (-it[1] / it[2], it[0]))\n\n\ndef bound(order, budget: float, fixed: dict[str, int]):\n    \"\"\"Dantzig's bound at a node: (value, split or None, names whole in the LP), or None if infeasible.\n\n    `order` is the free items in ratio order.\n    \"\"\"\n    left = budget - sum(c for n, _, c in order if fixed.get(n) == 1)\n    if left < 0:\n        return None\n    value = float(sum(v for n, v, _ in order if fixed.get(n) == 1))\n    taken = [n for n, _, _ in order if fixed.get(n) == 1]\n    for n, v, c in order:\n        if n in fixed:\n            continue\n        if c <= left:\n            left -= c\n            value += v\n            taken.append(n)\n        elif left > 0:\n            return value + v * left / c, n, taken\n        else:\n            break\n    return value, None, taken\n\n\ndef best_plan(items: list[tuple[str, int, int]], budget: int, must: set[str]):\n    \"\"\"(total value, sorted names) of the best plan that stocks every item in `must`; None if impossible.\"\"\"\n    # TODO: pay for the must-stock items first (None if they do not fit), sort the rest once with\n    # by_ratio, then run the depth-first search over a stack of fixings using bound(). Add the\n    # must-stock items back into the value and the names at the end.\n    return -1, []\n\n\nif __name__ == \"__main__\":\n    spares = [(\"T1\", 120, 40), (\"T2\", 100, 50), (\"T3\", 45, 45), (\"T4\", 30, 60), (\"R1\", 10, 25)]\n    print(best_plan(spares, 120, {\"R1\"}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "014061082bf0f728ba391d2d20c48205f7f43829a91f449d230b5cb974e6dff1",
+  "starting_code": "from __future__ import annotations\n\nimport math\n\n\ndef by_ratio(items: list[tuple[str, int, int]]) -> list[tuple[str, int, int]]:\n    \"\"\"Best value per cost first; ties by name.\"\"\"\n    return sorted(items, key=lambda it: (-it[1] / it[2], it[0]))\n\n\ndef bound(order, budget: float, fixed: dict[str, int]):\n    \"\"\"Dantzig's bound at a node: (value, split or None, names whole in the LP), or None if infeasible.\n\n    `order` is the free items in ratio order.\n    \"\"\"\n    left = budget - sum(c for n, _, c in order if fixed.get(n) == 1)\n    if left < 0:\n        return None\n    value = float(sum(v for n, v, _ in order if fixed.get(n) == 1))\n    taken = [n for n, _, _ in order if fixed.get(n) == 1]\n    for n, v, c in order:\n        if n in fixed:\n            continue\n        if c <= left:\n            left -= c\n            value += v\n            taken.append(n)\n        elif left > 0:\n            return value + v * left / c, n, taken\n        else:\n            break\n    return value, None, taken\n\n\ndef best_plan(items: list[tuple[str, int, int]], budget: int, must: set[str]):\n    \"\"\"(total value, sorted names) of the best plan that stocks every item in `must`; None if impossible.\"\"\"\n    # TODO: pay for the must-stock items first (None if they do not fit), sort the rest once with\n    # by_ratio, then run the depth-first search over a stack of fixings using bound(). Add the\n    # must-stock items back into the value and the names at the end.\n    return -1, []\n\n\nif __name__ == \"__main__\":\n    spares = [(\"T1\", 120, 40), (\"T2\", 100, 50), (\"T3\", 45, 45), (\"T4\", 30, 60), (\"R1\", 10, 25)]\n    print(best_plan(spares, 120, {\"R1\"}))\n",
+  "exercise": {
+    "main_path": "practice/03-integer-programming-foundations/09-branch-and-bound/prose/unit-04/practice-2/search.py",
+    "test_path": "practice/03-integer-programming-foundations/09-branch-and-bound/prose/unit-04/practice-2/test_search.py",
+    "run_command": [
+      "python3",
+      "practice/03-integer-programming-foundations/09-branch-and-bound/prose/unit-04/practice-2/search.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/03-integer-programming-foundations/09-branch-and-bound/prose/unit-04/practice-2/target/report.xml",
+      "practice/03-integer-programming-foundations/09-branch-and-bound/prose/unit-04/practice-2/test_search.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_small_instance_by_hand",
+        "kind": "main",
+        "says": "five spares: budgets of 50 and 100 give plans worth 220 and 310"
+      },
+      {
+        "id": "test_twenty_random_instances_match_brute_force",
+        "kind": "main",
+        "says": "on 20 random 12-item instances, one per seed, the value matches brute force"
+      },
+      {
+        "id": "test_must_stock_items_are_in_the_plan_and_its_value",
+        "kind": "edge",
+        "says": "items that must be stocked appear in the plan and their values count in its total"
+      },
+      {
+        "id": "test_must_stock_items_over_budget_give_none",
+        "kind": "edge",
+        "says": "when the items that must be stocked cost more than the budget, the answer is None"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/03-integer-programming-foundations/09-branch-and-bound/prose/unit-04/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "09-branch-and-bound/README_3.2.4.md",
+      "section": "Check the Search Against Brute Force and Against HiGHS"
+    },
+    "concepts": [
+      "a search is checked against brute force and an independent solver on many instances",
+      "items fixed at 1 are paid first, items fixed at 0 are skipped, and the free items keep their order",
+      "the budget-only selection: must-dos paid first, one 0-1 variable per other project, one budget row",
+      "the search pops fixings from a stack, prunes three ways, and pushes both children of the split item"
+    ]
+  }
+}

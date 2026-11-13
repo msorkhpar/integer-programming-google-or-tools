@@ -1,0 +1,162 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "27-dependencies-and-groups"
+  ],
+  "variant": "prose",
+  "unit": 5,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A fiber builder's county agreements",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A fiber builder plans its network for 2027 to 2029 under agreements with the counties it builds in. The model in `counties.py` has a binary `x[pid, t]` for each project and each year `t` in its `starts`; each project starts at most once (given). A project's `cost` is a tuple: what it spends in its first year of work, its second, and so on, so a project with cost `(300, 200)` started in 2027 spends 300 in 2027 and 200 in 2028. All work ends by 2029. The agreements, in $k:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Minimum.** Each county in `floor` receives at least `floor[c]` over the whole plan.",
+        "**Cap over the plan.** Each county in `cap` receives at most `cap[c]` over the whole plan.",
+        "**Cap in a year.** For each `(c, y)` in `yearly_cap`, county `c` receives at most `yearly_cap[c, y]` in year `y`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Write `add_county_rules(model, x, projects, years, floor, cap, yearly_cap)` so that the model allows exactly the plans that keep the three agreements."
+    },
+    {
+      "type": "para",
+      "text": "The model so far, with $`P`$ the projects, $`T_i`$ project $`i`$'s start years and $`c_{i,k}`$ what it spends in its $`k`$-th year of work ($`k = 0, 1, \\dots`$):"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& x_{i,t} \\in \\{0, 1\\} && \\forall i \\in P,\\ t \\in T_i && \\text{(project } i \\text{ starts in year } t\\text{)} \\\\\n& \\textstyle\\sum_{t \\in T_i} x_{i,t} \\le 1 && \\forall i \\in P && \\text{(once}_i\\text{, given)} \\\\\n& \\text{?} && && \\text{(your rows)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Name the counties and the projects of each, and write two expressions first: a county's spend in one year, and its spend over the plan. Then write each row with its quantifier and a label, and only then code them."
+    },
+    {
+      "type": "para",
+      "text": "A county may have no project that spends in some year. Its spend there is a sum over no terms, the number 0 in Python, and MathOpt refuses a row with no variable on either side. Skip such a row, or start the sum from `mathopt.LinearExpression()` (lesson 6.4.1)."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix every `x[pid, t]` through its bounds and ask the solver whether the model accepts the plan, so any correct formulation passes. About twelve lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    county: str\n    cost: tuple[int, ...]\n    starts: tuple[int, ...]\n\n\ndef add_county_rules(model: mathopt.Model, x: dict, projects: list[Project], years: tuple[int, ...],\n                     floor: dict[str, int], cap: dict[str, int], yearly_cap: dict[tuple[str, int], int]) -> None:\n    \"\"\"Each county's minimum and cap over the plan, and its caps in single years.\"\"\"\n    def in_year(county: str, year: int):\n        return sum(p.cost[year - t] * x[p.pid, t] for p in projects if p.county == county\n                   for t in p.starts if 0 <= year - t < len(p.cost))\n\n    def whole_plan(county: str):\n        return sum(sum(p.cost) * x[p.pid, t] for p in projects if p.county == county for t in p.starts)\n\n    for county, least in floor.items():\n        model.add_linear_constraint(whole_plan(county) >= least, name=f\"floor_{county}\")\n    for county, most in cap.items():\n        model.add_linear_constraint(whole_plan(county) <= most, name=f\"cap_{county}\")\n    for (county, year), most in yearly_cap.items():\n        model.add_linear_constraint(in_year(county, year) <= most, name=f\"cap_{county}_{year}\")\n\n\ndef build(projects: list[Project], years: tuple[int, ...], floor: dict[str, int], cap: dict[str, int],\n          yearly_cap: dict[tuple[str, int], int]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"counties\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_county_rules(model, x, projects, years, floor, cap, yearly_cap)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"F1\", \"Ash\", (300, 200), (2027, 2028)), Project(\"F2\", \"Ash\", (250,), (2027,))]\n    model, x = build(projects, (2027, 2028, 2029), {\"Ash\": 400}, {\"Ash\": 700}, {(\"Ash\", 2028): 300})\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    county: str\n    cost: tuple[int, ...]\n    starts: tuple[int, ...]\n\n\ndef add_county_rules(model: mathopt.Model, x: dict, projects: list[Project], years: tuple[int, ...],\n                     floor: dict[str, int], cap: dict[str, int], yearly_cap: dict[tuple[str, int], int]) -> None:\n    \"\"\"Each county's minimum and cap over the plan, and its caps in single years.\"\"\"\n    # TODO: the spend expressions and the three kinds of rows.\n    return None\n\n\ndef build(projects: list[Project], years: tuple[int, ...], floor: dict[str, int], cap: dict[str, int],\n          yearly_cap: dict[tuple[str, int], int]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"counties\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_county_rules(model, x, projects, years, floor, cap, yearly_cap)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"F1\", \"Ash\", (300, 200), (2027, 2028)), Project(\"F2\", \"Ash\", (250,), (2027,))]\n    model, x = build(projects, (2027, 2028, 2029), {\"Ash\": 400}, {\"Ash\": 700}, {(\"Ash\", 2028): 300})\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 6,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "6931ca24b733e4c1938b31fd7ce9d2f2af8707a1e50ac3dfe1852f05754f1ce1",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    county: str\n    cost: tuple[int, ...]\n    starts: tuple[int, ...]\n\n\ndef add_county_rules(model: mathopt.Model, x: dict, projects: list[Project], years: tuple[int, ...],\n                     floor: dict[str, int], cap: dict[str, int], yearly_cap: dict[tuple[str, int], int]) -> None:\n    \"\"\"Each county's minimum and cap over the plan, and its caps in single years.\"\"\"\n    # TODO: the spend expressions and the three kinds of rows.\n    return None\n\n\ndef build(projects: list[Project], years: tuple[int, ...], floor: dict[str, int], cap: dict[str, int],\n          yearly_cap: dict[tuple[str, int], int]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"counties\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_county_rules(model, x, projects, years, floor, cap, yearly_cap)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"F1\", \"Ash\", (300, 200), (2027, 2028)), Project(\"F2\", \"Ash\", (250,), (2027,))]\n    model, x = build(projects, (2027, 2028, 2029), {\"Ash\": 400}, {\"Ash\": 700}, {(\"Ash\", 2028): 300})\n    print(model.get_num_linear_constraints(), \"rows\")\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-1/counties.py",
+    "test_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-1/test_counties.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-1/counties.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-1/target/report.xml",
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-1/test_counties.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_each_county_gets_its_minimum",
+        "kind": "main",
+        "says": "a plan that gives each county its minimum is allowed, and one that leaves a county short is refused"
+      },
+      {
+        "id": "test_a_county_gets_no_more_than_its_cap",
+        "kind": "main",
+        "says": "a plan over a county's cap for the plan is refused"
+      },
+      {
+        "id": "test_a_county_stays_within_its_yearly_cap",
+        "kind": "main",
+        "says": "a plan over a county's cap for one year is refused"
+      },
+      {
+        "id": "test_later_years_of_work_count_in_their_own_year",
+        "kind": "edge",
+        "says": "a project's second year of spend counts toward that year's cap"
+      },
+      {
+        "id": "test_every_year_of_work_counts_toward_the_minimum",
+        "kind": "edge",
+        "says": "a project's whole cost counts toward its county's minimum, not only its first year"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "27-dependencies-and-groups/README_6.5.5.md",
+      "section": "A Jurisdiction's Spend Is the Same Sum Over Its Own Projects"
+    },
+    "concepts": [
+      "a jurisdiction's limits are rows on the spend of its own projects, over the plan or in one year"
+    ]
+  }
+}

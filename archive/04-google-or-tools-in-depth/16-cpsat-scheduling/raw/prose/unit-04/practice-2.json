@@ -1,0 +1,149 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "16-cpsat-scheduling"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Checking an installation plan by hand",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A museum plans the installation of its new exhibitions. Each job needs some installers for some days; some jobs, the noisy or dusty ones, must happen while their gallery is closed to visitors. The museum has a fixed team of installers. Days are numbered from 0, and a job that starts on day `s` and takes `d` days occupies days `s` to `s + d - 1` and ends at `s + d`."
+    },
+    {
+      "type": "para",
+      "text": "Write `broken_rules(jobs, start, installers, horizon)` in `checker.py`, **without a solver**: it checks a plan someone else made. `jobs` maps a job to `(days, installers_needed, windows)`, where `windows` is a list of closures `(a, b)`, each the half-open span of days $`[a, b)`$ (open from the start of day `a` to the start of day `b`), or `None` when the job can happen any time. `start` maps each job to its start day. Return the set of broken rules:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`(\"outside\", job)` when the job starts before day 0 or ends after `horizon`;",
+        "`(\"window\", job)` when the job has windows and lies wholly inside none of them;",
+        "`(\"crowded\", day)` for each day `t` from 0 to `horizon - 1` on which the installers needed by the jobs running exceed `installers`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The rules, with $`s_j`$, $`d_j`$, $`n_j`$ and $`\\mathcal{W}_j`$ each job's start, days, installers and windows, $`N`$ the team and $`H`$ the horizon:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& 0 \\le s_j \\;\\text{ and }\\; s_j + d_j \\le H && \\forall j && \\text{(outside)} \\\\\n& \\exists\\, [a, b) \\in \\mathcal{W}_j : a \\le s_j \\;\\text{ and }\\; s_j + d_j \\le b && \\forall j \\text{ with windows} && \\text{(window)} \\\\\n& \\textstyle\\sum_{j \\,:\\, s_j \\le t < s_j + d_j} n_j \\le N && \\forall t \\in \\{0, \\dots, H - 1\\} && \\text{(crowded)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Write each rule the plain way, one loop per rule. The tests hand you plans that break known rules. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\n\ndef broken_rules(jobs: dict[str, tuple[int, int, list[tuple[int, int]] | None]], start: dict[str, int],\n                 installers: int, horizon: int) -> set[tuple[str, object]]:\n    \"\"\"Every rule the plan breaks: (\"outside\", job), (\"window\", job), (\"crowded\", day).\"\"\"\n    broken = set()\n    for name, (days, _, windows) in jobs.items():\n        s, e = start[name], start[name] + days\n        if s < 0 or e > horizon:\n            broken.add((\"outside\", name))\n        if windows is not None and not any(a <= s and e <= b for a, b in windows):\n            broken.add((\"window\", name))\n    for t in range(horizon):\n        used = sum(need for name, (days, need, _) in jobs.items() if start[name] <= t < start[name] + days)\n        if used > installers:\n            broken.add((\"crowded\", t))\n    return broken\n\n\nif __name__ == \"__main__\":\n    jobs = {\"drill\": (2, 2, [(0, 3)]), \"paint\": (3, 1, None), \"hang\": (1, 3, None)}\n    print(broken_rules(jobs, {\"drill\": 2, \"paint\": 0, \"hang\": 4}, 3, 6))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\n\ndef broken_rules(jobs: dict[str, tuple[int, int, list[tuple[int, int]] | None]], start: dict[str, int],\n                 installers: int, horizon: int) -> set[tuple[str, object]]:\n    \"\"\"Every rule the plan breaks: (\"outside\", job), (\"window\", job), (\"crowded\", day).\"\"\"\n    # TODO: one loop per rule. The placeholder below reports a rule nobody wrote.\n    return {(\"unchecked\", \"plan\")}\n\n\nif __name__ == \"__main__\":\n    jobs = {\"drill\": (2, 2, [(0, 3)]), \"paint\": (3, 1, None), \"hang\": (1, 3, None)}\n    print(broken_rules(jobs, {\"drill\": 2, \"paint\": 0, \"hang\": 4}, 3, 6))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "10d3f63c0658309f0c6e7a1771b5983099675bf7c3ed44f8c8f443aa0bd295a2",
+  "starting_code": "from __future__ import annotations\n\n\ndef broken_rules(jobs: dict[str, tuple[int, int, list[tuple[int, int]] | None]], start: dict[str, int],\n                 installers: int, horizon: int) -> set[tuple[str, object]]:\n    \"\"\"Every rule the plan breaks: (\"outside\", job), (\"window\", job), (\"crowded\", day).\"\"\"\n    # TODO: one loop per rule. The placeholder below reports a rule nobody wrote.\n    return {(\"unchecked\", \"plan\")}\n\n\nif __name__ == \"__main__\":\n    jobs = {\"drill\": (2, 2, [(0, 3)]), \"paint\": (3, 1, None), \"hang\": (1, 3, None)}\n    print(broken_rules(jobs, {\"drill\": 2, \"paint\": 0, \"hang\": 4}, 3, 6))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-04/practice-2/checker.py",
+    "test_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-04/practice-2/test_checker.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-04/practice-2/checker.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-04/practice-2/target/report.xml",
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-04/practice-2/test_checker.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_plan_that_keeps_every_rule_breaks_none",
+        "kind": "main",
+        "says": "a plan that keeps every rule gets an empty set"
+      },
+      {
+        "id": "test_work_past_the_horizon_is_reported",
+        "kind": "main",
+        "says": "a job that starts before day 0 or ends after the horizon is reported as outside"
+      },
+      {
+        "id": "test_a_job_ending_as_its_window_closes_is_inside",
+        "kind": "edge",
+        "says": "a job that ends exactly when its window ends is inside the window, and one that runs a day longer is not"
+      },
+      {
+        "id": "test_a_crowded_day_counts_installers_not_jobs",
+        "kind": "edge",
+        "says": "a day is crowded when the installers the running jobs need exceed the team, even if few jobs run"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-04/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "16-cpsat-scheduling/README_4.5.4.md",
+      "section": "A Checker Written From the Rules Proves the Schedule"
+    },
+    "concepts": [
+      "a checker written from the rules in plain Python verifies any schedule and must be shown to fail"
+    ]
+  }
+}

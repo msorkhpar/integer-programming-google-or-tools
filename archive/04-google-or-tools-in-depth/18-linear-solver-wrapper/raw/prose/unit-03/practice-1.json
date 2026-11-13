@@ -1,0 +1,141 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "18-linear-solver-wrapper"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "How many generators can arrive?",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A generator rental firm keeps portable generators in yards and sends them to towns after a storm. Before the season it asks how many generators its road routes could deliver at most."
+    },
+    {
+      "type": "para",
+      "text": "Write `most_delivered(stock, needs, routes)` in `generators.py`, using `SimpleMaxFlow`. `stock` maps each yard to the generators it holds, `needs` maps each town to the most it can take, and `routes` maps `(from, to)` pairs of place names to the most generators that route carries. A route may pass through a place that is neither a yard nor a town. Return the largest number that can arrive at the towns in total."
+    },
+    {
+      "type": "para",
+      "text": "The problem, with a super source $`s`$ joined to every yard and a super sink $`t`$ joined from every town:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max\\;& v \\\\\n\\text{s.t. }& \\text{flow out of } n - \\text{flow into } n = \\begin{cases} v & n = s \\\\ -v & n = t \\\\ 0 & \\text{otherwise} \\end{cases} && \\text{(balance}_n) \\\\\n& 0 \\le f_{s,y} \\le \\text{stock}_y, \\quad 0 \\le f_{i,j} \\le \\text{route}_{i,j}, \\quad 0 \\le f_{w,t} \\le \\text{need}_w\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The solver writes the rows; you give it the arcs. Number the places first (`SimpleMaxFlow` knows nodes only as integers), and give the super source and sink numbers after them. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.graph.python import max_flow\n\n\ndef most_delivered(stock: dict, needs: dict, routes: dict) -> int:\n    \"\"\"The most units that can reach the towns: from yards holding `stock`, along `routes`\n    {(from, to): capacity}, to towns that take at most `needs`.\"\"\"\n    names = sorted({n for route in routes for n in route} | set(stock) | set(needs))\n    node = {name: i for i, name in enumerate(names)}\n    source, sink = len(names), len(names) + 1\n    smf = max_flow.SimpleMaxFlow()\n    for yard, units in stock.items():\n        smf.add_arc_with_capacity(source, node[yard], units)\n    for (i, j), capacity in routes.items():\n        smf.add_arc_with_capacity(node[i], node[j], capacity)\n    for town, units in needs.items():\n        smf.add_arc_with_capacity(node[town], sink, units)\n    if smf.solve(source, sink) != smf.OPTIMAL:\n        raise RuntimeError(\"max flow failed\")\n    return smf.optimal_flow()\n\n\nif __name__ == \"__main__\":\n    print(most_delivered({\"North yard\": 6}, {\"Elm\": 4}, {(\"North yard\", \"Elm\"): 5}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.graph.python import max_flow\n\n\ndef most_delivered(stock: dict, needs: dict, routes: dict) -> int:\n    \"\"\"The most units that can reach the towns: from yards holding `stock`, along `routes`\n    {(from, to): capacity}, to towns that take at most `needs`.\"\"\"\n    # TODO: number the places, add a super source and a super sink, and solve one max flow.\n    return 0\n\n\nif __name__ == \"__main__\":\n    print(most_delivered({\"North yard\": 6}, {\"Elm\": 4}, {(\"North yard\", \"Elm\"): 5}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "68758117ef4fef27503f9f7ec6607a45ef6c296c1330cac9e5c5ded618e4dc83",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.graph.python import max_flow\n\n\ndef most_delivered(stock: dict, needs: dict, routes: dict) -> int:\n    \"\"\"The most units that can reach the towns: from yards holding `stock`, along `routes`\n    {(from, to): capacity}, to towns that take at most `needs`.\"\"\"\n    # TODO: number the places, add a super source and a super sink, and solve one max flow.\n    return 0\n\n\nif __name__ == \"__main__\":\n    print(most_delivered({\"North yard\": 6}, {\"Elm\": 4}, {(\"North yard\", \"Elm\"): 5}))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-03/practice-1/generators.py",
+    "test_path": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-03/practice-1/test_generators.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-03/practice-1/generators.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-03/practice-1/target/report.xml",
+      "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-03/practice-1/test_generators.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_routes_limit_what_arrives",
+        "kind": "main",
+        "says": "when every yard and town has room, the routes' capacities decide what arrives"
+      },
+      {
+        "id": "test_a_yard_sends_no_more_than_it_holds",
+        "kind": "edge",
+        "says": "a yard sends no more than its stock, however wide its routes"
+      },
+      {
+        "id": "test_a_town_takes_no_more_than_it_needs",
+        "kind": "edge",
+        "says": "a town takes no more than it needs, however wide the routes into it"
+      },
+      {
+        "id": "test_units_may_pass_through_a_depot_that_holds_none",
+        "kind": "edge",
+        "says": "units may travel through a place that is neither a yard nor a town"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-03/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "18-linear-solver-wrapper/README_4.7.3.md",
+      "section": "Many Sources and Many Sinks Become One Pair With a Super Source and a Super Sink"
+    },
+    "concepts": [
+      "SimpleMaxFlow takes integer-numbered nodes and arcs with capacities, solves from a source to a sink, and reports a minimum cut",
+      "several sources and sinks are joined to one super source and one super sink by arcs as wide as each stock and need"
+    ]
+  }
+}

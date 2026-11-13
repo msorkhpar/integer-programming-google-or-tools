@@ -1,0 +1,145 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "47-testing-optimization-code"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Bytes that repeat for a routing run",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A parcel company's routing service must give the same routes every time it reruns a day, and its determinism test compares run records from fresh processes. Compared as they are, two records never match: each holds the time the run started and how long it took, its cost carries floating-point noise, and its set of unserved stops prints in whatever order the process's hash seed gives."
+    },
+    {
+      "type": "para",
+      "text": "The docstring of `run_bytes.py` gives a record's shape. Write:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`canonical(record)`, the record as bytes that are equal exactly when two runs did the same work: without the two clock fields (`started_at`, and `wall_seconds` inside `stats`), with every float rounded to 6 decimals and `-0.0` written as `0.0`, with dictionary keys sorted, each set as a sorted list, and each list kept in its order, since a route visits its stops in order;",
+        "`repeats(records)`, `True` when every record in the list has the same canonical bytes."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`json.dumps(..., sort_keys=True, separators=(\",\", \":\"))` writes compact JSON with sorted keys; JSON has no sets, so turn them into lists first. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Canonical bytes for a delivery-routing run record, so a determinism test can compare runs.\n\nA record is a dict:\n    \"started_at\": when the run started (text; a clock)\n    \"stats\":      {\"wall_seconds\": float (a clock), \"nodes\": int}\n    \"cost\":       float, the routes' total cost\n    \"routes\":     {truck: [stops, in the order visited]}\n    \"unserved\":   a set of stops no truck visits\n\"\"\"\n\nfrom __future__ import annotations\n\nimport json\n\nCLOCK = {(\"started_at\",), (\"stats\", \"wall_seconds\")}\n\n\ndef _clean(value, path=()):\n    if isinstance(value, dict):\n        return {k: _clean(v, path + (k,)) for k, v in value.items() if path + (k,) not in CLOCK}\n    if isinstance(value, (set, frozenset)):\n        return sorted(_clean(v, path) for v in value)\n    if isinstance(value, list):\n        return [_clean(v, path) for v in value]\n    if isinstance(value, float):\n        rounded = round(value, 6)\n        return 0.0 if rounded == 0 else rounded\n    return value\n\n\ndef canonical(record: dict) -> bytes:\n    \"\"\"The record without its clocks, floats to 6 decimals, keys sorted, as compact JSON bytes.\"\"\"\n    return json.dumps(_clean(record), sort_keys=True, separators=(\",\", \":\")).encode(\"utf-8\")\n\n\ndef repeats(records: list[dict]) -> bool:\n    \"\"\"True when every record has the same canonical bytes.\"\"\"\n    return len({canonical(r) for r in records}) <= 1\n\n\nif __name__ == \"__main__\":\n    run = {\"started_at\": \"09:00\", \"stats\": {\"wall_seconds\": 1.2, \"nodes\": 40}, \"cost\": 512.0,\n           \"routes\": {\"t1\": [\"a\", \"b\"]}, \"unserved\": {\"c\"}}\n    print(canonical(run))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Canonical bytes for a delivery-routing run record, so a determinism test can compare runs.\n\nA record is a dict:\n    \"started_at\": when the run started (text; a clock)\n    \"stats\":      {\"wall_seconds\": float (a clock), \"nodes\": int}\n    \"cost\":       float, the routes' total cost\n    \"routes\":     {truck: [stops, in the order visited]}\n    \"unserved\":   a set of stops no truck visits\n\"\"\"\n\nfrom __future__ import annotations\n\nimport json\n\n\ndef canonical(record: dict) -> bytes:\n    \"\"\"The record without its clocks, floats to 6 decimals, keys sorted, as compact JSON bytes.\"\"\"\n    # TODO\n    return b\"\"\n\n\ndef repeats(records: list[dict]) -> bool:\n    \"\"\"True when every record has the same canonical bytes.\"\"\"\n    # TODO\n    return True\n\n\nif __name__ == \"__main__\":\n    run = {\"started_at\": \"09:00\", \"stats\": {\"wall_seconds\": 1.2, \"nodes\": 40}, \"cost\": 512.0,\n           \"routes\": {\"t1\": [\"a\", \"b\"]}, \"unserved\": {\"c\"}}\n    print(canonical(run))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "e8e9938e8eb22fb3d57526887ab0e084c48b9e7b7d484a6b4c679e3c05cff7fc",
+  "starting_code": "\"\"\"Canonical bytes for a delivery-routing run record, so a determinism test can compare runs.\n\nA record is a dict:\n    \"started_at\": when the run started (text; a clock)\n    \"stats\":      {\"wall_seconds\": float (a clock), \"nodes\": int}\n    \"cost\":       float, the routes' total cost\n    \"routes\":     {truck: [stops, in the order visited]}\n    \"unserved\":   a set of stops no truck visits\n\"\"\"\n\nfrom __future__ import annotations\n\nimport json\n\n\ndef canonical(record: dict) -> bytes:\n    \"\"\"The record without its clocks, floats to 6 decimals, keys sorted, as compact JSON bytes.\"\"\"\n    # TODO\n    return b\"\"\n\n\ndef repeats(records: list[dict]) -> bool:\n    \"\"\"True when every record has the same canonical bytes.\"\"\"\n    # TODO\n    return True\n\n\nif __name__ == \"__main__\":\n    run = {\"started_at\": \"09:00\", \"stats\": {\"wall_seconds\": 1.2, \"nodes\": 40}, \"cost\": 512.0,\n           \"routes\": {\"t1\": [\"a\", \"b\"]}, \"unserved\": {\"c\"}}\n    print(canonical(run))\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-04/practice-1/run_bytes.py",
+    "test_path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-04/practice-1/test_run_bytes.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-04/practice-1/run_bytes.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-04/practice-1/target/report.xml",
+      "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-04/practice-1/test_run_bytes.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_runs_differing_only_in_start_time_repeat_and_a_moved_stop_does_not",
+        "kind": "main",
+        "says": "two runs that differ only in when they started repeat, and two that put a stop on another truck do not"
+      },
+      {
+        "id": "test_the_nested_clock_field_is_left_out",
+        "kind": "edge",
+        "says": "the wall-clock seconds inside the stats are a clock too, while the node count is real work"
+      },
+      {
+        "id": "test_float_noise_below_a_millionth_is_not_a_difference",
+        "kind": "edge",
+        "says": "a cost that differs in the tenth decimal is the same cost, and one that differs by a cent is not"
+      },
+      {
+        "id": "test_minus_zero_and_zero_are_the_same",
+        "kind": "edge",
+        "says": "-0.0 and 0.0 are the same number, though their text differs"
+      },
+      {
+        "id": "test_the_order_of_a_route_matters",
+        "kind": "edge",
+        "says": "a route visits its stops in order, so the same stops in another order is a different run"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-04/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "47-testing-optimization-code/README_12.3.4.md",
+      "section": "A Determinism Test Must Be Able to Fail"
+    },
+    "concepts": [
+      "a determinism comparison must tell real differences from noise, or it can never fail",
+      "runs are compared as canonical bytes, with clocks left out and floats rounded"
+    ]
+  }
+}

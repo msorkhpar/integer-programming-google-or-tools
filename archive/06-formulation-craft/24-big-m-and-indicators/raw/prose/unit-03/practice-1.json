@@ -1,0 +1,140 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "24-big-m-and-indicators"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A pump with a minimum flow and no rated maximum",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility's booster station has one pump. When the pump is idle it moves no water. When it runs, it must move at least `min_flow` (below that it overheats). The station's records give no rated maximum flow, so the flow variable has no upper bound: $`0 \\le f`$, nothing more."
+    },
+    {
+      "type": "para",
+      "text": "`pump_variables` (given) creates the flow $`f`$ and the on/off binary $`u`$. Write `add_pump_rules(model, flow, on, min_flow)` in `pump.py`, with MathOpt indicator constraints, so that the model needs no $`M`$. The tests solve with SCIP (`mathopt.SolverType.GSCIP`), which takes indicator constraints."
+    },
+    {
+      "type": "para",
+      "text": "The model so far, with $`q`$ the minimum flow:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& f \\ge 0, \\quad u \\in \\{0, 1\\} && \\\\\n& \\text{?} && \\text{(idle\\_moves\\_nothing)} \\\\\n& \\text{?} && \\text{(running\\_minimum)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Write each rule as an implication first (\"$`u = \\dots \\Longrightarrow \\dots`$\"), then code it. Before running the tests, decide what a big-M version of the idle rule would need that this model does not have."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix a plan by its variables' bounds and ask SCIP whether it is allowed, so any correct pair of rules passes. Two lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef pump_variables(model: mathopt.Model) -> tuple[mathopt.Variable, mathopt.Variable]:\n    \"\"\"The pump's flow (no upper bound: the station has no rated maximum on record) and its on/off binary.\"\"\"\n    flow = model.add_variable(lb=0, ub=math.inf, name=\"flow\")\n    on = model.add_binary_variable(name=\"on\")\n    return flow, on\n\n\ndef add_pump_rules(model: mathopt.Model, flow: mathopt.Variable, on: mathopt.Variable, min_flow: float) -> None:\n    \"\"\"An idle pump moves nothing; a running pump moves at least `min_flow`.\"\"\"\n    model.add_indicator_constraint(indicator=on, activate_on_zero=True, implied_constraint=flow <= 0,\n                                   name=\"idle_moves_nothing\")\n    model.add_indicator_constraint(indicator=on, implied_constraint=flow >= min_flow, name=\"running_minimum\")\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    flow, on = pump_variables(model)\n    add_pump_rules(model, flow, on, 20)\n    print(model.get_num_indicator_constraints(), \"indicator constraints\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef pump_variables(model: mathopt.Model) -> tuple[mathopt.Variable, mathopt.Variable]:\n    \"\"\"The pump's flow (no upper bound: the station has no rated maximum on record) and its on/off binary.\"\"\"\n    flow = model.add_variable(lb=0, ub=math.inf, name=\"flow\")\n    on = model.add_binary_variable(name=\"on\")\n    return flow, on\n\n\ndef add_pump_rules(model: mathopt.Model, flow: mathopt.Variable, on: mathopt.Variable, min_flow: float) -> None:\n    \"\"\"An idle pump moves nothing; a running pump moves at least `min_flow`.\"\"\"\n    # TODO: your rules, as indicator constraints.\n    return None\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    flow, on = pump_variables(model)\n    add_pump_rules(model, flow, on, 20)\n    print(model.get_num_indicator_constraints(), \"indicator constraints\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "5e35a8bfc9628d94369d97209d5c7128e6e45810cf06931f80b05e3ad88f3031",
+  "starting_code": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef pump_variables(model: mathopt.Model) -> tuple[mathopt.Variable, mathopt.Variable]:\n    \"\"\"The pump's flow (no upper bound: the station has no rated maximum on record) and its on/off binary.\"\"\"\n    flow = model.add_variable(lb=0, ub=math.inf, name=\"flow\")\n    on = model.add_binary_variable(name=\"on\")\n    return flow, on\n\n\ndef add_pump_rules(model: mathopt.Model, flow: mathopt.Variable, on: mathopt.Variable, min_flow: float) -> None:\n    \"\"\"An idle pump moves nothing; a running pump moves at least `min_flow`.\"\"\"\n    # TODO: your rules, as indicator constraints.\n    return None\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    flow, on = pump_variables(model)\n    add_pump_rules(model, flow, on, 20)\n    print(model.get_num_indicator_constraints(), \"indicator constraints\")\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-03/practice-1/pump.py",
+    "test_path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-03/practice-1/test_pump.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-03/practice-1/pump.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-03/practice-1/target/report.xml",
+      "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-03/practice-1/test_pump.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_an_idle_pump_moves_nothing",
+        "kind": "main",
+        "says": "an idle pump with no flow is allowed, and an idle pump with flow refused"
+      },
+      {
+        "id": "test_a_running_pump_moves_at_least_the_minimum",
+        "kind": "edge",
+        "says": "a running pump at its minimum flow is allowed, and one below it refused"
+      },
+      {
+        "id": "test_a_running_pump_may_move_any_flow_above_the_minimum",
+        "kind": "edge",
+        "says": "a running pump may move a very large flow, which an idle one may not"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-03/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "24-big-m-and-indicators/README_6.2.3.md",
+      "section": "Only Some Solvers Take Indicator Constraints"
+    },
+    "concepts": [
+      "MathOpt's add_indicator_constraint states that a row holds when a binary takes a given value",
+      "HiGHS refuses indicator constraints and SCIP solves them"
+    ]
+  }
+}

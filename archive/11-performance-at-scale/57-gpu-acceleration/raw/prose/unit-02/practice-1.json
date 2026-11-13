@@ -1,0 +1,145 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "11-performance-at-scale",
+    "57-gpu-acceleration"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A fallback chain that never crashes and never settles",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A logistics team's nightly job tries a list of LP solvers in order: GPU solvers first, CPU solvers after. The machine may have no GPU, a GPU solver may raise (out of memory, a driver fault), and a solver may finish without an optimal answer. The job must never call a GPU solver on a machine without a GPU, must not die because one solver failed, and must never hand on an answer its solver did not call optimal."
+    },
+    {
+      "type": "para",
+      "text": "Write `solve_with_fallback(model, solvers, gpu)` in `fallback.py`. Each solver is a dict with a `name`, a `needs_gpu` flag and a `solve` function that takes the model and returns a dict with a `\"status\"`. Go through the solvers in order:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "a solver that needs a GPU when `gpu` is False is not called, and logged as `\"<name>: skipped (no GPU)\"`;",
+        "a solver that raises is logged as `\"<name>: error\"`, and the next one runs;",
+        "any other solver is logged as `\"<name>: <status>\"`; the first whose status is `\"Optimal\"` is the answer."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Return `(result, log)`, with `result` None when no solver answered `\"Optimal\"`. The tests use fake solvers, and one real LP solved with `highspy` on whatever the machine has: `test_a_real_lp_is_solved_on_whatever_this_machine_has` tries HiGHS's GPU PDLP first on the GPU image with a GPU. On a machine without a GPU it checks the CPU path only, and it says nothing about the GPU part: no test is reported as skipped. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\n\ndef solve_with_fallback(model, solvers: list[dict], gpu: bool):\n    \"\"\"Try each solver in order and return (the first Optimal result or None, what happened to each).\n\n    A solver is {\"name\": str, \"needs_gpu\": bool, \"solve\": callable(model) -> dict with a \"status\"}.\n    \"\"\"\n    log = []\n    for solver in solvers:\n        if solver[\"needs_gpu\"] and not gpu:\n            log.append(f\"{solver['name']}: skipped (no GPU)\")\n            continue\n        try:\n            result = solver[\"solve\"](model)\n        except Exception:\n            log.append(f\"{solver['name']}: error\")\n            continue\n        log.append(f\"{solver['name']}: {result['status']}\")\n        if result[\"status\"] == \"Optimal\":\n            return result, log\n    return None, log\n\n\nif __name__ == \"__main__\":\n    cpu = {\"name\": \"cpu\", \"needs_gpu\": False, \"solve\": lambda m: {\"status\": \"Optimal\", \"objective\": 1.0}}\n    print(solve_with_fallback(None, [cpu], gpu=False))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\n\ndef solve_with_fallback(model, solvers: list[dict], gpu: bool):\n    \"\"\"Try each solver in order and return (the first Optimal result or None, what happened to each).\n\n    A solver is {\"name\": str, \"needs_gpu\": bool, \"solve\": callable(model) -> dict with a \"status\"}.\n    \"\"\"\n    # TODO: skip GPU solvers without a GPU, survive a solver that raises, accept only \"Optimal\".\n    return None, []\n\nif __name__ == \"__main__\":\n    cpu = {\"name\": \"cpu\", \"needs_gpu\": False, \"solve\": lambda m: {\"status\": \"Optimal\", \"objective\": 1.0}}\n    print(solve_with_fallback(None, [cpu], gpu=False))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "6638163574dde0a9dd15334f125e660c41b3b2b156af4a574dcaca222a4486d6",
+  "starting_code": "from __future__ import annotations\n\n\ndef solve_with_fallback(model, solvers: list[dict], gpu: bool):\n    \"\"\"Try each solver in order and return (the first Optimal result or None, what happened to each).\n\n    A solver is {\"name\": str, \"needs_gpu\": bool, \"solve\": callable(model) -> dict with a \"status\"}.\n    \"\"\"\n    # TODO: skip GPU solvers without a GPU, survive a solver that raises, accept only \"Optimal\".\n    return None, []\n\nif __name__ == \"__main__\":\n    cpu = {\"name\": \"cpu\", \"needs_gpu\": False, \"solve\": lambda m: {\"status\": \"Optimal\", \"objective\": 1.0}}\n    print(solve_with_fallback(None, [cpu], gpu=False))\n",
+  "exercise": {
+    "main_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-1/fallback.py",
+    "test_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-1/test_fallback.py",
+    "run_command": [
+      "python3",
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-1/fallback.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-1/target/report.xml",
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-1/test_fallback.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_without_a_gpu_the_gpu_solver_is_never_called",
+        "kind": "main",
+        "says": "without a GPU, a GPU solver is skipped and never called"
+      },
+      {
+        "id": "test_a_real_lp_is_solved_on_whatever_this_machine_has",
+        "kind": "main",
+        "says": "a real LP is solved on whatever this machine has"
+      },
+      {
+        "id": "test_a_gpu_answer_that_is_not_optimal_falls_through",
+        "kind": "edge",
+        "says": "an answer that is not Optimal sends the job to the next solver"
+      },
+      {
+        "id": "test_a_solver_that_raises_is_logged_and_the_next_one_runs",
+        "kind": "edge",
+        "says": "a solver that raises is logged and the next one runs"
+      },
+      {
+        "id": "test_when_no_solver_answers_optimal_there_is_no_result",
+        "kind": "edge",
+        "says": "with no Optimal answer there is no result"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "57-gpu-acceleration/README_11.4.2.md",
+      "section": "Fall Back When the GPU Is Missing or Its Answer Is Not Optimal"
+    },
+    "concepts": [
+      "a solve skips GPU solvers without a GPU, survives one that fails, and accepts only an optimal answer"
+    ]
+  }
+}

@@ -1,0 +1,145 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "24-big-m-and-indicators"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A district spending floor with a waiver",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A regulator requires each maintenance district to spend at least a floor $`F`$ ($k) this year, **unless** the district is granted a waiver. The district's spend is the sum of its work orders. Each work order $`j`$ has a continuous spend $`s_j`$ between a lowest and a highest amount (some orders are already committed, so their lowest amount is above 0, and a credit line, money returned to the district, has a negative lowest amount). The waiver is a binary $`w`$."
+    },
+    {
+      "type": "para",
+      "text": "Write `add_floor(model, spend, floor, waiver)` in `floor.py`. `spend` maps each work order's name to its MathOpt variable, whose bounds (`lower_bound`, `upper_bound`) are the order's lowest and highest spend. Write the rule as one big-M row, and compute its $`M`$ from those bounds: the smallest value that never refuses a plan the bounds allow when the waiver is on. The lesson derived $`M`$ for a \"$`\\le`$ unless\" row; this one is a floor, \"$`\\ge`$ unless\"."
+    },
+    {
+      "type": "para",
+      "text": "The model so far, with $`O`$ the work orders and $`l_j \\le s_j \\le u_j`$ their bounds:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& l_j \\le s_j \\le u_j && \\forall j \\in O \\\\\n& w \\in \\{0, 1\\} && \\\\\n& \\text{?} && \\text{(district\\_floor)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Write the row in this notation first, with the formula for $`M`$, then code it. Check it by hand on a district whose orders are all at their lowest spend, with and without the waiver."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix a plan by its variables' bounds, after your row is written, and ask the solver whether the plan is allowed, so any correct row passes. One more test relaxes the waiver to one half and checks that your $`M`$ is as small as the bounds allow. About three lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef spend_variables(model: mathopt.Model, items: dict[str, tuple[float, float]]) -> dict:\n    \"\"\"One continuous spend variable per work order, with its (lowest, highest) spend in $k.\"\"\"\n    return {name: model.add_variable(lb=lo, ub=hi, name=f\"spend_{name}\") for name, (lo, hi) in items.items()}\n\n\ndef add_floor(model: mathopt.Model, spend: dict, floor: float, waiver: mathopt.Variable) -> None:\n    \"\"\"The district's total spend is at least `floor`, unless `waiver` is 1.\"\"\"\n    lowest = sum(v.lower_bound for v in spend.values())\n    big = max(0.0, floor - lowest)\n    model.add_linear_constraint(sum(spend.values()) >= floor - big * waiver, name=\"district_floor\")\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    spend = spend_variables(model, {\"trim\": (0, 60), \"poles\": (20, 80)})\n    waiver = model.add_binary_variable(name=\"waiver\")\n    add_floor(model, spend, 100, waiver)\n    print(model.get_num_linear_constraints(), \"row\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef spend_variables(model: mathopt.Model, items: dict[str, tuple[float, float]]) -> dict:\n    \"\"\"One continuous spend variable per work order, with its (lowest, highest) spend in $k.\"\"\"\n    return {name: model.add_variable(lb=lo, ub=hi, name=f\"spend_{name}\") for name, (lo, hi) in items.items()}\n\n\ndef add_floor(model: mathopt.Model, spend: dict, floor: float, waiver: mathopt.Variable) -> None:\n    \"\"\"The district's total spend is at least `floor`, unless `waiver` is 1.\"\"\"\n    # TODO: your row, with the smallest M the variables' bounds allow.\n    return None\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    spend = spend_variables(model, {\"trim\": (0, 60), \"poles\": (20, 80)})\n    waiver = model.add_binary_variable(name=\"waiver\")\n    add_floor(model, spend, 100, waiver)\n    print(model.get_num_linear_constraints(), \"row\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "b7c7b99f23685ba4faee0ef1fb1a17edd473bd5bfde0daa0efe0cbed501cb6e0",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef spend_variables(model: mathopt.Model, items: dict[str, tuple[float, float]]) -> dict:\n    \"\"\"One continuous spend variable per work order, with its (lowest, highest) spend in $k.\"\"\"\n    return {name: model.add_variable(lb=lo, ub=hi, name=f\"spend_{name}\") for name, (lo, hi) in items.items()}\n\n\ndef add_floor(model: mathopt.Model, spend: dict, floor: float, waiver: mathopt.Variable) -> None:\n    \"\"\"The district's total spend is at least `floor`, unless `waiver` is 1.\"\"\"\n    # TODO: your row, with the smallest M the variables' bounds allow.\n    return None\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    spend = spend_variables(model, {\"trim\": (0, 60), \"poles\": (20, 80)})\n    waiver = model.add_binary_variable(name=\"waiver\")\n    add_floor(model, spend, 100, waiver)\n    print(model.get_num_linear_constraints(), \"row\")\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-1/floor.py",
+    "test_path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-1/test_floor.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-1/floor.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-1/target/report.xml",
+      "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-1/test_floor.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_without_a_waiver_the_floor_holds",
+        "kind": "main",
+        "says": "without a waiver, a total at the floor is allowed and one below it refused"
+      },
+      {
+        "id": "test_a_waiver_allows_the_lowest_spend_the_orders_allow",
+        "kind": "edge",
+        "says": "with a waiver, every work order at its lowest spend is allowed"
+      },
+      {
+        "id": "test_a_credit_line_can_take_the_total_below_zero_under_a_waiver",
+        "kind": "edge",
+        "says": "a credit line with a negative lower bound is counted when the waiver is on"
+      },
+      {
+        "id": "test_the_row_is_as_tight_as_the_bounds_allow",
+        "kind": "edge",
+        "says": "with the waiver at one half in the LP, the least total is halfway between the floor and the lowest spend"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "24-big-m-and-indicators/README_6.2.1.md",
+      "section": "Variable Bounds Give a Safe M With No Solve"
+    },
+    "concepts": [
+      "a safe M comes from each variable's bounds, with positive coefficients at upper and negative ones at lower bounds, mirrored for a floor",
+      "a binary times a constant M switches a row off, and M must cover the most the left side can exceed the right side"
+    ]
+  }
+}

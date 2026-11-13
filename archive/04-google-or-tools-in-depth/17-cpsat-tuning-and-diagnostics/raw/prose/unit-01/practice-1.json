@@ -1,0 +1,144 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "17-cpsat-tuning-and-diagnostics"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "One LNS step on an inspection week",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A utility's inspection planner picks which substation inspections the crews run this week. Each job has a district, a value (risk points removed) and the crew-hours it takes; the crews have `hours` in total. `build(jobs, hours)` in `inspections.py` already makes the whole week's CP-SAT model, with one Boolean `pick[name]` per job."
+    },
+    {
+      "type": "para",
+      "text": "The planner has a plan and wants to improve it one district at a time: free the jobs of one district, keep every other job exactly as the plan has it, and let CP-SAT re-plan the freed part."
+    },
+    {
+      "type": "para",
+      "text": "Write `improve(jobs, hours, plan, free)`. `plan` and `free` are sets of job names. Return the set of job names in the best plan that agrees with `plan` on every job not in `free`."
+    },
+    {
+      "type": "para",
+      "text": "The model `build` makes, with $`J`$ the jobs, $`v_j`$ their values and $`h_j`$ their hours:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& \\sum_{j \\in J} v_j\\, \\text{pick}_j \\\\\n\\text{s.t. } & \\sum_{j \\in J} h_j\\, \\text{pick}_j \\le \\text{hours} && \\text{(hours)} \\\\\n& \\text{pick}_j \\in \\{0, 1\\} && \\forall j \\in J\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Write the rows your step adds in this notation first, with their quantifier: one for the jobs the plan runs and one for the jobs it leaves out, each only outside the neighborhood. Then code them, hint the current plan, and solve with one worker. About eight lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    district: str\n    value: int      # risk removed, in points\n    hours: int      # crew-hours the inspection takes\n\n\ndef build(jobs: list[Job], hours: int) -> tuple[cp_model.CpModel, dict[str, cp_model.IntVar]]:\n    \"\"\"Given: the week's model. pick[j] = 1 runs job j; the crews have `hours` in total.\"\"\"\n    model = cp_model.CpModel()\n    pick = {j.name: model.new_bool_var(f\"pick_{j.name}\") for j in jobs}\n    model.add(sum(j.hours * pick[j.name] for j in jobs) <= hours)\n    model.maximize(sum(j.value * pick[j.name] for j in jobs))\n    return model, pick\n\n\ndef improve(jobs: list[Job], hours: int, plan: set[str], free: set[str]) -> set[str]:\n    \"\"\"The best plan that keeps every job outside `free` exactly as `plan` has it.\"\"\"\n    model, pick = build(jobs, hours)\n    for name, var in pick.items():\n        model.add_hint(var, 1 if name in plan else 0)\n        if name not in free:\n            model.add(var == (1 if name in plan else 0))\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.solve(model)\n    return {name for name, var in pick.items() if solver.value(var)}\n\n\nif __name__ == \"__main__\":\n    week = [Job(\"N1\", \"north\", 30, 10), Job(\"N2\", \"north\", 25, 10), Job(\"N3\", \"north\", 10, 10),\n            Job(\"S1\", \"south\", 50, 20)]\n    print(sorted(improve(week, 40, {\"N3\", \"S1\"}, {\"N1\", \"N2\", \"N3\"})))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    district: str\n    value: int      # risk removed, in points\n    hours: int      # crew-hours the inspection takes\n\n\ndef build(jobs: list[Job], hours: int) -> tuple[cp_model.CpModel, dict[str, cp_model.IntVar]]:\n    \"\"\"Given: the week's model. pick[j] = 1 runs job j; the crews have `hours` in total.\"\"\"\n    model = cp_model.CpModel()\n    pick = {j.name: model.new_bool_var(f\"pick_{j.name}\") for j in jobs}\n    model.add(sum(j.hours * pick[j.name] for j in jobs) <= hours)\n    model.maximize(sum(j.value * pick[j.name] for j in jobs))\n    return model, pick\n\n\ndef improve(jobs: list[Job], hours: int, plan: set[str], free: set[str]) -> set[str]:\n    \"\"\"The best plan that keeps every job outside `free` exactly as `plan` has it.\"\"\"\n    # TODO: fix every job outside `free` to its value in `plan`, hint the plan, solve with one worker.\n    return set()\n\n\nif __name__ == \"__main__\":\n    week = [Job(\"N1\", \"north\", 30, 10), Job(\"N2\", \"north\", 25, 10), Job(\"N3\", \"north\", 10, 10),\n            Job(\"S1\", \"south\", 50, 20)]\n    print(sorted(improve(week, 40, {\"N3\", \"S1\"}, {\"N1\", \"N2\", \"N3\"})))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "d7230fa4be0e72362ca97f2bd29b5916f1c0697e67edb4d0ea83be588bd5d354",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    district: str\n    value: int      # risk removed, in points\n    hours: int      # crew-hours the inspection takes\n\n\ndef build(jobs: list[Job], hours: int) -> tuple[cp_model.CpModel, dict[str, cp_model.IntVar]]:\n    \"\"\"Given: the week's model. pick[j] = 1 runs job j; the crews have `hours` in total.\"\"\"\n    model = cp_model.CpModel()\n    pick = {j.name: model.new_bool_var(f\"pick_{j.name}\") for j in jobs}\n    model.add(sum(j.hours * pick[j.name] for j in jobs) <= hours)\n    model.maximize(sum(j.value * pick[j.name] for j in jobs))\n    return model, pick\n\n\ndef improve(jobs: list[Job], hours: int, plan: set[str], free: set[str]) -> set[str]:\n    \"\"\"The best plan that keeps every job outside `free` exactly as `plan` has it.\"\"\"\n    # TODO: fix every job outside `free` to its value in `plan`, hint the plan, solve with one worker.\n    return set()\n\n\nif __name__ == \"__main__\":\n    week = [Job(\"N1\", \"north\", 30, 10), Job(\"N2\", \"north\", 25, 10), Job(\"N3\", \"north\", 10, 10),\n            Job(\"S1\", \"south\", 50, 20)]\n    print(sorted(improve(week, 40, {\"N3\", \"S1\"}, {\"N1\", \"N2\", \"N3\"})))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-01/practice-1/inspections.py",
+    "test_path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-01/practice-1/test_inspections.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-01/practice-1/inspections.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-01/practice-1/target/report.xml",
+      "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-01/practice-1/test_inspections.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_result_is_the_best_plan_inside_the_neighborhood",
+        "kind": "main",
+        "says": "the step returns the best plan that keeps every job outside the neighborhood as it was"
+      },
+      {
+        "id": "test_an_empty_neighborhood_returns_the_plan_unchanged",
+        "kind": "main",
+        "says": "with nothing freed, the step returns the plan it was given"
+      },
+      {
+        "id": "test_a_job_the_plan_leaves_out_stays_out_unless_it_is_free",
+        "kind": "edge",
+        "says": "a job outside the neighborhood that the plan leaves out is not added"
+      },
+      {
+        "id": "test_a_job_the_plan_keeps_stays_in_unless_it_is_free",
+        "kind": "edge",
+        "says": "a job outside the neighborhood that the plan runs is not dropped"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "17-cpsat-tuning-and-diagnostics/README_4.6.1.md",
+      "section": "LNS Frees Part of a Good Plan and Lets CP-SAT Rebuild It"
+    },
+    "concepts": [
+      "an LNS step fixes every variable outside the neighborhood to the current plan and re-solves the rest"
+    ]
+  }
+}

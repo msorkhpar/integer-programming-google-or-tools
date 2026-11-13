@@ -1,0 +1,153 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "25-knapsack-and-assignment"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Jobs too big to share a resource",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A transmission operator (not GridCap) plans its substation jobs for next season. Several limited resources are shared: the mobile crane's days, the outage hours the grid operator grants, the budget. Each is a knapsack row,"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_{j \\in J} u_{\\ell,j}\\, x_j \\le U_\\ell \\qquad \\forall \\ell \\in L \\qquad \\text{(limit}_\\ell)"
+    },
+    {
+      "type": "para",
+      "text": "with $`x_j \\in \\{0, 1\\}`$ (do job $`j`$), $`u_{\\ell,j}`$ the whole amount of resource $`\\ell`$ that job $`j`$ uses and $`U_\\ell`$ what is available. `build` in `jobs.py` already writes these rows and the objective."
+    },
+    {
+      "type": "para",
+      "text": "The planners noticed that some jobs are so big that no two of them fit under the same limit, and that the LP relaxation ignores this: it happily takes one big job and part of another. Write `add_big_item_rows(model, x, limits)`, which adds rows that"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "every whole plan that fits all the limits still satisfies (so no plan the limits allow is lost), and",
+        "stop the LP from combining big jobs: for each limit, the jobs no two of which fit together under it may be funded at most one at a time, and a job that does not fit under a limit even on its own is never funded, not even in part."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Each such row comes from a cover of one limit's row, a cover of two jobs or of one. Decide on paper which jobs belong to a limit's row, why \"no two of them fit\" is a simple test on each job's own use, and write the rows with their labels before coding. When a limit has only one big job, the reference writes no \"at most one\" row for it: that row would read $`x_j \\le 1`$, which the variable's bound already says (a job too big even on its own still gets its \"never\" row)."
+    },
+    {
+      "type": "para",
+      "text": "The tests try every whole plan of five jobs against the limits, and compare the LP bound with the value the right rows give, so any correct set of valid rows passes. About seven lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Limit:\n    name: str\n    use: dict          # job -> how much of this resource it uses (whole numbers)\n    capacity: int\n\n\ndef add_big_item_rows(model: mathopt.Model, x: dict, limits: list[Limit]) -> None:\n    \"\"\"Valid rows from the jobs too big to share a resource: at most one of them, none if alone too big.\"\"\"\n    for lim in limits:\n        big = [j for j, u in lim.use.items() if 2 * u > lim.capacity]       # any two of these overflow\n        if len(big) >= 2:\n            model.add_linear_constraint(sum(x[j] for j in big) <= 1, name=f\"big_{lim.name}\")\n        for j in big:\n            if lim.use[j] > lim.capacity:                                     # a cover of one job\n                model.add_linear_constraint(x[j] <= 0, name=f\"never_{lim.name}_{j}\")\n\n\ndef build(values: dict, limits: list[Limit], *, integer: bool = True) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"substation-jobs\")\n    x = {j: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{j}\") for j in values}\n    for lim in limits:\n        model.add_linear_constraint(sum(u * x[j] for j, u in lim.use.items()) <= lim.capacity, name=lim.name)\n    add_big_item_rows(model, x, limits)\n    model.maximize(sum(v * x[j] for j, v in values.items()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    limits = [Limit(\"crane\", {\"J1\": 7, \"J2\": 6, \"J3\": 2}, 10)]\n    model, x = build({\"J1\": 5, \"J2\": 4, \"J3\": 1}, limits, integer=False)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Limit:\n    name: str\n    use: dict          # job -> how much of this resource it uses (whole numbers)\n    capacity: int\n\n\ndef add_big_item_rows(model: mathopt.Model, x: dict, limits: list[Limit]) -> None:\n    \"\"\"Valid rows from the jobs too big to share a resource: at most one of them, none if alone too big.\"\"\"\n    # TODO: the valid rows that pairs of big jobs give.\n    return None\n\ndef build(values: dict, limits: list[Limit], *, integer: bool = True) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"substation-jobs\")\n    x = {j: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{j}\") for j in values}\n    for lim in limits:\n        model.add_linear_constraint(sum(u * x[j] for j, u in lim.use.items()) <= lim.capacity, name=lim.name)\n    add_big_item_rows(model, x, limits)\n    model.maximize(sum(v * x[j] for j, v in values.items()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    limits = [Limit(\"crane\", {\"J1\": 7, \"J2\": 6, \"J3\": 2}, 10)]\n    model, x = build({\"J1\": 5, \"J2\": 4, \"J3\": 1}, limits, integer=False)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "f608b00807a44666553d90897bff56adffc99ec05e20cbc94f95bdf2fd95d812",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Limit:\n    name: str\n    use: dict          # job -> how much of this resource it uses (whole numbers)\n    capacity: int\n\n\ndef add_big_item_rows(model: mathopt.Model, x: dict, limits: list[Limit]) -> None:\n    \"\"\"Valid rows from the jobs too big to share a resource: at most one of them, none if alone too big.\"\"\"\n    # TODO: the valid rows that pairs of big jobs give.\n    return None\n\ndef build(values: dict, limits: list[Limit], *, integer: bool = True) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"substation-jobs\")\n    x = {j: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{j}\") for j in values}\n    for lim in limits:\n        model.add_linear_constraint(sum(u * x[j] for j, u in lim.use.items()) <= lim.capacity, name=lim.name)\n    add_big_item_rows(model, x, limits)\n    model.maximize(sum(v * x[j] for j, v in values.items()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    limits = [Limit(\"crane\", {\"J1\": 7, \"J2\": 6, \"J3\": 2}, 10)]\n    model, x = build({\"J1\": 5, \"J2\": 4, \"J3\": 1}, limits, integer=False)\n    print(len(list(model.linear_constraints())), \"rows\")\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-1/jobs.py",
+    "test_path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-1/test_jobs.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-1/jobs.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-1/target/report.xml",
+      "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-1/test_jobs.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_big_jobs_of_one_resource_get_one_row",
+        "kind": "main",
+        "says": "the jobs that each use more than half of a resource get one row allowing at most one of them, which lowers the LP bound and keeps every whole plan"
+      },
+      {
+        "id": "test_each_resource_gives_its_own_row",
+        "kind": "main",
+        "says": "every resource gives its own row over its own big jobs"
+      },
+      {
+        "id": "test_two_jobs_of_exactly_half_may_share",
+        "kind": "edge",
+        "says": "two jobs using exactly half a resource each fit together, so no row may forbid that pair"
+      },
+      {
+        "id": "test_a_job_too_big_on_its_own_is_never_funded",
+        "kind": "edge",
+        "says": "a job using more than all of a resource is held at 0, so the LP cannot fund part of it"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "25-knapsack-and-assignment/README_6.3.3.md",
+      "section": "A Cover Row Cuts Off LP Points the Budget Row Allows"
+    },
+    "concepts": [
+      "a cover row removes fractional LP points the knapsack row allows and keeps every whole plan",
+      "a set of items whose weights exceed the capacity gives a row that every whole plan obeys"
+    ]
+  }
+}

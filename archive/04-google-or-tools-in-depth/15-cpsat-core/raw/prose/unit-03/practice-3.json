@@ -1,0 +1,140 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "15-cpsat-core"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 3,
+  "ingested": "2026-11-13",
+  "title": "Every best programme for a conference",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A conference's programme committee (not GridCap) scores each submitted talk and fills a session within its minutes, at most one talk per track. Scores are small whole numbers, so many programmes tie, and the committee wants to see *all* the best ones before it chooses."
+    },
+    {
+      "type": "para",
+      "text": "Write `all_best(model, x, objective)` in `best_plans.py`. `model` is a CP-SAT model with every rule already in it and no objective; `x` maps each talk's name to its Boolean; `objective` is the linear score to maximize. Return `(best, plans)`: the best score as an `int`, and every distinct plan that reaches it, each plan a sorted tuple of the names whose Boolean is true, the list sorted. Return `(None, [])` if no optimum is proven. In the lesson's terms, with $`S(x)`$ the score:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "S^* = \\max_{x \\text{ feasible}} S(x), \\qquad \\text{plans} = \\{\\, \\{i : x_i = 1\\} \\;:\\; x \\text{ feasible},\\ S(x) = S^* \\,\\}"
+    },
+    {
+      "type": "para",
+      "text": "`PlanCollector` is given: it records the plan of every solution reported to it. Some models have variables that are not part of the plan. About fifteen lines."
+    },
+    {
+      "type": "para",
+      "text": "The function may change the model it is given: each test builds a fresh model for each call, and the reference adds its rows to `model` itself. If you would rather leave the caller's model as it was, work on a copy: in OR-Tools 9.15, `copy = model.clone()` returns a new `CpModel` with the same variables and constraints, and rows or an objective added to the copy leave the original unchanged. The copy's variables have the same indices as the original's, so expressions built from `x` and `objective` can be added to the copy and read with `solver.value` after solving it."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\nclass PlanCollector(cp_model.CpSolverSolutionCallback):\n    \"\"\"Keep the names whose Boolean is true, for every solution reported.\"\"\"\n\n    def __init__(self, x: dict):\n        cp_model.CpSolverSolutionCallback.__init__(self)\n        self.x = x\n        self.plans: list[tuple[str, ...]] = []\n\n    def on_solution_callback(self) -> None:\n        self.plans.append(tuple(sorted(name for name, v in self.x.items() if self.boolean_value(v))))\n\n\ndef all_best(model: cp_model.CpModel, x: dict, objective) -> tuple[int | None, list[tuple[str, ...]]]:\n    \"\"\"The best value of `objective` (maximized) and every distinct plan that reaches it, sorted.\"\"\"\n    model.maximize(objective)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    if solver.solve(model) != cp_model.OPTIMAL:\n        return None, []\n    best = round(solver.objective_value)\n\n    model.add(objective == best)\n    model.clear_objective()\n    collector = PlanCollector(x)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.parameters.enumerate_all_solutions = True\n    solver.solve(model, collector)\n    return best, sorted(set(collector.plans))\n\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = {t: model.new_bool_var(t) for t in (\"A\", \"B\", \"C\")}\n    model.add(sum(x.values()) <= 2)\n    print(all_best(model, x, x[\"A\"] + x[\"B\"] + x[\"C\"]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\nclass PlanCollector(cp_model.CpSolverSolutionCallback):\n    \"\"\"Keep the names whose Boolean is true, for every solution reported.\"\"\"\n\n    def __init__(self, x: dict):\n        cp_model.CpSolverSolutionCallback.__init__(self)\n        self.x = x\n        self.plans: list[tuple[str, ...]] = []\n\n    def on_solution_callback(self) -> None:\n        self.plans.append(tuple(sorted(name for name, v in self.x.items() if self.boolean_value(v))))\n\n\ndef all_best(model: cp_model.CpModel, x: dict, objective) -> tuple[int | None, list[tuple[str, ...]]]:\n    \"\"\"The best value of `objective` (maximized) and every distinct plan that reaches it, sorted.\"\"\"\n    # TODO: find the best value, then every plan that reaches it.\n    return None, []\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = {t: model.new_bool_var(t) for t in (\"A\", \"B\", \"C\")}\n    model.add(sum(x.values()) <= 2)\n    print(all_best(model, x, x[\"A\"] + x[\"B\"] + x[\"C\"]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "68437801704d57f128784a7c77ac11b78fd85d25e065a842f9f33f2ff59f5e25",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\nclass PlanCollector(cp_model.CpSolverSolutionCallback):\n    \"\"\"Keep the names whose Boolean is true, for every solution reported.\"\"\"\n\n    def __init__(self, x: dict):\n        cp_model.CpSolverSolutionCallback.__init__(self)\n        self.x = x\n        self.plans: list[tuple[str, ...]] = []\n\n    def on_solution_callback(self) -> None:\n        self.plans.append(tuple(sorted(name for name, v in self.x.items() if self.boolean_value(v))))\n\n\ndef all_best(model: cp_model.CpModel, x: dict, objective) -> tuple[int | None, list[tuple[str, ...]]]:\n    \"\"\"The best value of `objective` (maximized) and every distinct plan that reaches it, sorted.\"\"\"\n    # TODO: find the best value, then every plan that reaches it.\n    return None, []\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = {t: model.new_bool_var(t) for t in (\"A\", \"B\", \"C\")}\n    model.add(sum(x.values()) <= 2)\n    print(all_best(model, x, x[\"A\"] + x[\"B\"] + x[\"C\"]))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-3/best_plans.py",
+    "test_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-3/test_best_plans.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-3/best_plans.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-3/target/report.xml",
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-3/test_best_plans.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_single_best_plan",
+        "kind": "main",
+        "says": "a model with one best plan returns its value and that plan"
+      },
+      {
+        "id": "test_the_best_score_with_ties",
+        "kind": "main",
+        "says": "a model with tied best plans returns the best score"
+      },
+      {
+        "id": "test_every_tied_plan_is_returned",
+        "kind": "edge",
+        "says": "every tied best plan is returned, not only the first one found"
+      },
+      {
+        "id": "test_a_variable_outside_the_plan_does_not_repeat_plans",
+        "kind": "edge",
+        "says": "a variable that is not part of the plan does not make one plan appear twice"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-3/target/report.xml"
+    },
+    "origin": {
+      "path": "15-cpsat-core/README_4.4.3.md",
+      "section": "Every Optimal Plan: Optimize, Fix the Objective, Enumerate"
+    },
+    "concepts": [
+      "every optimal plan comes from fixing the objective at its optimum, removing it, and enumerating"
+    ]
+  }
+}

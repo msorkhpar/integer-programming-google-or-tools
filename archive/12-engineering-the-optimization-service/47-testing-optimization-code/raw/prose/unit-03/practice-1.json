@@ -1,0 +1,146 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "47-testing-optimization-code"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A readable diff for a crew roster",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A utility's line-maintenance group assigns jobs to crews with a model that minimizes cost, and keeps golden records of a few rosters. Their regression test compares records with `==` and fails with a screen of nested dictionaries whenever anything moves, including the last digits of a float. Write the comparison that replaces it."
+    },
+    {
+      "type": "para",
+      "text": "The docstring of `roster_golden.py` gives a record's shape, and `TOLERANCE` gives what \"the same\" means for each float field, in that field's own units: $1 for cost, 0.01 hours for overtime. Write `compare(expected, actual)`, returning one line per difference, in this order and format:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "if the status differs, only `status: <old> -> <new>`, and nothing else, because a roster that did not solve cannot be compared field by field;",
+        "`cost: <old> -> <new>`, both with two decimals, if the costs differ by more than the tolerance;",
+        "for each job in either record, in sorted order, `assign: <job> <old crew> -> <new crew>` if its crew differs, writing `none` for a record that does not assign it;",
+        "for each crew in either record, in sorted order, `overtime <crew>: <old> -> <new>`, two decimals, if the hours differ by more than the tolerance; a crew a record does not list has 0 hours."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "An identical record gives an empty list. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Compare a crew-roster result with its golden record.\n\nA record is a dict:\n    \"status\":   the solver's termination, e.g. \"OPTIMAL\"\n    \"cost\":     the roster's cost in dollars (a float from the solver)\n    \"assign\":   {job: crew}\n    \"overtime\": {crew: overtime hours} (floats from the solver; a crew not listed has 0)\n\"\"\"\n\nfrom __future__ import annotations\n\nTOLERANCE = {\"cost\": 1.0, \"overtime\": 0.01}   # $1 on cost; 0.01 hours (36 seconds) on overtime\n\n\ndef compare(expected: dict, actual: dict) -> list[str]:\n    \"\"\"One line per difference, in the order: status, cost, assignments, overtime.\"\"\"\n    if expected[\"status\"] != actual[\"status\"]:\n        return [f\"status: {expected['status']} -> {actual['status']}\"]\n    lines = []\n    if abs(actual[\"cost\"] - expected[\"cost\"]) > TOLERANCE[\"cost\"]:\n        lines.append(f\"cost: {expected['cost']:.2f} -> {actual['cost']:.2f}\")\n    was, now = expected[\"assign\"], actual[\"assign\"]\n    for job in sorted(set(was) | set(now)):\n        if was.get(job) != now.get(job):\n            lines.append(f\"assign: {job} {was.get(job, 'none')} -> {now.get(job, 'none')}\")\n    before, after = expected[\"overtime\"], actual[\"overtime\"]\n    for crew in sorted(set(before) | set(after)):\n        b, a = before.get(crew, 0.0), after.get(crew, 0.0)\n        if abs(a - b) > TOLERANCE[\"overtime\"]:\n            lines.append(f\"overtime {crew}: {b:.2f} -> {a:.2f}\")\n    return lines\n\n\nif __name__ == \"__main__\":\n    golden = {\"status\": \"OPTIMAL\", \"cost\": 1200.0, \"assign\": {\"j1\": \"red\"}, \"overtime\": {\"red\": 2.0}}\n    print(compare(golden, {**golden, \"cost\": 1250.0}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Compare a crew-roster result with its golden record.\n\nA record is a dict:\n    \"status\":   the solver's termination, e.g. \"OPTIMAL\"\n    \"cost\":     the roster's cost in dollars (a float from the solver)\n    \"assign\":   {job: crew}\n    \"overtime\": {crew: overtime hours} (floats from the solver; a crew not listed has 0)\n\"\"\"\n\nfrom __future__ import annotations\n\nTOLERANCE = {\"cost\": 1.0, \"overtime\": 0.01}   # $1 on cost; 0.01 hours (36 seconds) on overtime\n\n\ndef compare(expected: dict, actual: dict) -> list[str]:\n    \"\"\"One line per difference, in the order: status, cost, assignments, overtime.\"\"\"\n    # TODO: status first, then each field with its tolerance.\n    return []\n\nif __name__ == \"__main__\":\n    golden = {\"status\": \"OPTIMAL\", \"cost\": 1200.0, \"assign\": {\"j1\": \"red\"}, \"overtime\": {\"red\": 2.0}}\n    print(compare(golden, {**golden, \"cost\": 1250.0}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "ab3f9455f9db93da2834926feacd3433b2f75495f5f0bacdb957c6e481babefe",
+  "starting_code": "\"\"\"Compare a crew-roster result with its golden record.\n\nA record is a dict:\n    \"status\":   the solver's termination, e.g. \"OPTIMAL\"\n    \"cost\":     the roster's cost in dollars (a float from the solver)\n    \"assign\":   {job: crew}\n    \"overtime\": {crew: overtime hours} (floats from the solver; a crew not listed has 0)\n\"\"\"\n\nfrom __future__ import annotations\n\nTOLERANCE = {\"cost\": 1.0, \"overtime\": 0.01}   # $1 on cost; 0.01 hours (36 seconds) on overtime\n\n\ndef compare(expected: dict, actual: dict) -> list[str]:\n    \"\"\"One line per difference, in the order: status, cost, assignments, overtime.\"\"\"\n    # TODO: status first, then each field with its tolerance.\n    return []\n\nif __name__ == \"__main__\":\n    golden = {\"status\": \"OPTIMAL\", \"cost\": 1200.0, \"assign\": {\"j1\": \"red\"}, \"overtime\": {\"red\": 2.0}}\n    print(compare(golden, {**golden, \"cost\": 1250.0}))\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-03/practice-1/roster_golden.py",
+    "test_path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-03/practice-1/test_roster_golden.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-03/practice-1/roster_golden.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-03/practice-1/target/report.xml",
+      "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-03/practice-1/test_roster_golden.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_matching_record_has_no_lines_and_a_changed_one_names_each_change",
+        "kind": "main",
+        "says": "an identical record gives no lines, and one with a new cost and a job on another crew gives exactly those two lines"
+      },
+      {
+        "id": "test_cost_within_a_dollar_is_the_same",
+        "kind": "edge",
+        "says": "a cost that differs by solver noise is the same cost, and one that differs by more than $1 is not"
+      },
+      {
+        "id": "test_a_job_only_in_the_new_record_is_reported",
+        "kind": "edge",
+        "says": "a job the new roster assigns and the golden one did not is reported as well as one it dropped"
+      },
+      {
+        "id": "test_overtime_near_zero_is_compared_in_hours",
+        "kind": "edge",
+        "says": "overtime of 0 against 0.004 hours is the same, since the tolerance is in hours, not a share of the value"
+      },
+      {
+        "id": "test_a_changed_status_is_the_only_line",
+        "kind": "edge",
+        "says": "when the status changed, that is the only line, since the rest cannot be compared"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-03/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "47-testing-optimization-code/README_12.3.3.md",
+      "section": "Compare Field by Field, Within Tolerances Stated in Business Units"
+    },
+    "concepts": [
+      "each field is compared exactly or within a tolerance stated in its own units, with one readable line per difference"
+    ]
+  }
+}

@@ -1,0 +1,136 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "14-mathopt-advanced"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "A table of budget cuts on one model and one solver",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A school district picks which building repairs to fund this summer, with a binary $`x_j`$ per repair, value $`v_j`$, cost $`c_j`$ and one budget row:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\sum_j v_j x_j \\quad \\text{s.t.} \\quad \\sum_j c_j x_j \\le B \\;\\; \\text{(budget)}, \\qquad x_j \\in \\{0, 1\\}"
+    },
+    {
+      "type": "para",
+      "text": "The board wants the best value under several cuts of $`B`$: for each share $`s`$ in `cuts`, the optimum with the budget row's limit at $`(1 - s) B`$, where $`B`$ is the limit the row has when the function is called."
+    },
+    {
+      "type": "para",
+      "text": "Write `cut_table(model, budget_row, cuts)`, which returns a list with the optimal objective value for each share, in order. Use one `mathopt.IncrementalSolver` on HiGHS for all of them, and edit the row's `upper_bound` rather than building anything new. When the function returns, the model must be exactly as it was, limit included. About ten lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef cut_table(model: mathopt.Model, budget_row, cuts: list[float]) -> list[float]:\n    \"\"\"The optimum for each relative cut of the budget row's current limit; the model is left as it was.\"\"\"\n    original = budget_row.upper_bound\n    values = []\n    with mathopt.IncrementalSolver(model, mathopt.SolverType.HIGHS) as solver:\n        try:\n            for share in cuts:\n                budget_row.upper_bound = (1 - share) * original\n                values.append(solver.solve().objective_value())\n        finally:\n            budget_row.upper_bound = original\n    return values\n\n\ndef build(repairs: dict[str, tuple[float, float]], budget: float):\n    \"\"\"repairs: name -> (value, cost).\"\"\"\n    model = mathopt.Model(name=\"repairs\")\n    x = {r: model.add_binary_variable(name=f\"x_{r}\") for r in repairs}\n    row = model.add_linear_constraint(sum(repairs[r][1] * x[r] for r in repairs) <= budget, name=\"budget\")\n    model.maximize(sum(repairs[r][0] * x[r] for r in repairs))\n    return model, x, row\n\n\nif __name__ == \"__main__\":\n    model, x, row = build({\"roof\": (9, 6), \"boiler\": (7, 5), \"windows\": (4, 3)}, 10)\n    print(cut_table(model, row, [0.0, 0.2]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef cut_table(model: mathopt.Model, budget_row, cuts: list[float]) -> list[float]:\n    \"\"\"The optimum for each relative cut of the budget row's current limit; the model is left as it was.\"\"\"\n    # TODO: one IncrementalSolver, one edit and one solve per cut, then put the limit back.\n    return []\n\n\ndef build(repairs: dict[str, tuple[float, float]], budget: float):\n    \"\"\"repairs: name -> (value, cost).\"\"\"\n    model = mathopt.Model(name=\"repairs\")\n    x = {r: model.add_binary_variable(name=f\"x_{r}\") for r in repairs}\n    row = model.add_linear_constraint(sum(repairs[r][1] * x[r] for r in repairs) <= budget, name=\"budget\")\n    model.maximize(sum(repairs[r][0] * x[r] for r in repairs))\n    return model, x, row\n\n\nif __name__ == \"__main__\":\n    model, x, row = build({\"roof\": (9, 6), \"boiler\": (7, 5), \"windows\": (4, 3)}, 10)\n    print(cut_table(model, row, [0.0, 0.2]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "6e01dcf7de6edd40c6df14b2eafdcef14426c9e7caaea982fe1ebb0b2c9f189f",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef cut_table(model: mathopt.Model, budget_row, cuts: list[float]) -> list[float]:\n    \"\"\"The optimum for each relative cut of the budget row's current limit; the model is left as it was.\"\"\"\n    # TODO: one IncrementalSolver, one edit and one solve per cut, then put the limit back.\n    return []\n\n\ndef build(repairs: dict[str, tuple[float, float]], budget: float):\n    \"\"\"repairs: name -> (value, cost).\"\"\"\n    model = mathopt.Model(name=\"repairs\")\n    x = {r: model.add_binary_variable(name=f\"x_{r}\") for r in repairs}\n    row = model.add_linear_constraint(sum(repairs[r][1] * x[r] for r in repairs) <= budget, name=\"budget\")\n    model.maximize(sum(repairs[r][0] * x[r] for r in repairs))\n    return model, x, row\n\n\nif __name__ == \"__main__\":\n    model, x, row = build({\"roof\": (9, 6), \"boiler\": (7, 5), \"windows\": (4, 3)}, 10)\n    print(cut_table(model, row, [0.0, 0.2]))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-2/cuts.py",
+    "test_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-2/test_cuts.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-2/cuts.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-2/target/report.xml",
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-2/test_cuts.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_one_value_per_cut_matching_a_fresh_solve",
+        "kind": "main",
+        "says": "a single cut gives the optimum a fresh solve of the cut model gives, and a cut of 0 gives the base optimum"
+      },
+      {
+        "id": "test_the_model_is_not_rebuilt",
+        "kind": "main",
+        "says": "after the table the model has the same rows and variables as before"
+      },
+      {
+        "id": "test_each_cut_is_taken_from_the_original_limit",
+        "kind": "edge",
+        "says": "a 10% cut after a 20% cut is answered as a 10% cut of the original limit"
+      },
+      {
+        "id": "test_the_limit_is_back_afterwards",
+        "kind": "edge",
+        "says": "after the table the row's upper bound is its original value"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "14-mathopt-advanced/README_4.3.4.md",
+      "section": "One IncrementalSolver Answers Every Scenario"
+    },
+    "concepts": [
+      "several cuts of one limit answered with one incremental solver on one model"
+    ]
+  }
+}

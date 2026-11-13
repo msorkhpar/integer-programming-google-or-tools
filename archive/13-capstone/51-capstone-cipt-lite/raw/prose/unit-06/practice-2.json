@@ -1,0 +1,166 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "13-capstone",
+    "51-capstone-cipt-lite"
+  ],
+  "variant": "prose",
+  "unit": 6,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "A planning job API with its states in SQLite",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A planning run takes minutes, and the service restarts whenever it is redeployed. Planners must be able to submit a run, close the browser, and fetch the plan after lunch, even if the service was restarted in between. Your milestone is the job API, with each job's state and result kept in a local SQLite file. The solves are stand-ins in the tests; the portfolio behind them is invented for a fictional utility."
+    },
+    {
+      "type": "para",
+      "text": "`create_app(solve, db_path)` returns the FastAPI app. `solve(budget)` is the planning run: it takes `{year: $k}` budget overrides, with integer years, and returns a JSON-ready dict with a `\"status\"` of `\"optimal\"` or `\"infeasible\"`; it may also raise. The request model `PlanRequest` (only a `budget` field, extra fields refused) is given."
+    },
+    {
+      "type": "table",
+      "headers": [
+        "endpoint",
+        "contract",
+        "lesson"
+      ],
+      "rows": [
+        [
+          "`POST /jobs`",
+          "add a row for the job in state `queued`, hand the solve to a one-thread `ThreadPoolExecutor`, and answer 202 at once with `{\"job_id\": <id>, \"poll\": \"/jobs/<id>\", \"result\": \"/jobs/<id>/result\"}` and a `Location: /jobs/<id>` header",
+          "12.4.2"
+        ],
+        [
+          "`GET /jobs/{id}`",
+          "`{\"job_id\", \"state\", \"finished\"}`; the state is `queued`, `running`, `optimal`, `infeasible` or `failed`; 404, with the id in its `detail`, for an id the service never gave out",
+          "12.4.2"
+        ],
+        [
+          "`GET /jobs/{id}/result`",
+          "404 for an unknown id, 409 while the job has not finished, otherwise the result the solve returned (for a failed job, `{\"status\": \"failed\", \"error\": \"<type>: <message>\"}`)",
+          "12.4.2, 12.4.3"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Keep the jobs in a table of the SQLite file at `db_path`: `CREATE TABLE IF NOT EXISTS job (id TEXT PRIMARY KEY, request TEXT NOT NULL, state TEXT NOT NULL, result TEXT) STRICT`, with the result as JSON text. Open the connection with `check_same_thread=False` (the worker thread writes to it) and guard it with a lock. The worker sets `running`, calls the solve, and writes the final state and result; an exception from the solve fails that job only. Lesson 12.1.4 covers SQLite, and lessons 12.4.1 to 12.4.3 the API. About forty-five lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Milestone 6: the planning job API, with every job's state and result in a local SQLite file.\n\n`create_app(solve, db_path)` builds the app. `solve(budget)` is the planning run (milestone 2's model\nbehind it in the service); it takes {year: $k} overrides and returns a JSON-ready result dict with a\n\"status\". Jobs run on one worker thread; their state survives a restart because it is in the file.\nThe practice portfolio behind the solves is invented for a fictional utility.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nimport sqlite3\nimport threading\nimport uuid\nfrom concurrent.futures import ThreadPoolExecutor\n\nfrom fastapi import FastAPI, HTTPException, Response\nfrom pydantic import BaseModel, ConfigDict, Field\n\nFINISHED = (\"optimal\", \"infeasible\", \"failed\")\n\n\nclass PlanRequest(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\")\n    budget: dict[int, int] = Field(default_factory=dict)\n\n\nclass Jobs:\n    \"\"\"The job table in a SQLite file, one connection shared under a lock.\"\"\"\n\n    def __init__(self, path: str):\n        self.db = sqlite3.connect(path, check_same_thread=False, autocommit=True)\n        self.lock = threading.Lock()\n        self.db.execute(\"CREATE TABLE IF NOT EXISTS job (id TEXT PRIMARY KEY, request TEXT NOT NULL, \"\n                        \"state TEXT NOT NULL, result TEXT) STRICT\")\n\n    def add(self, job_id: str, request: str) -> None:\n        with self.lock:\n            self.db.execute(\"INSERT INTO job (id, request, state) VALUES (?, ?, 'queued')\", (job_id, request))\n\n    def finish(self, job_id: str, state: str, result: dict | None = None) -> None:\n        with self.lock:\n            self.db.execute(\"UPDATE job SET state = ?, result = ? WHERE id = ?\",\n                            (state, None if result is None else json.dumps(result), job_id))\n\n    def row(self, job_id: str) -> tuple[str, str | None] | None:\n        with self.lock:\n            return self.db.execute(\"SELECT state, result FROM job WHERE id = ?\", (job_id,)).fetchone()\n\n\ndef create_app(solve, db_path: str) -> FastAPI:\n    app = FastAPI(title=\"Practice planning jobs\")\n    jobs = Jobs(db_path)\n    pool = ThreadPoolExecutor(max_workers=1)\n\n    def work(job_id: str, request: PlanRequest) -> None:\n        jobs.finish(job_id, \"running\")\n        try:\n            result = solve(dict(request.budget))\n            jobs.finish(job_id, result[\"status\"], result)\n        except Exception as error:                     # one job fails; the service goes on\n            jobs.finish(job_id, \"failed\", {\"status\": \"failed\", \"error\": f\"{type(error).__name__}: {error}\"})\n\n    @app.post(\"/jobs\", status_code=202)\n    def submit(request: PlanRequest, response: Response) -> dict:\n        job_id = uuid.uuid4().hex\n        jobs.add(job_id, request.model_dump_json())\n        pool.submit(work, job_id, request)\n        response.headers[\"Location\"] = f\"/jobs/{job_id}\"\n        return {\"job_id\": job_id, \"poll\": f\"/jobs/{job_id}\", \"result\": f\"/jobs/{job_id}/result\"}\n\n    @app.get(\"/jobs/{job_id}\")\n    def poll(job_id: str) -> dict:\n        row = jobs.row(job_id)\n        if row is None:\n            raise HTTPException(status_code=404, detail=f\"no job {job_id}\")\n        return {\"job_id\": job_id, \"state\": row[0], \"finished\": row[0] in FINISHED}\n\n    @app.get(\"/jobs/{job_id}/result\")\n    def fetch(job_id: str) -> dict:\n        state = poll(job_id)[\"state\"]\n        if state not in FINISHED:\n            raise HTTPException(status_code=409, detail=f\"job {job_id} is {state}\")\n        return json.loads(jobs.row(job_id)[1])\n\n    return app\n\n\nif __name__ == \"__main__\":\n    print(sorted(r.path for r in create_app(lambda budget: {\"status\": \"optimal\"}, \":memory:\").routes))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Milestone 6: the planning job API, with every job's state and result in a local SQLite file.\n\n`create_app(solve, db_path)` builds the app. `solve(budget)` is the planning run (milestone 2's model\nbehind it in the service); it takes {year: $k} overrides and returns a JSON-ready result dict with a\n\"status\". Jobs run on one worker thread; their state survives a restart because it is in the file.\nThe practice portfolio behind the solves is invented for a fictional utility.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nimport sqlite3\nimport threading\nimport uuid\nfrom concurrent.futures import ThreadPoolExecutor\n\nfrom fastapi import FastAPI, HTTPException, Response\nfrom pydantic import BaseModel, ConfigDict, Field\n\nFINISHED = (\"optimal\", \"infeasible\", \"failed\")\n\n\nclass PlanRequest(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\")\n    budget: dict[int, int] = Field(default_factory=dict)\n\n\ndef create_app(solve, db_path: str) -> FastAPI:\n    app = FastAPI(title=\"Practice planning jobs\")\n    # TODO: the job table in the SQLite file at db_path, one worker thread, and the three endpoints.\n    return app\n\n\nif __name__ == \"__main__\":\n    print(sorted(r.path for r in create_app(lambda budget: {\"status\": \"optimal\"}, \":memory:\").routes))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 1,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "7e6b64a69744008952275927326a9d5f9d04701d98626b3e22ce8a9a471d5fd9",
+  "starting_code": "\"\"\"Milestone 6: the planning job API, with every job's state and result in a local SQLite file.\n\n`create_app(solve, db_path)` builds the app. `solve(budget)` is the planning run (milestone 2's model\nbehind it in the service); it takes {year: $k} overrides and returns a JSON-ready result dict with a\n\"status\". Jobs run on one worker thread; their state survives a restart because it is in the file.\nThe practice portfolio behind the solves is invented for a fictional utility.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nimport sqlite3\nimport threading\nimport uuid\nfrom concurrent.futures import ThreadPoolExecutor\n\nfrom fastapi import FastAPI, HTTPException, Response\nfrom pydantic import BaseModel, ConfigDict, Field\n\nFINISHED = (\"optimal\", \"infeasible\", \"failed\")\n\n\nclass PlanRequest(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\")\n    budget: dict[int, int] = Field(default_factory=dict)\n\n\ndef create_app(solve, db_path: str) -> FastAPI:\n    app = FastAPI(title=\"Practice planning jobs\")\n    # TODO: the job table in the SQLite file at db_path, one worker thread, and the three endpoints.\n    return app\n\n\nif __name__ == \"__main__\":\n    print(sorted(r.path for r in create_app(lambda budget: {\"status\": \"optimal\"}, \":memory:\").routes))\n",
+  "exercise": {
+    "main_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-2/job_api.py",
+    "test_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-2/test_job_api.py",
+    "run_command": [
+      "python3",
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-2/job_api.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-2/target/report.xml",
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-2/test_job_api.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_submit_poll_and_fetch",
+        "kind": "main",
+        "says": "a submitted job gets 202, an id and a Location header; its poll reaches the solve's status, and its fetch returns the solve's result, an infeasible one included"
+      },
+      {
+        "id": "test_an_unknown_job_is_404",
+        "kind": "edge",
+        "says": "an id the service never gave out gets 404 on poll and on fetch, with the id in the reason"
+      },
+      {
+        "id": "test_fetching_before_the_job_finishes_is_409",
+        "kind": "edge",
+        "says": "fetching a job that is still solving gets 409, and 200 once it has finished"
+      },
+      {
+        "id": "test_a_finished_job_survives_a_restart",
+        "kind": "edge",
+        "says": "a new instance of the service on the same SQLite file still knows the job, its state and its result"
+      },
+      {
+        "id": "test_a_solve_that_raises_fails_its_job_and_the_next_job_runs",
+        "kind": "edge",
+        "says": "a solve that raises leaves its job failed with the error, and the next job still runs"
+      },
+      {
+        "id": "test_a_request_with_an_unknown_field_is_422",
+        "kind": "edge",
+        "says": "a request with a misspelt field is refused, not solved with the default budgets"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "51-capstone-cipt-lite/README_13.1.6.md",
+      "section": "A Job Is Accepted at Once, Polled, Then Fetched"
+    },
+    "concepts": [
+      "submit, poll and fetch, with every job's state and result in a SQLite file that outlives the process"
+    ]
+  }
+}

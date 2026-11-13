@@ -1,0 +1,329 @@
+# 15.1.3 Mock 3: Value, Objectives and Trade-Offs
+
+This round is about the numbers the model maximizes and about what happens when there is more than
+one of them. The interviewer works for a (fictional) gas utility whose repair candidates each carry an
+NPV and a safety risk removed, and whose planners argue about which matters more. Expect questions
+on discounting, failure probabilities, value functions and Pareto fronts, and expect the interviewer
+to check your formulas term by term.
+
+| Part | Minutes |
+| --- | --- |
+| Rounds 1 and 2: six questions | 10 |
+| Trap questions | 5 |
+| Code practice: coefficients you can defend | 5 |
+| Whiteboard and its code practice | 10 |
+
+## Round 1: Every Coefficient Is Computed Before the Model
+
+**Q1. How do you value a project that may start in any of five years?**
+
+<details>
+<summary>Model answer</summary>
+
+One coefficient per project and start year, computed before the model: shift the project's cash
+flows so that its year-$`k`$ amount lands in calendar year $`t + k`$, then discount every amount to
+one valuation date, $`F/(1 + r)^{y - y_0}`$. Valuing each start from its own year makes delay look
+free (lesson 7.2.4: P022's loss from waiting showed as $235k instead of $395k). Count benefits to the
+end of the asset's life, not the end of the plan: the plan's horizon limits which start variables
+exist, not how long a project pays. The rate reaches the plan only through the coefficients; GridCap
+small's plan was the same at 3% and 7% and changed 14 starts at 12%.
+
+*Follow-ups.* "NPV or IRR to rank?" NPV at the chosen rate. "Why is the model still linear?" The
+nonlinear work happens before the model; the objective is $`\sum_{i,t} \text{npv}_{i,t}\,x_{i,t}`$.
+
+*Taught in:* lesson 7.2.1; lesson 7.2.4.
+
+</details>
+
+**Q2. The cost estimate is in 2026 dollars and costs escalate 4% a year. How do you treat it?**
+
+<details>
+<summary>Model answer</summary>
+
+Escalate from the price's base year $`b`$: the price paid in year $`y`$ is $`c\,(1 + e)^{y - b}`$.
+Pair real dollars with a real rate and nominal dollars with a nominal rate; mixing them errs in
+opposite directions, and the exact Fisher relation converts between them. In a real model only the
+escalation above inflation matters, $`e_\text{real} = (1 + e)/(1 + i) - 1`$. A check on any borrowed
+formula: with $`e = r`$ and the base year equal to the valuation date, escalation and discounting
+should cancel exactly.
+
+*Taught in:* lesson 7.2.2.
+
+</details>
+
+**Q3. The data team hands you a Weibull curve and an RUL per transformer. How does that become a
+coefficient?**
+
+<details>
+<summary>Model answer</summary>
+
+Next year's probability of failure is conditional on the asset working today:
+$`\text{PoF} = 1 - R(a + 1)/R(a)`$, with $`R(a) = e^{-(a/\eta)^\beta}`$. Risk is the expected
+failure cost per year, PoF times the consequence of failure, and with minimal repair the course
+counts expected failures, $`\Lambda(a + 1) - \Lambda(a)`$. The risk an intervention removes in a year
+is the risk without the work minus the risk with it, the asset ageing again after the work, summed
+over a fixed window and discounted; those coefficients $`\text{rr}_{i,s}`$ enter the start-year model
+unchanged. An RUL is one statistic of a remaining-life distribution: ask which one (median, mean,
+P10) and how censored assets were treated, and turn it into a point on a curve; the same age and
+median can give PoF 6.7% or 3.2% depending on the shape.
+
+*Taught in:* lesson 7.3.1; lesson 7.3.2; lesson 7.3.3; lesson 7.3.4.
+
+</details>
+
+## Round 2: Two Objectives Need a Rule for the Trade
+
+**Q4. Planners want reliability, safety, environmental and financial benefit in one objective. How
+do you build it so it survives a review?**
+
+<details>
+<summary>Model answer</summary>
+
+Each benefit measure counts one consequence, in one unit, with more always better. Raw measures
+cannot be added: the units choose the winner. Divide each by a reference fixed before the candidates
+are scored, with zero meaning no benefit, so the scores are unit-free and a withdrawn project cannot
+reorder the others. A weight is then an exchange rate between units, so set weights by swing
+weighting (rate each measure's swing from 0 to its reference against the biggest), restate the
+result as prices people can read ("an incident is worth $6,667k"), and sweep the contested weights to
+show which rankings survive. The value function is one coefficient per project and start year,
+$`v_{i,t} = \sum_k w_k\, m_{i,t,k}/R_k`$, and each consequence is counted once.
+
+*Taught in:* lesson 7.4.1; lesson 7.4.2; lesson 7.4.3; lesson 7.4.4.
+
+</details>
+
+**Q5. Weighted sum, lexicographic or ε-constraint for NPV against risk removed?**
+
+<details>
+<summary>Model answer</summary>
+
+A weighted sum folds the two into one objective; only the ratio of the weights matters, the ratio is
+a price that depends on the units, and the plan moves in jumps. It reaches only supported Pareto
+points, those on the upper convex hull of the front: GridCap small has 65 Pareto-optimal plans and
+weighted sums reach 8. Lexicographic order solves one objective, then lets the next choose among
+plans within a stated tolerance of the first: a 1% NPV tolerance bought 20.6% more risk removed.
+ε-constraint keeps one objective and turns the other into a floor; it reaches unsupported points too.
+Choose by the question the planners ask: a price (weights), a priority with a tolerance
+(lexicographic), or a target (ε).
+
+*Follow-ups.* "Can a weighted sum return a dominated plan?" With positive weights, no; a zero weight
+promises only weak Pareto optimality. "How do you implement lexicographic in OR-Tools?" No runner
+solver takes MathOpt's auxiliary objectives, so solve in passes, each to a zero gap, holding earlier
+objectives within their tolerances.
+
+*Taught in:* lesson 8.1.1; lesson 8.1.2; lesson 8.2.1; lesson 8.2.2; lesson 8.3.1.
+
+</details>
+
+**Q6. How do you present the trade-off to planners?**
+
+<details>
+<summary>Model answer</summary>
+
+Generate the frontier once and check that no point dominates another, with a tolerance for solver
+noise. Show a short table where each row is a plan a planner could pick: the two ends, the best plan
+at round targets and the knees (9 rows instead of 65 on GridCap small). State each step as a price,
+"$x of NPV per $1 of risk removed", and say where the price jumps; then say the trade-off in one
+sentence generated from the same data as the table.
+
+*Taught in:* lesson 8.3.3.
+
+</details>
+
+## Trap Questions: Formulas That Look Right and Are Not
+
+**T1. "The Weibull CDF $`F(a) = 1 - e^{-(a/\eta)^\beta}`$ is the asset's probability of failing this
+year." Agree?**
+
+<details>
+<summary>What is wrong</summary>
+
+$`F(a)`$ is the chance of having failed *by* age $`a`$, for an asset of unknown history. The asset in
+the plan is working today, so next year's PoF is conditional: $`1 - R(a+1)/R(a)`$. The program
+`value_traps.py` prints the three readings for one asset:
+
+```text
+an asset aged 40, Weibull shape 3.5, scale 45 years
+  F(a), failed by this age                 0.484
+  F(a+1) - F(a), unconditional             0.030
+  1 - R(a+1)/R(a), next year given working 0.058
+```
+
+The CDF overstates the yearly risk eightfold here; the unconditional difference understates it by
+half. Lesson 7.3.1 found the same pattern on GridCap's A006 (0.84 against 0.095). The same study
+guides say PoF "rises exponentially" as RUL runs out; a Weibull hazard is a power of age,
+$`(\beta/\eta)(a/\eta)^{\beta - 1}`$, and RUL alone does not fix the PoF.
+
+*Taught in:* lesson 7.3.1; lesson 7.3.2.
+
+</details>
+
+**T2. "Escalate each project's cost by $`(1+e)^\tau`$, with $`\tau`$ counted from the project's
+start." Right?**
+
+<details>
+<summary>What is wrong</summary>
+
+Counted from the start, a project that starts later escalates less, so delay looks cheaper than it
+is. Escalation runs from the price's base year:
+
+```text
+$1,000k quoted in 2026 prices, escalating 4% a year, discounted at 7% to 2026
+  start 2027: escalated from the base year $972.0k, from the start year $934.6k
+  start 2030: escalated from the base year $892.5k, from the start year $762.9k
+```
+
+The error grows with every year of delay, $129.6k of present value at a 2030 start. Lesson 7.2.2
+found $128k missing for GridCap's P022 at 2029.
+
+*Taught in:* lesson 7.2.2.
+
+</details>
+
+**T3. "$`\text{NPV}_{i,t} = \sum_{\tau = t}^{T} \text{CF}_{i,\tau}/(1+r)^\tau`$, with $`T`$ the plan's
+last year." Is the sum right?**
+
+<details>
+<summary>What is wrong</summary>
+
+It stops counting at the plan's end, so a project that pays back over decades looks like a loss, and
+a later start looks worse than it is:
+
+```text
+$900k spent in the start year, $120k of benefit a year for 25 years, 7%, valued at 2027
+  start 2027: NPV over the asset's life $498.4k, cut at the plan's end (2031) -$493.5k
+  start 2030: NPV over the asset's life $406.9k, cut at the plan's end (2031) -$643.1k
+```
+
+Count to the end of the asset's life; lesson 7.2.4 saw a $146k project turn into a loss at every
+start when it was cut at the horizon.
+
+*Taught in:* lesson 7.2.4.
+
+</details>
+
+**T4. "Sweep ε over a grid and you have the exact Pareto frontier." True?**
+
+<details>
+<summary>What is wrong</summary>
+
+Only with steps fine enough for the data, and only if each answer is efficient. A sweep finds at
+most one plan per floor: 21 floors found 20 of GridCap small's 65 Pareto plans. Plain ε-constraint
+can also return a weakly efficient plan (6 of 11 answers were dominated when vegetation was booked at
+NPV 0). AUGMECON rewards the floor's slack with a weight too small to cost any of the main objective,
+and with the whole-number objective in the floor and steps of one, the frontier is exact.
+
+*Taught in:* lesson 8.3.1; lesson 8.3.2.
+
+</details>
+
+**T5. "Model the value curve with SOS2: no binaries needed." In OR-Tools?**
+
+<details>
+<summary>What is wrong</summary>
+
+MathOpt's Python model in OR-Tools 9.15 has no SOS method, nor does CP-SAT, and HiGHS takes no SOS2
+(Pyomo's default SOS2 piecewise form fails with HiGHS). The course writes the λ form with one binary
+per segment, or the incremental or logarithmic forms. A convex cost pushed down, or a concave value
+pushed up, needs no binaries at all; any other combination does.
+
+*Taught in:* lesson 6.6.1; lesson 6.6.2; lesson 6.6.3; lesson 5.1.4.
+
+</details>
+
+The first code practice computes the two coefficients the traps got wrong, so that every number you
+hand the model is one you can defend term by term.
+
+<!-- practice 1 -->
+
+## Whiteboard: Leak Repairs, NPV Against Safety
+
+"Each leak repair has a cost, an NPV and the safety risk it removes. Some repairs are alternatives
+for one main, at most one of them. Planners want the most NPV within the budget, but only among
+plans that remove at least a target amount of risk. Write the model, then code it."
+
+<details>
+<summary>Model formulation</summary>
+
+**Sets.** $`P`$ the repairs; $`\mathcal{M}`$ the mains with alternatives, $`P_m \subseteq P`$ the
+repairs on main $`m`$.
+
+**Parameters.** $`c_i`$ the cost of repair $`i`$ ($k); $`n_i`$ its NPV ($k); $`\rho_i`$ the risk it
+removes ($k a year); $`B`$ the budget ($k); $`\varepsilon`$ the risk floor ($k a year).
+
+**Variables.** $`x_i \in \{0, 1\}`$ for every $`i \in P`$: repair $`i`$ is funded.
+
+**Objective.**
+
+```math
+\max \; \sum_{i \in P} n_i\, x_i
+```
+
+**Constraints.**
+
+```math
+\begin{aligned}
+\sum_{i \in P} c_i\, x_i &\le B && && \text{(budget)} \\
+\sum_{i \in P} \rho_i\, x_i &\ge \varepsilon && && \text{(risk\_floor)} \\
+\sum_{i \in P_m} x_i &\le 1 && \forall m \in \mathcal{M} && \text{(alt}_m)
+\end{aligned}
+```
+
+Follow-ups: "What range of $`\varepsilon`$ makes sense?" The payoff table: below the risk the
+NPV-best plan already removes, the floor does nothing; above the most removable risk, no plan exists
+(lesson 8.3.1). "How do you avoid a weakly efficient answer?" Add the floor's slack to the objective
+with a tiny reward, AUGMECON (lesson 8.3.2).
+
+</details>
+
+<!-- practice 2 -->
+
+## Summary
+
+- **Coefficients.** Value each start year by shifting the cash flows and discounting to one
+  valuation date; count benefits to the end of the asset's life. Escalate from the price's base year.
+  Next year's PoF is conditional on the asset working today; the CDF is the chance of having failed
+  by now, not a yearly probability.
+- **Value functions.** Normalize by fixed references, treat weights as exchange rates, set them by
+  swing weighting, and show the prices they imply.
+- **Two objectives.** A weighted sum reaches only supported Pareto points; lexicographic order holds
+  earlier objectives within a tolerance; ε-constraint turns one objective into a floor and reaches
+  unsupported points, but a coarse sweep misses plans and plain ε can return weakly efficient ones.
+- **Traps.** CDF as yearly PoF, escalation from the start year, NPV cut at the plan's end, "ε grids
+  are exact", and SOS2 in a stack that has none.
+
+## Reference
+
+| Question | Lessons |
+| --- | --- |
+| Q1, T3 NPV by start year | 7.2.1; 7.2.4 |
+| Q2, T2 escalation | 7.2.2 |
+| Q3, T1 PoF and risk | 7.3.1; 7.3.2; 7.3.3; 7.3.4 |
+| Q4 value function | 7.4.1; 7.4.2; 7.4.3; 7.4.4 |
+| Q5, Q6, T4 trade-offs | 8.1.1; 8.1.2; 8.2.1; 8.2.2; 8.3.1; 8.3.2; 8.3.3 |
+| T5 piecewise curves | 6.6.1; 6.6.2; 6.6.3; 5.1.4 |
+| Whiteboard | 8.3.1; the capstone's *Value: NPV by start year, risk reduction from PoF/RUL, weighted value*; project lessons *Value: NPV by start year and risk reduction* and *Two goals: risk against NPV* |
+
+**Further reading:** [MathOpt `Model` (OR-Tools source, read in the pinned 9.15 wheel)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/model.py) (`maximize`, `add_linear_constraint` and `add_maximization_objective`, the auxiliary objective no runner solver accepts); [MathOpt `objectives.py` (OR-Tools source, read in the pinned 9.15 wheel)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/objectives.py) (the primary and auxiliary objectives and their priorities).
+
+## Challenges
+
+1. In `value_traps.py`, set the escalation rate equal to the discount rate and predict what the
+   base-year column prints for every start.
+2. Add AUGMECON's slack reward to the whiteboard model. How small must the reward be?
+3. Turn the whiteboard into a lexicographic model: NPV first, then risk within 2% of the best NPV.
+
+## Design Note: Defend Each Number Separately
+
+A value coefficient is several decisions stacked: a base year, a valuation date, a rate, a window, a
+failure model. An interviewer who doubts one of them will ask about that one. Keep each step a
+separate, tested function, as the course does, and the answer is "here is the line and the test".
+
+## The Full Programs
+
+**value_traps.py.** Three readings of a Weibull curve, escalation from the base year and from the
+start year, and NPV over the asset's life against NPV cut at the plan's end (*Trap Questions:
+Formulas That Look Right and Are Not*). *Try:* Set the asset's age to 10 and predict which of the
+three PoF readings is now the largest.
+
+- Program: [value_traps.py](src/value_traps.py)

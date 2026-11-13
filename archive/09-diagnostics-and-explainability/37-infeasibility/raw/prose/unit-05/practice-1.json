@@ -1,0 +1,161 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "09-diagnostics-and-explainability",
+    "37-infeasibility"
+  ],
+  "variant": "prose",
+  "unit": 5,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Which roster rules clash?",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A hospital ward builds its weekly nurse roster with CP-SAT. Three kinds of rules apply:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Rule name",
+        "Rule"
+      ],
+      "rows": [
+        [
+          "`cover_<day>`",
+          "at least `need[day]` nurses work on that day"
+        ],
+        [
+          "`max_<nurse>`",
+          "the nurse works at most `max_shifts[nurse]` days in the week"
+        ],
+        [
+          "`off_<nurse>_<day>`",
+          "the nurse does not work on that day (a granted request)"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "When no roster exists, the ward manager wants the rules that clash, by name. Write the formulation first: a 0/1 variable per nurse and day, and each rule as one constraint guarded by its own Boolean flag. Then write `named_conflict(nurses, need, max_shifts, days_off)`:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "build the model, assume every flag, and solve with one worker;",
+        "if a roster exists, return `None`;",
+        "otherwise return the sorted names of the rules whose flags the solver reports in `sufficient_assumptions_for_infeasibility()`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`nurses` is a list of names (no underscores), `need` maps each day of the week (an integer) to the nurses needed, `max_shifts` maps each nurse to a limit, and `days_off` is a list of `(nurse, day)` pairs. A day off on a day that is not a key of `need` forbids nothing: it gets no rule and no name. CP-SAT here only decides whether a roster exists, so there is no objective and no gap tolerance to set. The set the solver reports is sufficient, not always minimal, so the tests check that the names you return are infeasible together and include the rules that must be there. About twenty lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef named_conflict(nurses: list[str], need: dict, max_shifts: dict, days_off: list) -> list[str] | None:\n    \"\"\"The roster rules CP-SAT names as clashing (sorted), or None if a roster exists.\"\"\"\n    model = cp_model.CpModel()\n    days = sorted(need)\n    works = {(n, d): model.new_bool_var(f\"works_{n}_{d}\") for n in nurses for d in days}\n    flags = {}\n\n    def rule(name, constraint):\n        flags[name] = model.new_bool_var(f\"flag_{name}\")\n        constraint.only_enforce_if(flags[name])\n\n    for d in days:\n        rule(f\"cover_{d}\", model.add(sum(works[n, d] for n in nurses) >= need[d]))\n    for n in nurses:\n        rule(f\"max_{n}\", model.add(sum(works[n, d] for d in days) <= max_shifts[n]))\n    for n, d in days_off:\n        if d not in need:\n            continue                                   # not a roster day: nothing to forbid, no rule\n        rule(f\"off_{n}_{d}\", model.add(works[n, d] == 0))\n    model.add_assumptions(list(flags.values()))\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    if solver.solve(model) != cp_model.INFEASIBLE:\n        return None\n    by_index = {flag.index: name for name, flag in flags.items()}\n    return sorted(by_index[i] for i in solver.sufficient_assumptions_for_infeasibility())\n\n\nif __name__ == \"__main__\":\n    print(named_conflict([\"Ana\", \"Ben\"], {1: 3}, {\"Ana\": 5, \"Ben\": 5}, []))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef named_conflict(nurses: list[str], need: dict, max_shifts: dict, days_off: list) -> list[str] | None:\n    \"\"\"The roster rules CP-SAT names as clashing (sorted), or None if a roster exists.\"\"\"\n    # TODO: guard each rule with its own flag, assume every flag, solve with one worker,\n    # and turn the indices the solver names back into rule names.\n    return None\n\n\nif __name__ == \"__main__\":\n    print(named_conflict([\"Ana\", \"Ben\"], {1: 3}, {\"Ana\": 5, \"Ben\": 5}, []))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 1,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "159232e0cb6886b90ae6a03497ba07a337ae4df90e309659224ee2b4b0d20195",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef named_conflict(nurses: list[str], need: dict, max_shifts: dict, days_off: list) -> list[str] | None:\n    \"\"\"The roster rules CP-SAT names as clashing (sorted), or None if a roster exists.\"\"\"\n    # TODO: guard each rule with its own flag, assume every flag, solve with one worker,\n    # and turn the indices the solver names back into rule names.\n    return None\n\n\nif __name__ == \"__main__\":\n    print(named_conflict([\"Ana\", \"Ben\"], {1: 3}, {\"Ana\": 5, \"Ben\": 5}, []))\n",
+  "exercise": {
+    "main_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-05/practice-1/roster.py",
+    "test_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-05/practice-1/test_roster.py",
+    "run_command": [
+      "python3",
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-05/practice-1/roster.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-05/practice-1/target/report.xml",
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-05/practice-1/test_roster.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_feasible_roster_gives_none_and_an_impossible_day_is_named",
+        "kind": "main",
+        "says": "a roster that exists gives None, and a day needing more nurses than there are is named"
+      },
+      {
+        "id": "test_a_day_off_frees_that_day_only",
+        "kind": "edge",
+        "says": "a day off removes a nurse from that one day"
+      },
+      {
+        "id": "test_a_shift_limit_counts_every_day_of_the_week",
+        "kind": "edge",
+        "says": "a nurse's shift limit covers the whole week"
+      },
+      {
+        "id": "test_a_day_off_outside_the_roster_forbids_nothing",
+        "kind": "edge",
+        "says": "a day off on a day the roster does not plan forbids nothing"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-05/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "37-infeasibility/README_9.1.5.md",
+      "section": "Here the Solver Named a Minimal Set at Once, So Every Conflict Costs One Solve"
+    },
+    "concepts": [
+      "rules guarded by flags, assumed, solved with one worker, read back by index"
+    ]
+  }
+}

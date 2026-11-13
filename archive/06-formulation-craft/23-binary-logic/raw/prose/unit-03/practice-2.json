@@ -1,0 +1,157 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "23-binary-logic"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "One transformer order, or none",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A municipal electric utility buys the distribution transformers for this year's projects in a single order from one supplier. Each candidate project needs `units` transformers (some need none). The supplier's terms:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "An order is for at least `min_order` and at most `max_order` transformers. The utility may also place **no order at all**, but then it can fund no project that needs a transformer.",
+        "An order carries a `delivery_fee` ($k), paid from the same budget as the projects. No order, no fee."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The model in `order.py` has a binary `x[pid]` per project (1 if funded) and nothing else. Write `add_order_rules(model, x, projects, min_order, max_order, delivery_fee, budget)` so that the model allows exactly the plans the supplier's terms and the budget allow, including the budget row. Add whatever variables you need."
+    },
+    {
+      "type": "para",
+      "text": "With $`P`$ the projects, $`u_p`$ the transformers project $`p`$ needs and $`c_p`$ its cost ($k), the model so far is"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "x_p \\in \\{0, 1\\} \\quad \\forall p \\in P \\qquad \\text{(fund project } p\\text{)}"
+    },
+    {
+      "type": "para",
+      "text": "Write the rest first: each new variable with its domain, then each row with a label. Check your rows against the cases that matter: no project funded, only projects needing no transformer, an order just under the minimum, and one just over the maximum."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix which projects are funded and ask the solver whether the model accepts the plan, so any correct formulation passes. About six lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    units: int       # transformers the project needs\n    cost: int        # $k, without the transformers' delivery\n\n\ndef add_order_rules(model: mathopt.Model, x: dict, projects: list[Project], min_order: int,\n                    max_order: int, delivery_fee: int, budget: int) -> None:\n    \"\"\"No order, or one between min_order and max_order units with a delivery fee; all within budget.\"\"\"\n    order = model.add_binary_variable(name=\"order\")\n    units = sum(p.units * x[p.pid] for p in projects)\n    model.add_linear_constraint(units >= min_order * order, name=\"order_min\")\n    model.add_linear_constraint(units <= max_order * order, name=\"order_max\")\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in projects) + delivery_fee * order <= budget,\n                                name=\"budget\")\n\n\ndef build(projects: list[Project], min_order: int, max_order: int, delivery_fee: int,\n          budget: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"transformer-order\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    add_order_rules(model, x, projects, min_order, max_order, delivery_fee, budget)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"F1\", 6, 50), Project(\"F2\", 5, 40), Project(\"F3\", 0, 25)]\n    model, x = build(projects, 10, 30, 20, 200)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    units: int       # transformers the project needs\n    cost: int        # $k, without the transformers' delivery\n\n\ndef add_order_rules(model: mathopt.Model, x: dict, projects: list[Project], min_order: int,\n                    max_order: int, delivery_fee: int, budget: int) -> None:\n    \"\"\"No order, or one between min_order and max_order units with a delivery fee; all within budget.\"\"\"\n    # TODO: the order switch, its two rows, and the budget row.\n    return None\n\n\ndef build(projects: list[Project], min_order: int, max_order: int, delivery_fee: int,\n          budget: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"transformer-order\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    add_order_rules(model, x, projects, min_order, max_order, delivery_fee, budget)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"F1\", 6, 50), Project(\"F2\", 5, 40), Project(\"F3\", 0, 25)]\n    model, x = build(projects, 10, 30, 20, 200)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "e5198778ec6967db86e376058325f62ef3e963485ca59f910ce6eff5deb27c2e",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    units: int       # transformers the project needs\n    cost: int        # $k, without the transformers' delivery\n\n\ndef add_order_rules(model: mathopt.Model, x: dict, projects: list[Project], min_order: int,\n                    max_order: int, delivery_fee: int, budget: int) -> None:\n    \"\"\"No order, or one between min_order and max_order units with a delivery fee; all within budget.\"\"\"\n    # TODO: the order switch, its two rows, and the budget row.\n    return None\n\n\ndef build(projects: list[Project], min_order: int, max_order: int, delivery_fee: int,\n          budget: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"transformer-order\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    add_order_rules(model, x, projects, min_order, max_order, delivery_fee, budget)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"F1\", 6, 50), Project(\"F2\", 5, 40), Project(\"F3\", 0, 25)]\n    model, x = build(projects, 10, 30, 20, 200)\n    print(len(list(model.linear_constraints())), \"rows\")\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-2/order.py",
+    "test_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-2/test_order.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-2/order.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-2/target/report.xml",
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-2/test_order.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_an_order_must_reach_the_minimum",
+        "kind": "main",
+        "says": "a plan whose transformers make an order of at least the minimum is allowed, and one below the minimum refused"
+      },
+      {
+        "id": "test_an_order_may_not_exceed_the_maximum",
+        "kind": "main",
+        "says": "a plan within the supplier's maximum is allowed, and one above it refused"
+      },
+      {
+        "id": "test_the_delivery_fee_is_paid_from_the_budget",
+        "kind": "main",
+        "says": "a plan that fits the budget with the delivery fee is allowed, and one whose costs fit but not the fee is refused"
+      },
+      {
+        "id": "test_a_plan_with_no_transformers_places_no_order",
+        "kind": "edge",
+        "says": "a plan with no project at all needs no order, so no minimum and no fee"
+      },
+      {
+        "id": "test_projects_that_need_no_transformer_do_not_trigger_an_order",
+        "kind": "edge",
+        "says": "funding only projects that need no transformer places no order"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "23-binary-logic/README_6.1.3.md",
+      "section": "None, or at Least k, Needs a Switch Variable"
+    },
+    "concepts": [
+      "a count that is zero or at least a minimum is bounded by a binary switch from both sides"
+    ]
+  }
+}

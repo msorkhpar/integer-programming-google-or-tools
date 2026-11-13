@@ -1,0 +1,132 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "11-performance-at-scale",
+    "44-decomposition-and-heuristics"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Generate reel patterns until none pays",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The reel cutting of the previous practice, as a whole season: piece $`k`$ is needed $`d_k`$ times, and the question is how few reels cover every piece. `best_reel` (your pricing problem) is given."
+    },
+    {
+      "type": "para",
+      "text": "Write the restricted master first, over the patterns $`\\Pi'`$ found so far: variables with domains, objective, and labelled rows. Write the rule that says no new pattern can improve the LP, and the lower bound on the LP that holds at every iteration."
+    },
+    {
+      "type": "para",
+      "text": "Then write `reel_columns(pieces, reel)` to return `(lp_value, bounds, reels)`: the master LP's optimum when no pattern improves it, the lower bound computed after each master solve (one per solve, in order), and the reels used when the generated patterns are made integer and solved once with HiGHS. Start from one single-length pattern per piece, as many pieces as fit (and as needed). Solve each master LP with GLOP through MathOpt. The tests check your answers against a compact model of the same question."
+    },
+    {
+      "type": "para",
+      "text": "About twenty lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Column generation for cable reels. A pricing function is given (a brute-force one, not practice 1's); write the loop.\"\"\"\n\nfrom __future__ import annotations\n\nimport itertools\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\n\ndef best_reel(prices: dict[str, float], pieces: dict[str, tuple[int, int]], reel: int) -> tuple[float, dict[str, int]]:\n    \"\"\"The pattern worth the most at `prices` that fits in one reel, with at most `demand` of each piece.\n\n    Not practice 1's answer: it tries every count of every piece, which is quick for this practice's\n    three lengths and too slow for practice 1's longest test.\n    \"\"\"\n    names = list(pieces)\n    best = (0.0, {})\n    for counts in itertools.product(*[range(pieces[n][1] + 1) for n in names]):\n        if sum(c * pieces[n][0] for n, c in zip(names, counts)) <= reel:\n            worth = sum(c * prices[n] for n, c in zip(names, counts))\n            if worth > best[0] + 1e-12:\n                best = (worth, {n: c for n, c in zip(names, counts) if c})\n    return best\n\n\ndef reel_columns(pieces: dict[str, tuple[int, int]], reel: int):\n    \"\"\"Returns (LP optimum, the lower bound after each master solve, reels in the integer plan).\"\"\"\n    patterns = [{k: min(d, reel // length)} for k, (length, d) in pieces.items()]\n    bounds = []\n    while True:\n        lp = mathopt.Model(name=\"reels\")\n        use = [lp.add_variable(lb=0, name=f\"use_{i}\") for i in range(len(patterns))]\n        rows = {k: lp.add_linear_constraint(sum(p.get(k, 0) * u for p, u in zip(patterns, use)) >= d, name=k)\n                for k, (_, d) in pieces.items()}\n        lp.minimize(sum(use))\n        result = mathopt.solve(lp, mathopt.SolverType.GLOP)\n        worth, pattern = best_reel({k: result.dual_values(r) for k, r in rows.items()}, pieces, reel)\n        bounds.append(result.objective_value() / max(worth, 1.0))\n        if worth <= 1 + 1e-6:\n            break\n        patterns.append(pattern)\n    for u in use:\n        u.integer = True\n    whole = mathopt.solve(lp, mathopt.SolverType.HIGHS)\n    return result.objective_value(), bounds, round(whole.objective_value())\n\n\nif __name__ == \"__main__\":\n    print(reel_columns({\"feeder\": (70, 9), \"service\": (50, 14), \"lateral\": (30, 11)}, 220))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Column generation for cable reels. A pricing function is given (a brute-force one, not practice 1's); write the loop.\"\"\"\n\nfrom __future__ import annotations\n\nimport itertools\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\n\ndef best_reel(prices: dict[str, float], pieces: dict[str, tuple[int, int]], reel: int) -> tuple[float, dict[str, int]]:\n    \"\"\"The pattern worth the most at `prices` that fits in one reel, with at most `demand` of each piece.\n\n    Not practice 1's answer: it tries every count of every piece, which is quick for this practice's\n    three lengths and too slow for practice 1's longest test.\n    \"\"\"\n    names = list(pieces)\n    best = (0.0, {})\n    for counts in itertools.product(*[range(pieces[n][1] + 1) for n in names]):\n        if sum(c * pieces[n][0] for n, c in zip(names, counts)) <= reel:\n            worth = sum(c * prices[n] for n, c in zip(names, counts))\n            if worth > best[0] + 1e-12:\n                best = (worth, {n: c for n, c in zip(names, counts) if c})\n    return best\n\n\ndef reel_columns(pieces: dict[str, tuple[int, int]], reel: int):\n    \"\"\"Returns (LP optimum, the lower bound after each master solve, reels in the integer plan).\"\"\"\n    # TODO: write the restricted master and the stopping rule first, then the loop.\n    return 0.0, [], 0\n\n\nif __name__ == \"__main__\":\n    print(reel_columns({\"feeder\": (70, 9), \"service\": (50, 14), \"lateral\": (30, 11)}, 220))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "dcd9d1cd7854909c4ef6c74e084138ca96958c626a9cd6ebe17f2edd18167547",
+  "starting_code": "\"\"\"Column generation for cable reels. A pricing function is given (a brute-force one, not practice 1's); write the loop.\"\"\"\n\nfrom __future__ import annotations\n\nimport itertools\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\n\ndef best_reel(prices: dict[str, float], pieces: dict[str, tuple[int, int]], reel: int) -> tuple[float, dict[str, int]]:\n    \"\"\"The pattern worth the most at `prices` that fits in one reel, with at most `demand` of each piece.\n\n    Not practice 1's answer: it tries every count of every piece, which is quick for this practice's\n    three lengths and too slow for practice 1's longest test.\n    \"\"\"\n    names = list(pieces)\n    best = (0.0, {})\n    for counts in itertools.product(*[range(pieces[n][1] + 1) for n in names]):\n        if sum(c * pieces[n][0] for n, c in zip(names, counts)) <= reel:\n            worth = sum(c * prices[n] for n, c in zip(names, counts))\n            if worth > best[0] + 1e-12:\n                best = (worth, {n: c for n, c in zip(names, counts) if c})\n    return best\n\n\ndef reel_columns(pieces: dict[str, tuple[int, int]], reel: int):\n    \"\"\"Returns (LP optimum, the lower bound after each master solve, reels in the integer plan).\"\"\"\n    # TODO: write the restricted master and the stopping rule first, then the loop.\n    return 0.0, [], 0\n\n\nif __name__ == \"__main__\":\n    print(reel_columns({\"feeder\": (70, 9), \"service\": (50, 14), \"lateral\": (30, 11)}, 220))\n",
+  "exercise": {
+    "main_path": "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-04/practice-2/reel_columns.py",
+    "test_path": "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-04/practice-2/test_reel_columns.py",
+    "run_command": [
+      "python3",
+      "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-04/practice-2/reel_columns.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-04/practice-2/target/report.xml",
+      "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-04/practice-2/test_reel_columns.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_one_piece_length_needs_no_new_pattern",
+        "kind": "main",
+        "says": "with one piece length the starting pattern is already best, and the reels are the demand over the pieces a reel holds, rounded up"
+      },
+      {
+        "id": "test_patterns_are_added_until_none_has_a_negative_reduced_cost",
+        "kind": "edge",
+        "says": "the loop keeps adding patterns until the best one is worth no more than one reel, and its integer plan matches the compact model's best"
+      },
+      {
+        "id": "test_every_bound_sits_below_the_lp_optimum",
+        "kind": "edge",
+        "says": "each iteration's bound divides the master's value by the best pattern's worth, so it never exceeds the LP optimum"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-04/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "44-decomposition-and-heuristics/README_11.3.4.md",
+      "section": "Integer Answers Come From the Generated Columns, and the LP Bound Says How Good They Are"
+    },
+    "concepts": [
+      "a master over a few patterns, started from simple ones, grows one column at a time",
+      "the integer plan comes from the generated columns, judged against the LP bound",
+      "the loop stops when no pattern has a negative reduced cost, with a lower bound at every iteration"
+    ]
+  }
+}

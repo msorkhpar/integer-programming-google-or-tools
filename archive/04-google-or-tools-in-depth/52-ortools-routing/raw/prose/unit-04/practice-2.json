@@ -1,0 +1,130 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "52-ortools-routing"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Samples from clinic to lab",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A hospital courier runs two cars. Each blood sample is collected at a clinic and must reach its lab in the same car, since nobody hands samples between cars, and the car must of course collect it before it delivers it. `handoff.py` builds the routes with a \"Distance\" dimension, whose cumul is the distance a car has driven on arrival. Write `add_handoffs(routing, manager, distance_dim, pairs)`, with `pairs` a list of `(clinic, lab)` nodes."
+    },
+    {
+      "type": "para",
+      "text": "In the lesson's notation, for every pair $`(p, d)`$ with indices $`\\text{index}(p)`$ and $`\\text{index}(d)`$:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& \\text{vehicle}_{\\text{index}(p)} = \\text{vehicle}_{\\text{index}(d)} && \\text{(same car)} \\\\\n& \\text{dist}_{\\text{index}(p)} \\le \\text{dist}_{\\text{index}(d)} && \\text{(collect first)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "and the pair is declared to the search so its moves keep the two stops together. Before you code, say why comparing the Distance cumuls means \"earlier on the route\", and which of the three calls the lesson found a plan could not do without."
+    },
+    {
+      "type": "para",
+      "text": "The tests ask the model whether hand-built plans are allowed, so any correct formulation passes. About five lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef add_handoffs(routing, manager, distance_dim, pairs: list[tuple[int, int]]) -> None:\n    \"\"\"Each (pickup, delivery) pair is served by one vehicle, which reaches the pickup first.\"\"\"\n    for pickup_node, delivery_node in pairs:\n        pickup, delivery = manager.NodeToIndex(pickup_node), manager.NodeToIndex(delivery_node)\n        routing.AddPickupAndDelivery(pickup, delivery)\n        routing.solver().Add(routing.VehicleVar(pickup) == routing.VehicleVar(delivery))\n        routing.solver().Add(distance_dim.CumulVar(pickup) <= distance_dim.CumulVar(delivery))\n\n\ndef build(distance: list[list[int]], vehicles: int, pairs: list[tuple[int, int]]):\n    \"\"\"Given: routes from the depot (node 0), priced by distance, with a Distance dimension.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(distance), vehicles, 0)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def arc(from_index, to_index):\n        return distance[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    handle = routing.RegisterTransitCallback(arc)\n    routing.SetArcCostEvaluatorOfAllVehicles(handle)\n    routing.AddDimension(handle, 0, 10_000, True, \"Distance\")\n    add_handoffs(routing, manager, routing.GetDimensionOrDie(\"Distance\"), pairs)\n    return manager, routing\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 4, 6], [4, 0, 3], [6, 3, 0]], 1, [(1, 2)])\n    print(routing.ReadAssignmentFromRoutes([[2, 1]], True) is None)\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef add_handoffs(routing, manager, distance_dim, pairs: list[tuple[int, int]]) -> None:\n    \"\"\"Each (pickup, delivery) pair is served by one vehicle, which reaches the pickup first.\"\"\"\n    # TODO: declare each pair, and the rows that keep it on one vehicle and in order.\n    return None\n\n\ndef build(distance: list[list[int]], vehicles: int, pairs: list[tuple[int, int]]):\n    \"\"\"Given: routes from the depot (node 0), priced by distance, with a Distance dimension.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(distance), vehicles, 0)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def arc(from_index, to_index):\n        return distance[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    handle = routing.RegisterTransitCallback(arc)\n    routing.SetArcCostEvaluatorOfAllVehicles(handle)\n    routing.AddDimension(handle, 0, 10_000, True, \"Distance\")\n    add_handoffs(routing, manager, routing.GetDimensionOrDie(\"Distance\"), pairs)\n    return manager, routing\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 4, 6], [4, 0, 3], [6, 3, 0]], 1, [(1, 2)])\n    print(routing.ReadAssignmentFromRoutes([[2, 1]], True) is None)\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "c02e2da55a3e40252d058847be53274d431fa131f9c3f1c93fd9c6d79b7f097b",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef add_handoffs(routing, manager, distance_dim, pairs: list[tuple[int, int]]) -> None:\n    \"\"\"Each (pickup, delivery) pair is served by one vehicle, which reaches the pickup first.\"\"\"\n    # TODO: declare each pair, and the rows that keep it on one vehicle and in order.\n    return None\n\n\ndef build(distance: list[list[int]], vehicles: int, pairs: list[tuple[int, int]]):\n    \"\"\"Given: routes from the depot (node 0), priced by distance, with a Distance dimension.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(distance), vehicles, 0)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def arc(from_index, to_index):\n        return distance[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    handle = routing.RegisterTransitCallback(arc)\n    routing.SetArcCostEvaluatorOfAllVehicles(handle)\n    routing.AddDimension(handle, 0, 10_000, True, \"Distance\")\n    add_handoffs(routing, manager, routing.GetDimensionOrDie(\"Distance\"), pairs)\n    return manager, routing\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 4, 6], [4, 0, 3], [6, 3, 0]], 1, [(1, 2)])\n    print(routing.ReadAssignmentFromRoutes([[2, 1]], True) is None)\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-04/practice-2/handoff.py",
+    "test_path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-04/practice-2/test_handoff.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-04/practice-2/handoff.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-04/practice-2/target/report.xml",
+      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-04/practice-2/test_handoff.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_car_picks_up_before_it_delivers",
+        "kind": "main",
+        "says": "a car that collects a sample and then delivers it is allowed, and one that reaches the lab first is refused"
+      },
+      {
+        "id": "test_one_car_carries_a_sample_from_clinic_to_lab",
+        "kind": "edge",
+        "says": "a plan in which one car collects a sample and another car delivers it is refused, even when the collection comes earlier in distance"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-04/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "52-ortools-routing/README_4.8.4.md",
+      "section": "Pickup and Delivery Is a Pair, a Same-Vehicle Row and an Order Row"
+    },
+    "concepts": [
+      "a pickup and delivery pair needs a same-vehicle row and an order row besides the declaration"
+    ]
+  }
+}

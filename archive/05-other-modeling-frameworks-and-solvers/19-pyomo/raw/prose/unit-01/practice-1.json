@@ -1,0 +1,141 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "05-other-modeling-frameworks-and-solvers",
+    "19-pyomo"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A budget sweep on one model",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility wants to see how much value its pipe-renewal list delivers at several budgets before the board picks one. Each renewal has a cost and a value ($k); a renewal is funded whole or not at all. The analyst's old script built a fresh model for every budget, and on the real list that rebuild is most of the run time."
+    },
+    {
+      "type": "para",
+      "text": "In `sweep.py`, write:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`build(projects, budget)`: a Pyomo model of the selection below, where `projects` maps a name to `(cost, value)`. The budget must be a **mutable** Param named `m.budget`, and the objective must be named `m.total`.",
+        "`sweep(projects, budgets)`: call `build` **once**, then for each budget in the list set `m.budget`, solve with `appsi_highs` at a zero `mip_gap`, and record the value of `m.total`. Return the values in the order of `budgets`."
+      ]
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& \\sum_{p \\in P} \\text{value}_p\\, x_p \\\\\n& \\sum_{p \\in P} \\text{cost}_p\\, x_p \\le B && \\text{(spend)} \\\\\n& x_p \\in \\{0, 1\\} && \\forall p \\in P\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The tests check every value and count how many times `sweep` calls `build`. About twenty lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport pyomo.environ as pyo\n\n\ndef build(projects: dict[str, tuple[float, float]], budget: float) -> pyo.ConcreteModel:\n    \"\"\"Fund projects (name -> (cost, value)) within `budget`, maximizing value. The budget is a mutable Param.\"\"\"\n    m = pyo.ConcreteModel()\n    m.P = pyo.Set(initialize=list(projects))\n    m.cost = pyo.Param(m.P, initialize={p: c for p, (c, v) in projects.items()})\n    m.value = pyo.Param(m.P, initialize={p: v for p, (c, v) in projects.items()})\n    m.budget = pyo.Param(initialize=budget, mutable=True)\n    m.x = pyo.Var(m.P, domain=pyo.Binary)\n    m.spend = pyo.Constraint(expr=sum(m.cost[p] * m.x[p] for p in m.P) <= m.budget)\n    m.total = pyo.Objective(expr=sum(m.value[p] * m.x[p] for p in m.P), sense=pyo.maximize)\n    return m\n\n\ndef sweep(projects: dict[str, tuple[float, float]], budgets: list[float]) -> list[float]:\n    \"\"\"The best total value at each budget, from one model built once and re-solved.\"\"\"\n    solver = pyo.SolverFactory(\"appsi_highs\")\n    solver.config.mip_gap = 0.0\n    m = build(projects, budgets[0])\n    values = []\n    for b in budgets:\n        m.budget = b\n        solver.solve(m)\n        values.append(pyo.value(m.total))\n    return values\n\n\nif __name__ == \"__main__\":\n    print(sweep({\"A\": (4, 7), \"B\": (3, 5), \"C\": (2, 3)}, [3, 5, 9]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport pyomo.environ as pyo\n\n\ndef build(projects: dict[str, tuple[float, float]], budget: float) -> pyo.ConcreteModel:\n    \"\"\"Fund projects (name -> (cost, value)) within `budget`, maximizing value. The budget is a mutable Param.\"\"\"\n    m = pyo.ConcreteModel()\n    # TODO: the set of projects, cost and value Params, a mutable budget Param, x, the spend row\n    #       and the objective, named m.total.\n    return m\n\n\ndef sweep(projects: dict[str, tuple[float, float]], budgets: list[float]) -> list[float]:\n    \"\"\"The best total value at each budget, from one model built once and re-solved.\"\"\"\n    # TODO: build once, then for each budget change m.budget, solve with appsi_highs and read m.total.\n    return [0.0 for _ in budgets]\n\n\nif __name__ == \"__main__\":\n    print(sweep({\"A\": (4, 7), \"B\": (3, 5), \"C\": (2, 3)}, [3, 5, 9]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "7566777f69bec74f69074166f93f9a494f376bccfb09ddc994f5ce86a5ba9730",
+  "starting_code": "from __future__ import annotations\n\nimport pyomo.environ as pyo\n\n\ndef build(projects: dict[str, tuple[float, float]], budget: float) -> pyo.ConcreteModel:\n    \"\"\"Fund projects (name -> (cost, value)) within `budget`, maximizing value. The budget is a mutable Param.\"\"\"\n    m = pyo.ConcreteModel()\n    # TODO: the set of projects, cost and value Params, a mutable budget Param, x, the spend row\n    #       and the objective, named m.total.\n    return m\n\n\ndef sweep(projects: dict[str, tuple[float, float]], budgets: list[float]) -> list[float]:\n    \"\"\"The best total value at each budget, from one model built once and re-solved.\"\"\"\n    # TODO: build once, then for each budget change m.budget, solve with appsi_highs and read m.total.\n    return [0.0 for _ in budgets]\n\n\nif __name__ == \"__main__\":\n    print(sweep({\"A\": (4, 7), \"B\": (3, 5), \"C\": (2, 3)}, [3, 5, 9]))\n",
+  "exercise": {
+    "main_path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-1/sweep.py",
+    "test_path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-1/test_sweep.py",
+    "run_command": [
+      "python3",
+      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-1/sweep.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-1/target/report.xml",
+      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-1/test_sweep.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_each_budget_gets_its_own_optimum",
+        "kind": "main",
+        "says": "four rising budgets each get their own best value"
+      },
+      {
+        "id": "test_a_budget_that_falls_after_rising_is_still_right",
+        "kind": "main",
+        "says": "a budget lower than the one before gives the lower optimum, not a stale one"
+      },
+      {
+        "id": "test_the_model_is_built_once_for_the_whole_sweep",
+        "kind": "edge",
+        "says": "the sweep builds the model once and changes only the budget between solves"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "19-pyomo/README_5.1.1.md",
+      "section": "HiGHS Solves the Model, and a Scalar Mutable Param Changes Between Solves"
+    },
+    "concepts": [
+      "a Pyomo model built at once from data already in Python",
+      "data that can change between solves of one model",
+      "solving with HiGHS and changing a one-number Param between solves"
+    ]
+  }
+}

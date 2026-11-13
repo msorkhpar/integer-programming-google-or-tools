@@ -1,0 +1,647 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "01-foundations",
+    "03-python-for-optimization"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Typed inputs with dataclasses and pydantic",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "1.3.2 Typed Inputs with Dataclasses and Pydantic"
+    },
+    {
+      "type": "para",
+      "text": "The pandas check of lesson 1.3.1 catches GridCap's six bad rows, and then hands the model a DataFrame row: a bag of columns whose types depend on the file. The model code downstream still reads `row[\"must_do\"]` and hopes it is a boolean. A second team now wants to send projects from a web form as plain dicts of strings, which never pass through pandas at all. This lesson gives a project a type of its own, checked once where the data comes in, in three rules. GridCap is a fictional utility, and its files are generated, not real data."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Dataclass Names Each Field's Type but Never Checks It"
+    },
+    {
+      "type": "para",
+      "text": "A **dataclass** is a class whose fields are declared with type annotations; Python writes its constructor, its `==` and its printed form. `frozen=True` forbids changing a field after the object is built. Here is one built from a row of `projects.csv`, read with the standard `csv` module, which gives every cell as a string:"
+    },
+    {
+      "type": "example",
+      "id": "dataclass_trust-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "03-python-for-optimization/src/dataclass_trust.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "03-python-for-optimization/src/dataclass_trust.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "@dataclass(frozen=True)\nclass ProjectRecord:\n    project_id: str\n    cost_profile: tuple[int, ...]\n    must_do: bool"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "example",
+      "id": "dataclass_trust-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "03-python-for-optimization/src/dataclass_trust.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "03-python-for-optimization/src/dataclass_trust.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "def record(row: dict[str, str]) -> ProjectRecord:\n    return ProjectRecord(row[\"project_id\"], row[\"cost_profile\"], row[\"must_do\"])"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "ProjectRecord(project_id='P003', cost_profile='980;1490', must_do='0')\ntype of cost_profile: str\nP003 lasts 8 years\nP001 is must-do: True\nsum(cost_profile) fails: unsupported operand type(s) for +: 'int' and 'str'\nassigning a field fails: cannot assign to field 'must_do'"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The annotation says `tuple[int, ...]`, and the field holds the string `'980;1490'`. Python does not check annotations at run time; they are documentation for people and for tools like type checkers. So the record is wrong in two quiet ways and one loud one. `len()` of the string counts characters, so the two-year project \"lasts 8 years\". `must_do` is the string `'0'`, and every non-empty string is true, so P001 becomes a compliance project. Only `sum()` fails, because adding an int to a string is an error."
+    },
+    {
+      "type": "para",
+      "text": "The quiet failures are the dangerous ones: a model built from these records would force P001 into every plan and stretch P003's spending over eight years, and nothing would crash. `frozen=True` does its part (the last line): once a record exists, nobody can change it by accident. What a dataclass cannot do is make sure the record was right when it was built."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Pydantic Converts Each Field at the Boundary, or Says Why It Cannot"
+    },
+    {
+      "type": "para",
+      "text": "[Pydantic](https://docs.pydantic.dev/) checks types at run time. A class that inherits from `BaseModel` declares its fields like a dataclass, and building one **validates** the input: each value is converted to its field's type, or the build fails with a `ValidationError` that lists every problem. This is the **boundary**: the one place data from outside (a file, a form, an API) becomes objects the rest of the program trusts."
+    },
+    {
+      "type": "para",
+      "text": "What does \"converted\" mean for a string? `TypeAdapter(int)` applies one field's conversion on its own:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "int  '2150'    -> 2150\nint  ' 2150 '  -> 2150\nint  '2150.0'  -> 2150\nint  '2150.5'  -> rejected: Input should be a valid integer, unable to parse string as an integer\nint  '2,150'   -> rejected: Input should be a valid integer, unable to parse string as an integer\nbool '0'       -> False\nbool '1'       -> True\nbool 'yes'     -> True\nbool '2'       -> rejected: Input should be a valid boolean, unable to interpret input"
+    },
+    {
+      "type": "para",
+      "text": "This is pydantic's default **lax** mode: a string that clearly means a number or a yes/no is converted, and anything that would need a guess is rejected. `'2150.5'` would lose its half and `'2,150'` could be a thousands separator or a decimal comma, so both are refused, which is the \"reject, don't repair\" rule of lesson 1.3.1 built in. If even `'2150'` should be refused (an API that promises real numbers), `ConfigDict(strict=True)` turns conversion off:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "strict int '2150' -> rejected: Input should be a valid integer"
+    },
+    {
+      "type": "para",
+      "text": "Here is a whole row of `projects.csv` as a model:"
+    },
+    {
+      "type": "example",
+      "id": "pydantic_rows-3",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "03-python-for-optimization/src/pydantic_rows.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "03-python-for-optimization/src/pydantic_rows.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "class ProjectRow(BaseModel):\n    model_config = ConfigDict(frozen=True)\n\n    project_id: str\n    program: Program\n    region: Region\n    cost_profile: tuple[NonNegativeInt, ...]\n    earliest_start: int\n    latest_start: int\n    must_do: bool\n    parent: str | None\n    alt_group: str | None\n\n    @field_validator(\"cost_profile\", mode=\"before\")\n    @classmethod\n    def split_years(cls, value):\n        return value.split(\";\") if isinstance(value, str) else value\n\n    @field_validator(\"parent\", \"alt_group\", mode=\"before\")\n    @classmethod\n    def blank_is_none(cls, value):\n        return value or None"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Each annotation is now a rule. `str | None` means \"a string or `None`\". `Program` and `Region` are `Literal[...]` types (defined at the top of the program, with the three program and four region names), so only the listed names pass. `NonNegativeInt` is an `int` that must be 0 or more, so a negative cost fails. A **field validator** is a method pydantic runs for one field; with `mode=\"before\"` it runs on the raw input, before the type conversion. Pydantic asks for field validators to be class methods (`@classmethod`, receiving the class as `cls`), because they run before any object exists. `split_years` turns `'980;1490'` into two strings for the `int` conversion to handle, and `blank_is_none` turns the CSV's empty cell into `None`, so \"no parent\" has one spelling. Columns the class does not declare, such as `name` and `crew_months`, are ignored."
+    },
+    {
+      "type": "para",
+      "text": "`ProjectRow.model_validate(row)` builds a `ProjectRow` from a dict such as a `csv.DictReader` row, or raises `ValidationError`. Here it is on the rows of P003 and P001 that fooled the dataclass:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "project_id='P003' program='transmission' region='Coast' cost_profile=(980, 1490) earliest_start=2027 latest_start=2027 must_do=False parent=None alt_group=None\nP003 lasts 2 years and costs 2470\nP001 is must-do: False"
+    },
+    {
+      "type": "para",
+      "text": "The same two rows that fooled the dataclass now come out right: P003 lasts two years and P001 is not must-do."
+    },
+    {
+      "type": "para",
+      "text": "A bound that has no ready-made type, such as \"above 0\", goes on the field with `Field(...)`: write the type, then `= Field(gt=0)` (\"greater than 0\"; `ge`, `lt` and `le` are \"at least\", \"below\" and \"at most\"). `portfolio.json` holds the discount rate, which must be above 0, and the capital budget:"
+    },
+    {
+      "type": "example",
+      "id": "pydantic_rows-4",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "03-python-for-optimization/src/pydantic_rows.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "03-python-for-optimization/src/pydantic_rows.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "class PlanSettings(BaseModel):\n    \"\"\"The two numbers of portfolio.json the models use.\"\"\"\n    discount_rate: float = Field(gt=0)\n    capital_budget: NonNegativeInt"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "example",
+      "id": "pydantic_rows-5",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "03-python-for-optimization/src/pydantic_rows.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "03-python-for-optimization/src/pydantic_rows.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "print(PlanSettings.model_validate(settings))\nfor rate in (\"0\", \"\", \"0.07\"):\n    try:\n        print(f\"discount_rate {rate!r:6} ->\", PlanSettings.model_validate({**settings, \"discount_rate\": rate}))\n    except ValidationError as error:\n        print(f\"discount_rate {rate!r:6} -> rejected:\", error.errors()[0][\"msg\"])"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "discount_rate=0.07 capital_budget=7390\ndiscount_rate '0'    -> rejected: Input should be greater than 0\ndiscount_rate ''     -> rejected: Input should be a valid number, unable to parse string as a number\ndiscount_rate '0.07' -> discount_rate=0.07 capital_budget=7390"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`settings` is the dict read from `portfolio.json`; its other keys (`name`, `seed`, `years`) are ignored. `{**settings, \"discount_rate\": rate}` is a copy of it with one value replaced. A rate of `'0'` breaks `gt=0`, and a blank cell `''` is not a number at all, so a `float` field rejects it rather than reading it as 0."
+    },
+    {
+      "type": "para",
+      "text": "What does pydantic say about a failure? `ValidationError.errors()` returns a list with one dict per problem. Here is the first entry for P010 (cost `-400`) and for the rate `'0'`:"
+    },
+    {
+      "type": "example",
+      "id": "pydantic_rows-6",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "03-python-for-optimization/src/pydantic_rows.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "03-python-for-optimization/src/pydantic_rows.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "for row in (rows[9], {**settings, \"discount_rate\": \"0\"}):\n    model = ProjectRow if \"project_id\" in row else PlanSettings\n    try:\n        model.model_validate(row)\n    except ValidationError as error:\n        entry = error.errors()[0]                # one dict per problem\n        print({key: entry[key] for key in (\"type\", \"loc\", \"msg\", \"input\")})"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "{'type': 'greater_than_equal', 'loc': ('cost_profile', 0), 'msg': 'Input should be greater than or equal to 0', 'input': '-400'}\n{'type': 'greater_than', 'loc': ('discount_rate',), 'msg': 'Input should be greater than 0', 'input': '0'}"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`loc` (location) is a tuple whose first item is always the field's name: `('discount_rate',)`. When the problem is inside a field, more items follow: `('cost_profile', 0)` is item 0 of the cost profile, the first year. `msg` is the message, and `input` the value that failed. The entry also has keys this program leaves out (`ctx`, `url`)."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Rule Across Fields Goes in a Model Validator; a Rule Across Rows Goes Over the Whole File"
+    },
+    {
+      "type": "para",
+      "text": "Some rules need two fields at once: a project's window is empty if its earliest start is after its latest. A **model validator** with `mode=\"after\"` runs once every field has been converted, and sees the whole object:"
+    },
+    {
+      "type": "example",
+      "id": "pydantic_rows-7",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "03-python-for-optimization/src/pydantic_rows.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "03-python-for-optimization/src/pydantic_rows.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "@model_validator(mode=\"after\")\ndef window_is_ordered(self):\n    if self.earliest_start > self.latest_start:\n        raise ValueError(\"earliest start after latest\")\n    return self"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Now the six rows the planner appended in lesson 1.3.1, each validated alone:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "P009 rejected: cost_profile.0: Input should be a valid integer, unable to parse string as an integer\nP010 rejected: cost_profile.0: Input should be greater than or equal to 0\nP011 rejected: row: Value error, earliest start after latest\nP012 rejected: region: Input should be 'Ridge', 'Valley', 'Coast' or 'Plains'\nP008 accepted\nP013 accepted"
+    },
+    {
+      "type": "para",
+      "text": "Each error names where it is: `cost_profile.0` is the first year of the profile (the `loc` `('cost_profile', 0)` above, joined with a dot by the helper `reasons` shown in the next code), and `row` marks the model validator, which belongs to no single field. Two rows pass, and they should, as single rows: the second P008 is a perfectly good project on its own, and P013's parent P099 is a well-formed id. \"Ids are unique\" and \"a parent exists\" are rules about the whole file, and no single row can break them alone. They go in the code that sees every row:"
+    },
+    {
+      "type": "example",
+      "id": "load_portfolio-8",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "03-python-for-optimization/src/load_portfolio.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "03-python-for-optimization/src/load_portfolio.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "def load(rows: list[dict[str, str]]) -> tuple[list[ProjectRow], list[tuple[int, str, str]]]:\n    \"\"\"The rows that pass every rule, and (file line, project id, reason) for each that does not.\"\"\"\n    parsed, rejected = [], []\n    for line, row in enumerate(rows, start=2):\n        try:\n            parsed.append((line, ProjectRow.model_validate(row)))\n        except ValidationError as error:\n            rejected += [(line, row[\"project_id\"], reason) for reason in reasons(error)]\n\n    copies = Counter(p.project_id for _, p in parsed)\n    rejected += [(line, p.project_id, \"duplicate id\") for line, p in parsed if copies[p.project_id] > 1]\n    kept = [(line, p) for line, p in parsed if copies[p.project_id] == 1]\n    known = {p.project_id for _, p in kept}\n    rejected += [(line, p.project_id, \"unknown parent\") for line, p in kept if p.parent and p.parent not in known]\n    kept = [(line, p) for line, p in kept if not p.parent or p.parent in known]\n    return [p for _, p in kept], sorted(rejected)"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`enumerate(rows, start=2)` numbers the rows from 2, so each number is the row's line in the file (the header is line 1). `Counter` (from `collections`) counts how often each id occurs among the rows that passed. `load` catches each row's `ValidationError` and keeps going, so one bad row does not hide the next. Then it runs the rules across rows, in order: duplicates first, then parents, checked against the projects that survived, because a parent that was itself rejected is no parent the model can use. `reasons(error)` is a short helper, defined in `pydantic_rows.py`, that turns pydantic's list of errors into `field: message` strings:"
+    },
+    {
+      "type": "example",
+      "id": "pydantic_rows-9",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "03-python-for-optimization/src/pydantic_rows.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "03-python-for-optimization/src/pydantic_rows.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "def reasons(error: ValidationError) -> list[str]:\n    \"\"\"Each problem pydantic found, as `field: message` (a whole-row rule has no field).\"\"\"\n    return [f\"{'.'.join(str(part) for part in e['loc']) or 'row'}: {e['msg']}\" for e in error.errors()]"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "It joins each `loc` with dots, so `('cost_profile', 0)` becomes `cost_profile.0`. An error raised by a model validator belongs to no field, and its `loc` is the empty tuple `()`; joining that gives the empty string, and `or 'row'` puts the label `row` in its place. That is where `row:` in the output above comes from."
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "line  9  P008  duplicate id\nline 10  P009  cost_profile.0: Input should be a valid integer, unable to parse string as an integer\nline 11  P010  cost_profile.0: Input should be greater than or equal to 0\nline 12  P011  row: Value error, earliest start after latest\nline 13  P012  region: Input should be 'Ridge', 'Valley', 'Coast' or 'Plains'\nline 14  P008  duplicate id\nline 15  P013  unknown parent\n\n14 rows read, 7 rejected, 7 kept: P001 P002 P003 P004 P005 P006 P007\nsame lines as the pandas check of lesson 1.3.1: True"
+    },
+    {
+      "type": "para",
+      "text": "The pydantic loader rejects exactly the lines the pandas masks did, and the last line of output checks that. The difference is what comes out: a list of frozen `ProjectRow` objects whose every field has the type it claims, which model code can use without checking again."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The selection model of lesson 1.1.1, unchanged. What changes in this lesson is what the loader promises about its data before the model is built."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`P`$ the candidate projects; $`M \\subseteq P`$ the must-do projects; $`C \\subseteq P`$ the child projects, each with parent $`p(c) \\in P`$; $`\\mathcal{G}`$ the alternative groups, each a set of projects."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`\\text{capex}_i`$, the sum of project $`i`$'s cost profile ($k); $`\\text{npv}_i`$, its NPV if it starts in its earliest start year ($k); $`B`$, the capital budget ($k)."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_i \\in \\{0, 1\\}`$ for each $`i \\in P`$: 1 if project $`i`$ is funded."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{i \\in P} \\text{npv}_i\\, x_i"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{i \\in P} \\text{capex}_i\\, x_i &\\le B && && \\text{(budget)} \\\\\nx_i &= 1 && \\forall i \\in M && \\text{(must}_i) \\\\\nx_c &\\le x_{p(c)} && \\forall c \\in C && \\text{(parent}_c) \\\\\n\\sum_{i \\in g} x_i &\\le 1 && \\forall g \\in \\mathcal{G} && \\text{(alt}_g)\n\\end{aligned}"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "The model assumes",
+        "Checked by"
+      ],
+      "rows": [
+        [
+          "each project in $`P`$ once, so one variable per project",
+          "`load`: duplicate id"
+        ],
+        [
+          "$`\\text{capex}_i`$ is a sum of whole $k amounts, none negative",
+          "`ProjectRow.cost_profile`: `tuple[NonNegativeInt, ...]`"
+        ],
+        [
+          "$`i \\in M`$ only for a real yes",
+          "`ProjectRow.must_do`: `bool`"
+        ],
+        [
+          "$`p(c) \\in P`$ for every child",
+          "`load`: unknown parent"
+        ],
+        [
+          "a start window $`e_i \\le l_i`$ that holds a year (later models choose a start in it)",
+          "`window_is_ordered`"
+        ],
+        [
+          "a region with a budget (regional spend rules come in lesson 6.5.5)",
+          "`ProjectRow.region`: `Region`"
+        ]
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**A dataclass names each field's type but never checks it.** Built from strings, it holds strings, and the wrong answers it gives are quiet ones.",
+        "**Pydantic converts each field at the boundary, or says why it cannot.** Lax mode converts what is unambiguous and rejects what needs a guess; field validators prepare raw values first.",
+        "**A rule across fields goes in a model validator; a rule across rows goes over the whole file.** Validate each row, collect every error, then check uniqueness and references over the survivors."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Need",
+        "Pydantic"
+      ],
+      "rows": [
+        [
+          "A checked record",
+          "`class Row(BaseModel): field: type`"
+        ],
+        [
+          "Build one from a dict",
+          "`Row.model_validate(data)`"
+        ],
+        [
+          "No changes after building",
+          "`model_config = ConfigDict(frozen=True)`"
+        ],
+        [
+          "No conversion from strings",
+          "`ConfigDict(strict=True)`"
+        ],
+        [
+          "One of a few names",
+          "`Literal[\"a\", \"b\"]`"
+        ],
+        [
+          "Number bounds",
+          "`NonNegativeInt`, or on a field: `rate: float = Field(gt=0)` (also `ge`, `lt`, `le`)"
+        ],
+        [
+          "Prepare a raw value",
+          "`@field_validator(\"f\", mode=\"before\")`"
+        ],
+        [
+          "A rule over several fields",
+          "`@model_validator(mode=\"after\")`"
+        ],
+        [
+          "Every problem found",
+          "`except ValidationError as e: e.errors()`: one dict per problem, with `loc` (field name first, then positions inside it; `()` for a model validator), `msg` and `input`"
+        ],
+        [
+          "One type on its own",
+          "`TypeAdapter(int).validate_python(value)`"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [Python `dataclasses`](https://docs.python.org/3/library/dataclasses.html) (the decorator reads annotations only to find the fields and never checks their types; `frozen=True` raises `FrozenInstanceError`); [Pydantic: conversion table](https://pydantic.dev/docs/validation/latest/concepts/conversion_table/) (which inputs each type accepts in lax and in strict mode, including the strings a `bool` reads as true and false); [Pydantic: validators](https://pydantic.dev/docs/validation/latest/concepts/validators/) (before, after, plain and wrap field validators, and model validators that return the validated object)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "A web form sends `\"must_do\": \"no\"`. Does `ProjectRow` accept it, and as what? Check your answer against the conversion table above before you run it.",
+        "P004's parent P003 is fine. If P003 were rejected for a bad cost, `load` would reject P004 too. What happens to a child of P004, two levels down?",
+        "Should `load` reject a project whose `alt_group` has only one member? What would that row do to the (alt) constraint?"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Validate Once, at the Edge"
+    },
+    {
+      "type": "para",
+      "text": "Every function that receives a project could check it again, and some codebases do. The checks then drift apart, and none of them knows which file line to blame. This course validates once, where data enters (`load`), and passes frozen, typed objects inward. Model code can then read `p.must_do` as a boolean without a second thought, because the type promises it and nothing can change it on the way."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**dataclass_trust.py.** Builds dataclass records from CSV strings and shows what they get wrong (*A Dataclass Names Each Field's Type but Never Checks It*). *Try:* Add `parent: str | None` to `ProjectRecord` and fill it from the row. Predict what P001's parent is."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [dataclass_trust.py](src/dataclass_trust.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**pydantic_rows.py.** Shows lax conversion, defines `ProjectRow` and `PlanSettings`, prints two `errors()` entries, and validates the appended rows one at a time (*Pydantic Converts Each Field at the Boundary*). *Try:* Add `strict=True` to `model_config`. Predict how many of the tiny portfolio's rows still validate."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [pydantic_rows.py](src/pydantic_rows.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**load_portfolio.py.** Loads the dirty export: row rules through `ProjectRow`, then duplicates and parents across rows (*A Rule Across Fields Goes in a Model Validator*). *Try:* Move the parent check before the duplicate check. Does any line of the report change?"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [load_portfolio.py](src/load_portfolio.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 10,
+    "paras": 33,
+    "code": 7,
+    "tables": 2,
+    "lists": 5,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 9
+  },
+  "content_sha256": "c2ecfe45136c7c06b0f4a5d05f93a17fdd13faa4032a0171e2448288cefa6c5d"
+}

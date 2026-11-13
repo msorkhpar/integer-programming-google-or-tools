@@ -1,0 +1,279 @@
+# 14.3.4 Crews, Lead Times and Spare Units
+
+The bundled plan went to the regional managers and to procurement. Both had a problem with it:
+
+> **Request 4.** Each region has 12 crew-weeks a year for transformer work. A small unit takes 2
+> crew-weeks to swap, a medium one 4, a large one 8. And new units are not on a shelf: a medium unit
+> takes a year from order to delivery and a large one three, so nothing ordered now arrives before
+> 2028 or 2030. Until then, a replacement must come from the spares we hold: two medium units and
+> one large. Small units are stocked by the supplier and arrive within the year.
+
+The code before this lesson is snapshot `steps/03`; after it, `steps/04`. The fleet is the invented
+500-unit one, and the 12 crew-weeks, lead times and spare counts are invented with it.
+
+## The Bundled Plan Needs More Crews Than Some Regions Have
+
+`crews_and_spares.py` counts what the bundled plan of the last lesson asks of each region:
+
+```text
+bundles plan        : 140 units; region-years over 12 crew-weeks: 11 of 40, most 26; units before their lead time: medium 1, large 0
+```
+
+In 11 of the 40 region-years (four regions, ten years) the plan needs more than 12 crew-weeks, and
+one region-year needs 26, more than twice what the region has. The model never heard of crews, so
+this is not a surprise; it is the reason for the request. The lead times happen not to be broken by
+this plan (one medium unit before 2028, within the two spares), but nothing in the model makes sure
+of it, and a different budget or fleet would break them.
+
+## Each Resource Is a Row: Crews per Region and Year, Spares per Kind
+
+**Crews** are a capacity per region and year, used by each replacement according to its kind. That
+is a knapsack row, one per region and year, written on the same $`x_{i,t}`$ as the budget:
+$`\sum_{i \in I_g} w_{k(i)} x_{i,t} \le C`$, with $`w`$ the crew-weeks of a kind and $`C`$ the region's
+crew-weeks a year.
+
+**Lead times** need a design decision. A unit of kind $`k`$ ordered in 2027 arrives in
+$`y_0 + L_k`$. Three ways to say it:
+
+| Option | Rows | Allows |
+| --- | --- | --- |
+| cut the domain: no $`x_{i,t}`$ for $`t < y_0 + L_{k(i)}`$ | none | no early replacement at all; ignores spares |
+| one row per kind: early replacements $`\le`$ spares | one per kind | early replacements up to the spares held |
+| stock over time: spares, orders and deliveries as variables per kind and year | several per kind and year | restocking, failures that use spares |
+
+The first is the simplest, and wrong: the utility holds spares precisely so that it can replace a
+unit early. The third is the full inventory model. It is the right one once spares are reordered
+and emergencies draw on them, and it adds a stock variable per kind and year (lesson 6.4.4's
+carry-over is the same pattern). Procurement's request is about the units in stock today, so the
+project takes the second: one row per kind, counting the replacements that happen before that
+kind's lead time has passed. A small unit has a lead time of 0 and gets no row.
+
+## The Model
+
+The model with crews and spares. Changes from the last lesson are marked.
+
+**Sets.** $`I`$, the candidates; $`Y`$, the plan years; $`W`$, the risk window; $`S`$ and $`I_s`$,
+substations and their candidates; $`G`$, the regions, with $`S_g`$ their substations and $`I_g`$
+their candidates $`\leftarrow`$; $`K`$, the kinds, with $`I_k`$ the candidates of kind $`k`$
+$`\leftarrow`$; $`E_k = \{ t \in Y : t < y_0 + L_k \}`$, the years before a new unit of kind $`k`$
+can arrive $`\leftarrow`$.
+
+**Parameters.** $`\text{rr}_{i,t}`$, $`c_i`$, $`B`$, $`F`$, $`O`$, $`n_s`$ as before;
+$`w_k`$, crew-weeks to replace a unit of kind $`k`$ $`\leftarrow`$; $`C`$, crew-weeks per region and
+year $`\leftarrow`$; $`L_k`$, lead time of kind $`k`$ in years $`\leftarrow`$; $`\sigma_k`$, spare
+units of kind $`k`$ in stock $`\leftarrow`$.
+
+**Variables.** $`x_{i,t} \in \{0,1\}`$ for $`i \in I`$, $`t \in Y`$; $`o_{s,t} \in \{0,1\}`$ for
+$`s \in S`$, $`t \in Y`$. No new variables.
+
+**Objective.**
+
+```math
+\max \; \sum_{i \in I} \sum_{t \in Y} \text{rr}_{i,t} \, x_{i,t}
+```
+
+**Constraints.**
+
+```math
+\begin{aligned}
+\sum_{t \in Y} x_{i,t} &\le 1 && \forall i \in I && \text{(once}_i) \\
+\sum_{i \in I_s} x_{i,t} &\le n_s \, o_{s,t} && \forall s \in S,\ t \in Y && \text{(outage}_{s,t}) \\
+\sum_{s \in S_g} o_{s,t} &\le O && \forall g \in G,\ t \in Y && \text{(coord}_{g,t}) \\
+\sum_{i \in I_g} w_{k(i)} \, x_{i,t} &\le C && \forall g \in G,\ t \in Y && \text{(crews}_{g,t}) \quad \leftarrow \text{this lesson} \\
+\sum_{i \in I_k} \sum_{t \in E_k} x_{i,t} &\le \sigma_k && \forall k \in K,\ E_k \ne \varnothing && \text{(spares}_k) \quad \leftarrow \text{this lesson} \\
+\sum_{i \in I} c_i \, x_{i,t} + F \sum_{s \in S} o_{s,t} &\le B && \forall t \in Y && \text{(budget}_t)
+\end{aligned}
+```
+
+The data: $`w`$ is 2, 4 and 8 for small, medium and large; $`L`$ is 0, 1 and 3; $`\sigma`$ is 2
+medium and 1 large; $`C = 12`$. So $`E_{\text{medium}} = \{2027\}`$, $`E_{\text{large}} = \{2027,
+2028, 2029\}`$, and small units have no spares row. The code names the rows `crews_north_2029` and
+`spares_large`.
+
+## The Change, File by File
+
+**`fleet.py` needs no change.** `KINDS` already held each kind's crew-weeks and lead time; the
+skeleton's author put them next to costs and curves, where the generator could see them. Data that
+describes a kind lives with the kind, so a rule that needs it does not need a new table.
+
+**`request.py`: three stubs become real.** `crew_weeks` is $`C`$, `lead_times` switches the spares
+rows on, and `spares` is $`\sigma`$. `None`, `False` and an empty dict keep the last lesson's model.
+The stub `scaled` is the next lesson's.
+
+```diff
+--- 03/renewal/request.py
++++ 04/renewal/request.py
+@@
+ from dataclasses import dataclass, field
+
+ from .fleet import FIRST_YEAR
+@@
+-    # Stubs: the next lesson gives these fields their meaning; this model ignores them.
+-    crew_weeks: int | None = None
+-    lead_times: bool = False
+-    spares: dict[str, int] = field(default_factory=dict)
++    crew_weeks: int | None = None   # crew-weeks per region per year; None: no limit
++    lead_times: bool = False        # a unit needed before its kind's lead time must come from spares
++    spares: dict[str, int] = field(default_factory=dict)    # spare units in stock, by kind
++
++    def scaled(self, factor: int) -> Request:
++        """Stub: the next lesson grows every limit with the fleet. Until then, the request unchanged."""
++        return self
+```
+
+`lead_times` is a separate switch, not "spares were given": a request with lead times and no spares
+must refuse every early medium and large replacement, and an empty `spares` dict says exactly that.
+
+**`model.py`: two row families.** Each block is one line of the formulation, and both go after the
+outage blocks, before the budget rows. The crews block, $`\text{crews}_{g,t}`$, is yours to write in
+the practice:
+
+- Only when `request.crew_weeks` is not `None`. For each region in `REGIONS` and each plan year, the
+  sum over the region's candidates of $`w_{k(i)} \, x_{i,t}`$, where $`w_k`$ is
+  `KINDS[t.kind].crew_weeks`, at most `request.crew_weeks`, named `crews_<region>_<year>`.
+- A region with no candidates gets no row: its sum would be an empty sum, the number 0, which
+  MathOpt refuses as a row. It is the same guard the region-limit block of the last lesson needs.
+
+The spares block collects the early variables of one kind, $`x_{i,t}`$ for $`i \in I_k`$ and
+$`t \in E_k`$, and caps their sum:
+
+```diff
+--- 03/renewal/model.py
++++ 04/renewal/model.py
+@@
+-from .fleet import REGIONS, Transformer
++from .fleet import FIRST_YEAR, KINDS, REGIONS, Transformer
+ from .request import Request
+ from .risk import risk_removed
+@@
++    if request.lead_times:
++        for kind, k in KINDS.items():
++            # Before FIRST_YEAR + lead, no unit ordered now has arrived: each such replacement uses a spare.
++            early = [x[t.tid, y] for t in units if t.kind == kind for y in years if y < FIRST_YEAR + k.lead_years]
++            if early:
++                model.add_linear_constraint(sum(early) <= request.spares.get(kind, 0), name=f"spares_{kind}")
+     budget = {}
+     for y in years:
+         spend = sum(t.cost * x[t.tid, y] for t in units)
+```
+
+`if early:` skips a kind with no early years, small, where the list is empty. Written plainly, the
+crews block finds a region's candidates by scanning every candidate inside its loops over regions
+and years: the same habit as the last lesson's outage block, now in a third place.
+
+## Crews Reshape the Plan; the Spares Rows Do Not Bind on This Fleet
+
+```text
+bundles plan        : 140 units; region-years over 12 crew-weeks: 11 of 40, most 26; units before their lead time: medium 1, large 0
+with crews and spares: 142 units; region-years over 12 crew-weeks: 0 of 40, most 12; units before their lead time: medium 1, large 0
+risk removed: bundles plan $464,155k, with crews and spares $460,385k (bound $469,591k, OPTIMAL)
+replaced by kind: small 102, medium 37, large 3
+large units replaced in 2027-2029: 0; first large replacement 2034
+```
+
+With crews in the model, no region-year goes over 12 crew-weeks, and the busiest uses exactly 12.
+The plan replaces two more units than before, 142: 102 small, 37 medium and only 3 large, the first
+of them in 2034. A large unit uses 8 of a region's 12 crew-weeks, so a year that replaces one in a
+region has room for at most two small units more there.
+
+The spares rows change nothing here: the plan wants no early large units and one early medium one,
+within the stock of two. That is a finding about this fleet and this budget, not about the rule;
+the tests below show the rows working where they bind. As in the last lesson, the drop in risk
+removed, $3,770k, is inside both runs' 2% gaps, so the runs do not show what crews cost. What they
+do show is the plan that keeps the new rules.
+
+## The Tests Pin Each Resource Where It Alone Binds
+
+- **a region has only its crew-weeks each year:** with 6 crew-weeks, a small and a medium unit in
+  the north (2 + 4) and a small one in the south are allowed; a second small one in the north (8)
+  is refused.
+- **short crews push work into later years:** two small units, 2 crew-weeks a year: one in 2027,
+  one in 2028, though money allows both at once.
+- **a unit needed before its lead time must be a spare:** with no large spares, a large unit may be
+  replaced in 2030 but not in 2029; with one spare, one large unit in 2027 is allowed, and a second
+  in 2029 is refused.
+
+```text
+step 04 tests on the code of step 03 (before): 19 passed, 3 failed
+  FAILED test_crews_and_spares.py::test_a_region_has_only_its_crew_weeks_each_year (AssertionError)
+         assert not True
+  FAILED test_crews_and_spares.py::test_short_crews_push_work_into_later_years (AssertionError)
+         assert [2027, 2027] == [2027, 2028]
+  FAILED test_crews_and_spares.py::test_a_unit_needed_before_its_lead_time_must_be_a_spare (AssertionError)
+         assert not True
+step 04 tests on the code of step 04 (after): 22 passed, 0 failed
+tests step 04 adds or changes: 3
+```
+
+The old model allows the over-crewed list, replaces both units in 2027, and allows a large unit
+three years before it can arrive. Each test fails on the first assertion the old code gets wrong.
+
+## What the Step Did to the Code
+
+```text
+03       10    225         19     19         121  model.build (13)
+04       11    251         22     22         143  model.build (23)
+```
+
+`build` now branches 23 ways, and the package has 26 more code lines; the file count rises by one only because the
+next lesson's stub module, `reference.py`, arrives. Every rule is still one block of `build`, in the
+formulation's order, which keeps the code easy to check against the model. But `build` has become
+the place where every request lands, and three of its blocks scan the whole candidate list inside a
+loop. On 211 candidates the 500-unit plan solves in seconds and the scans do not show. The next
+request is for the whole fleet.
+
+**Practice.** This lesson's project practice starts from the code before this step, the whole
+package (snapshot `steps/03`). It is graded by the tests in the practice's `tests/` folder and by a
+check that `main.py` prints the practice's `expected/report.txt`; the practice's statement gives the
+request `main.py` makes and the format of every line it prints. This step's `main.py` plans a tiny
+fleet of 25 units, drawn from seed 56, over five years, with outages, crews and spares.
+
+<!-- practice 1 -->
+
+## Summary
+
+- **Each limited resource is a row on the same variables:** crew-weeks per region and year, as a
+  knapsack row weighted by kind.
+- **Lead times with spares are a count:** the replacements before a kind's lead time has passed may
+  not exceed the spares in stock. Cutting the domain would forbid spares; a full stock model is for
+  when spares are reordered.
+- **Crews reshaped the plan** (no region-year over 12 crew-weeks) and moved it toward smaller units;
+  the spares rows did not bind on this fleet, and the tests show them binding where they should.
+- **A difference in value inside both runs' gaps is not a measured cost.**
+
+## Reference
+
+| Rule | Row | Code name |
+| --- | --- | --- |
+| crew-weeks per region and year | $`\sum_{i \in I_g} w_{k(i)} x_{i,t} \le C`$ | `crews_{g}_{t}` |
+| spares before the lead time | $`\sum_{i \in I_k} \sum_{t \in E_k} x_{i,t} \le \sigma_k`$ | `spares_{k}` |
+| years before delivery | $`E_k = \{t \in Y : t < y_0 + L_k\}`$ | `y < FIRST_YEAR + k.lead_years` |
+
+**Further reading:** [MathOpt `model.py` (OR-Tools source, v9.15)](https://github.com/google/or-tools/blob/v9.15/ortools/math_opt/python/model.py) (`add_linear_constraint` with a name, which is how each crews and spares row can be found in an exported model). It was read from the copy installed in the course's runner image. Lessons 6.3.1 (multi-dimensional knapsack: one item drawing on several resources), 6.4.4 (carry-over, the pattern a stock-over-time spares model would follow) and 6.4.1 (start-year variables and windows) are the course's background for this step.
+
+## Challenges
+
+1. Procurement adds: "a spare used before 2030 is reordered and arrives three years later". Which of
+   the three lead-time options can say that, and which new variable does it need?
+2. The north region gets a second crew from 2030: 24 crew-weeks from then on. Which parameter becomes
+   indexed by year, and which test would you add?
+3. Write the test that would fail if the spares row counted a large unit replaced in 2030 as early.
+
+## Design Note: A Switch for Lead Times, Not a Sentinel in the Spares
+
+`lead_times: bool` and `spares: dict` look redundant: why not "lead times apply when spares are
+given"? Because "no spares" is a real answer procurement can give, and it must mean "no early
+replacements", not "ignore lead times". When a missing value and a zero mean different things, give
+the difference its own field.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change.
+
+**crews_and_spares.py.** Counts the crew-weeks and early replacements of the bundled plan, solves
+with crews and spares, and runs the step's tests before and after the change (*every section*).
+*Try:* Set the spares to zero for every kind. Predict whether the plan changes, then run it.
+
+- Program: [crews_and_spares.py](src/crews_and_spares.py)
+- Program: [growth.py](src/growth.py)
+- Library: [steps.py](src/steps.py)

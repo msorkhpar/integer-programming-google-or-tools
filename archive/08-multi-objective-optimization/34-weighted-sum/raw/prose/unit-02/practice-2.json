@@ -1,0 +1,154 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "08-multi-objective-optimization",
+    "34-weighted-sum"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "A plan no weighting can reach, with its proof",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A city parks department has a small budget and a short list of projects: new trees, a pond, play courts and so on. Each costs money and adds two things the department reports on, square metres of tree canopy (shade) and extra visits a week, both to maximize. The council has asked for \"the best plan at our weights\", and the department suspects that the plan it would actually recommend is one no weights would ever pick. It wants to find such a plan and show the council a proof it can check by hand."
+    },
+    {
+      "type": "para",
+      "text": "Write `unreachable(projects, budget)` in `parks.py`. A plan is any set of projects whose total cost is within `budget`. Return a triple `(plan, a, b)` of sets of project names, or `None`:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`plan` must be dominated by no allowed plan;",
+        "`a` and `b` must be allowed plans with less and more shade than `plan`, and the straight line from `a` to `b` must pass strictly above `plan` (more visits at `plan`'s shade);",
+        "return `None` only when every unbeaten plan is picked by some weighting."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "An unbeaten plan that lies exactly on the straight line between two others counts as picked: at the share where those two tie, it ties with them, so that weighting makes it optimal (it is supported, lesson 8.1.2). Such a plan is never the answer, and when every unbeaten plan is a hull corner or on a straight stretch between corners, the answer is `None`. The proof's line must pass *strictly* above `plan`, as the second rule says."
+    },
+    {
+      "type": "para",
+      "text": "The lists are short enough to try every set. Work it out on paper first: which points of the shade-visits picture can a weighted sum return, and why does a line from `a` to `b` above `plan` prove that no share picks `plan`? Then decide which two plans make a proof that always works."
+    },
+    {
+      "type": "para",
+      "text": "About twenty-five lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\nfrom itertools import combinations\n\n\n@dataclass(frozen=True)\nclass Project:\n    name: str\n    cost: int          # $k\n    shade: int         # square metres of tree canopy\n    visits: int        # extra visits a week\n\n\ndef plans(projects: list[Project], budget: int) -> dict[frozenset[str], tuple[int, int]]:\n    \"\"\"Every set of projects the budget allows, with its (shade, visits).\"\"\"\n    out = {}\n    for size in range(len(projects) + 1):\n        for chosen in combinations(projects, size):\n            if sum(p.cost for p in chosen) <= budget:\n                out[frozenset(p.name for p in chosen)] = (sum(p.shade for p in chosen),\n                                                          sum(p.visits for p in chosen))\n    return out\n\n\ndef unreachable(projects: list[Project], budget: int):\n    \"\"\"An unbeaten plan no weighting of shade and visits picks, with two plans that prove it.\n\n    Returns (plan, a, b), three sets of project names: `plan` is dominated by no plan, and `a` and\n    `b` are plans with less and more shade whose straight line passes strictly above `plan`. Returns\n    None when every unbeaten plan is picked by some weighting.\n    \"\"\"\n    scored = plans(projects, budget)\n    by_point = {}\n    for plan, point in sorted(scored.items(), key=lambda item: sorted(item[0])):\n        by_point.setdefault(point, plan)\n    front = sorted(p for p in by_point\n                   if not any(o[0] >= p[0] and o[1] >= p[1] and o != p for o in by_point))\n    hull = []\n    for p in front:\n        while len(hull) >= 2 and ((hull[-1][0] - hull[-2][0]) * (p[1] - hull[-2][1])\n                                  - (hull[-1][1] - hull[-2][1]) * (p[0] - hull[-2][0])) > 0:\n            hull.pop()\n        hull.append(p)\n    for q in front:\n        if q in hull:\n            continue\n        a = max(h for h in hull if h[0] < q[0])\n        b = min(h for h in hull if h[0] > q[0])\n        return by_point[q], by_point[a], by_point[b]\n    return None\n\n\nif __name__ == \"__main__\":\n    park = [Project(\"trees\", 7, 1, 10), Project(\"pond\", 7, 4, 7), Project(\"courts\", 8, 8, 6)]\n    print(unreachable(park, 10))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\nfrom itertools import combinations\n\n\n@dataclass(frozen=True)\nclass Project:\n    name: str\n    cost: int          # $k\n    shade: int         # square metres of tree canopy\n    visits: int        # extra visits a week\n\n\ndef plans(projects: list[Project], budget: int) -> dict[frozenset[str], tuple[int, int]]:\n    \"\"\"Every set of projects the budget allows, with its (shade, visits).\"\"\"\n    out = {}\n    for size in range(len(projects) + 1):\n        for chosen in combinations(projects, size):\n            if sum(p.cost for p in chosen) <= budget:\n                out[frozenset(p.name for p in chosen)] = (sum(p.shade for p in chosen),\n                                                          sum(p.visits for p in chosen))\n    return out\n\n\ndef unreachable(projects: list[Project], budget: int):\n    \"\"\"An unbeaten plan no weighting of shade and visits picks, with two plans that prove it.\n\n    Returns (plan, a, b), three sets of project names: `plan` is dominated by no plan, and `a` and\n    `b` are plans with less and more shade whose straight line passes strictly above `plan`. Returns\n    None when every unbeaten plan is picked by some weighting.\n    \"\"\"\n    # TODO: find the unbeaten plans, then one that no weighting picks, and its proof.\n    return frozenset(), frozenset(), frozenset()\n\n\nif __name__ == \"__main__\":\n    park = [Project(\"trees\", 7, 1, 10), Project(\"pond\", 7, 4, 7), Project(\"courts\", 8, 8, 6)]\n    print(unreachable(park, 10))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "1c8cf4d84857fa6c7e2d86a3f962f1b64ee37ad25998d0abfe25cd79adc296d4",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\nfrom itertools import combinations\n\n\n@dataclass(frozen=True)\nclass Project:\n    name: str\n    cost: int          # $k\n    shade: int         # square metres of tree canopy\n    visits: int        # extra visits a week\n\n\ndef plans(projects: list[Project], budget: int) -> dict[frozenset[str], tuple[int, int]]:\n    \"\"\"Every set of projects the budget allows, with its (shade, visits).\"\"\"\n    out = {}\n    for size in range(len(projects) + 1):\n        for chosen in combinations(projects, size):\n            if sum(p.cost for p in chosen) <= budget:\n                out[frozenset(p.name for p in chosen)] = (sum(p.shade for p in chosen),\n                                                          sum(p.visits for p in chosen))\n    return out\n\n\ndef unreachable(projects: list[Project], budget: int):\n    \"\"\"An unbeaten plan no weighting of shade and visits picks, with two plans that prove it.\n\n    Returns (plan, a, b), three sets of project names: `plan` is dominated by no plan, and `a` and\n    `b` are plans with less and more shade whose straight line passes strictly above `plan`. Returns\n    None when every unbeaten plan is picked by some weighting.\n    \"\"\"\n    # TODO: find the unbeaten plans, then one that no weighting picks, and its proof.\n    return frozenset(), frozenset(), frozenset()\n\n\nif __name__ == \"__main__\":\n    park = [Project(\"trees\", 7, 1, 10), Project(\"pond\", 7, 4, 7), Project(\"courts\", 8, 8, 6)]\n    print(unreachable(park, 10))\n",
+  "exercise": {
+    "main_path": "practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-02/practice-2/parks.py",
+    "test_path": "practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-02/practice-2/test_parks.py",
+    "run_command": [
+      "python3",
+      "practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-02/practice-2/parks.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-02/practice-2/target/report.xml",
+      "practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-02/practice-2/test_parks.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_compromise_plan_no_weighting_picks_is_found_with_its_proof",
+        "kind": "main",
+        "says": "an unbeaten compromise plan is returned with two plans whose line passes above it"
+      },
+      {
+        "id": "test_none_when_every_unbeaten_plan_has_a_weighting",
+        "kind": "edge",
+        "says": "when every unbeaten plan is picked by some weighting, the answer is None"
+      },
+      {
+        "id": "test_a_plan_on_the_line_between_two_others_counts_as_reachable",
+        "kind": "edge",
+        "says": "an unbeaten plan exactly on the line between two others is picked by a weighting, so the answer is None"
+      },
+      {
+        "id": "test_a_plan_that_spends_the_whole_budget_is_allowed",
+        "kind": "edge",
+        "says": "a plan that costs exactly the budget is allowed"
+      },
+      {
+        "id": "test_the_proof_uses_plans_some_weighting_picks",
+        "kind": "edge",
+        "says": "the proof's two plans are ones a weighting picks, not merely the nearest unbeaten plans"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "34-weighted-sum/README_8.1.2.md",
+      "section": "No Weight Reaches a Point Below the Segment Between Its Supported Neighbours"
+    },
+    "concepts": [
+      "a point below the segment between two feasible plans loses to one of them at every share",
+      "a supported point is returned by some weighted sum, an unsupported one by none"
+    ]
+  }
+}

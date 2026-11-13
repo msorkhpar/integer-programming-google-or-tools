@@ -1,0 +1,131 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "14-mathopt-advanced"
+  ],
+  "variant": "prose",
+  "unit": 5,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Stop the solve at a gap of your choosing",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A crew-scheduling service lets each customer choose how close to optimal a schedule must be before the solve stops. Write `stop_at(target)`, which returns a callback for `Event.MIP_SOLUTION` that asks the solver to stop once the relative gap is at most `target`:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\text{gap} = \\frac{|\\,\\text{dual bound} - \\text{primal bound}\\,|}{|\\,\\text{primal bound}\\,|}"
+    },
+    {
+      "type": "para",
+      "text": "Both bounds are in the callback data's `mip_stats` (`primal_bound`, the incumbent's value, and `dual_bound`, the best bound). The callback returns `mathopt.CallbackResult(terminate=True)` to stop, and `terminate=False` to go on. In a maximization the bound is above the incumbent; in a minimization it is below, which is why the formula takes absolute values. The tests build `CallbackData` by hand, with bounds you can read in each test. About five lines."
+    },
+    {
+      "type": "para",
+      "text": "The formula has no value when the primal bound is 0 (a division by zero) or $`\\pm\\infty`$ (no plan's value to measure against). In those cases return `terminate=False` and let the solve go on: the reference does exactly that, testing `stats.primal_bound == 0` and `math.isfinite`. The tests do not try those cases. (The lesson's `good_enough` does the same in its own way: for a maximization with positive values it treats a primal bound that is not above 0 as a gap of 100%.)"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef stop_at(target: float):\n    \"\"\"A MIP_SOLUTION callback that stops the solve once the relative gap is at most `target`.\"\"\"\n\n    def callback(data: mathopt.CallbackData) -> mathopt.CallbackResult:\n        stats = data.mip_stats\n        if stats.primal_bound == 0 or not math.isfinite(stats.primal_bound):\n            return mathopt.CallbackResult(terminate=False)      # no plan yet, or no gap to measure\n        gap = abs(stats.dual_bound - stats.primal_bound) / abs(stats.primal_bound)\n        return mathopt.CallbackResult(terminate=gap <= target)\n\n    return callback\n\n\nif __name__ == \"__main__\":\n    stats = mathopt.MipStats(primal_bound=98.0, dual_bound=100.0)\n    print(stop_at(0.03)(mathopt.CallbackData(event=mathopt.Event.MIP_SOLUTION, mip_stats=stats)).terminate)\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef stop_at(target: float):\n    \"\"\"A MIP_SOLUTION callback that stops the solve once the relative gap is at most `target`.\"\"\"\n\n    def callback(data: mathopt.CallbackData) -> mathopt.CallbackResult:\n        # TODO: the relative gap from data.mip_stats.\n        return mathopt.CallbackResult(terminate=False)\n\n    return callback\n\n\nif __name__ == \"__main__\":\n    stats = mathopt.MipStats(primal_bound=98.0, dual_bound=100.0)\n    print(stop_at(0.03)(mathopt.CallbackData(event=mathopt.Event.MIP_SOLUTION, mip_stats=stats)).terminate)\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "45eefa1306938805aab1555d41a866d2142f73d7e8658e6ddd1ff7b46e248a13",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef stop_at(target: float):\n    \"\"\"A MIP_SOLUTION callback that stops the solve once the relative gap is at most `target`.\"\"\"\n\n    def callback(data: mathopt.CallbackData) -> mathopt.CallbackResult:\n        # TODO: the relative gap from data.mip_stats.\n        return mathopt.CallbackResult(terminate=False)\n\n    return callback\n\n\nif __name__ == \"__main__\":\n    stats = mathopt.MipStats(primal_bound=98.0, dual_bound=100.0)\n    print(stop_at(0.03)(mathopt.CallbackData(event=mathopt.Event.MIP_SOLUTION, mip_stats=stats)).terminate)\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-2/stopper.py",
+    "test_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-2/test_stopper.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-2/stopper.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-2/target/report.xml",
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-2/test_stopper.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_small_gap_stops_the_solve",
+        "kind": "main",
+        "says": "a maximization at a 2% gap stops when the target is 3%"
+      },
+      {
+        "id": "test_a_large_gap_lets_it_run",
+        "kind": "main",
+        "says": "a maximization at a 5% gap goes on when the target is 3%, and stops when the target is 6%"
+      },
+      {
+        "id": "test_a_minimization_measures_the_gap_the_same_way",
+        "kind": "edge",
+        "says": "a minimization, whose bound is below its incumbent, goes on at a 5% gap and stops at 2% when the target is 3%"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "14-mathopt-advanced/README_4.3.5.md",
+      "section": "A Callback Can Stop the Solve"
+    },
+    "concepts": [
+      "a callback that ends the solve at a chosen relative gap, for either sense"
+    ]
+  }
+}

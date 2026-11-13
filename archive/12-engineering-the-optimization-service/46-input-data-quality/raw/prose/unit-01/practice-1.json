@@ -1,0 +1,168 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "46-input-data-quality"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A schema for a bus-replacement snapshot",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A city transit agency plans which buses to replace in which year, and its planning tool sends the optimization service a snapshot as JSON. The service's model is small:"
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`H`$ the horizon's years; $`D`$ the depots; $`V`$ the buses, each kept at a depot $`d(b) \\in D`$; $`T_b = \\{e_b, \\dots, l_b\\}`$ the years bus $`b`$ may be replaced in."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`c_b`$, the cost of replacing bus $`b`$ ($k); $`A_y`$, the budget of year $`y`$ ($k)."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_{b,y} \\in \\{0, 1\\}`$ for $`b \\in V`$, $`y \\in T_b`$: bus $`b`$ is replaced in year $`y`$."
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{y \\in T_b} x_{b,y} &= 1 && \\forall b \\in V && \\text{(replace}_b) \\\\\n\\sum_{b \\in V:\\, y \\in T_b} c_b\\, x_{b,y} &\\le A_y && \\forall y \\in H && \\text{(budget}_y)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "In `fleet.py`, finish the schema so that a snapshot is accepted exactly when this model can be built from it and its parameters make sense: one variable family per bus (no bus listed twice), every bus at a listed depot, one budget row for every year of the horizon (not zero, not two), a window that holds at least one year, a cost above zero, and a budget of zero or more. Rules across records go in `FleetSnapshot.references_resolve`; when several fail, one `ValueError` must name every bus and year involved. The tests validate JSON text with `FleetSnapshot.model_validate_json` and look for the ids and years in the error's messages. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom pydantic import BaseModel, Field, model_validator\n\n\nclass Bus(BaseModel):\n    bus_id: str\n    depot: str\n    cost: int = Field(gt=0)                     # $k\n    earliest: int\n    latest: int\n\n    @model_validator(mode=\"after\")\n    def window_holds_a_year(self):\n        if self.earliest > self.latest:\n            raise ValueError(f\"{self.bus_id}: no year between {self.earliest} and {self.latest}\")\n        return self\n\n\nclass YearBudget(BaseModel):\n    year: int\n    amount: int = Field(ge=0)                   # $k\n\n\nclass FleetSnapshot(BaseModel):\n    schema_version: int\n    horizon: list[int]\n    depots: list[str]\n    budgets: list[YearBudget]\n    buses: list[Bus]\n\n    @model_validator(mode=\"after\")\n    def references_resolve(self):\n        problems: list[str] = []\n        seen = set()\n        for bus in self.buses:\n            if bus.bus_id in seen:\n                problems.append(f\"bus {bus.bus_id} is listed twice\")\n            seen.add(bus.bus_id)\n            if bus.depot not in self.depots:\n                problems.append(f\"bus {bus.bus_id} is at unlisted depot {bus.depot}\")\n        for year in self.horizon:\n            rows = [b for b in self.budgets if b.year == year]\n            if len(rows) != 1:\n                problems.append(f\"year {year} has {len(rows)} budget rows\")\n        if problems:\n            raise ValueError(\"; \".join(problems))\n        return self\n\nif __name__ == \"__main__\":\n    text = ('{\"schema_version\": 3, \"horizon\": [2027], \"depots\": [\"North\"], '\n            '\"budgets\": [{\"year\": 2027, \"amount\": 900}], '\n            '\"buses\": [{\"bus_id\": \"B101\", \"depot\": \"North\", \"cost\": 450, \"earliest\": 2027, \"latest\": 2027}]}')\n    print(FleetSnapshot.model_validate_json(text))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom pydantic import BaseModel, model_validator\n\n\nclass Bus(BaseModel):\n    # TODO: a bound on cost.\n    bus_id: str\n    depot: str\n    cost: int                                   # $k\n    earliest: int\n    latest: int\n\n    @model_validator(mode=\"after\")\n    def window_holds_a_year(self):\n        # TODO: refuse a window that holds no year.\n        return self\n\n\nclass YearBudget(BaseModel):\n    # TODO: a budget cannot be negative.\n    year: int\n    amount: int                                 # $k\n\n\nclass FleetSnapshot(BaseModel):\n    schema_version: int\n    horizon: list[int]\n    depots: list[str]\n    budgets: list[YearBudget]\n    buses: list[Bus]\n\n    @model_validator(mode=\"after\")\n    def references_resolve(self):\n        problems: list[str] = []\n        # TODO: every rule across records; add one message per problem found.\n        if problems:\n            raise ValueError(\"; \".join(problems))\n        return self\n\n\nif __name__ == \"__main__\":\n    text = ('{\"schema_version\": 3, \"horizon\": [2027], \"depots\": [\"North\"], '\n            '\"budgets\": [{\"year\": 2027, \"amount\": 900}], '\n            '\"buses\": [{\"bus_id\": \"B101\", \"depot\": \"North\", \"cost\": 450, \"earliest\": 2027, \"latest\": 2027}]}')\n    print(FleetSnapshot.model_validate_json(text))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 6,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "c284bb71a5094dc5be12e58a62084472ba2fa9fee28db3ab4685f06912d99a27",
+  "starting_code": "from __future__ import annotations\n\nfrom pydantic import BaseModel, model_validator\n\n\nclass Bus(BaseModel):\n    # TODO: a bound on cost.\n    bus_id: str\n    depot: str\n    cost: int                                   # $k\n    earliest: int\n    latest: int\n\n    @model_validator(mode=\"after\")\n    def window_holds_a_year(self):\n        # TODO: refuse a window that holds no year.\n        return self\n\n\nclass YearBudget(BaseModel):\n    # TODO: a budget cannot be negative.\n    year: int\n    amount: int                                 # $k\n\n\nclass FleetSnapshot(BaseModel):\n    schema_version: int\n    horizon: list[int]\n    depots: list[str]\n    budgets: list[YearBudget]\n    buses: list[Bus]\n\n    @model_validator(mode=\"after\")\n    def references_resolve(self):\n        problems: list[str] = []\n        # TODO: every rule across records; add one message per problem found.\n        if problems:\n            raise ValueError(\"; \".join(problems))\n        return self\n\n\nif __name__ == \"__main__\":\n    text = ('{\"schema_version\": 3, \"horizon\": [2027], \"depots\": [\"North\"], '\n            '\"budgets\": [{\"year\": 2027, \"amount\": 900}], '\n            '\"buses\": [{\"bus_id\": \"B101\", \"depot\": \"North\", \"cost\": 450, \"earliest\": 2027, \"latest\": 2027}]}')\n    print(FleetSnapshot.model_validate_json(text))\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-1/fleet.py",
+    "test_path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-1/test_fleet.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-1/fleet.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-1/target/report.xml",
+      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-1/test_fleet.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_clean_snapshot_is_accepted_and_a_duplicate_bus_refused",
+        "kind": "main",
+        "says": "a clean snapshot is accepted, and one that lists a bus twice is refused, naming the bus"
+      },
+      {
+        "id": "test_a_bus_at_an_unlisted_depot_is_refused_by_name",
+        "kind": "edge",
+        "says": "a bus kept at a depot the snapshot does not list is refused, naming the bus"
+      },
+      {
+        "id": "test_a_horizon_year_without_a_budget_is_refused",
+        "kind": "edge",
+        "says": "a year of the horizon with no budget row is refused, naming the year"
+      },
+      {
+        "id": "test_a_year_with_two_budget_rows_is_refused",
+        "kind": "edge",
+        "says": "a year with two budget rows is refused too: each year has exactly one"
+      },
+      {
+        "id": "test_every_problem_is_reported_in_one_error",
+        "kind": "edge",
+        "says": "a snapshot with two problems across records names both in one error"
+      },
+      {
+        "id": "test_a_reversed_window_is_refused_and_a_one_year_window_accepted",
+        "kind": "edge",
+        "says": "a window whose earliest year is after its latest is refused; a one-year window is fine"
+      },
+      {
+        "id": "test_a_zero_budget_is_accepted_and_a_negative_one_refused",
+        "kind": "edge",
+        "says": "a year may have a budget of zero, but not a negative one"
+      },
+      {
+        "id": "test_a_bus_that_costs_nothing_is_refused",
+        "kind": "edge",
+        "says": "a replacement bus must cost something"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "46-input-data-quality/README_12.2.1.md",
+      "section": "One Schema Validates the Whole Snapshot and Reports Every Problem in One Pass"
+    },
+    "concepts": [
+      "a snapshot schema nests its records, bounds each parameter, and checks every reference across records in one model validator that reports every problem at once"
+    ]
+  }
+}

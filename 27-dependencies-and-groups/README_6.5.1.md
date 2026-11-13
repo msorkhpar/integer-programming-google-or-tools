@@ -1,0 +1,395 @@
+# 6.5.1 Must-Do vs. Discretionary Planning Groups
+
+GridCap's planners split the small portfolio's 40 projects into two kinds before they plan anything.
+Four are **must-do** projects: P003 and P010 (Valley vegetation clearing), P017 (a Coast
+transmission repair) and P039 (a Coast undergrounding job) are owed to a regulator or a safety
+commitment, and the plan has to fund them whatever they are worth. The other 36 are
+**discretionary**: each is funded only if it earns its place against the others. A third kind of
+rule sits between the two: "every aging asset with a repair and a replace option must get one of
+them", or "at least one Ridge circuit goes underground", where the group is mandated but no single
+project is.
+
+A **planning group** is a named set of projects that the plan treats by one rule. This lesson
+writes the must-do group, the discretionary group and the mandated groups as rows of the
+multi-period model of lessons 6.4.1 to 6.4.4, checks before the solve that the mandates can fit, and measures
+what each mandate costs, in four rules.
+
+GridCap is a fictional utility's portfolio, generated for this course; the budget cuts and the
+mandates on groups below are invented for the lesson.
+
+## A Must-Do Is an Equality Row, Not a Large Weight
+
+The model is the one of lesson 6.4.1: a binary $`x_{i,t}`$ for each project $`i`$ and each year
+$`t`$ it may start in, and $`\text{started}(i) = \sum_{t \in T_i} x_{i,t}`$, which is 1 if project
+$`i`$ is funded in some year and 0 if it is not. The two groups are told apart by one character of
+their row:
+
+```math
+\text{started}(i) \le 1 \quad \forall i \in P \setminus M \quad \text{(once}_i), \qquad
+\text{started}(i) = 1 \quad \forall i \in M \quad \text{(must}_i)
+```
+
+with $`M`$ the set of must-do projects. The discretionary row says "at most once": the project may
+be dropped. The must-do row says "exactly once": every plan the model accepts funds it, in one of
+its start years, and the model chooses which.
+
+There is a second way people write a mandate, and it is common in inherited models: leave every
+project discretionary and add a large bonus to each must-do's value, so that the solver "wants" it
+badly enough. `must_do_rows.py` builds both, with a bonus of $100,000k per must-do:
+
+```python
+def equality(portfolio):
+    plan = build(portfolio)                                  # must_i: started(i) == 1
+    return plan, 0
+
+
+def weighted(portfolio):
+    plan = build(portfolio, must_do=False)                   # once_i: started(i) <= 1 for every project
+    bonus = sum(BONUS * plan.started(i) for i in must)
+    plan.model.maximize(plan.model.objective.as_linear_expression() + bonus)
+    return plan, bonus
+```
+
+It solves both with the budgets as generated, then again after cutting the 2030 and 2031 budgets
+to $4,000k each. The NPV column is computed from the plan itself, without the bonus:
+
+```text
+must-do projects: ['P003', 'P010', 'P017', 'P039']
+budgets as generated
+  equality  OPTIMAL  objective $24,260k  NPV $24,260k  must-dos funded 4 of 4: ['P003', 'P010', 'P017', 'P039']
+  weighted  OPTIMAL  objective $424,260k  NPV $24,260k  must-dos funded 4 of 4: ['P003', 'P010', 'P017', 'P039']
+2030 and 2031 budgets cut to $4,000k
+  equality  INFEASIBLE
+  weighted  OPTIMAL  objective $321,216k  NPV $21,216k  must-dos funded 3 of 4: ['P003', 'P010', 'P039']
+```
+
+With the generated budgets the two agree on the plan, and only the objective differs, by
+$400,000k of bonus that no one can spend. After the cut they disagree on the one thing that
+matters. P017 costs $5,310k in a single year, 2030 or 2031, and both years now have $4,000k. No
+plan can fund it, so no plan keeps every rule of the equality model, and the solver says so with
+the status `INFEASIBLE` (lesson 6.1.3 defined it: no plan satisfies every row). The weighted model
+has no rule to break. It returns `OPTIMAL` and a plan that quietly drops P017, with an objective of
+$321,216k that is neither the plan's value nor anything else a planner can use.
+
+`INFEASIBLE` is the right answer here. The planner needs to hear "the mandates do not fit the
+budget", and a plan that drops a regulatory commitment without saying so is worse than no plan. A
+weight also has to be chosen: too small, and the solver drops the must-do whenever discretionary
+work is worth more; large, and the objective is mostly bonus, which makes the solver's gap
+(lesson 3.4.1) a percentage of a number that means nothing. The rule to keep is simple: what the
+plan *must* do is a constraint, and what the plan *would like* to do is a term in the objective.
+
+## Must-Dos Claim Their Money First, and You Can Check That Before Solving
+
+Every plan funds the must-dos, so their spend comes out of each year's budget before any
+discretionary project is considered. Part of that is known from the data alone, before a model is
+built. A must-do with one start year spends a fixed amount in fixed years. A must-do with a window
+of several start years can move, so in a given year it is certain to spend only the *least* it
+spends there over all its start years, which is often 0. Summing that least spend over the
+must-dos gives a floor on each year's must-do spend:
+
+```python
+def least_must_spend(portfolio) -> dict[int, int]:
+    """The least the must-dos can spend in each year, whatever start years they get."""
+    least = {y: 0 for y in portfolio.years}
+    for p in portfolio.projects:
+        if p.must_do:
+            for y in portfolio.years:
+                least[y] += min(p.spend(t).get(y, 0) for t in p.starts())
+    return least
+```
+
+```text
+year  budget  must-do least  left for discretionary
+2027   8,890              0                   8,890
+2028   8,120              0                   8,120
+2029   8,760              0                   8,760
+2030   8,610              0                   8,610
+2031   7,850            140                   7,710
+precheck: no problem found
+```
+
+Only P003 has a single start year (2031), so only its $140k is certain. The others can move, and
+the yearly floor does not see them. Two more checks see more. One asks whether each must-do, on its
+own, has a start year whose spend fits every year's budget; if not, no plan can fund it, whatever
+else the plan does. The other compares the must-dos' total cost with the budgets' total.
+
+```python
+def fits_alone(portfolio, p) -> bool:
+    """Some start year of `p` keeps its own spend within every year's budget."""
+    return any(all(amount <= portfolio.budget[y] for y, amount in p.spend(t).items()) for t in p.starts())
+
+
+def precheck(portfolio) -> list[str]:
+    problems = []
+    for p in portfolio.projects:
+        if p.must_do and not fits_alone(portfolio, p):
+            problems.append(f"{p.project_id} fits the budgets in none of its start years")
+    least = least_must_spend(portfolio)
+    for y in portfolio.years:
+        if least[y] > portfolio.budget[y]:
+            problems.append(f"{y}: must-dos need at least {money(least[y])}, budget {money(portfolio.budget[y])}")
+    need = sum(p.capex for p in portfolio.projects if p.must_do)
+    if need > sum(portfolio.budget.values()):
+        problems.append(f"plan: must-dos cost {money(need)}, budgets total {money(sum(portfolio.budget.values()))}")
+    return problems
+```
+
+After the solve, the same split can be read off the plan: what the must-dos spent in each year,
+and what was left to the discretionary group. Then the program tries the precheck on three budget
+cuts and solves each:
+
+```text
+OPTIMAL  NPV $24,260k
+year  budget  must-do spend  discretionary spend
+2027   8,890              0                8,750
+2028   8,120          1,170                6,800
+2029   8,760            880                7,750
+2030   8,610          5,310                3,250
+2031   7,850            270                7,450
+budgets {2030: 4000, 2031: 4000}: precheck ['P017 fits the budgets in none of its start years']; solve INFEASIBLE
+budgets {2031: 4000}: precheck no problem found; solve OPTIMAL
+budgets {2030: 5000, 2031: 5400}: precheck no problem found; solve INFEASIBLE
+```
+
+In the plan, P017 takes $5,310k of 2030's $8,610k, which leaves $3,250k for discretionary work
+there (the other $50k is unspent). The first cut is the one from the previous section, and the
+precheck names the project at fault, which the solver's single word `INFEASIBLE` does not. The
+second cut leaves room for every must-do. The third shows the limit of the checks. Each must-do
+fits on its own: P017 cannot start in 2030 ($5,310k is more than $5,000k), but it fits in 2031
+($5,310k is at most $5,400k). Together they do not: in 2031, P017's $5,310k and P003's $140k make
+$5,450k, which is $50k over. No check that looks at one project, or at one year's floor, sees that.
+
+So the checks are **necessary, not sufficient**: when one fails, the model is infeasible, and when
+all pass, it may still be. They are cheap and they name the culprit, so run them first; when they
+pass and the solver still says `INFEASIBLE`, lessons 9.1.2 and 9.1.3 find the rows that conflict.
+
+## A Group Can Be Mandated When No Single Project Is
+
+Some mandates name a group. Two are common in asset planning:
+
+- **Every asset that is failing gets addressed**, by whichever of its options the plan picks. In
+  GridCap small, assets A001 and A030 each have a replace and a repair project, in alternative
+  groups G001 (P001, P002) and G030 (P030, P031). "Address each asset" is *exactly one* member of
+  each group: $`\sum_{i \in g} \text{started}(i) = 1`$.
+- **At least one of a set gets done.** "At least one Ridge circuit is put underground in the plan",
+  with P024 and P037 the Ridge undergrounding projects, is $`\text{started}(P024) +
+  \text{started}(P037) \ge 1`$.
+
+Neither is a must-do on a project: no single project in either group has to be funded. Each is one
+row on a sum of `started` terms, the counting rows of lesson 6.1.3 written over start variables:
+
+```python
+def address_each_asset(plan):     # every asset with an alternative group is repaired or replaced
+    for g, members in groups.items():
+        plan.model.add_linear_constraint(sum(plan.started(i) for i in members) == 1, name=f"address_{g}")
+
+
+def underground_one(plan):        # at least one Ridge circuit is put underground in the plan
+    plan.model.add_linear_constraint(sum(plan.started(i) for i in UNDERGROUND) >= 1, name="underground_Ridge")
+```
+
+The program also writes the mistake that turns a group mandate into project mandates: every member
+made a must-do. It solves each version and prints, for the six projects involved, the year each
+starts in (`-` for not funded):
+
+```text
+no group mandate    NPV $24,260k  costs     $0k  starts {'P001': 2028, 'P002': '-', 'P030': '-', 'P031': 2028, 'P024': '-', 'P037': '-'}
+address each asset  NPV $24,260k  costs     $0k  starts {'P001': 2028, 'P002': '-', 'P030': '-', 'P031': 2028, 'P024': '-', 'P037': '-'}
+underground one     NPV $24,196k  costs    $64k  starts {'P001': 2028, 'P002': '-', 'P030': '-', 'P031': 2028, 'P024': '-', 'P037': 2031}
+underground both    NPV $23,987k  costs   $273k  starts {'P001': 2028, 'P002': '-', 'P030': '-', 'P031': 2028, 'P024': 2029, 'P037': 2031}
+both G030 members   INFEASIBLE
+```
+
+- **Address each asset** costs nothing on these budgets: the best plan already replaces A001 (P001)
+  and repairs A030 (P031). The row still belongs in the model. It is what stops a later plan, with
+  other budgets, from leaving a failing asset untouched.
+- **Underground one** costs $64k. The best plan funded neither project, and the cheapest way to
+  meet the rule is P037 in 2031.
+- **Underground both** is the mistake: it costs $273k, more than four times as much, because it
+  demands a project the regulator never asked for.
+- **Both G030 members** is the same mistake on an alternative group, and here it is fatal. The
+  alternative row says $`\text{started}(P030) + \text{started}(P031) \le 1`$, the two must-do rows
+  say each is 1, and no plan keeps all three.
+
+Write a mandate at the level the regulator wrote it. "One of these" is one row on the group; "each
+of these" is one row per project.
+
+<!-- practice 1 -->
+
+## The Cost of a Mandate Is the NPV You Give Up for It
+
+A planner will ask what the mandates cost. The question has an exact answer: the NPV of the best
+plan without a mandate, less the NPV of the best plan with it. Removing a must-do row does not
+remove the project; it becomes discretionary (its row turns into "at most once"), and the solver
+keeps it if it is worth its money:
+
+```python
+def best(relaxed: set[str]) -> tuple[float, dict[str, int]]:
+    """The best plan when the must-dos in `relaxed` become discretionary."""
+    plan = build(small, must_do=False)
+    for i in must:
+        if i not in relaxed:
+            plan.model.add_linear_constraint(plan.started(i) == 1, name=f"must_{i}")
+    result = solve_highs(plan.model)
+    return result.objective_value(), schedule(plan, result)
+```
+
+```text
+all must-dos enforced   NPV $24,260k
+  without must_P003     NPV $24,260k  mandate costs $0k  (P003 still funded)
+  without must_P010     NPV $24,260k  mandate costs $0k  (P010 still funded)
+  without must_P017     NPV $26,103k  mandate costs $1,843k  (P017 dropped)
+  without must_P039     NPV $24,784k  mandate costs $524k  (P039 dropped)
+no must-do enforced     NPV $26,646k  mandates cost $2,386k  funded anyway: ['P003']
+```
+
+Three things in this table are worth saying out loud to a planner.
+
+- **A mandate the plan would meet anyway costs nothing.** P003 and P010, small vegetation jobs,
+  stay in the plan when their own row is lifted.
+- **P017 is the expensive one.** Without its row the plan drops it and spends its $5,310k on work
+  worth $1,843k more. That number is the price of the Coast repair commitment, in the model's own
+  units.
+- **The costs do not add up.** One at a time they sum to $1,843k + $524k = $2,367k; lifted
+  together they cost $2,386k. Each cost is measured against the same plan, but when several rows
+  are lifted at once the solver rearranges around all of them together, through the budgets they
+  share. Even P010, which costs nothing on its own, leaves the plan when every mandate is lifted.
+  Report each mandate's cost and the joint cost, and never the sum as the joint cost.
+
+This is the "forcing in and out" idea that section 9 turns into a report (lesson 9.3.2): the value
+of a rule is measured by solving with and without it.
+
+<!-- practice 2 -->
+
+## The Model
+
+The planning model of this lesson, in one place. `planning_model.build` writes the GridCap rules;
+the group mandates are added by `group_mandates.py`, one at a time.
+
+**Sets.** $`P`$ the projects; $`Y`$ the plan's years; $`T_i \subseteq Y`$ the start years project
+$`i`$ may use; $`M \subseteq P`$ the must-do projects; $`\mathcal{G}`$ the alternative groups, each a
+set of projects; $`\mathcal{A} \subseteq \mathcal{G}`$ the groups whose asset must be addressed;
+$`U \subseteq P`$ a set of which at least one must be funded (here P024 and P037); $`C \subseteq P`$
+the child projects, with parent $`p(c)`$ and lag $`L_c`$ years.
+
+**Parameters.** $`\text{npv}_{i,t}`$, the NPV of project $`i`$ started in year $`t`$ ($k);
+$`c_{i,k}`$, what project $`i`$ spends in its $`k`$-th year of work, $`k = 0, 1, \dots`$ ($k);
+$`B_y`$, the budget of year $`y`$ ($k).
+
+**Variables.** $`x_{i,t} \in \{0, 1\}`$ for every $`i \in P`$ and $`t \in T_i`$: project $`i`$
+starts in year $`t`$. We write $`\text{started}(i) = \sum_{t \in T_i} x_{i,t}`$.
+
+**Objective.**
+
+```math
+\max \; \sum_{i \in P} \sum_{t \in T_i} \text{npv}_{i,t}\, x_{i,t}
+```
+
+**Constraints.**
+
+```math
+\begin{aligned}
+\text{started}(i) &\le 1 && \forall i \in P \setminus M && \text{(once}_i) \quad \leftarrow \text{this lesson} \\
+\text{started}(i) &= 1 && \forall i \in M && \text{(must}_i) \quad \leftarrow \text{this lesson} \\
+\textstyle\sum_{i \in g} \text{started}(i) &\le 1 && \forall g \in \mathcal{G} && \text{(alt}_g) \\
+\textstyle\sum_{i \in g} \text{started}(i) &= 1 && \forall g \in \mathcal{A} && \text{(address}_g) \quad \leftarrow \text{this lesson} \\
+\textstyle\sum_{i \in U} \text{started}(i) &\ge 1 && && \text{(underground\_Ridge)} \quad \leftarrow \text{this lesson} \\
+\textstyle\sum_{u \in T_c,\, u \le t} x_{c,u} &\le \textstyle\sum_{s \in T_{p(c)},\, s \le t - L_c} x_{p(c),s} && \forall c \in C,\ t \in T_c && \text{(after}_{c,t}) \\
+\textstyle\sum_{i \in P} \sum_{t \in T_i,\, t \le y} c_{i,\,y-t}\, x_{i,t} &\le B_y && \forall y \in Y && \text{(budget}_y)
+\end{aligned}
+```
+
+| Label | Row name in the code |
+| --- | --- |
+| once$`_i`$, must$`_i`$ | `once_P001`, `must_P017` |
+| alt$`_g`$, address$`_g`$ | `alt_G030`, `address_G030` |
+| after$`_{c,t}`$ | `after_P023_2029` |
+| budget$`_y`$ | `budget_2030` |
+
+The weighted version in `must_do_rows.py` drops every must$`_i`$ row, writes once$`_i`$ for all of
+$`P`$, and maximizes $`\sum_{i,t} \text{npv}_{i,t}\, x_{i,t} + W \sum_{i \in M} \text{started}(i)`$
+with $`W = 100{,}000`$; this lesson shows why not to.
+
+## Summary
+
+- **A must-do is an equality row, not a large weight.** The weight hides an infeasible mandate
+  behind an `OPTIMAL` plan that drops it; the equality reports `INFEASIBLE`.
+- **Must-dos claim their money first, and you can check that before solving.** Check each must-do
+  alone, each year's least must-do spend, and the total. The checks are necessary, not
+  sufficient.
+- **A group can be mandated when no single project is.** "One of these" is one row on the group's
+  sum; making each member a must-do over-mandates, and on an alternative group is infeasible.
+- **The cost of a mandate is the NPV you give up for it.** Solve with and without the row. Costs of
+  several mandates do not add up.
+
+## Reference
+
+| Rule in words | Row |
+| --- | --- |
+| project $`i`$ may be funded | $`\text{started}(i) \le 1`$ |
+| project $`i`$ must be funded | $`\text{started}(i) = 1`$ |
+| exactly one of group $`g`$ must be funded | $`\sum_{i \in g} \text{started}(i) = 1`$ |
+| at least one of $`U`$ must be funded | $`\sum_{i \in U} \text{started}(i) \ge 1`$ |
+| cost of a mandate | best NPV without its row $`-`$ best NPV with it |
+
+| Precheck before the solve | Fails when |
+| --- | --- |
+| each must-do alone | no start year keeps the project's own spend within every year's budget |
+| each year's floor | the must-dos' least spend in a year exceeds its budget |
+| the whole plan | the must-dos' total cost exceeds the budgets' total |
+
+**Further reading:** [MathOpt (OR-Tools)](https://developers.google.com/optimization/math_opt) (models are built once and solved by any supported solver, with a detailed termination reason for each solve); [MathOpt sample integer_programming.py (OR-Tools)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/samples/python/integer_programming.py) (reads a solution only after checking the termination reason, the habit that catches an `INFEASIBLE` mandate); [Integer Programming, Chapter 9 of Applied Mathematical Programming (MIT 15.053)](https://web.mit.edu/15.053/www/AMP-Chapter-09.pdf) (section 9.1: capital budgeting as go/no-go decisions under resource rows).
+
+## Challenges
+
+1. A regulator says "P017 must be done by 2030". Which variable do you remove, and what does
+   `must_do_load.py`'s first precheck then say about the generated budgets?
+2. In `cost_of_mandates.py`, also lift the mandate "underground one Ridge circuit". Predict whether
+   P037 stays in the plan.
+3. Write a precheck for the group mandate "exactly one of each alternative group": what must hold
+   for at least one member of the group?
+
+## Design Note: Keep Mandates in the Data, Not in the Code
+
+GridCap stores the must-do flag on each project, and `build` turns it into rows. A mandate on a
+group (address this asset, underground one of these) deserves the same treatment: a table of
+groups with a kind ("exactly one", "at least one") and a list of members, read by one function
+that writes the rows. Then a planner can see every mandate in one place, a test can check that
+each one is in the model (lesson 12.3.1), and lifting a mandate to price it is a change of data,
+not of code.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson
+shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy
+of the code, so the course's own files never change.
+
+**must_do_rows.py.** Solves GridCap small with must-dos as equality rows and as a large bonus,
+before and after a budget cut (*A Must-Do Is an Equality Row, Not a Large Weight*). *Try:* Lower
+`BONUS` to 1,000. Predict whether the weighted model still funds all four must-dos with the
+generated budgets.
+
+- Program: [must_do_rows.py](src/must_do_rows.py)
+
+**must_do_load.py.** Checks the must-dos against the budgets before the solve and splits the plan's
+spend between must-do and discretionary work (*Must-Dos Claim Their Money First*). *Try:* Cut 2028
+to $1,000k. Predict which check fails first.
+
+- Program: [must_do_load.py](src/must_do_load.py)
+
+**group_mandates.py.** Adds mandates on groups of projects, and the mistake of mandating every
+member (*A Group Can Be Mandated When No Single Project Is*). *Try:* Require at least one of the
+three Plains distribution replacements P013, P026 and P040. Predict the cost.
+
+- Program: [group_mandates.py](src/group_mandates.py)
+
+**cost_of_mandates.py.** Prices each must-do by solving without its row, and all of them together
+(*The Cost of a Mandate Is the NPV You Give Up for It*). *Try:* Price the mandates with the 2030
+budget raised by $2,000k. Predict whether P017 still costs the most.
+
+- Program: [cost_of_mandates.py](src/cost_of_mandates.py)
+
+**planning_model.py.** The model builder every program of this module imports: start variables,
+once and must-do rows, alternatives, parent rows, spend and budgets. It runs nothing itself.
+
+- Library: [planning_model.py](src/planning_model.py)

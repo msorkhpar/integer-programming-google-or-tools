@@ -1,0 +1,148 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "12-ortools-landscape"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Pair crews with depots using the assignment solver",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility (not GridCap) sends its repair crews to depots each morning, one crew per depot, and wants the least total travel. Some crews are not cleared for some depots. The data is a matrix `hours[k][d]`: whole travel hours for crew `k` to reach depot `d`, or `None` where crew `k` is not cleared for depot `d`. There are as many crews as depots."
+    },
+    {
+      "type": "para",
+      "text": "Write `pair(hours)` in `pairing.py` with OR-Tools' assignment solver, `linear_sum_assignment.SimpleLinearSumAssignment`. It returns `(total_hours, depot_of)`, where `depot_of[k]` is the depot crew `k` goes to, or `None` when no pairing gives every crew a depot it is cleared for. The problem it solves:"
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`K`$, the crews; $`D`$, the depots ($`|K| = |D|`$); $`A \\subseteq K \\times D`$, the cleared pairs (the entries that are not `None`)."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`h_{k,d}`$, the hours for each $`(k, d) \\in A`$."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`y_{k,d} \\in \\{0, 1\\}`$ for every $`(k, d) \\in A`$."
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\min \\;& \\sum_{(k,d) \\in A} h_{k,d}\\, y_{k,d} \\\\\n\\text{s.t. } & \\sum_{d : (k,d) \\in A} y_{k,d} = 1 && \\forall k \\in K && \\text{(one\\_depot}_k) \\\\\n& \\sum_{k : (k,d) \\in A} y_{k,d} = 1 && \\forall d \\in D && \\text{(one\\_crew}_d)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "You do not write this model: the assignment solver takes it as arcs. Give it one arc per cleared pair (`add_arc_with_cost`), call `solve()`, and read `optimal_cost()` and `right_mate(k)`. Check what `solve()` returns before you read anything: it is a status, one of `OPTIMAL`, `INFEASIBLE` and `POSSIBLE_OVERFLOW`, and you compare it with the solver's own `solver.OPTIMAL`. About ten lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.graph.python import linear_sum_assignment\n\n\ndef pair(hours: list[list[int | None]]) -> tuple[int, list[int]] | None:\n    \"\"\"Least total hours with depot_of[k] for each crew k; None when no full pairing exists.\"\"\"\n    solver = linear_sum_assignment.SimpleLinearSumAssignment()\n    for k, row in enumerate(hours):\n        for d, h in enumerate(row):\n            if h is not None:\n                solver.add_arc_with_cost(k, d, h)\n    if solver.solve() != solver.OPTIMAL:\n        return None\n    return solver.optimal_cost(), [solver.right_mate(k) for k in range(len(hours))]\n\n\nif __name__ == \"__main__\":\n    print(pair([[4, 3, None], [2, 5, 6], [7, None, 4]]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.graph.python import linear_sum_assignment\n\n\ndef pair(hours: list[list[int | None]]) -> tuple[int, list[int]] | None:\n    \"\"\"Least total hours with depot_of[k] for each crew k; None when no full pairing exists.\"\"\"\n    # TODO: one arc per cleared pair, solve, check the status, read the cost and each crew's depot.\n    return 0, []\n\n\nif __name__ == \"__main__\":\n    print(pair([[4, 3, None], [2, 5, 6], [7, None, 4]]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 6,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "0f4db454d6e174c6fc2518b689ded5208b96b0a2e55fbca4fbd2cf1dd111473e",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.graph.python import linear_sum_assignment\n\n\ndef pair(hours: list[list[int | None]]) -> tuple[int, list[int]] | None:\n    \"\"\"Least total hours with depot_of[k] for each crew k; None when no full pairing exists.\"\"\"\n    # TODO: one arc per cleared pair, solve, check the status, read the cost and each crew's depot.\n    return 0, []\n\n\nif __name__ == \"__main__\":\n    print(pair([[4, 3, None], [2, 5, 6], [7, None, 4]]))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/12-ortools-landscape/prose/unit-01/practice-2/pairing.py",
+    "test_path": "practice/04-google-or-tools-in-depth/12-ortools-landscape/prose/unit-01/practice-2/test_pairing.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/12-ortools-landscape/prose/unit-01/practice-2/pairing.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/12-ortools-landscape/prose/unit-01/practice-2/target/report.xml",
+      "practice/04-google-or-tools-in-depth/12-ortools-landscape/prose/unit-01/practice-2/test_pairing.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_three_crews_get_the_cheapest_pairing",
+        "kind": "main",
+        "says": "three crews and three depots are paired at the least total hours any pairing has"
+      },
+      {
+        "id": "test_the_cheapest_pairing_is_not_each_crews_nearest",
+        "kind": "main",
+        "says": "four crews are paired at the least total hours even where a crew's nearest depot goes to another crew"
+      },
+      {
+        "id": "test_a_pair_marked_none_is_never_used",
+        "kind": "edge",
+        "says": "a crew is never sent to a depot it is not cleared for, however cheap that would look"
+      },
+      {
+        "id": "test_no_full_pairing_gives_none",
+        "kind": "edge",
+        "says": "when the cleared pairs cannot give every crew its own depot, the answer is None"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/12-ortools-landscape/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "12-ortools-landscape/README_4.1.1.md",
+      "section": "The Special-Purpose Solvers Take One Problem Shape, and No Model at All"
+    },
+    "concepts": [
+      "the knapsack and assignment solvers take one problem shape as data and report trouble through a status"
+    ]
+  }
+}

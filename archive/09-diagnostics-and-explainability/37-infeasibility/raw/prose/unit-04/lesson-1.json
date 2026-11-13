@@ -1,0 +1,470 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "09-diagnostics-and-explainability",
+    "37-infeasibility"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Elastic constraints and feasibility relaxation",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "9.1.4 Elastic Constraints and Feasibility Relaxation"
+    },
+    {
+      "type": "para",
+      "text": "Lesson 9.1.3 found three conflicts in GridCap's Budget Lock scenario. A conflict says what clashes. Finance asks a different question: *what is the smallest change that gives us a plan?* Should the 2028 budget rise by $40k, or by $500k? Is one more crew-month enough? This lesson answers with **elastic constraints**: every rule planners could negotiate may bend, each unit of bending has a price, and the solver finds the cheapest set of bends that leaves a plan. Gurobi builds the same model for you as `feasRelax`, and the end of the lesson checks that both give the same answer. GridCap is a fictional utility; none of its numbers are real."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The model of lesson 9.1.1 with every soft row made elastic. The marked items are new. Everything else (sets, parameters, $`x_{i,t} \\in \\{0, 1\\}`$, the hard rows) is as in that lesson."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** As in lesson 9.1.1, plus $`S`$, the **soft** rows: every $`\\text{budget}_y`$, $`\\text{crews}_{q,y}`$, $`\\text{floor}_r`$, $`\\text{force}`$ and $`\\text{must}_i`$ row (30 rows on the Budget Lock scenario). The **hard** rows, which never bend, are $`\\text{once}_i`$, $`\\text{alt}_g`$ and $`\\text{after}_{c,t}`$: bending them gives a plan that is not a plan (a project started twice, two alternatives, a child before its parent). $`\\leftarrow`$ new"
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** As in lesson 9.1.1, plus each soft row $`s`$'s price per unit of bending, $`w_s`$, and an upper limit on its bending, $`U_s`$ (used only by the counting objective). Write soft row $`s`$ as $`\\ell_s \\le a_s^\\top x \\le u_s`$, where $`\\ell_s`$ or $`u_s`$ may be infinite. $`\\leftarrow`$ new"
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_{i,t} \\in \\{0, 1\\}`$ as before; for each soft row $`s`$, $`o_s \\ge 0`$ (how far the row may go **over** its upper bound) when $`u_s`$ is finite, and $`v_s \\ge 0`$ (how far it may fall **under** its lower bound) when $`\\ell_s`$ is finite, both continuous; and, for the counting objective only, $`z_s \\in \\{0, 1\\}`$, \"row $`s`$ bends\". $`\\leftarrow`$ new"
+    },
+    {
+      "type": "para",
+      "text": "**Objectives**, one per question, each in its own solve:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n&\\min \\; \\sum_{s \\in S} w_s\\, (o_s + v_s) && \\text{(least weighted violation)} \\\\\n&\\min \\; \\sum_{s \\in S} z_s && \\text{(fewest rows bent)} \\\\\n&\\max \\; \\sum_{i \\in P} \\sum_{t \\in T_i} \\text{npv}_{i,t}\\, x_{i,t} \\;\\; \\text{s.t.} \\; \\sum_{s \\in S} w_s\\, (o_s + v_s) \\le V^* && \\text{(best plan among the least-violation repairs)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "where $`V^*`$ is the optimum of the first objective."
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.** The hard rows exactly as in lesson 9.1.1. Each soft row is replaced by its elastic form ($`o_s`$ or $`v_s`$ is simply absent on a side with no bound), and the counting objective adds a link per elastic variable:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\ell_s \\;\\le\\; a_s^\\top x - o_s + v_s \\;&\\le\\; u_s && \\forall s \\in S && \\text{(the soft row, elastic)} \\quad \\leftarrow \\text{new} \\\\\no_s \\le U_s\\, z_s, \\quad v_s &\\le U_s\\, z_s && \\forall s \\in S && \\text{(link}_s\\text{, counting only)} \\quad \\leftarrow \\text{new}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "With every $`o_s = v_s = 0`$ the elastic model is the original, so the original is feasible exactly when the least violation is 0. This model is **always feasible** as long as the hard rows can hold together: any plan can be made to fit by bending enough."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "An Elastic Variable Lets a Row Bend, at a Price"
+    },
+    {
+      "type": "para",
+      "text": "`elastic.elastic(model, weight)` copies the model and, for each row named in `weight`, adds one variable per side that has a bound. `row.set_coefficient(var, c)` puts a new term into an existing row:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "        if not math.isinf(row.upper_bound):\n            el.over[row.name] = work.add_variable(lb=0, name=f\"over_{row.name}\")\n            row.set_coefficient(el.over[row.name], -1.0)            # a.x - over <= upper\n        if not math.isinf(row.lower_bound):\n            el.under[row.name] = work.add_variable(lb=0, name=f\"under_{row.name}\")\n            row.set_coefficient(el.under[row.name], 1.0)            # a.x + under >= lower"
+    },
+    {
+      "type": "para",
+      "text": "A budget row has only an upper bound and gets `over_budget_2028`, the extra $k the year would need. A floor or force row has only a lower bound and gets `under_...`. A must-do row is an equation (lower and upper bound both 1) and gets both. The least-violation objective is one line:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "    def violation(self) -> mathopt.LinearExpression:\n        return mathopt.fast_sum(self.weight[n] * e for side in (self.over, self.under) for n, e in side.items())"
+    },
+    {
+      "type": "para",
+      "text": "`bends(result)` reads the answer back as \"row: amount\", positive for over and negative for under, listing only rows that bent."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Every Unit Costing 1 Mixes Dollars, Crews and Projects"
+    },
+    {
+      "type": "para",
+      "text": "The first try gives every soft row the price 1:"
+    },
+    {
+      "type": "example",
+      "id": "elastic_lock-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "37-infeasibility/src/elastic_lock.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "37-infeasibility/src/elastic_lock.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "flat = {n: 1.0 for n in soft}                                  # every unit of every row costs 1\nel = elastic(lm.model, flat)\nresult = min_violation(el)"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "30 soft rows of 70\nevery unit costs 1   : violation 2, bends {'crews_transmission_2031': 1.0, 'force_P032_2028': -1.0}"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Total violation 2: one more transmission crew-month in 2031, and the board's P032 override broken (`force_P032_2028` falls 1 short of its lower bound, so P032 does not start in 2028). Correct for the model, and useless for the planners. A unit of a budget row is $1k, a unit of a crew row is a crew-month, and a unit of an override is a whole project the board asked for. Pricing them all at 1 says that ignoring the board costs the same as finding $1k. The solver took the cheapest units, as told."
+    },
+    {
+      "type": "para",
+      "text": "The price of each row is the policy, and the model only applies it. Lesson 5.3.3's design note makes the same point about `feasRelax`'s penalties."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Penalties in One Currency Give a Repair Planners Can Price"
+    },
+    {
+      "type": "para",
+      "text": "The second try puts every price in $k. A $k of budget or floor costs 1. A crew-month is priced at $50k, a figure the planners would supply (here it is an assumption of this lesson). Breaking a must-do or an override costs $10,000k a unit, more than any change of budget or crews in this scenario, so the solver bends one only if nothing else works:"
+    },
+    {
+      "type": "example",
+      "id": "elastic_lock-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "37-infeasibility/src/elastic_lock.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "37-infeasibility/src/elastic_lock.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "POLICY = {\"budget_\": 1.0, \"floor_\": 1.0, \"crews_\": 50.0, \"force_\": 10_000.0, \"must_\": 10_000.0}"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "priced in $k         : violation 390, bends {'budget_2028': 40.0, 'crews_distribution_2030': 5.0, 'crews_transmission_2028': 1.0, 'crews_transmission_2031': 1.0}"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The cheapest repair costs 390 in these units: $40k more in the 2028 budget, one more transmission crew-month in each of 2028 and 2031, and five more distribution crew-months in 2030 ($`40 + 50 \\times (1 + 1 + 5) = 390`$). Each bend can be traced to the conflicts of lesson 9.1.3:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "$40k in 2028 and a crew-month in 2028 end the two conflicts of the board's overrides: P032 and P022 together need $6,040k at the least, against $6,000k, and 20 transmission crew-months against 19 (lesson 9.1.6 prints the arithmetic).",
+        "One crew-month in 2031 ends P017's conflict: it needs 13 and the scenario leaves 12.",
+        "The distribution crews of 2030 were in no conflict the filters reported. The repair's plan funds P023 (forced), P039 (must-do) and P037, which together use 13 distribution crew-months in 2030 against 8:"
+      ]
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "distribution crew-months used in 2030: {'P023': 3, 'P037': 5, 'P039': 5}, available 8"
+    },
+    {
+      "type": "para",
+      "text": "That last bend is the difference between \"a conflict\" and \"a repair\". An IIS names rows that clash among themselves. A repair has to leave a whole plan that keeps *every* other rule, and bending one row moves the plan into places where other rows bind. The solver found five distribution crew-months, at $250k, cheaper than every other way to keep all the remaining rules."
+    },
+    {
+      "type": "para",
+      "text": "A least-violation repair can have many plans. The third objective picks the best one: maximize NPV with the violation capped at 390:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def best_repair(el: Elastic, least: float) -> mathopt.SolveResult:\n    \"\"\"The model's own objective (maximized) among repairs whose weighted violation is at most `least`.\"\"\"\n    el.model.add_linear_constraint(el.violation() <= least + 1e-6, name=\"least_violation\")\n    el.model.maximize(el.goal)\n    return solve(el.model)"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "best NPV among those repairs: $17,060k, bends {'budget_2028': 40.0, 'crews_distribution_2030': 5.0, 'crews_transmission_2028': 1.0, 'crews_transmission_2031': 1.0}"
+    },
+    {
+      "type": "para",
+      "text": "$17,060k, against $22,741k for the base scenario: the overrides and the locked budget cost the portfolio $5,681k, even after the repair. That number belongs in the message to the board, beside the repair. The `1e-6` tolerance on the cap keeps the second solve from failing on rounding in the first solve's value."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Counting Rows Asks \"How Few Rules Must Give?\""
+    },
+    {
+      "type": "para",
+      "text": "Sometimes the question is not how much but how many: \"what is the fewest rules we must break?\". The counting objective gives each soft row a 0/1 variable $`z_s`$, ties its elastic variables to it with $`o_s, v_s \\le U_s z_s`$, and minimizes $`\\sum z_s`$. $`U_s`$ has to be large enough for any bend the row might need: $50,000k for a budget or floor row, 100 for a crew row, and 1 for an override or must-do row (a 0/1 sum can fall at most 1 short):"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "        bent[name] = el.model.add_binary_variable(name=f\"bent_{name}\")\n        for side in (el.over, el.under):\n            if name in side:\n                el.model.add_linear_constraint(side[name] <= big[name] * bent[name], name=f\"link_{side[name].name}\")\n    el.model.minimize(mathopt.fast_sum(bent.values()))"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "fewest rows bent     : 2 rows, bends {'must_P017': -1.0, 'force_P023': -1.0}"
+    },
+    {
+      "type": "para",
+      "text": "Two rows: drop P017's must-do, and stop forcing P023 in. That is the fewest possible, and it makes sense against lesson 9.1.3's three conflicts. `force_P023` is in both override conflicts, and any row of P017's conflict ends the third. So no single row ends all three, and two do. The answer is not unique. Any row of P017's conflict could replace `must_P017`, and the solver picked one of the ties (lesson 9.1.5 finds a different pair with the same count). Counting also treats every row alike, so it happily breaks a must-do. Giving each row a weight inside the count fixes that, which is what `feasRelax` offers next as `relaxobjtype=2`. Two other edits do not: removing the must-do row drops the board's requirement itself, and removing its link lets the row bend without being counted at all. Raising the must-do row's `U` does not help either: `U` only lets the row bend further, and the plain count still treats it like every other row."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "feasRelax Builds the Same Model in gurobipy"
+    },
+    {
+      "type": "para",
+      "text": "gurobipy builds this model for you. `feasRelax(relaxobjtype, minrelax, vars, lbpen, ubpen, constrs, rhspen)` relaxes the listed variable bounds and rows with the given penalties. `relaxobjtype` 0 minimizes the weighted sum of violations, 1 their weighted squares, and 2 the weighted count. With `minrelax=True` it then finds the best plan by the original objective among the least-violation repairs, our third objective. The call changes the model it is called on (Gurobi's reference calls it destructive), so it runs on a fresh copy each time. Its short form, `feasRelaxS(relaxobjtype, minrelax, vrelax, crelax)`, takes no lists and no prices: `vrelax=True` lets every variable bound bend, `crelax=True` lets every row bend, and each bent unit costs 1 (gurobipy's docstring for `feasRelaxS`). So `feasRelaxS(0, False, False, True)` asks for the least total bending, one phase only, with every row elastic, the hard rows too, and no bound. That is too blunt for this scenario, where the hard rows must hold. `feasRelax` gets the same 30 rows and the same $k prices as the elastic model:"
+    },
+    {
+      "type": "example",
+      "id": "elastic_lock-3",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "37-infeasibility/src/elastic_lock.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "37-infeasibility/src/elastic_lock.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "    phase1 = g.feasRelax(0, minrelax, None, None, None, rows, [priced[n] for n in soft])\n    g.optimize()\n    added = {v.VarName: round(v.X, 6) for v in g.getVars() if v.VarName.startswith(\"Art\") and v.X > 1e-6}"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "feasRelax, minrelax=False: violation 390, {'ArtN_budget_2028': 40.0, 'ArtN_crews_distribution_2030': 5.0, 'ArtN_crews_transmission_2028': 1.0, 'ArtN_crews_transmission_2031': 1.0}\nfeasRelax, minrelax=True : least violation 390, NPV $17,060k, {'ArtN_budget_2028': 40.0, 'ArtN_crews_distribution_2030': 5.0, 'ArtN_crews_transmission_2028': 1.0, 'ArtN_crews_transmission_2031': 1.0}"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Gurobi's relaxation found the same least violation, 390, the same four bends and, with `minrelax=True`, the same best NPV, $17,060k. Its elastic variables are named after the rows, and reading three rows back shows they are this lesson's $`o_s`$ and $`v_s`$ under other names:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "row budget_2028  (<): [('ArtN_budget_2028', -1.0)]\nrow floor_Coast  (>): [('ArtP_floor_Coast', 1.0)]\nrow must_P017    (=): [('ArtP_must_P017', 1.0), ('ArtN_must_P017', -1.0)]"
+    },
+    {
+      "type": "para",
+      "text": "`ArtN_` enters a row with $`-1`$, like $`o_s`$, and `ArtP_` with $`+1`$, like $`v_s`$. A $`\\le`$ row gets only the first, a $`\\ge`$ row only the second, and an equation both. Two tools, one model, one answer. That is the check to make whenever a library builds a model for you."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**An elastic variable lets a row bend, at a price:** $`a^\\top x - o \\le u`$, $`a^\\top x + v \\ge \\ell`$, with $`o, v \\ge 0`$. The elastic model always has a plan, provided the hard rows can hold together, and the original is feasible exactly when the least violation is 0.",
+        "**Every unit costing 1 mixes dollars, crews and projects.** The flat repair broke the board's override because one project cost the same as $1k.",
+        "**Penalties in one currency give a repair planners can price:** $40k in 2028, a transmission crew-month in 2028 and in 2031, and five distribution crew-months in 2030. The best plan with that repair is worth $17,060k.",
+        "**Counting rows asks \"how few rules must give?\":** two here. Ties are common, and a plain count treats a must-do like any other row.",
+        "**`feasRelax` builds the same model in gurobipy**, and gave the same 390, the same bends and the same NPV."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Question",
+        "Objective",
+        "gurobipy"
+      ],
+      "rows": [
+        [
+          "least total bending, priced",
+          "$`\\min \\sum w_s (o_s + v_s)`$",
+          "`feasRelax(0, False, ...)`"
+        ],
+        [
+          "least squared bending",
+          "$`\\min \\sum w_s (o_s^2 + v_s^2)`$",
+          "`feasRelax(1, False, ...)`"
+        ],
+        [
+          "fewest rows bent",
+          "$`\\min \\sum z_s`$, $`o_s, v_s \\le U_s z_s`$",
+          "`feasRelax(2, False, ...)`"
+        ],
+        [
+          "best plan among least-bending repairs",
+          "then $`\\max`$ original, bending $`\\le V^*`$",
+          "`minrelax=True`"
+        ],
+        [
+          "every row (hard ones too), unit price, no bounds",
+          "",
+          "`feasRelaxS(0, False, False, True)`"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Row",
+        "Elastic form"
+      ],
+      "rows": [
+        [
+          "$`a^\\top x \\le u`$ (budget, crews)",
+          "$`a^\\top x - o \\le u`$"
+        ],
+        [
+          "$`a^\\top x \\ge \\ell`$ (floor, force)",
+          "$`a^\\top x + v \\ge \\ell`$"
+        ],
+        [
+          "$`a^\\top x = b`$ (must-do)",
+          "$`a^\\top x - o + v = b`$"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** OR-Tools, [MathOpt](https://developers.google.com/optimization/math_opt), for the model API used to build the elastic copy. Gurobi, [`Model` reference](https://docs.gurobi.com/projects/optimizer/en/current/reference/python/model.html) (`feasRelax`, `feasRelaxS`, the three `relaxobjtype` values, `minrelax`, and the warning that both change the model), the docstring of `Model.feasRelaxS` in gurobipy 13.0.3 (its four arguments), and the [infeasibility example tour](https://docs.gurobi.com/projects/examples/en/current/overview/infeasibility.html) (`workforce3`, which adds an artificial variable to each row and minimizes their total, and `feasopt`). Pyomo, [Infeasibility Diagnostics](https://pyomo.readthedocs.io/en/stable/explanation/analysis/iis.html), whose MIS tool starts with the same elastic step and reports its \"repair options\"."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Price a crew-month at $1,000k instead of $50k. Predict which bends change, and whether any override breaks.",
+        "Make only the budget rows soft. Is the model still always feasible? What does the solver say, and which lesson's tool explains why?",
+        "In the counting objective, give `must_` rows a weight of 10 in the sum. Predict the new pair of rows."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Hard Rows Are Part of the Question"
+    },
+    {
+      "type": "para",
+      "text": "Choosing $`S`$ is a modeling decision, as much as choosing prices. Leaving \"once\" and precedence rows hard is not caution. A bent \"once\" row would allow a project started twice, and a plan like that tells a planner nothing. A soft row should be one that a person could change in a meeting: a budget, a crew count, a floor, an override. If no such person exists, the row is hard."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**elastic_lock.py.** The flat and priced repairs, the best plan among the priced repairs, the fewest rows bent, and gurobipy's `feasRelax` with `minrelax` off and on (*every section*). It needs the license the runner mounts for its last part. *Try:* Make the floor rows hard (drop them from `soft`). Predict whether the least violation changes."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [elastic_lock.py](src/elastic_lock.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The elastic model is a library."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [elastic.py](src/elastic.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 12,
+    "paras": 30,
+    "code": 10,
+    "tables": 2,
+    "lists": 5,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 3
+  },
+  "content_sha256": "b7ffbb4bb5a912e8519f75ccae1760e2e6b3501dfe2d2b052f65fb43ff8b8c8c"
+}

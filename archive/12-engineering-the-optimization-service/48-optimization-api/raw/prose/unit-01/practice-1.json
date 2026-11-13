@@ -1,0 +1,171 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "48-optimization-api"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A trim request the API can trust",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A vegetation team plans which overhead circuits to trim this season. Their scheduling tool will call an API with a JSON body like this:"
+    },
+    {
+      "type": "code",
+      "lang": "json",
+      "text": "{\"budget\": 900,\n \"circuits\": [{\"circuit_id\": \"C-14\", \"miles\": 12.5, \"cost\": 300},\n              {\"circuit_id\": \"C-22\", \"miles\": 4.0, \"cost\": 120}]}"
+    },
+    {
+      "type": "para",
+      "text": "The optimizer behind the API trusts its input: a negative budget or a repeated circuit would build a model that answers a question nobody asked. So the API must refuse such a request with a 422 before any model is built, and say which field is wrong."
+    },
+    {
+      "type": "para",
+      "text": "In `trim_api.py`, add the rules to the two pydantic models. The endpoint is written. The rules:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`budget` is a whole number of $k, zero or more. A zero budget is a real request: trim nothing.",
+        "`circuits` has at least one circuit, and no two circuits share a `circuit_id`.",
+        "A circuit's `circuit_id` is not empty, its `miles` is above zero, and its `cost` is zero or more.",
+        "A field the API does not know, at the top or inside a circuit, is refused, not ignored: a misspelled `budjet` must never fall back to a default."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The tests send requests through FastAPI's `TestClient` and check the status codes, so any way of writing the rules that pydantic enforces passes. About ten lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom fastapi import FastAPI\nfrom pydantic import BaseModel, ConfigDict, Field, model_validator\n\n\nclass Circuit(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\")\n\n    circuit_id: str = Field(min_length=1)\n    miles: float = Field(gt=0)\n    cost: int = Field(ge=0)\n\n\nclass TrimRequest(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\")\n\n    budget: int = Field(ge=0)\n    circuits: list[Circuit] = Field(min_length=1)\n\n    @model_validator(mode=\"after\")\n    def ids_are_unique(self) -> \"TrimRequest\":\n        ids = [c.circuit_id for c in self.circuits]\n        if len(ids) != len(set(ids)):\n            raise ValueError(\"circuit ids must be unique\")\n        return self\n\n\napp = FastAPI(title=\"Trim planning API\")\n\n\n@app.post(\"/trims\")\ndef accept(request: TrimRequest) -> dict:\n    return {\"circuits\": len(request.circuits), \"budget\": request.budget}\n\n\nif __name__ == \"__main__\":\n    print(TrimRequest.model_json_schema()[\"required\"])\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom fastapi import FastAPI\nfrom pydantic import BaseModel\n\n\nclass Circuit(BaseModel):\n    # TODO: refuse an empty id, miles that are not positive, a negative cost, and unknown fields.\n    circuit_id: str\n    miles: float\n    cost: int\n\n\nclass TrimRequest(BaseModel):\n    # TODO: refuse a negative budget, an empty circuit list, repeated circuit ids, and unknown fields.\n    budget: int\n    circuits: list[Circuit]\n\n\napp = FastAPI(title=\"Trim planning API\")\n\n\n@app.post(\"/trims\")\ndef accept(request: TrimRequest) -> dict:\n    return {\"circuits\": len(request.circuits), \"budget\": request.budget}\n\n\nif __name__ == \"__main__\":\n    print(TrimRequest.model_json_schema()[\"required\"])\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "c634b829dd98184dfcab01519fc5a694b45299c67e8ea10901913a5c5a6561bd",
+  "starting_code": "from __future__ import annotations\n\nfrom fastapi import FastAPI\nfrom pydantic import BaseModel\n\n\nclass Circuit(BaseModel):\n    # TODO: refuse an empty id, miles that are not positive, a negative cost, and unknown fields.\n    circuit_id: str\n    miles: float\n    cost: int\n\n\nclass TrimRequest(BaseModel):\n    # TODO: refuse a negative budget, an empty circuit list, repeated circuit ids, and unknown fields.\n    budget: int\n    circuits: list[Circuit]\n\n\napp = FastAPI(title=\"Trim planning API\")\n\n\n@app.post(\"/trims\")\ndef accept(request: TrimRequest) -> dict:\n    return {\"circuits\": len(request.circuits), \"budget\": request.budget}\n\n\nif __name__ == \"__main__\":\n    print(TrimRequest.model_json_schema()[\"required\"])\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-01/practice-1/trim_api.py",
+    "test_path": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-01/practice-1/test_trim_api.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-01/practice-1/trim_api.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-01/practice-1/target/report.xml",
+      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-01/practice-1/test_trim_api.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_valid_request_is_accepted_and_a_negative_budget_refused",
+        "kind": "main",
+        "says": "a valid request gets 200 and a negative budget gets 422"
+      },
+      {
+        "id": "test_a_zero_budget_is_accepted_and_a_negative_cost_refused",
+        "kind": "edge",
+        "says": "a budget of zero is a real budget, and a circuit cost below zero is refused"
+      },
+      {
+        "id": "test_a_circuit_with_no_miles_is_refused",
+        "kind": "edge",
+        "says": "a circuit with zero miles is refused, while a short one is accepted"
+      },
+      {
+        "id": "test_repeated_circuit_ids_are_refused",
+        "kind": "edge",
+        "says": "two circuits with the same id are refused"
+      },
+      {
+        "id": "test_an_empty_circuit_list_is_refused",
+        "kind": "edge",
+        "says": "a request with no circuits is refused"
+      },
+      {
+        "id": "test_a_misspelled_field_is_refused",
+        "kind": "edge",
+        "says": "a misspelled top-level field is refused instead of ignored"
+      },
+      {
+        "id": "test_a_misspelled_circuit_field_is_refused",
+        "kind": "edge",
+        "says": "a misspelled field inside a circuit is refused instead of ignored"
+      },
+      {
+        "id": "test_an_empty_circuit_id_is_refused",
+        "kind": "edge",
+        "says": "a circuit with an empty id is refused"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "48-optimization-api/README_12.4.1.md",
+      "section": "The Request Is a Pydantic Model, and FastAPI Refuses What It Does Not Fit"
+    },
+    "concepts": [
+      "an endpoint is a method, a path and a Python function, and a TestClient calls it without a server",
+      "request rules live in the pydantic model, and FastAPI answers 422 to a body that breaks them"
+    ]
+  }
+}

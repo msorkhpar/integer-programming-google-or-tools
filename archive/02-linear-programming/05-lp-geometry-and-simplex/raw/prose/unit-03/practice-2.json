@@ -1,0 +1,143 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "02-linear-programming",
+    "05-lp-geometry-and-simplex"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Run simplex to optimal or unbounded",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The pump-scheduling simplex can pivot. Now it must run on its own and say how it ended, including on the two kinds of model that trip up a first implementation: one whose objective can grow without limit, and one with a vertex where several rows are tight."
+    },
+    {
+      "type": "para",
+      "text": "In `simplex.py`, `pivot` and `entering` (Dantzig's rule, `None` at an optimum) are given. Write:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        [
+          "`ratio_row(T, k)`: the leaving row for entering column `k`,",
+          {
+            "type": "code",
+            "lang": "math",
+            "text": "r = \\arg\\min_{i} \\left\\{ \\frac{T_{i,\\text{rhs}}}{T_{i,k}} \\;:\\; T_{i,k} > 10^{-9} \\right\\}"
+          },
+          "over the constraint rows (every row but the last), the lowest row index on a tie, and `None` when no constraint row has an entry above $`10^{-9}`$ in column `k`."
+        ],
+        "`run_simplex(T, max_steps=100)`: repeat until done, at most `max_steps` pivots. Take the entering column; if there is none, return `(\"OPTIMAL\", value)` with the value in the objective row's last entry. Take the ratio row; if there is none, the LP is unbounded: return `(\"UNBOUNDED\", None)`. Otherwise pivot and continue. If the steps run out, return `(\"STEP_LIMIT\", None)`. The optimum is recognized only at the start of a step, by finding no entering column, and that check costs no pivot. So if the `max_steps`-th pivot lands on the optimum, there is no step left to see it, and the status is `STEP_LIMIT`: with `max_steps=2`, an LP that needs exactly two pivots ends `STEP_LIMIT`, and with `max_steps=3` it ends `OPTIMAL`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`T` is a tableau for $`\\max c \\cdot x`$, $`Ax \\le b`$, $`x \\ge 0`$ with $`b \\ge 0`$: constraint rows $`[A \\mid I \\mid b]`$, then the objective row $`[-c \\mid 0 \\mid 0]`$."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nEPS = 1e-9\n\n\ndef pivot(T: list[list[float]], r: int, k: int) -> list[list[float]]:\n    row = [v / T[r][k] for v in T[r]]\n    return [row if i == r else [v - T[i][k] * w for v, w in zip(T[i], row)] for i in range(len(T))]\n\n\ndef entering(T: list[list[float]]) -> int | None:\n    z = T[-1][:-1]\n    k = min(range(len(z)), key=lambda j: z[j])\n    return k if z[k] < -EPS else None\n\n\ndef ratio_row(T: list[list[float]], k: int) -> int | None:\n    \"\"\"The leaving row for column k by the ratio test, or None when no row limits k.\"\"\"\n    best = None\n    for i in range(len(T) - 1):\n        if T[i][k] > EPS:\n            ratio = T[i][-1] / T[i][k]\n            if best is None or ratio < best[0]:\n                best = (ratio, i)\n    return None if best is None else best[1]\n\n\ndef run_simplex(T: list[list[float]], max_steps: int = 100) -> tuple[str, float | None]:\n    \"\"\"Pivot until optimal or unbounded: (\"OPTIMAL\", value) or (\"UNBOUNDED\", None).\"\"\"\n    for _ in range(max_steps):\n        k = entering(T)\n        if k is None:\n            return \"OPTIMAL\", T[-1][-1]\n        r = ratio_row(T, k)\n        if r is None:\n            return \"UNBOUNDED\", None\n        T = pivot(T, r, k)\n    return \"STEP_LIMIT\", None\n\n\nif __name__ == \"__main__\":\n    print(run_simplex([[1, 1, 1, 0, 5], [2, 1, 0, 1, 8], [-3, -2, 0, 0, 0]]))\n    print(run_simplex([[1, -1, 1, 2], [-1, -2, 0, 0]]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nEPS = 1e-9\n\n\ndef pivot(T: list[list[float]], r: int, k: int) -> list[list[float]]:\n    row = [v / T[r][k] for v in T[r]]\n    return [row if i == r else [v - T[i][k] * w for v, w in zip(T[i], row)] for i in range(len(T))]\n\n\ndef entering(T: list[list[float]]) -> int | None:\n    z = T[-1][:-1]\n    k = min(range(len(z)), key=lambda j: z[j])\n    return k if z[k] < -EPS else None\n\n\ndef ratio_row(T: list[list[float]], k: int) -> int | None:\n    \"\"\"The leaving row for column k by the ratio test, or None when no row limits k.\"\"\"\n    # TODO: the smallest rhs / entry over constraint rows whose entry is above EPS (lowest row on a\n    # tie); None when no row has a positive entry.\n    return None\n\n\ndef run_simplex(T: list[list[float]], max_steps: int = 100) -> tuple[str, float | None]:\n    \"\"\"Pivot until optimal or unbounded: (\"OPTIMAL\", value) or (\"UNBOUNDED\", None).\"\"\"\n    # TODO: loop up to max_steps: entering column (None means optimal), ratio row (None means\n    # unbounded), pivot. Return (\"STEP_LIMIT\", None) if the loop runs out.\n    return \"NOT_RUN\", 0.0\n\n\nif __name__ == \"__main__\":\n    print(run_simplex([[1, 1, 1, 0, 5], [2, 1, 0, 1, 8], [-3, -2, 0, 0, 0]]))\n    print(run_simplex([[1, -1, 1, 2], [-1, -2, 0, 0]]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "4af9e354fefa6adbd3d157e0f59e252dcb11bc30be8cbd62f501afc3b434c851",
+  "starting_code": "from __future__ import annotations\n\nEPS = 1e-9\n\n\ndef pivot(T: list[list[float]], r: int, k: int) -> list[list[float]]:\n    row = [v / T[r][k] for v in T[r]]\n    return [row if i == r else [v - T[i][k] * w for v, w in zip(T[i], row)] for i in range(len(T))]\n\n\ndef entering(T: list[list[float]]) -> int | None:\n    z = T[-1][:-1]\n    k = min(range(len(z)), key=lambda j: z[j])\n    return k if z[k] < -EPS else None\n\n\ndef ratio_row(T: list[list[float]], k: int) -> int | None:\n    \"\"\"The leaving row for column k by the ratio test, or None when no row limits k.\"\"\"\n    # TODO: the smallest rhs / entry over constraint rows whose entry is above EPS (lowest row on a\n    # tie); None when no row has a positive entry.\n    return None\n\n\ndef run_simplex(T: list[list[float]], max_steps: int = 100) -> tuple[str, float | None]:\n    \"\"\"Pivot until optimal or unbounded: (\"OPTIMAL\", value) or (\"UNBOUNDED\", None).\"\"\"\n    # TODO: loop up to max_steps: entering column (None means optimal), ratio row (None means\n    # unbounded), pivot. Return (\"STEP_LIMIT\", None) if the loop runs out.\n    return \"NOT_RUN\", 0.0\n\n\nif __name__ == \"__main__\":\n    print(run_simplex([[1, 1, 1, 0, 5], [2, 1, 0, 1, 8], [-3, -2, 0, 0, 0]]))\n    print(run_simplex([[1, -1, 1, 2], [-1, -2, 0, 0]]))\n",
+  "exercise": {
+    "main_path": "practice/02-linear-programming/05-lp-geometry-and-simplex/prose/unit-03/practice-2/simplex.py",
+    "test_path": "practice/02-linear-programming/05-lp-geometry-and-simplex/prose/unit-03/practice-2/test_simplex.py",
+    "run_command": [
+      "python3",
+      "practice/02-linear-programming/05-lp-geometry-and-simplex/prose/unit-03/practice-2/simplex.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/02-linear-programming/05-lp-geometry-and-simplex/prose/unit-03/practice-2/target/report.xml",
+      "practice/02-linear-programming/05-lp-geometry-and-simplex/prose/unit-03/practice-2/test_simplex.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_bounded_lp_ends_optimal_with_its_value",
+        "kind": "main",
+        "says": "a bounded LP pivots to an optimal tableau and returns its value"
+      },
+      {
+        "id": "test_an_entering_column_with_no_positive_entry_is_unbounded",
+        "kind": "edge",
+        "says": "an entering column with no positive entry stops the run as UNBOUNDED, not OPTIMAL"
+      },
+      {
+        "id": "test_a_zero_ratio_is_a_real_pivot_of_length_zero",
+        "kind": "edge",
+        "says": "a row with right-hand side 0 and a positive entry wins the ratio test with ratio 0"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/02-linear-programming/05-lp-geometry-and-simplex/prose/unit-03/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "05-lp-geometry-and-simplex/README_2.2.3.md",
+      "section": "A Degenerate Vertex Has More Tight Rows Than It Needs, and Simplex Can Pivot Without Moving"
+    },
+    "concepts": [
+      "a basic variable at zero gives a ratio of zero and a pivot that changes the basis but not the plan",
+      "an entering column with no positive entry means the objective improves forever along a ray"
+    ]
+  }
+}

@@ -1,0 +1,503 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "47-testing-optimization-code"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Determinism tests and back-testing against history",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "12.3.4 Determinism Tests and Back-Testing Against History"
+    },
+    {
+      "type": "para",
+      "text": "Two questions remain before GridCap's test suite is complete. The first comes from the regulator: if the planning team reruns last month's snapshot, will it get last month's plan, byte for byte? The second comes from finance: had this version of the model been used in past planning cycles, what would it have chosen, and how does that compare with what was approved? A **determinism test** answers the first on every commit. A **back-test** answers the second by replaying past cycles through today's model. GridCap is a fictional utility, and so is its history: the past cycles in this lesson are invented by the course, as the section on back-testing explains."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model Under Test"
+    },
+    {
+      "type": "para",
+      "text": "The model is lesson 12.3.1's, unchanged."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`P`$ the projects; $`Y`$ the plan's years; $`T_i \\subseteq Y`$ the start years project $`i`$ may use; $`M \\subseteq P`$ the must-do projects; $`\\mathcal{G}`$ the alternative groups; $`C \\subseteq P`$ the child projects, each with parent $`p(c)`$ and lag $`L_c`$ years."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`\\text{npv}_{i,t}`$, the NPV of project $`i`$ started in year $`t`$ ($k); $`c_{i,k}`$, what project $`i`$ spends in its $`k`$-th year of work ($k); $`B_y`$, the budget of year $`y`$ ($k)."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_{i,t} \\in \\{0, 1\\}`$ for every $`i \\in P`$ and $`t \\in T_i`$."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{i \\in P} \\sum_{t \\in T_i} \\text{npv}_{i,t}\\, x_{i,t}"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{t \\in T_i} x_{i,t} &\\le 1 && \\forall i \\in P \\setminus M && \\text{(once}_i) \\\\\n\\sum_{t \\in T_i} x_{i,t} &= 1 && \\forall i \\in M && \\text{(must}_i) \\\\\n\\sum_{i \\in g} \\sum_{t \\in T_i} x_{i,t} &\\le 1 && \\forall g \\in \\mathcal{G} && \\text{(alt}_g) \\\\\n\\sum_{u \\in T_c,\\, u \\le t} x_{c,u} &\\le \\sum_{s \\in T_{p(c)},\\, s \\le t - L_c} x_{p(c),s} && \\forall c \\in C,\\ t \\in T_c && \\text{(after}_{c,t}) \\\\\n\\sum_{i \\in P} \\sum_{t \\in T_i,\\, t \\le y} c_{i,\\,y-t}\\, x_{i,t} &\\le B_y && \\forall y \\in Y && \\text{(budget}_y)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The back-test also uses an earlier version of the model, whose budget row differs (see *Back-Testing Replays Past Cycles Through Today's Model*)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Determinism Test Runs Fresh Processes and Compares Bytes"
+    },
+    {
+      "type": "para",
+      "text": "Lesson 10.2.5 builds the full tool: it reruns one snapshot in fresh processes, compares whole run manifests byte for byte, and names the fields that differ. A test suite needs the same idea in a smaller form, small enough to run on every commit. `determinism.py` keeps its three essentials:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Fresh processes.** Each run is a new Python process, because some state lives for a whole process (HiGHS fixes its thread count at the first solve, lesson 4.2.4), and because a service worker or a rerun next year is a new process too.",
+        "**A different hash seed in each.** Python salts the hash of every `str` and `bytes` with a random seed per process unless `PYTHONHASHSEED` fixes it, so the order a `set` of project ids iterates in can change between processes. Each child gets its own seed, 1, 2, 3, ..., on purpose, so a result that depends on that order shows up as a difference instead of hiding.",
+        "**Bytes, not values.** Each child prints its golden record (lesson 12.3.3) as canonical JSON: sorted keys, no spaces. The parent compares SHA-256 digests of the output, so any difference at all, in the plan, the spend or the status, makes the digests differ."
+      ]
+    },
+    {
+      "type": "example",
+      "id": "determinism-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "47-testing-optimization-code/src/determinism.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "47-testing-optimization-code/src/determinism.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "def digests(name: str, order: str = \"id\", runs: int = 5) -> list[str]:\n    \"\"\"The sha256 of each run's output, each run a fresh process with its own hash seed.\"\"\"\n    path = os.pathsep.join([str(HERE.parents[1] / \"00-base\"), str(HERE)])\n    found = []\n    for seed in range(1, runs + 1):\n        env = {**os.environ, \"PYTHONHASHSEED\": str(seed), \"PYTHONPATH\": path}\n        out = subprocess.run([sys.executable, str(HERE / \"determinism.py\"), \"--child\", name, order],\n                             env=env, capture_output=True, text=True, check=True).stdout\n        found.append(hashlib.sha256(out.encode(\"utf-8\")).hexdigest()[:12])\n    return found"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`subprocess.run` with `env` replaces the child's whole environment, so the mapping starts from `os.environ` and adds the two variables the child needs. `check=True` turns a crashed child into a `CalledProcessError`, so a crash fails the test instead of being compared as empty output. On the four golden scenarios, five processes each:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "tiny                               5 processes: same bytes  addd799e5622\nsmall                              5 processes: same bytes  d1223100ed1a\nsmall, 2028 budget cut 20%         5 processes: same bytes  822cf3d7e26c\ntwo equal projects, room for one   5 processes: same bytes  cac71e767635"
+    },
+    {
+      "type": "para",
+      "text": "The determinism test asserts that each list of digests has one distinct value. It does not compare them with a stored digest: that is the golden test's job, and keeping the two apart means a determinism failure always means \"runs disagree\", never \"the answer moved\"."
+    },
+    {
+      "type": "para",
+      "text": "What a pass proves has limits, which lesson 10.2.5 lists: the same software on the same machine repeats. Run the test in the image that runs production, and treat a solver upgrade as a change that needs the golden file reviewed again."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Determinism Test Must Be Able to Fail"
+    },
+    {
+      "type": "para",
+      "text": "A test that has never failed may be unable to: it may compare a field that never changes, or run everything in one process. So the suite keeps a known-bad case next to the real ones and asserts that it fails. Here the bad case is lesson 10.2.1's bug: the child reads the tie scenario's projects in the order a `set` of their ids iterates, which depends on the hash seed:"
+    },
+    {
+      "type": "example",
+      "id": "determinism-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "47-testing-optimization-code/src/determinism.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "47-testing-optimization-code/src/determinism.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "    if order == \"set\":\n        # The known bug: rows read in the order a set of ids happens to iterate in.\n        ids = {p.project_id for p in portfolio.projects}\n        portfolio = replace(portfolio, projects=tuple(portfolio.project(pid) for pid in ids))"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "the tie, rows in set order         5 processes: 2 different outputs  7c8cc0bb513f 7c8cc0bb513f cac71e767635 7c8cc0bb513f cac71e767635"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Two of the five processes funded A, as the golden record says (their digest, `cac71e767635`, is the one the id-order runs printed), and three funded B. Only a tie can do this: the two plans have the same value, so the solver's choice between them follows the order the rows were built in. Whether a scenario without a tie shows the bug depends on whether its optimum is unique (challenge 1 asks you to try GridCap small); the tie scenario exists to give the test something it must catch. The fixes are lesson 10.2.1's (build from a sorted order) and lesson 10.2.3's (a tie-break the model states)."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Back-Testing Replays Past Cycles Through Today's Model"
+    },
+    {
+      "type": "para",
+      "text": "A **back-test** runs today's model on the inputs of past planning cycles and sets each result beside the plan that cycle approved. It does not say which plan was right; the past did not happen under today's rules. It says how today's model would have behaved on real situations, which surfaces differences a planner can explain or must question."
+    },
+    {
+      "type": "para",
+      "text": "A real back-test needs an archive: for each past cycle, the input snapshot the cycle used (lesson 12.2.3's versioned snapshots) and the plan it approved. **GridCap has no past**, so `history.py` invents one, and says so in its docstring:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "the snapshot of cycle $`Y`$ is GridCap small generated with seed $`Y`$, its years moved to start in $`Y`$;",
+        "the plan approved in cycle $`Y`$ is what an earlier version of the model chose on that snapshot. That version charged each project's whole cost to its start year, the lump-cost shortcut lesson 6.4.2 warns about."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Nothing in this history is a real utility's decision, and nothing below is evidence about how real planners or real models behave. What it shows is the shape of the test, and what reading one is like."
+    },
+    {
+      "type": "para",
+      "text": "The earlier model's budget row, one of the two differences in the history:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def add_lump_budget(built: Built) -> None:\n    \"\"\"The earlier model's budget row: each project's whole cost charged to its start year.\"\"\"\n    by_year = {y: mathopt.LinearExpression() for y in built.portfolio.years}\n    for p in built.portfolio.projects:\n        for t in p.starts():\n            by_year[t] += p.capex * built.x[p.project_id, t]\n    for y in built.portfolio.years:\n        built.model.add_linear_constraint(by_year[y] <= built.portfolio.budget[y], name=f\"budget_{y}\")"
+    },
+    {
+      "type": "para",
+      "text": "In the formulation, the earlier model replaces $`(\\text{budget}_y)`$ with"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_{i \\in P} \\Big(\\sum_{k} c_{i,k}\\Big)\\, x_{i,y} \\le B_y \\qquad \\forall y \\in Y \\qquad (\\text{lump\\_budget}_y)"
+    },
+    {
+      "type": "para",
+      "text": "with $`x_{i,y}`$ read as 0 when $`y \\notin T_i`$, and keeps the other four rules."
+    },
+    {
+      "type": "para",
+      "text": "`backtest` solves each cycle's snapshot with today's model and compares, with the same tools the rest of the module uses: `audit.violations` and `audit.value` for each plan under today's rules, and a diff of the two plans:"
+    },
+    {
+      "type": "example",
+      "id": "backtest-3",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "47-testing-optimization-code/src/backtest.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "47-testing-optimization-code/src/backtest.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "def diff(was: dict[str, int], now: dict[str, int]) -> dict[str, list[str]]:\n    \"\"\"Projects kept in the same year, moved, added and dropped between two plans.\"\"\"\n    return {\"kept\": [p for p in was if now.get(p) == was[p]],\n            \"moved\": [p for p in was if p in now and now[p] != was[p]],\n            \"added\": [p for p in now if p not in was],\n            \"dropped\": [p for p in was if p not in now]}"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Read Every Difference as a Question, Not a Verdict"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "cycle 2024: today's model OPTIMAL, NPV 28,196 against approved 24,610 (+3,586)\n  15 kept, 3 moved, 5 added, 10 dropped; today's plan breaks 0 rules\n  the approved plan breaks 2 of today's rules, first: 2027: spends 10,070 over the budget of 9,340\ncycle 2025: today's model OPTIMAL, NPV 17,777 against approved 16,448 (+1,329)\n  11 kept, 5 moved, 8 added, 9 dropped; today's plan breaks 0 rules\n  the approved plan breaks 1 of today's rules, first: 2027: spends 7,460 over the budget of 5,730\ncycle 2026: today's model OPTIMAL, NPV 25,637 against approved 23,083 (+2,554)\n  16 kept, 3 moved, 4 added, 7 dropped; today's plan breaks 0 rules\n  the approved plan breaks 3 of today's rules, first: 2028: spends 9,050 over the budget of 6,850"
+    },
+    {
+      "type": "para",
+      "text": "Read it as a reviewer would, one line at a time."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Today's model is feasible on every past snapshot and its plans break no rule.** That part is a test: assert it, because a model change that made an old snapshot infeasible would be a regression in the data the service must still be able to replay.",
+        "**Every approved plan overspends in a later year under today's accounting.** That is not a bug in the past plans. The earlier model charged a two-year project's whole cost to its start year, so it saw nothing in the second year; spread over its real years of work, the cost lands in years the earlier model thought were free. The first line of each cycle names the year. This is the finding that would have justified the model change, and a back-test is how a team shows it.",
+        "**Today's NPV is higher in every cycle,** by $1,329k to $3,586k. That number cannot be read as \"today's model is better by that much\": part of the gain comes from plans the past model refused and part from the past model's plans being worth less once their costs are counted in the right years. It is a question to put to finance, not a result to report.",
+        "**Projects moved, added and dropped** are the list a planner reviews: for each, is the reason one of today's rules, a cost now counted correctly, or something to question?"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "A back-test is slower than the rest of the suite (one full solve per past cycle) and its interpretation needs people, so it runs when the model changes and before Budget Lock (lesson 7.1.3), not on every commit. Its pass/fail part is small: every past snapshot still solves, and today's plans break no rule. The rest is a report."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Where Each Kind of Test Runs"
+    },
+    {
+      "type": "para",
+      "text": "The four lessons of this module give five kinds of test. They differ in what they catch and in how often they can run:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Test",
+        "Lesson",
+        "Catches",
+        "When"
+      ],
+      "rows": [
+        [
+          "one rule at a time",
+          "12.3.1",
+          "a rule too loose or too strict, named",
+          "every commit"
+        ],
+        [
+          "properties",
+          "12.3.2",
+          "the instance nobody wrote; with a witness, too-strict models",
+          "every commit, fixed seed; more examples nightly"
+        ],
+        [
+          "golden",
+          "12.3.3",
+          "any unintended change to reviewed answers",
+          "every commit"
+        ],
+        [
+          "determinism",
+          "12.3.4",
+          "runs that disagree",
+          "every commit (few runs); lesson 10.2.5's ten runs before Budget Lock"
+        ],
+        [
+          "back-test",
+          "12.3.4",
+          "how a model change plays on past cycles",
+          "each model change, and before Budget Lock"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "No one kind is enough. Lesson 12.3.1's too-strict lag passed the whole-model test, every validity property and every golden scenario, and was caught by one unit test's allowed half and by the witness property."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**A determinism test runs fresh processes and compares bytes.** Each run gets its own hash seed; the digests of canonical output must all be equal. It is lesson 10.2.5's harness, small enough for every commit.",
+        "**A determinism test must be able to fail.** Keep a known-bad case, here rows read in set order on a tie scenario, and assert that it fails.",
+        "**Back-testing replays past cycles through today's model.** It needs an archive of snapshots and approved plans; GridCap's history is invented by this course.",
+        "**Read every difference as a question, not a verdict.** Assert that past snapshots still solve to valid plans; report the rest for planners and finance."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Determinism test step",
+        "Code"
+      ],
+      "rows": [
+        [
+          "a fresh process with hash seed $`k`$",
+          "`subprocess.run(..., env={**os.environ, \"PYTHONHASHSEED\": str(k), ...})`"
+        ],
+        [
+          "canonical output",
+          "`json.dumps(result, sort_keys=True, separators=(\",\", \":\"))`"
+        ],
+        [
+          "compare",
+          "SHA-256 digests; one distinct value means the runs repeat"
+        ],
+        [
+          "prove it can fail",
+          "the tie scenario with rows in set order: 2 different outputs"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Back-test field",
+        "Meaning"
+      ],
+      "rows": [
+        [
+          "kept / moved / added / dropped",
+          "the approved plan against today's, project by project"
+        ],
+        [
+          "today's plan breaks",
+          "must be 0: asserted"
+        ],
+        [
+          "the approved plan breaks",
+          "the past plan under today's rules: reported, not asserted"
+        ],
+        [
+          "NPV difference",
+          "a question for finance, not a measure of improvement"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [The basic example of MathOpt (OR-Tools)](https://developers.google.com/optimization/math_opt/basic_example) (the solve each child process and each back-tested cycle runs); [PYTHONHASHSEED (Python command line and environment)](https://docs.python.org/3/using/cmdline.html#envvar-PYTHONHASHSEED) (hash randomization of `str` and `bytes`, and how an integer seed fixes it); [subprocess (Python standard library)](https://docs.python.org/3/library/subprocess.html) (`run` with `env`, `capture_output`, `text` and `check`)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Run the determinism test on GridCap small with rows in set order. Predict whether it passes, and say what that tells you about the tie scenario's role.",
+        "Add a fourth past cycle whose snapshot is GridCap small with one must-do's cost tripled. What should the back-test assert about it?",
+        "The back-test's NPV difference mixes two effects. Compute the approved plans' values under the earlier model's own rules, and split the difference."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Keep Determinism and Golden Tests Apart"
+    },
+    {
+      "type": "para",
+      "text": "It is tempting to make one test do both: solve in five processes and compare each digest with a stored one. Then a failure could mean either \"the runs disagree\" or \"the answer moved\", and the first thing anyone does is work out which. Two tests, each with one question, fail with an answer instead. The same thinking keeps the back-test's assertions to the few facts that must hold, and leaves the rest as a report for people."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**determinism.py.** Solves each golden scenario in five fresh processes and compares digests, then runs the set-order bug on the tie scenario (*A Determinism Test Runs Fresh Processes*, *A Determinism Test Must Be Able to Fail*). *Try:* Give every child the same `PYTHONHASHSEED`. Predict how many different outputs the set-order line reports."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [determinism.py](src/determinism.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**backtest.py.** Back-tests today's model on three invented past cycles (*Read Every Difference as a Question*). *Try:* Back-test the earlier model against itself by passing its rules to `optimize` in `backtest`. Predict every count on the second line."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [backtest.py](src/backtest.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**history.py.** GridCap's invented planning history: past snapshots and the earlier model's plans."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [history.py](src/history.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 12,
+    "paras": 31,
+    "code": 6,
+    "tables": 3,
+    "lists": 8,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 3
+  },
+  "content_sha256": "278ee4fb2b1958c42b476f3fef36739c82f8ce6180a7c7cfd32a78affc2aa897"
+}

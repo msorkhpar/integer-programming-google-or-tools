@@ -1,0 +1,145 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "07-the-capital-planning-domain",
+    "33-value-functions"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Water main breaks avoided",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility renews old cast-iron mains. Its asset team models each main's breaks with a Weibull curve, the way GridCap models failures: `breaks(age, beta, eta, years)` (given) is the expected number of breaks between ages `age` and `age + years` if the main is only repaired when it breaks. One break leaves `households` households without water for `hours` hours."
+    },
+    {
+      "type": "para",
+      "text": "A renewal of **depth** `depth` makes the main as old as `(1 - depth)` times its age when the renewed main goes into service: 1 is a new pipe, 0.5 a relining. The work starts in year `start` and takes `duration` whole years (0 for a job finished within its first year), so the renewed main is in service from `start + duration`. Until then the old main keeps aging and breaking. `main.age` is its age in `first_year`, the first year of the plan, and benefits are counted over a window of `window` years from `first_year`."
+    },
+    {
+      "type": "para",
+      "text": "Write `benefit(main, depth, start, duration, first_year, window)` in `mains.py`, returning the expected breaks avoided within the window and the household-hours without water they would have cost: `{\"breaks\": ..., \"household_hours\": ...}`. Work that goes into service at or after the end of the window avoids nothing."
+    },
+    {
+      "type": "para",
+      "text": "Write the formula for the breaks avoided before you code it: which age goes in, and how many years are left? About eight lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Main:\n    name: str\n    age: float            # years, at the start of the plan\n    beta: float           # Weibull shape\n    eta: float            # Weibull scale, years\n    households: int       # households cut off by one break\n    hours: float          # hours until their water is back\n\n\ndef breaks(age: float, beta: float, eta: float, years: float) -> float:\n    \"\"\"Expected breaks of a main between ages `age` and `age + years` (repaired, not renewed).\"\"\"\n    return ((age + years) / eta) ** beta - (age / eta) ** beta\n\n\ndef benefit(main: Main, depth: float, start: int, duration: int, first_year: int, window: int) -> dict[str, float]:\n    \"\"\"Breaks and household-hours without water that renewing `main` avoids within the window.\"\"\"\n    in_service = start + duration\n    remaining = first_year + window - in_service\n    if remaining <= 0:\n        return {\"breaks\": 0.0, \"household_hours\": 0.0}\n    old = main.age + (in_service - first_year)\n    young = (1 - depth) * old\n    avoided = breaks(old, main.beta, main.eta, remaining) - breaks(young, main.beta, main.eta, remaining)\n    return {\"breaks\": avoided, \"household_hours\": avoided * main.households * main.hours}\n\n\nif __name__ == \"__main__\":\n    elm = Main(\"Elm St\", 20, 2.0, 10.0, 50, 6.0)\n    print(benefit(elm, 1.0, 2030, 0, 2030, 10))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Main:\n    name: str\n    age: float            # years, at the start of the plan\n    beta: float           # Weibull shape\n    eta: float            # Weibull scale, years\n    households: int       # households cut off by one break\n    hours: float          # hours until their water is back\n\n\ndef breaks(age: float, beta: float, eta: float, years: float) -> float:\n    \"\"\"Expected breaks of a main between ages `age` and `age + years` (repaired, not renewed).\"\"\"\n    return ((age + years) / eta) ** beta - (age / eta) ** beta\n\n\ndef benefit(main: Main, depth: float, start: int, duration: int, first_year: int, window: int) -> dict[str, float]:\n    \"\"\"Breaks and household-hours without water that renewing `main` avoids within the window.\"\"\"\n    # TODO: the expected breaks avoided, and the household-hours they would have cost.\n    return {\"breaks\": 0.0, \"household_hours\": 0.0}\n\nif __name__ == \"__main__\":\n    elm = Main(\"Elm St\", 20, 2.0, 10.0, 50, 6.0)\n    print(benefit(elm, 1.0, 2030, 0, 2030, 10))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "da967286e30bf8a2a3ce7126bdec6ce57a1f94a4a32ca268262c0362a7890042",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Main:\n    name: str\n    age: float            # years, at the start of the plan\n    beta: float           # Weibull shape\n    eta: float            # Weibull scale, years\n    households: int       # households cut off by one break\n    hours: float          # hours until their water is back\n\n\ndef breaks(age: float, beta: float, eta: float, years: float) -> float:\n    \"\"\"Expected breaks of a main between ages `age` and `age + years` (repaired, not renewed).\"\"\"\n    return ((age + years) / eta) ** beta - (age / eta) ** beta\n\n\ndef benefit(main: Main, depth: float, start: int, duration: int, first_year: int, window: int) -> dict[str, float]:\n    \"\"\"Breaks and household-hours without water that renewing `main` avoids within the window.\"\"\"\n    # TODO: the expected breaks avoided, and the household-hours they would have cost.\n    return {\"breaks\": 0.0, \"household_hours\": 0.0}\n\nif __name__ == \"__main__\":\n    elm = Main(\"Elm St\", 20, 2.0, 10.0, 50, 6.0)\n    print(benefit(elm, 1.0, 2030, 0, 2030, 10))\n",
+  "exercise": {
+    "main_path": "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-01/practice-2/mains.py",
+    "test_path": "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-01/practice-2/test_mains.py",
+    "run_command": [
+      "python3",
+      "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-01/practice-2/mains.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/07-the-capital-planning-domain/33-value-functions/prose/unit-01/practice-2/target/report.xml",
+      "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-01/practice-2/test_mains.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_replacement_avoids_the_breaks_worked_out_by_hand",
+        "kind": "main",
+        "says": "a replacement finished at once avoids the breaks and household-hours worked out by hand"
+      },
+      {
+        "id": "test_a_relining_takes_away_part_of_the_age",
+        "kind": "main",
+        "says": "a relining of depth 0.5 avoids the breaks of the years it takes away"
+      },
+      {
+        "id": "test_a_later_start_counts_fewer_years_on_an_older_main",
+        "kind": "main",
+        "says": "a later start counts fewer years of benefit, on a main that has aged meanwhile"
+      },
+      {
+        "id": "test_benefits_start_when_the_work_is_finished",
+        "kind": "edge",
+        "says": "benefits are counted from the year the renewed main is in service, not from the start of work"
+      },
+      {
+        "id": "test_the_main_keeps_aging_while_it_waits_and_while_it_is_worked_on",
+        "kind": "edge",
+        "says": "the main's age at renewal includes the years of work as well as the wait"
+      },
+      {
+        "id": "test_work_finished_after_the_window_avoids_nothing",
+        "kind": "edge",
+        "says": "work that ends after the window avoids nothing, and never a negative amount"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "33-value-functions/README_7.4.1.md",
+      "section": "Expected Failures Avoided Turn Into Every Non-Financial Measure"
+    },
+    "concepts": [
+      "expected failures avoided from the Weibull curve and the intervention depth, times each consequence"
+    ]
+  }
+}

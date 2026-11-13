@@ -1,0 +1,131 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "15-cpsat-core"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Stop loading the truck once the target is reached",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A haulage firm (not GridCap) loads a truck with crates by solving a CP-SAT model that maximizes the value of the load. The dispatcher does not need the proven best load: any load worth at least a target is good enough, and the truck should leave as soon as one is found. The dispatcher also wants to see how the value improved along the way."
+    },
+    {
+      "type": "para",
+      "text": "Write the class `TargetStopper(target)` in `stopper.py`, a `cp_model.CpSolverSolutionCallback`. Each time the solver reports a solution, append its objective value to `self.objectives`; when that value reaches the target, stop the search. In the lesson's terms, for the solutions $`1, 2, \\dots`$ the search reports with objective values $`o_1 < o_2 < \\dots`$, the callback records them until the first $`t`$ with"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "o_t \\ge \\text{target}"
+    },
+    {
+      "type": "para",
+      "text": "and stops there. The tests run the same model with one worker, so every run reports the same solutions in the same order. About four lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\nclass TargetStopper(cp_model.CpSolverSolutionCallback):\n    \"\"\"Record each solution's objective, and stop the search at the first one that reaches the target.\"\"\"\n\n    def __init__(self, target: float):\n        cp_model.CpSolverSolutionCallback.__init__(self)\n        self.target = target\n        self.objectives: list[float] = []\n\n    def on_solution_callback(self) -> None:\n        self.objectives.append(self.objective_value)\n        if self.objective_value >= self.target:\n            self.stop_search()\n\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = [model.new_bool_var(f\"x{i}\") for i in range(4)]\n    model.add(3 * x[0] + 4 * x[1] + 5 * x[2] + 6 * x[3] <= 10)\n    model.maximize(4 * x[0] + 5 * x[1] + 6 * x[2] + 8 * x[3])\n    stopper = TargetStopper(10)\n    solver = cp_model.CpSolver()\n    print(solver.status_name(solver.solve(model, stopper)), stopper.objectives)\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\nclass TargetStopper(cp_model.CpSolverSolutionCallback):\n    \"\"\"Record each solution's objective, and stop the search at the first one that reaches the target.\"\"\"\n\n    def __init__(self, target: float):\n        cp_model.CpSolverSolutionCallback.__init__(self)\n        self.target = target\n        self.objectives: list[float] = []\n\n    def on_solution_callback(self) -> None:\n        # TODO: record the objective, and stop once the target is reached.\n        return None\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = [model.new_bool_var(f\"x{i}\") for i in range(4)]\n    model.add(3 * x[0] + 4 * x[1] + 5 * x[2] + 6 * x[3] <= 10)\n    model.maximize(4 * x[0] + 5 * x[1] + 6 * x[2] + 8 * x[3])\n    stopper = TargetStopper(10)\n    solver = cp_model.CpSolver()\n    print(solver.status_name(solver.solve(model, stopper)), stopper.objectives)\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "fcae6e0967a86d911954389d8b098a8631e03e5ab2fd7f4e7fb9fdcf50e41940",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\nclass TargetStopper(cp_model.CpSolverSolutionCallback):\n    \"\"\"Record each solution's objective, and stop the search at the first one that reaches the target.\"\"\"\n\n    def __init__(self, target: float):\n        cp_model.CpSolverSolutionCallback.__init__(self)\n        self.target = target\n        self.objectives: list[float] = []\n\n    def on_solution_callback(self) -> None:\n        # TODO: record the objective, and stop once the target is reached.\n        return None\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = [model.new_bool_var(f\"x{i}\") for i in range(4)]\n    model.add(3 * x[0] + 4 * x[1] + 5 * x[2] + 6 * x[3] <= 10)\n    model.maximize(4 * x[0] + 5 * x[1] + 6 * x[2] + 8 * x[3])\n    stopper = TargetStopper(10)\n    solver = cp_model.CpSolver()\n    print(solver.status_name(solver.solve(model, stopper)), stopper.objectives)\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-2/stopper.py",
+    "test_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-2/test_stopper.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-2/stopper.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-2/target/report.xml",
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-2/test_stopper.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_every_solution_is_recorded_in_order",
+        "kind": "main",
+        "says": "with a target out of reach, every improving objective is recorded in order and the search ends proven"
+      },
+      {
+        "id": "test_the_search_stops_at_the_first_solution_past_the_target",
+        "kind": "main",
+        "says": "the search stops at the first solution past the target, with that solution the last recorded"
+      },
+      {
+        "id": "test_a_solution_equal_to_the_target_stops_the_search",
+        "kind": "edge",
+        "says": "a solution worth exactly the target counts as reaching it"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "15-cpsat-core/README_4.4.3.md",
+      "section": "A Solution Callback Sees Every Improving Plan"
+    },
+    "concepts": [
+      "a solution callback reads each solution as it is found and can stop the search"
+    ]
+  }
+}

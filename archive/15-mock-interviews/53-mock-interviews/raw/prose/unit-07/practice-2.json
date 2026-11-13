@@ -1,0 +1,146 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "15-mock-interviews",
+    "53-mock-interviews"
+  ],
+  "variant": "prose",
+  "unit": 7,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Carry-over cash and a regional floor",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "This is the modeling round's whiteboard, coded. A water authority's model in `cash.py` has a start variable `x[(pid, year)]` per project and allowed start year, the row that each project starts at most once, `spend(x, projects, year)` (what a set of projects spends in one year, as an expression), and an objective. Write `add_cash_rules(model, x, projects, budgets, carry_share, floors)`:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Carry-over.** What a year does not spend may be carried into the next year and spent there. Money neither spent nor carried lapses. Nothing comes into the first year. The last year may carry money out too, under the same cap, but no year follows to spend it, so it lapses; giving the last year a carry variable or not changes no plan, and the tests allow both.",
+        "**Carry cap.** A year carries out at most `carry_share` times its own budget.",
+        "**Floors.** Each region in `floors` spends at least its floor in total over the plan's years (`budgets` lists them); spend after the last year does not count. A region in `floors` that can spend nothing in those years (no projects, or none that can spend inside the plan) still has its floor, so a positive floor there allows no plan. Its total is an empty sum, which in Python is the number 0, not an expression, so start the sum from `mathopt.LinearExpression()` to keep the floor a row."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Write the formulation first: the new variables with their domains, each row with its quantifier and a label. The tests fix the start variables and leave your other variables free, so any correct formulation passes. About twelve lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    region: str\n    starts: tuple[int, ...]\n    cost: tuple[int, ...]       # $k in its first, second, ... year of work\n    value: int = 10\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project]) -> dict:\n    \"\"\"Given: x[(pid, year)] for every allowed start year, and each project starts at most once.\"\"\"\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    return x\n\n\ndef spend(x: dict, projects: list[Project], year: int):\n    \"\"\"Given: what the projects spend in one year, as an expression (0 when nothing can be spent).\"\"\"\n    return sum(p.cost[year - t] * x[p.pid, t] for p in projects for t in p.starts if 0 <= year - t < len(p.cost))\n\n\ndef add_cash_rules(model: mathopt.Model, x: dict, projects: list[Project], budgets: dict[int, int],\n                   carry_share: float, floors: dict[str, int]) -> None:\n    \"\"\"Carry-over cash rows with a cap on what each year carries out, and a minimum spend per region.\"\"\"\n    years = sorted(budgets)\n    carry = {y: model.add_variable(lb=0, name=f\"carry_{y}\") for y in years}\n    for i, y in enumerate(years):\n        incoming = carry[years[i - 1]] if i else 0\n        model.add_linear_constraint(spend(x, projects, y) + carry[y] - incoming <= budgets[y], name=f\"cash_{y}\")\n        model.add_linear_constraint(carry[y] <= carry_share * budgets[y], name=f\"carry_cap_{y}\")\n    for region, floor in floors.items():\n        members = [p for p in projects if p.region == region]\n        total = mathopt.LinearExpression() + sum(spend(x, members, y) for y in years)\n        model.add_linear_constraint(total >= floor, name=f\"floor_{region}\")\n\n\ndef build(projects: list[Project], budgets: dict[int, int], carry_share: float,\n          floors: dict[str, int]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"carry-over\")\n    x = start_variables(model, projects)\n    add_cash_rules(model, x, projects, budgets, carry_share, floors)\n    model.maximize(sum(p.value * x[p.pid, t] for p in projects for t in p.starts))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Project(\"N1\", \"N\", (2027, 2028), (60,))], {2027: 50, 2028: 50}, 0.5, {\"N\": 60})\n    print(mathopt.solve(model, mathopt.SolverType.HIGHS).termination.reason.name)\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    region: str\n    starts: tuple[int, ...]\n    cost: tuple[int, ...]       # $k in its first, second, ... year of work\n    value: int = 10\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project]) -> dict:\n    \"\"\"Given: x[(pid, year)] for every allowed start year, and each project starts at most once.\"\"\"\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    return x\n\n\ndef spend(x: dict, projects: list[Project], year: int):\n    \"\"\"Given: what the projects spend in one year, as an expression (0 when nothing can be spent).\"\"\"\n    return sum(p.cost[year - t] * x[p.pid, t] for p in projects for t in p.starts if 0 <= year - t < len(p.cost))\n\n\ndef add_cash_rules(model: mathopt.Model, x: dict, projects: list[Project], budgets: dict[int, int],\n                   carry_share: float, floors: dict[str, int]) -> None:\n    \"\"\"Carry-over cash rows with a cap on what each year carries out, and a minimum spend per region.\"\"\"\n    # TODO: the carry variables and the rows of your formulation.\n    return None\n\n\ndef build(projects: list[Project], budgets: dict[int, int], carry_share: float,\n          floors: dict[str, int]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"carry-over\")\n    x = start_variables(model, projects)\n    add_cash_rules(model, x, projects, budgets, carry_share, floors)\n    model.maximize(sum(p.value * x[p.pid, t] for p in projects for t in p.starts))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Project(\"N1\", \"N\", (2027, 2028), (60,))], {2027: 50, 2028: 50}, 0.5, {\"N\": 60})\n    print(mathopt.solve(model, mathopt.SolverType.HIGHS).termination.reason.name)\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 2,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "2912aba489d6a7bc7e1413e6ea8486b6a8c0303cf313374fe16d8c8e9186502d",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    region: str\n    starts: tuple[int, ...]\n    cost: tuple[int, ...]       # $k in its first, second, ... year of work\n    value: int = 10\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project]) -> dict:\n    \"\"\"Given: x[(pid, year)] for every allowed start year, and each project starts at most once.\"\"\"\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    return x\n\n\ndef spend(x: dict, projects: list[Project], year: int):\n    \"\"\"Given: what the projects spend in one year, as an expression (0 when nothing can be spent).\"\"\"\n    return sum(p.cost[year - t] * x[p.pid, t] for p in projects for t in p.starts if 0 <= year - t < len(p.cost))\n\n\ndef add_cash_rules(model: mathopt.Model, x: dict, projects: list[Project], budgets: dict[int, int],\n                   carry_share: float, floors: dict[str, int]) -> None:\n    \"\"\"Carry-over cash rows with a cap on what each year carries out, and a minimum spend per region.\"\"\"\n    # TODO: the carry variables and the rows of your formulation.\n    return None\n\n\ndef build(projects: list[Project], budgets: dict[int, int], carry_share: float,\n          floors: dict[str, int]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"carry-over\")\n    x = start_variables(model, projects)\n    add_cash_rules(model, x, projects, budgets, carry_share, floors)\n    model.maximize(sum(p.value * x[p.pid, t] for p in projects for t in p.starts))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Project(\"N1\", \"N\", (2027, 2028), (60,))], {2027: 50, 2028: 50}, 0.5, {\"N\": 60})\n    print(mathopt.solve(model, mathopt.SolverType.HIGHS).termination.reason.name)\n",
+  "exercise": {
+    "main_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-2/cash.py",
+    "test_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-2/test_cash.py",
+    "run_command": [
+      "python3",
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-2/cash.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-2/target/report.xml",
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-2/test_cash.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_unspent_money_can_be_spent_the_next_year_but_a_first_year_overspend_is_refused",
+        "kind": "main",
+        "says": "money left in one year pays for the next, and an overspend in the first year is refused"
+      },
+      {
+        "id": "test_a_year_carries_out_at_most_its_share",
+        "kind": "main",
+        "says": "a plan that needs more carried out of a year than its share allows is refused"
+      },
+      {
+        "id": "test_a_region_below_its_floor_is_refused",
+        "kind": "main",
+        "says": "a plan that spends less than a region's floor is refused"
+      },
+      {
+        "id": "test_money_carried_forward_is_spent_only_once",
+        "kind": "edge",
+        "says": "money carried out of a year leaves that year's budget, so it is spent only once"
+      },
+      {
+        "id": "test_the_floor_counts_only_spend_inside_the_plan",
+        "kind": "edge",
+        "says": "a region's floor counts only what is spent in the plan's years"
+      },
+      {
+        "id": "test_a_floor_for_a_region_that_can_spend_nothing_allows_no_plan",
+        "kind": "edge",
+        "says": "a positive floor for a region that can spend nothing allows no plan"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "53-mock-interviews/README_15.1.7.md",
+      "section": "Modeling Round: Carry-Over Cash and a Regional Floor"
+    },
+    "concepts": [
+      "write carry-over cash rows, a cap on what each year carries out, and a spend floor per region"
+    ]
+  }
+}

@@ -1,0 +1,145 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "14-mathopt-advanced"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A nurse rota's three objectives in priority order",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A hospital builds next month's nurse rota with a MIP. The ward manager ranks three goals, strictly:"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "leave as few shifts uncovered as possible;",
+        "among rotas that do that, use as few overtime hours as possible;",
+        "among those, honor as many of the nurses' shift preferences as possible."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The model in `rota.py` already has the three goals as linear expressions, `uncovered`, `overtime` and `preferences`. Write `set_objectives(model, uncovered, overtime, preferences)` so the model holds the ranking as MathOpt's prioritized objectives:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n&\\text{priority 0 (primary):} && \\min \\; \\text{uncovered} \\\\\n&\\text{priority 1:} && \\min \\; \\text{overtime} && \\text{(name: overtime)} \\\\\n&\\text{priority 2:} && \\max \\; \\text{preferences} && \\text{(name: preferences)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Nothing is solved: no solver in the course's runner accepts auxiliary objectives (lesson 4.3.2). The tests read the objectives back from the model, both auxiliary ones included, so mind what lesson 4.3.2 found about adding a second auxiliary objective in OR-Tools 9.15. About eight lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef set_objectives(model: mathopt.Model, uncovered, overtime, preferences) -> None:\n    \"\"\"Uncovered shifts first, then overtime, then preferences, as prioritized objectives.\"\"\"\n    model.minimize(uncovered)\n    for expr, priority, is_maximize, name in ((overtime, 1, False, \"overtime\"),\n                                              (preferences, 2, True, \"preferences\")):\n        obj = model.add_auxiliary_objective(priority=priority, is_maximize=is_maximize, name=name)\n        flat = mathopt.LinearExpression(expr)\n        obj.offset = flat.offset\n        for var, coefficient in flat.terms.items():\n            obj.set_linear_coefficient(var, coefficient)\n\n\ndef build() -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"rota\")\n    gap = model.add_variable(lb=0, ub=10, name=\"gap_night\")\n    extra = model.add_variable(lb=0, ub=40, name=\"extra_hours\")\n    likes = [model.add_binary_variable(name=f\"likes_{n}\") for n in (\"ana\", \"ben\", \"cy\")]\n    exprs = {\"uncovered\": gap, \"overtime\": 1.5 * extra, \"preferences\": sum(likes)}\n    set_objectives(model, exprs[\"uncovered\"], exprs[\"overtime\"], exprs[\"preferences\"])\n    return model, {\"gap\": gap, \"extra\": extra, \"likes\": likes}\n\n\nif __name__ == \"__main__\":\n    model, _ = build()\n    print(model.objective.is_maximize, model.num_auxiliary_objectives())\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef set_objectives(model: mathopt.Model, uncovered, overtime, preferences) -> None:\n    \"\"\"Uncovered shifts first, then overtime, then preferences, as prioritized objectives.\"\"\"\n    # TODO: the primary objective and two auxiliary ones.\n    return None\n\n\ndef build() -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"rota\")\n    gap = model.add_variable(lb=0, ub=10, name=\"gap_night\")\n    extra = model.add_variable(lb=0, ub=40, name=\"extra_hours\")\n    likes = [model.add_binary_variable(name=f\"likes_{n}\") for n in (\"ana\", \"ben\", \"cy\")]\n    exprs = {\"uncovered\": gap, \"overtime\": 1.5 * extra, \"preferences\": sum(likes)}\n    set_objectives(model, exprs[\"uncovered\"], exprs[\"overtime\"], exprs[\"preferences\"])\n    return model, {\"gap\": gap, \"extra\": extra, \"likes\": likes}\n\n\nif __name__ == \"__main__\":\n    model, _ = build()\n    print(model.objective.is_maximize, model.num_auxiliary_objectives())\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "6c7f511cbe36789dc9647abec6e637fd794bd4f10ec09b74d1f4b1a4a66f6dd0",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef set_objectives(model: mathopt.Model, uncovered, overtime, preferences) -> None:\n    \"\"\"Uncovered shifts first, then overtime, then preferences, as prioritized objectives.\"\"\"\n    # TODO: the primary objective and two auxiliary ones.\n    return None\n\n\ndef build() -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"rota\")\n    gap = model.add_variable(lb=0, ub=10, name=\"gap_night\")\n    extra = model.add_variable(lb=0, ub=40, name=\"extra_hours\")\n    likes = [model.add_binary_variable(name=f\"likes_{n}\") for n in (\"ana\", \"ben\", \"cy\")]\n    exprs = {\"uncovered\": gap, \"overtime\": 1.5 * extra, \"preferences\": sum(likes)}\n    set_objectives(model, exprs[\"uncovered\"], exprs[\"overtime\"], exprs[\"preferences\"])\n    return model, {\"gap\": gap, \"extra\": extra, \"likes\": likes}\n\n\nif __name__ == \"__main__\":\n    model, _ = build()\n    print(model.objective.is_maximize, model.num_auxiliary_objectives())\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-1/rota.py",
+    "test_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-1/test_rota.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-1/rota.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-1/target/report.xml",
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-1/test_rota.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_uncovered_shifts_are_the_primary_objective",
+        "kind": "main",
+        "says": "the primary objective minimizes the uncovered-shift expression, at priority 0"
+      },
+      {
+        "id": "test_overtime_comes_second_and_is_minimized",
+        "kind": "main",
+        "says": "an auxiliary objective named overtime minimizes the overtime expression, ranked after the primary one"
+      },
+      {
+        "id": "test_preferences_are_maximized",
+        "kind": "edge",
+        "says": "the preferences objective maximizes the preferences expression"
+      },
+      {
+        "id": "test_preferences_come_after_overtime",
+        "kind": "edge",
+        "says": "the preferences objective is ranked after overtime, not level with it"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "14-mathopt-advanced/README_4.3.2.md",
+      "section": "In OR-Tools 9.15, Add a Second Auxiliary Objective Term by Term"
+    },
+    "concepts": [
+      "a ranked list of goals written as a primary objective and auxiliary objectives with priorities and senses"
+    ]
+  }
+}

@@ -1,0 +1,366 @@
+# 9.3.2 Why Selected, Why Deferred: Forcing In and Out
+
+Two emails reach GridCap's optimization team on the morning the base plan is published. The Ridge
+region manager writes: "P024, the undergrounding job we promised Ridge customers, is not in the
+plan. Why?" And a finance analyst writes: "P032 costs $5,680k in one year. Why is it in?" Lesson
+9.3.1 gave part of an answer: as the plan stands, every budget row is too full to take P024. But
+the solver is not bound to the plan as it stands. It could drop one project, move two, and fit P024.
+The real question is what that would cost, and what would give way.
+
+This lesson answers it the way an optimizer can prove: **force the opposite decision and re-solve**.
+Force P024 in, and the drop in NPV is the price of P024; force P032 out, and the drop is what P032 is
+worth to the plan. The comparison of the two plans then says which projects give way, and the rows
+of lesson 9.3.1 say which rule makes them. Such a re-solve is often called a **counterfactual**: the
+best plan in a world where one decision went the other way.
+
+GridCap is a fictional utility, generated for this course; no number in it describes a real one.
+
+In this lesson, a project is **selected** when it is in the plan, and **deferred** when it is not:
+utilities say deferred because a candidate left out of this cycle's plan comes back in the next
+cycle's list. A selected project that starts after its earliest allowed year is **late**; lesson 7.1.4
+counted nine of them.
+
+## The Model
+
+The model of lesson 9.3.1, whole, with this lesson's three forcing rows marked. A forcing row
+replaces the project's once row; a forced-in must-do keeps its must row.
+
+**Sets.** $`P`$ the projects; $`Y`$ the plan's years; $`T_i \subseteq Y`$ the start years project
+$`i`$ may use; $`M \subseteq P`$ the must-do projects; $`\mathcal{G}`$ the alternative groups;
+$`C \subseteq P`$ the child projects, with parent $`p(c)`$ and lag $`L_c`$ years. For one re-solve:
+$`F^{+} \subseteq P`$ the projects forced in, $`F^{-} \subseteq P`$ those forced out, and
+$`A \subseteq \{(i,t) : i \in F^{+},\ t \in T_i\}`$ the forced-in projects pinned to a start year.
+
+**Parameters.** $`\text{npv}_{i,t}`$ ($k); $`c_{i,k}`$, what project $`i`$ spends in its $`k`$-th
+year of work ($k); $`B_y`$, the budget of year $`y`$ ($k).
+
+**Variables.** $`x_{i,t} \in \{0, 1\}`$ for every $`i \in P`$ and $`t \in T_i`$, with
+$`\text{started}(i) = \sum_{t \in T_i} x_{i,t}`$ and
+$`\text{by}(i, t) = \sum_{s \in T_i,\, s \le t} x_{i,s}`$.
+
+**Objective.**
+
+```math
+z = \max \; \sum_{i \in P} \sum_{t \in T_i} \text{npv}_{i,t}\, x_{i,t}
+```
+
+**Constraints.**
+
+```math
+\begin{aligned}
+\text{started}(i) &\le 1 && \forall i \in P \setminus (M \cup F^{+} \cup F^{-}) && \text{(once}_i) \\
+\text{started}(i) &= 1 && \forall i \in M && \text{(must}_i) \\
+\text{started}(i) &= 1 && \forall i \in F^{+} \setminus M && \text{(in}_i) \quad \leftarrow \text{this lesson} \\
+\text{started}(i) &= 0 && \forall i \in F^{-} && \text{(out}_i) \quad \leftarrow \text{this lesson} \\
+x_{i,t} &= 1 && \forall (i,t) \in A && \text{(in}_{i,t}) \quad \leftarrow \text{this lesson} \\
+\textstyle\sum_{i \in g} \text{started}(i) &\le 1 && \forall g \in \mathcal{G} && \text{(alt}_g) \\
+\text{by}(c, t) &\le \text{by}(p(c),\, t - L_c) && \forall c \in C,\ t \in T_c && \text{(after}_{c,t}) \\
+\textstyle\sum_{i \in P} \sum_{t \in T_i,\, t \le y} c_{i,\,y-t}\, x_{i,t} &\le B_y && \forall y \in Y && \text{(budget}_y)
+\end{aligned}
+```
+
+| Label | Row name in `explain_model.py` |
+| --- | --- |
+| in$`_i`$, out$`_i`$ | `in_P024`, `out_P032` |
+| in$`_{i,t}`$ | `in_P010_2030` |
+
+With $`z^*`$ the best NPV of the base model and $`z^*_{\text{in}(i)}`$, $`z^*_{\text{out}(i)}`$,
+$`z^*_{\text{at}(i,t)}`$ the best NPV with one forcing added, the **cost of a decision** is
+
+```math
+\Delta_{\text{in}}(i) = z^* - z^*_{\text{in}(i)}, \qquad
+\Delta_{\text{out}}(i) = z^* - z^*_{\text{out}(i)}, \qquad
+\Delta_{\text{at}}(i,t) = z^* - z^*_{\text{at}(i,t)}
+```
+
+Each is $`\ge 0`$: a forcing row only removes plans, so the best plan that is left can be no better
+than the best plan overall. When a forced model has no feasible plan at all, the cost is undefined.
+
+## The Cost of a Decision Is What the Best Plan Loses When You Force the Opposite
+
+`why.force` reverses one decision of the base plan and re-solves. A project in the plan is forced
+out, a project out of it is forced in, and a year, if given, pins the start:
+
+```python
+def force(portfolio: Portfolio, scenario: Scenario, base: Run, pid: str, year: int | None = None) -> Forced:
+    """Re-solve with the decision on `pid` reversed: in if it is out, out if it is in, or pinned to `year`."""
+    if year is not None:
+        action, changed = f"at {year}", replace(scenario, force_in={**scenario.force_in, pid: year})
+    elif pid in base.plan:
+        action, changed = "out", replace(scenario, force_out=scenario.force_out | {pid})
+    else:
+        action, changed = "in", replace(scenario, force_in={**scenario.force_in, pid: None})
+    run = solve(build(portfolio, changed))
+    cost = None if run.npv is None else round(base.npv - run.npv)
+    return Forced(pid, action, run.status, cost, run.plan)
+```
+
+The forcing is a change to the scenario, not an edit of the solved model: `build` writes the model
+again from the scenario, with the `in_` or `out_` row in place of the project's once row. Each
+re-solve runs to a proven optimum (relative gap 0), because a cost is the difference of two optima;
+with a gap tolerance, the difference could be the solver stopping early rather than the decision.
+`force_one.py` answers the two emails:
+
+```text
+base: NPV $24,260k, 27 funded
+
+force P024 in: OPTIMAL, NPV $23,987k, cost $273k (its own NPV at its best start: $490k)
+  added ['P024', 'P037']  dropped ['P005', 'P009', 'P016']
+  moved ['P008 2031->2029', 'P011 2031->2029', 'P018 2030->2031']
+```
+
+```text
+force P032 out: OPTIMAL, NPV $24,148k, cost $112k (its own NPV at its best start: $3,678k)
+  added ['P002', 'P036', 'P037', 'P038']  dropped ['P001', 'P016', 'P020', 'P032']
+  moved ['P008 2031->2029', 'P011 2031->2029', 'P012 2031->2030', 'P015 2029->2030', 'P021 2029->2028', 'P025 2028->2027', 'P031 2028->2027', 'P039 2028->2027']
+```
+
+P024 is deferred because funding it costs the portfolio $273k of NPV, the same $273k lesson 7.1.3
+found when a planner forced it in at Post-Opt (the base scenario there also had region floors, which
+did not change this plan). P032 is selected because the best plan without it is worth $112k less.
+
+Neither number is the project's own NPV, and the second shows how far apart they can be. P032 brings
+$3,678k of NPV, yet losing it costs only $112k, because its $5,680k of 2027 money does not vanish:
+the re-solve spends it on P002, P036, P037 and P038 and rearranges eight start years. What a
+project is worth to a plan is its NPV less the NPV of the best use of its money and its place in
+the rules. Only a re-solve measures that. A ranking by NPV, or by NPV per dollar, cannot (lesson
+7.1.4 found the same for ratios).
+
+## A Forced Re-Solve Says What Gives Way, and the Rules Say Why
+
+A cost tells a planner how much; the reason is in the rows. Two sources give it, and a good answer
+uses both:
+
+- **The rows that refuse the project as the plan stands** (lesson 9.3.1's refusals), turned into
+  facts: for a budget row, the room left and the least the project needs there; for an alternative
+  row, the option already funded. `why.rules_against` writes them.
+- **What gives way in the forced plan**: the projects dropped, added and moved. That is the
+  cheapest way the solver found to make room, so it names the projects the deferred one is
+  competing with.
+
+```python
+    if forced.action == "in":
+        for rule in rules_against(small, base, pid):
+            print(f"  as the plan stands: {rule}")
+```
+
+```text
+force P024 in: OPTIMAL, NPV $23,987k, cost $273k (its own NPV at its best start: $490k)
+  added ['P024', 'P037']  dropped ['P005', 'P009', 'P016']
+  moved ['P008 2031->2029', 'P011 2031->2029', 'P018 2030->2031']
+  as the plan stands: budget_2028: 150 left, needs at least 850
+  as the plan stands: budget_2029: 130 left, needs at least 850
+  as the plan stands: budget_2030: 50 left, needs at least 850
+  as the plan stands: budget_2031: 130 left, needs at least 850
+```
+
+```text
+force P002 in: OPTIMAL, NPV $24,148k, cost $112k (its own NPV at its best start: $386k)
+  added ['P002', 'P036', 'P037', 'P038']  dropped ['P001', 'P016', 'P020', 'P032']
+  moved ['P008 2031->2029', 'P011 2031->2029', 'P012 2031->2030', 'P015 2029->2030', 'P021 2029->2028', 'P025 2028->2027', 'P031 2028->2027', 'P039 2028->2027']
+  as the plan stands: alt_G001: P001 already funded
+  as the plan stands: budget_2027: 140 left, needs at least 460
+  as the plan stands: budget_2028: 150 left, needs at least 460
+```
+
+Put together, the answers read as sentences a planner can check:
+
+- **P024** spends $850k a year for two years, and no year of its window has more than $150k left. To
+  fit it, the best plan drops P005, P009 and P016, adds P037 and moves three projects, and ends
+  $273k lower.
+- **P002** is the repair option for asset A001, whose replacement P001 is funded, and
+  `alt_G001` allows one of the two; the money is short as well. Forcing P002 in drops P001, as the
+  alternative row says it must, and the plan ends $112k lower.
+
+The order matters: the rule first, then what gives way, then the cost. A cost with no rule
+("it would cost $273k") invites the reply "then cut something else"; the rule shows that every year
+is full, and the forced plan shows what "something else" would be.
+
+<!-- practice 1 -->
+
+## A Forcing the Rules Cannot Satisfy Is Answered by a Rule, Not a Price
+
+Some reversals have no price because no plan allows them. Force a must-do out:
+
+```text
+force P017 out: INFEASIBLE; its rows ['must_P017', 'out_P017']
+force P039 out: INFEASIBLE; its rows ['must_P039', 'out_P039']
+```
+
+The forced model holds both $`\text{started}(i) = 1`$ (must) and $`\text{started}(i) = 0`$ (out), and
+no plan keeps both. The answer to "why is P017 selected?" is then the rule, "it is a must-do", and
+the cost is not "very large" but undefined. A report must say "infeasible: must_P017", never print
+a number.
+
+Here the conflict is plain from the project's own rows. When it is not (a project forced in whose
+parent cannot fit, or a forced-in pair that two budgets cannot both carry), the conflicting rows are
+found with the tools of lesson 9.1.3 (an IIS) and worded with those of lesson 9.1.6. Some study
+guides say that an infeasible forced-in solve means the project "violates hard physical or timing
+constraints". Read it more narrowly: it means the forcing contradicts the model's rules as written,
+and which rules is a question for an IIS, not a guess.
+
+## Report Every Project, and Read Small Costs as Near Ties
+
+The planners' requirement from lesson 7.1.4 was a reason for *every* project. `why_report.py` runs
+one forced re-solve per project, 40 in all, plus one per late project pinned to its earliest year,
+and sorts each list by cost. The deferred projects:
+
+```text
+WHY DEFERRED: projects out of the plan, cheapest to force in first
+  P004  costs    64  gives way: P009, P016, P020
+        budget_2028: 150 left, needs at least 300
+  P037  costs    64  gives way: P009, P016, P020
+        budget_2030: 50 left, needs at least 2,120
+        budget_2031: 130 left, needs at least 2,120
+  P033  costs    80  gives way: P009, P016, P020
+        budget_2029: 130 left, needs at least 620
+        budget_2030: 50 left, needs at least 620
+        budget_2031: 130 left, needs at least 1,860
+  P002  costs   112  gives way: P001, P016, P020, P032
+        alt_G001: P001 already funded
+        budget_2027: 140 left, needs at least 460
+        budget_2028: 150 left, needs at least 460
+```
+
+The full list has all 13 (*The Full Programs* runs it); the most expensive is P007 at $1,145k. Then
+the selected projects, by what losing them costs, and the late ones:
+
+```text
+WHY SELECTED: projects in the plan, by what losing them costs
+  P003  INFEASIBLE: must_P003 keeps a must-do in every plan
+  P010  INFEASIBLE: must_P010 keeps a must-do in every plan
+  P017  INFEASIBLE: must_P017 keeps a must-do in every plan
+  P039  INFEASIBLE: must_P039 keeps a must-do in every plan
+  P028  losing it costs   870  (its NPV 4,268)
+  P034  losing it costs   531  (its NPV 2,123)
+  P019  losing it costs   384  (its NPV 1,275)
+```
+
+```text
+WHY LATE: projects that start after their earliest year, pinned to it
+  P008  2031 -> 2029 costs   64  dropped ['P009', 'P016', 'P020']  moved 7
+  P010  2031 -> 2030 costs   18  dropped []  moved 2
+  P011  2031 -> 2029 costs   64  dropped ['P009', 'P016', 'P020']  moved 7
+  P012  2031 -> 2030 costs   24  dropped []  moved 4
+  P021  2029 -> 2028 costs   64  dropped ['P009', 'P016', 'P020']  moved 7
+  P025  2028 -> 2027 costs  112  dropped ['P001', 'P016', 'P020', 'P032']  moved 8
+  P029  2031 -> 2030 costs    8  dropped []  moved 2
+  P031  2028 -> 2027 costs  112  dropped ['P001', 'P016', 'P020', 'P032']  moved 8
+  P039  2028 -> 2027 costs  112  dropped ['P001', 'P016', 'P020', 'P032']  moved 8
+```
+
+Look at how small most costs are against a plan worth $24,260k. Forcing P004 in costs $64k, 0.26% of
+the NPV; moving P029 a year earlier costs $8k. And many different forcings cost exactly the same.
+The program groups the forcings whose re-solves return the very same plan:
+
+```text
+forcings that land on the same plan:
+  cost  112: P002 in, P036 in, P038 in, P001 out, P032 out
+  cost   64: P004 in, P037 in, P009 out, P016 out, P020 out
+  cost  114: P006 in, P013 in
+  cost  113: P027 in, P005 out
+  cost  870: P030 in, P028 out
+  cost  135: P008 out, P011 out
+  cost  121: P021 out, P026 out
+```
+
+Ten different reversals lead to just two plans: one worth $64k less than the best, one worth $112k
+less. These are the runner-up plans of the portfolio, and the forcings are different doors into
+them. That is what to tell a planner: P004 is not out because it is a bad project; it is out because
+a plan with it exists that is only $64k worse, and the solver must pick one. A cost of exactly 0 would
+mean the forced plan is another optimum, and then "why deferred" has no answer beyond "the solver
+had to choose" (lesson 10.2.3 covers alternative optima and how to break ties on purpose). On
+GridCap small no reversal costs 0; the cheapest, P029 a year earlier, costs $8k.
+
+Treat a small cost as a finding in its own right. It says the decision is cheap to override, which is
+what a planner pushing for P004 wants to know, and it warns that a small change in the inputs could
+flip the decision, which is what finance wants to know before trusting it.
+
+<!-- practice 2 -->
+
+## Summary
+
+- **The cost of a decision is what the best plan loses when you force the opposite.** Re-solve
+  with $`\text{started}(i) = 1`$ or $`= 0`$ and compare optima. P024 costs $273k to force in; P032
+  costs $112k to lose, against its own NPV of $3,678k.
+- **A forced re-solve says what gives way, and the rules say why.** State the rows that refuse the
+  project as the plan stands, then the projects that give way, then the cost.
+- **A forcing the rules cannot satisfy is answered by a rule, not a price.** Forcing a must-do out
+  is infeasible; report the rows in conflict, never a number.
+- **Report every project, and read small costs as near ties.** Ten GridCap reversals lead to two
+  runner-up plans, $64k and $112k below the best; a cost of 0 would mean another optimum.
+
+## Reference
+
+| Question | Forcing | Answer |
+| --- | --- | --- |
+| why is $`i`$ deferred? | $`\text{started}(i) = 1`$ (`in_i`) | $`\Delta_{\text{in}}(i)`$, what gives way, and the rows that refuse $`i`$ |
+| why is $`i`$ selected? | $`\text{started}(i) = 0`$ (`out_i`) | $`\Delta_{\text{out}}(i)`$, what replaces it |
+| why does $`i`$ start late? | $`x_{i,t} = 1`$ for its earliest $`t`$ (`in_i_t`) | $`\Delta_{\text{at}}(i,t)`$, what moves |
+| forced model infeasible | any | the conflicting rows (lesson 9.1.3), no cost |
+
+| Cost | Reading |
+| --- | --- |
+| 0 | another optimal plan obeys the forcing; the solver chose between ties |
+| small against the NPV | a near tie; cheap to override, and sensitive to inputs |
+| large | the decision is robust; the rows say what makes it so |
+| undefined | the forcing breaks a rule; name the rule |
+
+**Further reading:** the OR-Tools [MathOpt overview](https://developers.google.com/optimization/math_opt)
+(a model built once and solved again unchanged, which is what makes a scenario re-solve cheap to
+write); the OR-Tools MathOpt sample
+[`integer_programming.py`](https://github.com/google/or-tools/blob/stable/ortools/math_opt/samples/python/integer_programming.py)
+(it reads a plan only after an optimal or feasible termination, the check `solve` makes before a
+cost is computed);
+[MathOpt `result.py` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/result.py)
+(the docstrings of `objective_value` and `best_objective_bound`, the two numbers whose equality a
+gap of 0 asks for); [Integer Programming, Chapter 9 of Applied Mathematical Programming (MIT 15.053)](https://web.mit.edu/15.053/www/AMP-Chapter-09.pdf)
+(section 9.1: capital budgeting with go/no-go variables and logical conditions such as one
+investment only if another, the rules a forcing runs against); L. A. Wolsey,
+[*Integer programming duality: price functions and sensitivity analysis*](https://ideas.repec.org/p/cor/louvrp/431.html)
+(the RePEc record of the 1981 paper on what replaces LP prices in integer programs, the subject
+lessons 9.2.1 to 9.2.4 take up).
+
+## Challenges
+
+1. Force P024 in *and* P037 out. Predict whether the cost is more or less than $273k, then run it.
+2. P028 and P030 land on the same plan when one is forced out and the other in. Explain why from
+   their windows and costs before you look at the rows.
+3. The report runs 49 re-solves on 40 projects. How many would it run on the medium portfolio, and
+   which projects could you skip without losing an answer?
+
+## Design Note: Forcings Are Named Rows, Not Bounds
+
+Lesson 6.5.6 writes a planner's override as bounds on the start variables, which is the lightest
+way to fix a decision. This lesson writes a forcing as a named row (`in_P024`, `out_P017`) instead.
+A named row can be reported, diffed between scenarios and named by an IIS when the forcing makes the
+model infeasible. A bound has no name of its own. Lesson 9.1.3's run showed both ways a bound
+fails in Gurobi's IIS: a 0-1 variable typed binary never has its bounds in the IIS at all, and one
+typed integer (as MathOpt's 0-1 variables are when copied to gurobipy) can have them there, but only
+as a variable's lower or upper bound (25 of them in that IIS), marked exactly as the ordinary 0 and
+1 bounds are. Either way, a forcing written as a bound could not be named as the forcing in the
+very explanation it caused.
+The cost is one row per forcing, which on a re-solve of one forcing is nothing.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson
+shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy
+of the code, so the course's own files never change.
+
+**force_one.py.** Forces P024 in, P032 out and P002 in, prints each cost and what gives way, and
+forces two must-dos out (*The Cost of a Decision*, *A Forced Re-Solve Says What Gives Way* and *A
+Forcing the Rules Cannot Satisfy*). *Try:* Force P037 in instead of P024. Predict its cost from the
+report's first table before you run it.
+
+- Program: [force_one.py](src/force_one.py)
+
+**why_report.py.** The "why" line for every project: deferred, selected and late, and the forcings
+that land on the same plan (*Report Every Project*). *Try:* Cut the 2030 budget by $500k in the
+program's scenario. Predict whether P004 stays the cheapest project to force in.
+
+- Program: [why_report.py](src/why_report.py)
+
+**why.py.** `force`, `changes` and the rule facts the reports print. It runs nothing itself.
+
+- Library: [why.py](src/why.py)

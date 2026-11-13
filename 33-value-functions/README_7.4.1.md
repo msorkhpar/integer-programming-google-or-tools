@@ -1,0 +1,462 @@
+# 7.4.1 Benefit Measures: Reliability, Safety, Environmental, Financial
+
+GridCap's planning board meets to rank the tiny portfolio's eight projects. Finance brings a list
+sorted by NPV, and tiny's P004, a $3,000k breaker replacement, is on top. The distribution engineer
+objects: P003, a tower set replacement on the Coast, keeps 12,000 customers from losing power for
+four hours each time those towers fail, and NPV does not see a single one of them. The safety lead
+adds that vegetation work prevents fires. Each of them is right about something the others' numbers
+leave out.
+
+Before any of this can go into a model, each of these claims has to become a number with a unit:
+a **benefit measure**. This lesson defines the four families of measures a utility's capital plan
+uses (reliability, safety, environmental and financial), computes them for every GridCap tiny
+project, and shows that each one ranks the projects in a different order. Lessons 7.4.2 to 7.4.4
+then turn the four into one value per project.
+
+GridCap is a fictional utility generated for this course. The consequence table, the customer count
+and the outage log in this lesson are invented too; no number here describes a real utility. Every
+project and asset ID in this lesson is the tiny portfolio's: tiny's P003 is a Coast tower set, while
+small's P003 (lesson 7.1.4) is a Valley circuit clearing, because each portfolio numbers its own
+projects from P001.
+
+## A Benefit Measure Counts One Consequence, in One Unit
+
+A capital project is worth doing because of what it prevents or creates. Replacing a worn
+transformer prevents some of its future failures, and each failure would have had **consequences**:
+customers lose power, someone may be hurt, oil may burn, and the utility pays for an emergency
+repair. A **benefit measure** is one of those consequences, counted in one unit, as the amount the
+project changes it. The utility's job is to pick the measures, and each needs three things written
+down:
+
+- **What it counts.** "Customer-minutes of interruption avoided", not "reliability".
+- **Its unit.** Customer-minutes, incidents, tonnes, thousands of dollars.
+- **Its direction.** Every measure in this module counts something *avoided* or *gained*, so more is
+  always better. A measure that counts something bad (minutes of outage *after* the project) has to
+  be turned around before it can join the others; counting the *reduction* does that.
+
+The four families of measures a utility's capital plan uses, with the measure this module picks for
+each:
+
+| Family | What it protects | GridCap measure | Unit |
+| --- | --- | --- | --- |
+| Reliability | customers' supply | customer-minutes of interruption avoided | customer-minutes |
+| Safety | the public and the crews | expected safety incidents avoided | incidents |
+| Environmental | air, land and water | emissions avoided (fire, gas leaks, oil fires) | tonnes CO2e |
+| Financial | the utility's money | net present value | $k |
+
+**CO2e** (carbon-dioxide equivalent) puts different greenhouse gases on one scale: a tonne of a gas
+counts as the tonnes of CO2 that would warm the climate as much. A breaker's insulating gas, SF6,
+warms it far more per tonne than CO2, so a leak of a few kilograms counts as tonnes of CO2e.
+
+## SAIFI Counts Interruptions and SAIDI Counts Minutes, per Customer Served
+
+Reliability is the measure regulators watch most closely, and utilities report it with standard
+indices defined in IEEE Standard 1366. Two of them matter here. Let $`N_T`$ be the number of
+customers the utility serves, and let an outage log list, for each sustained interruption $`j`$,
+the customers it cut off, $`N_j`$, and the minutes until their power came back, $`r_j`$:
+
+```math
+\text{SAIFI} = \frac{\sum_j N_j}{N_T}
+\qquad
+\text{SAIDI} = \frac{\sum_j r_j\, N_j}{N_T}
+\qquad
+\text{CAIDI} = \frac{\text{SAIDI}}{\text{SAIFI}} = \frac{\sum_j r_j\, N_j}{\sum_j N_j}
+```
+
+- **SAIFI**, the System Average Interruption *Frequency* Index, counts **customer interruptions**:
+  one customer losing power once is one customer interruption. Divided by the customers served, it
+  is how many times the average customer lost power in the year.
+- **SAIDI**, the System Average Interruption *Duration* Index, counts **customer-minutes of
+  interruption**: 1,000 customers out for 60 minutes are 60,000 customer-minutes. Divided by the
+  customers served, it is how many minutes the average customer spent without power.
+- **CAIDI**, the Customer Average Interruption Duration Index, is the average restoration time of
+  the customers who were interrupted.
+
+Both indices count only **sustained** interruptions: under the IEEE method, those longer than five
+minutes. Shorter ones are **momentary** (a breaker that trips and recloses) and are tracked by a
+separate index. The denominator is all customers served, not the customers who were interrupted;
+dividing by those instead gives CAIDI's denominator, which is a different question.
+
+Utilities also report each index with and without **major event days**, the storm days whose daily
+SAIDI is far above normal (the IEEE method sets the threshold from the previous five years). The
+two can differ a lot: the U.S. Energy Information Administration reported an average of about two
+hours a year without major events since 2013, and 5.8 hours in 2018 with them. A plan's benefit is
+normally stated against the "without major events" index, the part routine renewal changes.
+
+Here is a year of GridCap outages (invented), eight of them, two momentary:
+
+```python
+def reliability_indices(outages: list[Outage], customers_served: int) -> dict[str, float]:
+    """SAIFI, SAIDI and CAIDI of a year's outage log; momentary outages do not count."""
+    sustained = [o for o in outages if o.minutes > SUSTAINED_MINUTES]
+    interruptions = sum(o.customers for o in sustained)
+    customer_minutes = sum(o.customers * o.minutes for o in sustained)
+    saifi = interruptions / customers_served
+    saidi = customer_minutes / customers_served
+    return {"SAIFI": saifi, "SAIDI": saidi, "CAIDI": saidi / saifi if saifi else 0.0}
+```
+
+```python
+log = [Outage(12_000, 240), Outage(4_000, 300), Outage(9_000, 3), Outage(1_500, 180),
+       Outage(400, 360), Outage(6_000, 90), Outage(20_000, 2), Outage(1_200, 150)]
+indices = reliability_indices(log, CUSTOMERS_SERVED)
+```
+
+```text
+customers served 600,000; 8 outages, 2 of them momentary
+SAIFI 0.0418 interruptions per customer
+SAIDI 8.69 minutes per customer
+CAIDI 207.7 minutes per interrupted customer
+```
+
+Check it by hand. The six sustained outages interrupted 12,000 + 4,000 + 1,500 + 400 + 6,000 + 1,200
+= 25,100 customers, so SAIFI is 25,100 / 600,000 = 0.0418. Their customer-minutes add up to 5,214,000,
+so SAIDI is 5,214,000 / 600,000 = 8.69 minutes. The 20,000 customers of the 2-minute outage count in
+neither index: a momentary outage is not a sustained interruption, however many customers it touches.
+
+A project changes these indices by removing customer interruptions and customer-minutes from future
+years. Because the denominator $`N_T`$ is the same for every project, a project's **cut in SAIDI** is
+just its customer-minutes avoided divided by $`N_T`$, and its cut in SAIFI is its customer
+interruptions avoided divided by $`N_T`$. The two carry the same information as the counts, in a
+different unit; lesson 7.4.2 shows why that difference in unit must not change any decision.
+
+<!-- practice 1 -->
+
+## Expected Failures Avoided Turn Into Every Non-Financial Measure
+
+Where does a project's "customer-minutes avoided" come from? From the failures it prevents. Lesson
+6.6.4 (and lessons 7.3.1 to 7.3.4, *Asset risk*) model each GridCap asset's failures with a Weibull curve of shape
+$`\beta`$ and scale $`\eta`$ years. If a failed asset is repaired just enough to run again, the
+expected number of failures between ages $`a`$ and $`a + h`$ is
+
+```math
+N(a, h) = \Big(\frac{a + h}{\eta}\Big)^{\beta} - \Big(\frac{a}{\eta}\Big)^{\beta}
+```
+
+An intervention makes the asset younger. As in lesson 6.6.4, give each intervention a **depth**
+$`d`$: the asset's age becomes $`(1 - d)\,a`$. This module uses $`d = 1`$ for a replacement, rebuild
+or undergrounding (the asset is new), $`0.8`$ for clearing or widening a vegetation corridor, and
+$`0.5`$ for a repair or a trim (lesson 7.3.4 writes the same reset the other way round, as the
+share of its age the asset keeps; the section *Two Renewal Conventions, One Failure Model* below
+compares the two). Benefits are counted over an **evaluation window** of 10 years from
+the plan's first year, 2027 to 2036. A project started in year $`t`$, on an asset of age $`a_t`$ by
+then, has $`h_t = 2027 + 10 - t`$ years of the window left and avoids
+
+```math
+F_{i,t} = N(a_t,\, h_t) - N\big((1 - d_i)\,a_t,\; h_t\big)
+```
+
+expected failures: those the old asset would have had, less those the renewed one will have.
+
+```python
+def failures_avoided(portfolio: Portfolio, project: Project, start: int) -> float:
+    """Expected failures the project avoids from its start to the end of the evaluation window."""
+    asset = portfolio.asset(project.asset_id)
+    first = portfolio.years[0]
+    age = asset.age + (start - first)                  # the asset ages while it waits
+    years = first + EVALUATION_YEARS - start            # benefit years left in the window
+    after = (1 - DEPTH[project.intervention]) * age
+    return (failures(age, asset.weibull_beta, asset.weibull_eta, years)
+            - failures(after, asset.weibull_beta, asset.weibull_eta, years))
+```
+
+Every non-financial measure is then failures avoided times **what one failure does**, in that
+measure's unit. That per-failure consequence depends on the kind of asset: a tower set carries a
+transmission line that feeds many customers, a pole only a street. GridCap's table, invented for this
+module:
+
+| Asset kind | Customers cut off | Minutes to restore | Safety incidents per failure | tCO2e per failure |
+| --- | --- | --- | --- | --- |
+| line | 9,000 | 120 | 0.05 | 2.0 |
+| tower | 12,000 | 240 | 0.08 | 1.0 |
+| breaker | 6,000 | 90 | 0.03 | 8.0 |
+| transformer | 4,000 | 300 | 0.06 | 15.0 |
+| pole | 400 | 360 | 0.10 | 0.5 |
+| feeder | 1,500 | 180 | 0.04 | 0.5 |
+| circuit | 1,200 | 150 | 0.15 | 25.0 |
+| corridor | 7,000 | 200 | 0.20 | 40.0 |
+
+"Safety incidents per failure" is a probability-weighted count: 0.08 means that, on average, one tower
+failure in 12.5 hurts someone or creates a public hazard (a fallen conductor, a fire). So for project
+$`i`$ on an asset of kind $`k(i)`$, with customers $`C_k`$, restoration minutes $`M_k`$, incidents
+$`S_k`$ and emissions $`E_k`$ per failure:
+
+```math
+\begin{aligned}
+\text{CI}_{i,t} &= F_{i,t}\, C_{k(i)} && \text{(customer interruptions avoided)} \\
+\text{CMI}_{i,t} &= F_{i,t}\, C_{k(i)}\, M_{k(i)} && \text{(customer-minutes avoided)} \\
+\text{inc}_{i,t} &= F_{i,t}\, S_{k(i)} && \text{(safety incidents avoided)} \\
+\text{em}_{i,t} &= F_{i,t}\, E_{k(i)} && \text{(tonnes CO2e avoided)}
+\end{aligned}
+```
+
+```python
+def measures(portfolio: Portfolio, project: Project, start: int) -> Measures:
+    f = failures_avoided(portfolio, project, start)
+    c = CONSEQUENCE[portfolio.asset(project.asset_id).kind]
+    return Measures(failures=f, interruptions=f * c.customers, customer_minutes=f * c.customers * c.minutes,
+                    incidents=f * c.incidents, tco2e=f * c.tco2e, npv=project.npv[start])
+```
+
+For tiny's P003, the tower set from the opening, started in its only year, 2027:
+
+```text
+P003 Coast tower set replace (A003): 0.574 expected failures avoided
+  each cuts off 12,000 customers for 240 minutes
+  customer interruptions avoided  6,888  -> SAIFI cut 0.0115
+  customer-minutes avoided  1,653,216  -> SAIDI cut 2.76
+```
+
+0.574 failures avoided times 12,000 customers is 6,888 customer interruptions; times 240 minutes
+more, 1,653,216 customer-minutes. Spread over GridCap's 600,000 customers, that is 2.76 minutes of
+SAIDI, summed over the ten years of the window. These are **expected** values: P003 will not prevent
+0.574 of a failure. Either the towers would have failed or not; 0.574 is the average over many
+possible futures, which is what a plan that treats many assets should count.
+
+The same structure, probability of failure times consequence, is the risk of lessons 7.3.1 to 7.3.4 (*Asset
+risk*, lesson 7.3.3), there in dollars. Here the consequence is stated in each measure's own unit.
+
+<!-- practice 2 -->
+
+## Two Renewal Conventions, One Failure Model
+
+Lesson 7.3.4 also values a renewal by the failures it removes from the asset's Weibull
+curve, but it writes the renewal down differently. Side by side:
+
+| | Lesson 7.3.4 (risk in $k) | This lesson (benefit measures) |
+| --- | --- | --- |
+| parameter | $`\rho`$, the share of its age the asset **keeps** | $`d`$, the depth: the share of its age **taken away** |
+| age right after the work | $`\rho`$ times the age it had reached | $`(1 - d)`$ times its age in the start year |
+| replace, rebuild, underground | $`\rho = 0`$ | $`d = 1`$ |
+| repair, trim | $`\rho = 0.5`$ | $`d = 0.5`$ |
+| clear, widen | $`\rho = 0.5`$ | $`d = 0.8`$ |
+| when the asset becomes younger | the year after the work ends; it ages during the work | at the start of the start year |
+| what is counted | CoF times failures avoided, discounted at 7% | failures avoided times each measure's consequence, undiscounted |
+
+The two parameters are one number seen from opposite ends: $`d = 1 - \rho`$. A repair keeps half its
+age ($`\rho = 0.5`$) and has half taken away ($`d = 0.5`$); a replacement keeps none ($`\rho = 0`$,
+$`d = 1`$). (Lesson 7.2.4 uses $`\rho_i`$ for something unrelated, GridCap's benefit ratio.)
+
+Only clearing and widening disagree. Lesson 1.1.2 gave every partial intervention the same 0.5, and
+lessons 7.3.1 to 7.3.4 kept it. This module gives corridor clearing and widening a deeper reset, $`d = 0.8`$
+(that is, $`\rho = 0.2`$): taking a corridor back to its full cleared width removes most of the
+growth that causes its outages, where a trim cuts back only what is nearest the line. Both values
+are assumptions about the fictional GridCap, not measurements; a utility sets them from its own
+records of how failure rates change after each kind of work.
+
+To see what each difference does, the program below counts expected failures avoided (not dollars)
+on 7.3.4's year-by-year age path and compares them with this lesson's formula:
+
+```python
+def failures_by_age_path(asset, window, start: int, duration: int, keep: float) -> float:
+    """Expected failures avoided over the window, year by year, on lesson 7.3.4's age path."""
+    first, done = window[0], start + duration
+    total = 0.0
+    for y in window:
+        before = asset.age + (y - first)
+        after = before if y < done else keep * (asset.age + (done - first)) + (y - done)
+        total += (failures(before, asset.weibull_beta, asset.weibull_eta, 1)
+                  - failures(after, asset.weibull_beta, asset.weibull_eta, 1))
+    return total
+```
+
+```text
+expected failures avoided over 2027-2036, each project started as early as it can
+project action      work  d    1-d  rho  | 7.4.1   path, no work time  path, 1-d  path, rho (7.3.4)
+P001    replace     1y  1.0  0.0  0.0  | 0.486   0.486               0.462      0.462
+P002    rebuild     1y  1.0  0.0  0.0  | 0.228   0.228               0.211      0.211
+P003    replace     2y  1.0  0.0  0.0  | 0.574   0.574               0.516      0.516
+P004    replace     2y  1.0  0.0  0.0  | 0.312   0.312               0.250      0.250
+P005    trim        1y  0.5  0.5  0.5  | 0.095   0.095               0.095      0.095
+P006    replace     2y  1.0  0.0  0.0  | 1.082   1.082               0.872      0.872
+P007    repair      1y  0.5  0.5  0.5  | 0.957   0.957               0.881      0.881
+P008    widen       1y  0.8  0.2  0.5  | 0.093   0.093               0.088      0.050
+```
+
+Read the columns left to right, one difference at a time.
+
+- **No time for the work, keep $`1 - d`$:** the age path gives exactly this lesson's numbers, in every
+  row. The yearly expected counts add up to $`N(a, h)`$ over the window, so this lesson's formula is
+  7.3.4's method with zero years of work.
+- **The work takes its years:** the benefit falls for every project but P005, because the old
+  asset keeps failing until the crew is done. Tiny's P006, two years of work, drops from 1.082 to
+  0.872, about a fifth. (P005's columns happen to agree to three decimals.)
+- **7.3.4's $`\rho`$:** only P008, the widening, changes, from 0.088 to 0.050.
+
+So there is one method, and this lesson uses a short form of it. **To value a renewal, follow the
+asset's age year by year with and without the work** (lesson 7.3.4): it ages through the years of
+work, then keeps the share $`\rho`$ of the age it had reached and ages again; each year's benefit
+is the drop in expected failures times what one failure does, discounted if it is money. This
+lesson's $`N(a_t, h_t) - N((1 - d)\,a_t, h_t)`$ is that method with the years of work left out and
+nothing discounted, written with $`d = 1 - \rho`$. It keeps each measure one difference a reader can
+check by hand, and it counts customer-minutes, incidents and tonnes in their own units, which this
+module does not discount: a customer-minute in 2036 counts as much as one in 2028.
+
+The rest of the course keeps both, each for its own job. The risk objective that section 8 trades
+against NPV is 7.3.4's, age path, time for the work and lesson 1.1.2's $`\rho`$ included, because
+it is stated in dollars beside NPV. The value function of lessons 7.4.2 to 7.4.4 is built on this
+lesson's measures and depths. A utility that wants its value function on the full method changes
+`failures_avoided` to sum along the age path, and every coefficient after it follows.
+
+## Financial Benefit Is NPV, and Each Consequence Is Counted Once
+
+The financial measure is the project's **net present value** at its start year, $`\text{npv}_{i,t}`$
+in $k: its money benefits discounted to today, less its discounted cost. Lessons 7.2.1 to 7.2.4 (*Financial
+evaluation*) teach how it is computed; GridCap stores it as `Project.npv[start]`.
+
+A failure also has a money consequence: the emergency repair. GridCap records it as the asset's
+`cof` in $k, and lesson 7.3.4 turns it into a risk reduction in dollars. Is it inside GridCap's NPV? No.
+Lesson 7.2.4 rebuilt every NPV entry from three things: the project's cost profile, a benefit equal
+to its capex times a **benefit ratio** drawn between 1.15 and 2.05, and a **decay** of 3% to 8% of
+that benefit per year of delay. No term uses `cof` or the failure curve. GridCap's NPV is a stand-in
+for the money case finance would bring, and it does not say what that money is.
+
+So the course counts the avoided repair cost in exactly one place: the risk objective of lesson
+7.3.4, which section 8 puts beside NPV as a second objective and trades against it at a
+stated price. Counted there, it must not come back in the value function too, so the value function
+does **not** add $`F \times \text{cof}`$ as a fifth measure. Adding it would count the same dollars
+twice, and a doubly counted effect gets twice the weight it deserves in the final decision. The rule
+is about where the dollars already sit. With a real utility's NPV built from avoided repair bills,
+the repair cost is inside NPV, and it is added neither as a fifth measure nor as a separate risk
+objective summed with that NPV; GridCap's NPV has no such term, which is why section 8 may weigh
+GridCap's NPV and risk against each other without counting anything twice. The UK government's
+multi-criteria analysis manual makes the same rule for public appraisals: the same impact may be
+*shown* from several points of view, but it is counted once when options are compared.
+
+The practical test from that manual: take two projects that are identical in every measure except
+one, say customer-minutes. Would the board prefer the one with more? If yes, customer-minutes carry
+value that NPV does not, and they belong in the value function. If the board says "no, the
+customer-minutes are already priced in the NPV", then they are a double count and must go.
+Reliability, safety and environment pass that test at GridCap: none of them is in its NPV.
+
+Correlated is not the same as doubly counted. Tiny's P006 scores high on reliability, safety and
+emissions because all three come from the same failures avoided. That is fine: each counts a
+different consequence of those failures (customers in the dark, people hurt, gas released), and the
+board values each separately.
+
+## Each Measure Ranks the Projects Differently
+
+Here are all eight tiny projects, each started as early as it can, in all four measures (SAIDI is the
+customer-minutes column divided by 600,000):
+
+```text
+project kind         action      failures   cust-min  SAIDI  incidents  tCO2e  NPV $k
+P001    transformer  replace       0.486    583,053   0.97      0.029   7.29   1,386
+P002    line         rebuild       0.228    246,548   0.41      0.011   0.46     871
+P003    tower        replace       0.574  1,653,216   2.76      0.046   0.57     576
+P004    breaker      replace       0.312    168,387   0.28      0.009   2.49   2,120
+P005    circuit      trim          0.095     17,092   0.03      0.014   2.37     123
+P006    transformer  replace       1.082  1,298,153   2.16      0.065  16.23   1,247
+P007    transformer  repair        0.957  1,148,809   1.91      0.057  14.36     265
+P008    corridor     widen         0.093    129,743   0.22      0.019   3.71     137
+```
+
+```text
+best by reliability   (customer-minutes): P003 P006 P007 P001 P002 P004 P008 P005
+best by safety        (incidents)       : P006 P007 P003 P001 P008 P005 P002 P004
+best by environmental (tCO2e)           : P006 P007 P001 P008 P004 P005 P003 P002
+best by financial     ($k)              : P004 P001 P006 P002 P003 P007 P008 P005
+```
+
+Four measures, three different winners. P004 tops the finance list and is last on safety. P003 tops
+reliability and is next to last on emissions. P007, a $290k repair, is second on safety and
+emissions and sixth on NPV. Any one list would hand the board a plan that ignores what the other
+three people at the table care about.
+
+So the board needs **one** number per project that weighs all four, and a model needs it too: a
+MILP has one objective. Combining measures in different units is not a matter of adding them, and
+lesson 7.4.2 shows what goes wrong when you try.
+
+## Summary
+
+- **A benefit measure counts one consequence, in one unit.** Write down what it counts, its unit,
+  and its direction; count reductions so that more is always better.
+- **SAIFI counts interruptions and SAIDI counts minutes, per customer served.** SAIFI = customer
+  interruptions / customers served; SAIDI = customer-minutes / customers served; only sustained
+  (over five minutes) interruptions count. GridCap's log gives SAIFI 0.0418 and SAIDI 8.69.
+- **Expected failures avoided turn into every non-financial measure.** Failures avoided (from the
+  Weibull curve and the intervention's depth) times what one failure does: P003 avoids 0.574 failures,
+  1,653,216 customer-minutes.
+- **Two renewal conventions share one failure model.** This lesson's depth is lesson 7.3.4's share
+  kept turned around, $`d = 1 - \rho`$, and its formula is 7.3.4's year-by-year age path with no years
+  of work and no discounting. Clearing and widening take $`d = 0.8`$ here and $`\rho = 0.5`$ there;
+  section 8's risk objective uses 7.3.4's, this module's value function this lesson's.
+- **Financial benefit is NPV, and each consequence is counted once.** GridCap's NPV has no
+  repair-cost term; the avoided repair cost is counted once, in lesson 7.3.4's risk objective, so it is
+  not added to the value function as well.
+- **Each measure ranks the projects differently.** On GridCap tiny, reliability, safety and finance
+  each pick a different first project.
+
+## Reference
+
+| Symbol | Meaning | Unit |
+| --- | --- | --- |
+| $`N_T`$ | customers served (GridCap: 600,000) | customers |
+| $`N_j`$, $`r_j`$ | customers interrupted, and minutes to restore, in sustained outage $`j`$ | customers, minutes |
+| SAIFI | $`\sum_j N_j / N_T`$ | interruptions per customer |
+| SAIDI | $`\sum_j r_j N_j / N_T`$ | minutes per customer |
+| CAIDI | SAIDI / SAIFI | minutes per interrupted customer |
+| $`F_{i,t}`$ | expected failures avoided by project $`i`$ started in $`t`$, over the window | failures |
+| $`d_i`$ | intervention depth: the asset's age becomes $`(1 - d_i)\,a`$ | none |
+| $`\rho`$ | lesson 7.3.4's share of its age the asset keeps, $`1 - d`$ | none |
+| $`C_k, M_k, S_k, E_k`$ | customers, minutes, incidents and tCO2e per failure of kind $`k`$ | per failure |
+| $`\text{CMI}_{i,t}`$ | $`F_{i,t} C_k M_k`$, customer-minutes avoided | customer-minutes |
+| $`\text{npv}_{i,t}`$ | NPV of project $`i`$ started in $`t`$ | $k |
+
+**Further reading:** U.S. Energy Information Administration, [Electric Power Annual, Table 11.1,
+Reliability Metrics of U.S. Distribution System](https://www.eia.gov/electricity/annual/html/epa_11_01.html)
+(what SAIDI and SAIFI count, and the IEEE major-event-day rule); EIA, [U.S. customers experienced an
+average of nearly six hours of power interruptions in 2018](https://www.eia.gov/todayinenergy/detail.php?id=43915)
+(SAIDI with and without major events); T&D World, [Understanding Distribution Reliability
+Metrics](https://tdworld.com/overhead-distribution/article/21157348/understanding-distribution-reliability-metrics)
+(SAIFI, SAIDI, CAIDI and MAIFI in plain words); UK Department for Communities and Local Government,
+[Multi-criteria analysis: a manual](https://assets.publishing.service.gov.uk/government/uploads/system/uploads/attachment_data/file/7612/1132618.pdf)
+(2009), section 5.4.4.5 on double counting.
+
+## Challenges
+
+1. A storm interrupts 50,000 customers for 20 hours on one day. Compute what it adds to GridCap's
+   SAIDI, then say whether a renewal plan should be judged on that day.
+2. Two outages each interrupt the same 1,000 customers for 60 minutes. What do they add to SAIFI?
+   Is that "1,000 customers interrupted" or "2,000 customer interruptions"?
+3. P007 (repair) avoids 0.957 failures and P006 (replace) avoids 1.082, on the same transformer. Why
+   so close, when one makes the asset new and the other only halves its age? Look at the asset's age
+   and its $`\beta`$.
+
+## Design Note: Measures Before Weights
+
+It is tempting to start with the weights ("safety matters most") and fill in measures later. The
+order matters the other way round. A weight means nothing until you know what one unit of its measure
+is (lesson 7.4.3), and the arguments that slow a value function down for months are nearly always
+about what a measure counts: does vegetation work prevent fires or only outages, are customer-minutes
+counted with or without major events, is the repair bill in NPV or not. Settle the measures, their
+units and their sources first, and write them down in a table like the one above.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson
+shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy
+of the code, so the course's own files never change.
+
+**outage_indices.py.** Computes SAIFI, SAIDI and CAIDI for a year's outage log, then P003's failures,
+customer interruptions and customer-minutes avoided (*SAIFI Counts Interruptions*, *Expected
+Failures Avoided*). *Try:* Change the 3-minute outage to 6 minutes. Predict SAIFI before you run.
+
+- Program: [outage_indices.py](src/outage_indices.py)
+
+**renewal_conventions.py.** Counts each tiny project's expected failures avoided with this lesson's
+depth and along lesson 7.3.4's age path, with and without the years of work and with either
+lesson's vegetation value (*Two Renewal Conventions, One Failure Model*). *Try:* Set
+`KEEP["widen"]` to 0.2. Predict which two columns of P008's row then agree.
+
+- Program: [renewal_conventions.py](src/renewal_conventions.py)
+
+**benefit_table.py.** The four measures for every tiny project and the ranking each one gives
+(*Each Measure Ranks the Projects Differently*). *Try:* Change the transformer's minutes to restore
+from 300 to 100 in `benefits.py`. Predict which project then tops reliability.
+
+- Program: [benefit_table.py](src/benefit_table.py)
+
+**benefits.py.** The consequence table, the failure model and the measures.
+
+- Library: [benefits.py](src/benefits.py)

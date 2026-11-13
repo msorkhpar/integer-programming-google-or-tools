@@ -1,0 +1,145 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "03-integer-programming-foundations",
+    "10-cuts-presolve-heuristics"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "A fractional dive",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A substation-upgrade model has binaries $`x_j`$, and an LP solver you can call with some of them fixed. Write the dive that turns LP points into a plan."
+    },
+    {
+      "type": "para",
+      "text": "Write `dive(lp)` in `dive.py`. `lp` is a function: `lp(fixed)` takes a dict from variable to 0 or 1 and returns the LP optimum with those variables fixed, as a dict from every variable to its value, or `None` when that LP has no solution. Repeat:"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Call `lp(fixed)`, starting with `fixed = {}`. If the point has no fractional variable (every value within $`10^{-6}`$ of 0 or 1), return `(plan, steps)`: `plan` maps each variable to its value rounded to 0 or 1.",
+        "Otherwise pick the fractional variable with the smallest $`\\min(x_j, 1 - x_j)`$ (ties by name), and set `target` to 1 if $`x_j \\ge 0.5`$, else 0.",
+        "Call `lp` with `fixed` plus $`x_j`$ = `target`. If that returns `None`, use the other value instead. Add the fixing to `fixed`, record `(variable, value)` in `steps`, and go back to step 1 with the point you got."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "If both values of a variable give `None`, return `(None, steps)`. A failed fixing is not a step: `steps` holds only the fixings that were kept, so the variable whose two values both failed is not in it. The reference solution appends to `steps` only after a call returns a point. The tests give you an `lp` that answers only the calls a correct dive makes."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom typing import Callable\n\nEPS = 1e-6\nLP = Callable[[dict[str, int]], \"dict[str, float] | None\"]\n\n\ndef dive(lp: LP) -> tuple[dict[str, int] | None, list[tuple[str, int]]]:\n    \"\"\"Fix the least fractional variable to its nearest value, re-solve, repeat until the point is 0-1.\"\"\"\n    fixed: dict[str, int] = {}\n    steps: list[tuple[str, int]] = []\n    x = lp(fixed)\n    while True:\n        fractional = [j for j, v in x.items() if EPS < v < 1 - EPS]\n        if not fractional:\n            return {j: round(v) for j, v in x.items()}, steps\n        j = min(fractional, key=lambda j: (min(x[j], 1 - x[j]), j))\n        target = 1 if x[j] >= 0.5 else 0\n        new = lp({**fixed, j: target})\n        if new is None:\n            target = 1 - target\n            new = lp({**fixed, j: target})\n            if new is None:\n                return None, steps\n        fixed[j] = target\n        steps.append((j, target))\n        x = new\n\n\nif __name__ == \"__main__\":\n    answers = {(): {\"a\": 1, \"b\": 0.9, \"c\": 0.4}, ((\"b\", 1),): {\"a\": 1, \"b\": 1, \"c\": 0}}\n    print(dive(lambda fixed: answers[tuple(sorted(fixed.items()))]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom typing import Callable\n\nEPS = 1e-6\nLP = Callable[[dict[str, int]], \"dict[str, float] | None\"]\n\n\ndef dive(lp: LP) -> tuple[dict[str, int] | None, list[tuple[str, int]]]:\n    \"\"\"Fix the least fractional variable to its nearest value, re-solve, repeat until the point is 0-1.\"\"\"\n    # TODO: start from lp({}); while a variable is fractional, fix the least fractional one to its\n    # nearest value (the other value if that LP is None), keeping every earlier fixing.\n    return None, []\n\n\nif __name__ == \"__main__\":\n    answers = {(): {\"a\": 1, \"b\": 0.9, \"c\": 0.4}, ((\"b\", 1),): {\"a\": 1, \"b\": 1, \"c\": 0}}\n    print(dive(lambda fixed: answers[tuple(sorted(fixed.items()))]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "90502f0c5b9207a607e8868d3f6714a61df190bd6df0754561bc6ca0b0bbc7ff",
+  "starting_code": "from __future__ import annotations\n\nfrom typing import Callable\n\nEPS = 1e-6\nLP = Callable[[dict[str, int]], \"dict[str, float] | None\"]\n\n\ndef dive(lp: LP) -> tuple[dict[str, int] | None, list[tuple[str, int]]]:\n    \"\"\"Fix the least fractional variable to its nearest value, re-solve, repeat until the point is 0-1.\"\"\"\n    # TODO: start from lp({}); while a variable is fractional, fix the least fractional one to its\n    # nearest value (the other value if that LP is None), keeping every earlier fixing.\n    return None, []\n\n\nif __name__ == \"__main__\":\n    answers = {(): {\"a\": 1, \"b\": 0.9, \"c\": 0.4}, ((\"b\", 1),): {\"a\": 1, \"b\": 1, \"c\": 0}}\n    print(dive(lambda fixed: answers[tuple(sorted(fixed.items()))]))\n",
+  "exercise": {
+    "main_path": "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-03/practice-2/dive.py",
+    "test_path": "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-03/practice-2/test_dive.py",
+    "run_command": [
+      "python3",
+      "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-03/practice-2/dive.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-03/practice-2/target/report.xml",
+      "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-03/practice-2/test_dive.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_least_fractional_variable_is_rounded_up",
+        "kind": "main",
+        "says": "of 0.9 and 0.4, the variable at 0.9 is fixed first, at 1, and the next LP point is a plan"
+      },
+      {
+        "id": "test_the_least_fractional_variable_is_rounded_down",
+        "kind": "main",
+        "says": "of 0.1 and 0.6, the variable at 0.1 is fixed first, at 0"
+      },
+      {
+        "id": "test_an_infeasible_fixing_is_tried_the_other_way",
+        "kind": "edge",
+        "says": "when fixing at the nearest value makes the LP infeasible, the variable is fixed the other way"
+      },
+      {
+        "id": "test_earlier_fixings_stay_in_every_later_lp",
+        "kind": "edge",
+        "says": "the second LP is asked with both fixings, not only the newest one"
+      },
+      {
+        "id": "test_a_dead_end_returns_only_the_fixings_kept",
+        "kind": "edge",
+        "says": "when both values of a variable fail, the dive gives up and its steps leave that variable out"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-03/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "10-cuts-presolve-heuristics/README_3.3.3.md",
+      "section": "Diving Fixes One Variable, Re-Solves the LP, and Repeats"
+    },
+    "concepts": [
+      "a dive fixes the least fractional variable, re-solves, and keeps every earlier fixing"
+    ]
+  }
+}

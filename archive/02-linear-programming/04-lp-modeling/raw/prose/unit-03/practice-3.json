@@ -1,0 +1,140 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "02-linear-programming",
+    "04-lp-modeling"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 3,
+  "ingested": "2026-11-13",
+  "title": "Carry a parks budget across years",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A city parks department plans its maintenance spending over several years. Each year has a budget, an amount of work its crews can actually do, and a value per $k of work (later years are worth a little less, as discounting makes them). Council lets a year roll unspent money into the next year, but at most a share `max_carry` of the budget of the year the money leaves. Money a year neither spends nor carries lapses at year end."
+    },
+    {
+      "type": "para",
+      "text": "With $`Y`$ the years in order, $`y_0`$ the first (in order means sorted by year, smallest first, whatever order the dict's keys come in: money carried out of a year goes into the next larger year among the keys), $`B_y`$ the budget, $`w_y`$ the work available, $`v_y`$ the value per $k and $`\\gamma`$ the carry share:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& \\sum_{y \\in Y} v_y\\, x_y \\\\\n\\text{s.t. }& x_y + r_y \\le B_y + r_{y-1} && \\forall y \\in Y && \\text{(cash}_y),\\ r_{y_0 - 1} = 0 \\\\\n& 0 \\le x_y \\le w_y && \\forall y \\in Y \\\\\n& 0 \\le r_y \\le \\gamma\\, B_y && \\forall y \\in Y\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "$`x_y`$ is the $k spent in year $`y`$ and $`r_y`$ the $k carried out of it, both continuous. Write `plan_spending(budgets, work, value, max_carry)` in `carry.py`; the three dicts are keyed by year. It solves the model with GLOP and returns `(status, value, spend, carry)`: the name of the termination reason; when it is `OPTIMAL`, the objective value and two dicts by year, the spend and the carry (not rounded, every year included); otherwise `None, None, None`."
+    },
+    {
+      "type": "para",
+      "text": "About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef plan_spending(budgets: dict[int, float], work: dict[int, float], value: dict[int, float], max_carry: float):\n    \"\"\"Spend each year's budget, with carry-over into the next year. Returns (status, value, spend, carry).\"\"\"\n    years = sorted(budgets)\n    model = mathopt.Model(name=\"parks carry-over\")\n    x = {y: model.add_variable(lb=0, ub=work[y], name=f\"x_{y}\") for y in years}\n    carry = {}\n    for y in years:\n        carry[y] = model.add_variable(lb=0, ub=max_carry * budgets[y], name=f\"r_{y}\")\n    for i, y in enumerate(years):\n        incoming = carry[years[i - 1]] if i else 0\n        model.add_linear_constraint(x[y] + carry[y] <= budgets[y] + incoming, name=f\"cash_{y}\")\n    model.maximize(sum(value[y] * x[y] for y in years))\n    result = mathopt.solve(model, mathopt.SolverType.GLOP)\n    status = result.termination.reason.name\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return status, None, None, None\n    spend = {y: result.variable_values(x[y]) for y in years}\n    return status, result.objective_value(), spend, {y: result.variable_values(carry[y]) for y in years}\n\n\nif __name__ == \"__main__\":\n    print(plan_spending({2030: 100, 2031: 100}, {2030: 60, 2031: 150}, {2030: 1.0, 2031: 0.9}, 0.5))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef plan_spending(budgets: dict[int, float], work: dict[int, float], value: dict[int, float], max_carry: float):\n    \"\"\"Spend each year's budget, with carry-over into the next year. Returns (status, value, spend, carry).\"\"\"\n    # TODO: spend and carry variables with their bounds, one cash row per year, the objective,\n    # a GLOP solve, and the status before any value.\n    return \"NOT_SOLVED\", None, None, None\n\nif __name__ == \"__main__\":\n    print(plan_spending({2030: 100, 2031: 100}, {2030: 60, 2031: 150}, {2030: 1.0, 2031: 0.9}, 0.5))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "9e759ad1a0f40a324ae644a5f831173aa34a4f99a72a5914af2d176eec155d65",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef plan_spending(budgets: dict[int, float], work: dict[int, float], value: dict[int, float], max_carry: float):\n    \"\"\"Spend each year's budget, with carry-over into the next year. Returns (status, value, spend, carry).\"\"\"\n    # TODO: spend and carry variables with their bounds, one cash row per year, the objective,\n    # a GLOP solve, and the status before any value.\n    return \"NOT_SOLVED\", None, None, None\n\nif __name__ == \"__main__\":\n    print(plan_spending({2030: 100, 2031: 100}, {2030: 60, 2031: 150}, {2030: 1.0, 2031: 0.9}, 0.5))\n",
+  "exercise": {
+    "main_path": "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-3/carry.py",
+    "test_path": "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-3/test_carry.py",
+    "run_command": [
+      "python3",
+      "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-3/carry.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-3/target/report.xml",
+      "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-3/test_carry.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_unspent_money_rolls_forward_and_is_spent_later",
+        "kind": "main",
+        "says": "money a year cannot spend rolls into the next year and is spent there"
+      },
+      {
+        "id": "test_the_carry_cap_is_a_share_of_the_year_the_money_leaves",
+        "kind": "edge",
+        "says": "the carry cap is a share of the budget of the year the money leaves, not the year it enters"
+      },
+      {
+        "id": "test_the_first_year_has_nothing_carried_in",
+        "kind": "edge",
+        "says": "the first year has nothing carried in, not the last year's carry"
+      },
+      {
+        "id": "test_money_neither_spent_nor_carried_may_lapse",
+        "kind": "edge",
+        "says": "money neither spent nor carried lapses, so a year may leave some unused"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-3/target/report.xml"
+    },
+    "origin": {
+      "path": "04-lp-modeling/README_2.1.3.md",
+      "section": "Multi-Period Carry-Over Is a Stock Variable That Links Each Year's Cash Row to the Next"
+    },
+    "concepts": [
+      "carried money is a bounded variable that appears in two neighbouring years' cash rows"
+    ]
+  }
+}

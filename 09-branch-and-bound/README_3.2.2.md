@@ -1,0 +1,341 @@
+# 3.2.2 Bounds, Incumbents and Pruning
+
+Lesson 3.2.1 solved GridCap's tiny portfolio by branching until every leaf was infeasible or
+integral: 29 nodes for 8 projects. The same rule on the small portfolio would grow with its 40
+projects, and the planners' real portfolios are larger still. Yet the tiny tree held a hint. A
+whole subtree below a node with LP value 3,054.7 was searched after a plan worth 2,833 was known
+and before the plan worth 3,627 turned up, and nothing in that subtree could ever have won.
+
+This lesson adds the rule that skips such subtrees. It needs two numbers at every moment of the
+search: the best plan found so far, and the most any unexplored part of the tree could still be
+worth. Comparing them is the "bound" half of branch-and-bound, and it is what lets a solver prove a
+plan optimal without looking at most plans.
+
+## The Model
+
+Unchanged from lesson 3.2.1: the one-period selection model on GridCap tiny.
+
+**Sets.** $`P`$, the projects; $`M \subseteq P`$, the must-do projects; $`C \subseteq P`$, the
+projects with a parent $`p(c)`$; $`\mathcal{G}`$, the alternative groups.
+
+**Parameters.** $`c_i`$, capex ($k); $`v_i`$, value ($k); $`B`$, the capital budget ($k).
+
+**Variables.** $`x_i \in \{0, 1\}`$ for every $`i \in P`$: 1 if project $`i`$ is funded.
+
+**Objective and constraints.**
+
+```math
+\begin{aligned}
+\max \;& \sum_{i \in P} v_i\, x_i \\
+\text{s.t. }& \sum_{i \in P} c_i\, x_i \le B && \text{(budget)} \\
+& x_i = 1 \quad \forall i \in M && \text{(must}_i) \\
+& x_c \le x_{p(c)} \quad \forall c \in C && \text{(parent}_c) \\
+& \textstyle\sum_{i \in g} x_i \le 1 \quad \forall g \in \mathcal{G} && \text{(alt}_g)
+\end{aligned}
+```
+
+**A node.** Branching has fixed some variables: $`F_0`$ at 0 and $`F_1`$ at 1. The node's LP is the
+relaxation with those fixings:
+
+```math
+z(F_0, F_1) = \max \Big\{ \sum_{i \in P} v_i x_i \;:\; \text{the rows above},\ 0 \le x_i \le 1,\
+x_i = 0 \ \forall i \in F_0,\ x_i = 1 \ \forall i \in F_1 \Big\}
+```
+
+with $`z = -\infty`$ when that LP is infeasible. The root is $`F_0 = F_1 = \varnothing`$.
+
+## The Incumbent Is the Best Plan Found So Far, and Its Value Is a Lower Bound
+
+The **incumbent** is the best real plan the search has found so far: a 0-1 plan that obeys every
+row. Write its value $`\underline{z}`$. Because it is a real plan, the best plan is worth at least
+that much:
+
+```math
+z^* \;\ge\; \underline{z}
+```
+
+where $`z^*`$ is the optimum, the value of the best plan. So the incumbent's value is a **lower
+bound** on the optimum, the mirror of lesson 3.2.1's upper bound. Before the first plan is found
+there is no incumbent, and the lower bound is $`-\infty`$.
+
+In the trees of this module an incumbent appears when a node's LP is integral. Lesson 3.3.3 shows the other ways solvers find plans, such as
+rounding an LP solution and repairing it.
+
+## A Node's LP Value Is an Upper Bound on Every Plan Below It
+
+Lesson 3.1.2 showed that the root's LP value bounds every plan from above. The same argument works
+at any node: every 0-1 plan that obeys the rows and the node's fixings is a point of the node's LP,
+so no plan below the node is worth more than $`z(F_0, F_1)`$. And because a child only adds a
+fixing, a child's LP value is never above its parent's: going down the tree, the upper bounds fall.
+
+That gives a node two numbers to compare: the most anything below it could be worth, and the
+incumbent's value. If the first is not above the second, nothing below the node can improve on the
+incumbent.
+
+## Prune a Node That Is Infeasible, Integral, or Cannot Beat the Incumbent
+
+A node is **pruned** (the search stops below it) for exactly three reasons:
+
+| Prune by | Test | Why nothing is lost |
+| --- | --- | --- |
+| infeasibility | the node's LP has no solution | no plan obeys the node's rows and fixings |
+| bound | $`z(F_0, F_1) \le \underline{z}`$ | no plan below is worth more than the incumbent |
+| integrality | the LP solution is all 0 and 1 | it is the best plan in the node; it becomes the incumbent if it beats it |
+
+Every other node is branched on. The bound test is the new one. In `bnb.py` it is `can_beat`:
+
+```python
+def can_beat(bound: float, search: Search, round_bound: bool) -> bool:
+    """True when a node with this LP bound could still hold a plan better than the incumbent."""
+    if search.value is None or bound == math.inf:
+        return True
+    if round_bound:
+        bound = math.floor(bound + EPS)
+    return bound > search.value + EPS
+```
+
+`search.value` is $`\underline{z}`$, or `None` before the first plan. A bound equal to the incumbent
+is pruned too: a plan below could at best tie, and a tie is no improvement. `EPS` keeps float noise
+from turning a tie into a win. `round_bound` is the next rule's subject. `bound == math.inf` is the
+root, which has no parent bound yet.
+
+The search applies the test in this order: infeasible first, then the bound, then integrality. So an
+integral node worth less than the incumbent is recorded as pruned by bound, not as a new plan.
+
+```python
+lp = solve_lp(sel, node.fixed)
+search.lps += 1
+if lp.status == "infeasible":
+    action = "pruned: infeasible"
+elif prune and not can_beat(lp.value, search, round_bound):
+    action = f"pruned: bound {lp.value:,.1f} cannot beat {search.value:,.0f}"
+elif not fractional(lp.x):
+```
+
+The rest of the loop (integral and branch) is the code lesson 3.2.1 showed. Run on tiny with
+pruning on:
+
+```text
+  0 root                        LP 3,770.1  branch on x_P003 = 0.099
+  2   x_P003 = 1                LP 3,054.7  branch on x_P004 = 0.633
+  4     x_P004 = 1              infeasible  pruned: infeasible
+  3     x_P004 = 0              LP 2,936.8  branch on x_P001 = 0.884
+  6       x_P001 = 1            LP 2,869.6  branch on x_P007 = 0.138
+  8         x_P007 = 1          infeasible  pruned: infeasible
+  7         x_P007 = 0          LP 2,858.3  branch on x_P006 = 0.020
+ 10           x_P006 = 1        infeasible  pruned: infeasible
+  9           x_P006 = 0        LP 2,852.7  branch on x_P005 = 0.160
+ 12             x_P005 = 1      infeasible  pruned: infeasible
+ 11             x_P005 = 0      LP 2,842.4  branch on x_P008 = 0.069
+ 14               x_P008 = 1    infeasible  pruned: infeasible
+ 13               x_P008 = 0    LP 2,833.0  integral: new incumbent 2,833
+  5       x_P001 = 0            LP 2,802.2  pruned: bound 2,802.2 cannot beat 2,833
+  1   x_P003 = 0                LP 3,695.5  branch on x_P008 = 0.500
+ 16     x_P008 = 1              LP 3,617.6  branch on x_P006 = 0.976
+ 18       x_P006 = 1            LP 3,615.2  branch on x_P001 = 0.981
+ 20         x_P001 = 1          infeasible  pruned: infeasible
+ 19         x_P001 = 0          LP 2,378.0  pruned: bound 2,378.0 cannot beat 2,833
+ 17       x_P006 = 0            LP 2,782.0  pruned: bound 2,782.0 cannot beat 2,833
+ 15     x_P008 = 0              LP 3,627.0  integral: new incumbent 3,627
+21 nodes, 21 LPs; best plan 3,627: P001, P002, P005, P006
+```
+
+The first 13 lines are the same as in lesson 3.2.1: until node 13 there is no incumbent, so nothing
+can be pruned by bound. Then node 5 (P003 funded, P001 not) has LP value 2,802.2, below the 2,833
+already in hand. In lesson 3.2.1 that node was split, its subtree took 9 nodes, and it found
+nothing better. Here it is one line, and the tree shrinks from 29 nodes to 21 with the same answer.
+Node numbers follow the order nodes are made, so from here on they differ from lesson 3.2.1's.
+
+Nodes 19 and 17 are pruned by bound too, though they would have been leaves anyway. Node 17's LP
+solution, worth 2,782, is a real plan; lesson 3.2.1's tree (as node 25) marked it "integral: 2,782
+is no better". The bound test ran first and pruned it, which is the same decision.
+
+The last node, 15, is integral at 3,627. Nothing is left waiting, so the search stops, and the
+incumbent is the optimum: every other part of the tree was pruned for one of the three reasons, so
+no plan anywhere beats 3,627.
+
+## With Whole-Number Values, Round the Bound Down Before Comparing
+
+GridCap's values are whole numbers of $k, and every plan's value is a sum of them, so every plan is
+worth a whole number. If a node's LP bound is 25,336.4, no plan below it is worth more than 25,336.
+Against an incumbent of 25,336, that node cannot win, even though its unrounded bound is higher:
+
+```text
+a node with LP bound 25,336.4 against an incumbent of 25,336: prune after rounding
+small, bound rounded down: False  821 nodes, 821 LPs, best 25,336
+small, bound rounded down: True   803 nodes, 802 LPs, best 25,336
+```
+
+The second and third lines run the whole search on GridCap small, 40 projects, with the test
+$`\lfloor z(F_0, F_1) \rfloor \le \underline{z}`$ instead of $`z(F_0, F_1) \le \underline{z}`$.
+Rounding prunes nodes whose LP bound is less than $1k above the incumbent, and saves 18
+nodes. In the rounded run one node is pruned before its LP is solved (803 nodes, 802 LPs): a
+waiting node carries its parent's LP value as its bound, and by the time it is taken a better
+incumbent may already have made that bound useless.
+
+The rule needs every objective coefficient to be a whole number and every variable integer. A model
+with one continuous variable in the objective, or a value like 12.5, cannot use it as is (scaling
+by 2 would make 12.5 whole again). GridCap keeps money in whole $k, so the rule applies to every
+model in this module.
+
+<!-- practice 1 -->
+
+## The Optimum Always Lies Between the Incumbent and the Best Waiting Bound
+
+At any moment during the search, the optimum is trapped between two numbers. The incumbent's value
+$`\underline{z}`$ is below it, as the first rule showed. Above it: every plan not yet ruled out lies
+below some waiting node, and each waiting node carries an upper bound (its parent's LP value, since
+its own LP is not solved yet). So
+
+```math
+\underline{z} \;\le\; z^* \;\le\; \bar z = \max\Big(\underline{z},\ \max_{\text{waiting nodes } n} \text{bound}(n)\Big)
+```
+
+$`\bar z`$ is the **best bound**. The incumbent is included in the maximum because, when every
+waiting bound is below the incumbent, the incumbent itself is the best there is. The tiny search,
+printed each time the range changes:
+
+```python
+print("\nwhere the optimum can be, printed each time the range changes")
+incumbent, last = None, None
+for step in search.steps:
+    if "new incumbent" in step.action:
+        incumbent = step.lp.value
+    high = max(b for b in (step.waiting_bound, incumbent) if b is not None)
+    low = "no plan yet" if incumbent is None else f"{incumbent:,.0f}"
+    if (low, high) != last:
+        print(f"after node {step.node.id:>2}: between {low} and {high:,.1f}")
+        last = (low, high)
+```
+
+```text
+where the optimum can be, printed each time the range changes
+after node  0: between no plan yet and 3,770.1
+after node 13: between 2,833 and 3,770.1
+after node  1: between 2,833 and 3,695.5
+after node 15: between 3,627 and 3,627.0
+```
+
+`step.waiting_bound` is the largest bound among the nodes still waiting after the step. The upper
+end stays at the root's 3,770.1 until node 1 is solved, because node 1 waited all that time with the
+root's value as its bound. The lower end jumps twice, at each new incumbent. When the two meet, the
+incumbent is proven optimal, and the search can stop even if nodes are still waiting.
+
+The distance between the two ends, $`\bar z - \underline{z}`$, is the **gap**. Lesson 3.3.4 finds both ends and the gap in HiGHS's log, and lesson 3.4.1 shows how to stop a search once the gap is
+small enough.
+
+<!-- practice 2 -->
+
+## A Good Plan Found Early Prunes More
+
+Pruning by bound needs an incumbent, and the tiny search spent its first 13 nodes without one. A
+plan known before the search starts can serve as the first incumbent. A cheap one: solve the root LP
+and round every fractional variable down. On this model that is always a real plan: lowering a
+variable never breaks the budget row or an alternative group, the must-do variables are fixed at 1
+and never fractional, and a child at a fraction is at most its parent's fraction, so it rounds down
+too.
+
+```python
+plan = [pid for pid, v in root.x.items() if v > 1 - 1e-6]          # round the root LP down
+value = sum(portfolio.project(pid).value for pid in plan)
+cost = sum(portfolio.project(pid).capex for pid in plan)
+```
+
+```text
+tiny: root LP rounded down funds 3 projects, cost 6,850 of 7,390, value 3,504
+  no starting plan:       21 nodes, best 3,627
+  rounded plan to beat:    9 nodes, best 3,627
+small: root LP rounded down funds 20 projects, cost 37,060 of 38,390, value 24,671
+  no starting plan:      821 nodes, best 25,336
+  rounded plan to beat:  655 nodes, best 25,336
+```
+
+On tiny, an incumbent of 3,504 from the start prunes the whole subtree under $`x_{P003} = 1`$ as
+soon as its LP value, 3,054.7, is known, and the search takes 9 nodes instead of 21. On small it
+saves 166 nodes. The answer is the same both times; only the work changes. A method that finds
+plans without proving them best is a **primal heuristic**, and lesson 3.3.3 covers the ones MILP
+solvers run before and during the search.
+
+## Summary
+
+- **The incumbent is the best plan found so far, and its value is a lower bound** on the optimum.
+- **A node's LP value is an upper bound on every plan below it**, and it never rises going down.
+- **Prune a node that is infeasible, integral, or cannot beat the incumbent.** Test in that order;
+  a bound equal to the incumbent is pruned.
+- **With whole-number values, round the bound down before comparing.** It needs integer variables
+  and whole objective coefficients.
+- **The optimum always lies between the incumbent and the best waiting bound.** When they meet, the
+  incumbent is proven optimal.
+- **A good plan found early prunes more.** Rounding the root LP down gave a starting plan that cut
+  the tiny tree from 21 nodes to 9.
+
+## Reference
+
+| Symbol | Meaning |
+| --- | --- |
+| $`z^*`$ | the optimum: the best plan's value |
+| $`\underline{z}`$ | the incumbent's value, a lower bound on $`z^*`$ ($`-\infty`$ before the first plan) |
+| $`z(F_0, F_1)`$ | a node's LP value, an upper bound on every plan below it |
+| bound of a waiting node | its parent's LP value |
+| $`\bar z`$ | the best bound: the largest of $`\underline{z}`$ and the waiting nodes' bounds |
+| gap | $`\bar z - \underline{z}`$; zero means proven optimal |
+
+| Prune by | When |
+| --- | --- |
+| infeasibility | the node's LP has no solution |
+| bound | $`z(F_0, F_1) \le \underline{z}`$, or $`\lfloor z(F_0, F_1) \rfloor \le \underline{z}`$ with whole values |
+| integrality | the LP solution is all 0 and 1; update the incumbent if it is better |
+
+MathOpt reports the two ends of the range on every MILP result:
+`result.termination.objective_bounds.primal_bound` is the incumbent's value and `dual_bound` the best
+bound (lesson 3.4.1 reads them).
+
+**Further reading:** [MathOpt `ObjectiveBounds` and `SolveResult` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/result.py) (the primal bound is a plan's value, the dual bound a value no plan beats; for a MIP solver it comes from relaxations such as the LP); [Mixed-Integer Programming (OR-Tools)](https://developers.google.com/optimization/mip) (the branch-and-bound solvers OR-Tools wraps); [Integer Programming, Chapter 9 of Applied Mathematical Programming (MIT 15.053)](https://web.mit.edu/15.053/www/AMP-Chapter-09.pdf) (section 9.5 names the three prunes fathoming by infeasibility, integrality and bounds, rounds an LP bound of 41¼ down to 41 because the objective is integral, and takes the upper bound as the best "hanging" node); [HiGHS terminology: MIP](https://ergo-code.github.io/HiGHS/dev/terminology/) (primal bound, dual bound and the gap between them, as HiGHS uses the words).
+
+## Challenges
+
+1. In the tiny trace, node 1 waited from the first step to the fifteenth with bound 3,770.1. If the
+   search had taken node 1 right after the root, which nodes of the $`x_{P003} = 1`$ subtree would
+   still be solved? (Lesson 3.2.3 runs this.)
+2. Give `branch_and_bound` the start plan P001, P002, P005, P007 and P008, worth 2,782 (check that
+   it obeys every row first). Predict whether it prunes more or less than the rounded plan, then
+   run it.
+3. A model maximizes $`3.5a + 2b`$ over integers. Can it round its bounds down? What single change
+   to the objective lets it?
+
+## Design Note: Why the Bound Test Runs Before the Integrality Test
+
+An integral node worth less than the incumbent could be recorded either way; both stop the search
+there. Testing the bound first means the incumbent is never replaced by a worse plan, without a
+separate comparison. More importantly, in a real solver the bound test can run *before* the node's
+LP is solved, using the parent's value, as happened once in the rounded run on small. A node pruned
+that way costs nothing. Lesson 3.2.3 shows a node order under which this happens often.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson
+shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy
+of the code, so the course's own files never change.
+
+**pruning_trace.py.** The tiny tree with pruning by bound, then the range the optimum must lie in
+(*Prune a Node That Is Infeasible, Integral, or Cannot Beat the Incumbent* and *The Optimum Always
+Lies Between the Incumbent and the Best Waiting Bound*). *Try:* Run it with `prune=False`. Predict
+when the range's lower end first moves and whether the upper end moves sooner.
+
+- Program: [pruning_trace.py](src/pruning_trace.py)
+
+**rounded_bound.py.** The small search with and without rounding the bound down (*With Whole-Number
+Values, Round the Bound Down Before Comparing*). *Try:* Add 0.5 to every project's value in a copy.
+Predict whether rounding still saves nodes, and why it is no longer allowed.
+
+- Program: [rounded_bound.py](src/rounded_bound.py)
+
+**head_start.py.** Rounds the root LP down and uses that plan as the first incumbent, on tiny and
+small (*A Good Plan Found Early Prunes More*). *Try:* Start from a worse plan, P002 alone. Predict
+the node count on tiny.
+
+- Program: [head_start.py](src/head_start.py)
+
+**bnb.py.** The branch-and-bound library; `can_beat` is the bound test.
+
+- Library: [bnb.py](src/bnb.py)

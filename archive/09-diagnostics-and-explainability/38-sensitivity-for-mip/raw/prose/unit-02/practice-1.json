@@ -1,0 +1,144 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "09-diagnostics-and-explainability",
+    "38-sensitivity-for-mip"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A row report that keeps slack and price apart",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water treatment plant doses two chemicals each day. Its LP's rows are limits on stock, on the mixer's hours and on a minimum disinfection level. After each solve, the shift lead wants a report: for every row, how much room it has left and what it is worth."
+    },
+    {
+      "type": "para",
+      "text": "Write `row_report(model, result, tol=1e-6)` for a solved LP. Return a dict keyed by each row's name, whose value is a dict with three entries:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`\"slack\"`: how far the row's left side sits from its nearest **finite** bound, at the solution. A row may have a lower bound, an upper bound, or both (an equality has both, equal); a missing bound is infinite.",
+        "`\"binding\"`: `True` when that slack is zero, within `tol`.",
+        "`\"price\"`: the row's dual value."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Define binding first, in one sentence, from the row's two sides alone, then write the code. Each row's left side is a sum of coefficient × variable value: `row.terms()` yields the terms, each with `.variable` and `.coefficient`, and `row.lower_bound` and `row.upper_bound` are its bounds. `model.linear_constraints()` yields the rows."
+    },
+    {
+      "type": "para",
+      "text": "The tests build small LPs, solve them with GLOP and read your report. About ten lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef row_report(model: mathopt.Model, result: mathopt.SolveResult, tol: float = 1e-6) -> dict:\n    \"\"\"For each row of a solved LP: its slack, whether it binds, and its price.\"\"\"\n    report = {}\n    for row in model.linear_constraints():\n        activity = sum(t.coefficient * result.variable_values(t.variable) for t in row.terms())\n        slack = min(row.upper_bound - activity, activity - row.lower_bound)   # an infinite bound never wins\n        report[row.name] = {\"slack\": slack, \"binding\": abs(slack) <= tol, \"price\": result.dual_values(row)}\n    return report\n\n\nif __name__ == \"__main__\":\n    m = mathopt.Model()\n    x = m.add_variable(lb=0, name=\"chlorine\")\n    m.add_linear_constraint(x <= 40, name=\"stock\")\n    m.maximize(x)\n    print(row_report(m, mathopt.solve(m, mathopt.SolverType.GLOP)))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef row_report(model: mathopt.Model, result: mathopt.SolveResult, tol: float = 1e-6) -> dict:\n    \"\"\"For each row of a solved LP: its slack, whether it binds, and its price.\"\"\"\n    # TODO: define \"binding\" from the row's two sides, then fill in each row's three entries.\n    return {row.name: {\"slack\": 0.0, \"binding\": False, \"price\": 0.0} for row in model.linear_constraints()}\n\n\nif __name__ == \"__main__\":\n    m = mathopt.Model()\n    x = m.add_variable(lb=0, name=\"chlorine\")\n    m.add_linear_constraint(x <= 40, name=\"stock\")\n    m.maximize(x)\n    print(row_report(m, mathopt.solve(m, mathopt.SolverType.GLOP)))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "2eb51ff31df87d9f6c00ccd92640a6a9c6198873eedbb845136751ce6fb184f9",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef row_report(model: mathopt.Model, result: mathopt.SolveResult, tol: float = 1e-6) -> dict:\n    \"\"\"For each row of a solved LP: its slack, whether it binds, and its price.\"\"\"\n    # TODO: define \"binding\" from the row's two sides, then fill in each row's three entries.\n    return {row.name: {\"slack\": 0.0, \"binding\": False, \"price\": 0.0} for row in model.linear_constraints()}\n\n\nif __name__ == \"__main__\":\n    m = mathopt.Model()\n    x = m.add_variable(lb=0, name=\"chlorine\")\n    m.add_linear_constraint(x <= 40, name=\"stock\")\n    m.maximize(x)\n    print(row_report(m, mathopt.solve(m, mathopt.SolverType.GLOP)))\n",
+  "exercise": {
+    "main_path": "practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-1/rows.py",
+    "test_path": "practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-1/test_rows.py",
+    "run_command": [
+      "python3",
+      "practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-1/rows.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-1/target/report.xml",
+      "practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-1/test_rows.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_full_row_binds_and_a_loose_row_does_not",
+        "kind": "main",
+        "says": "a <= row whose two sides are equal binds and carries its price; a row with room to spare does not bind"
+      },
+      {
+        "id": "test_a_binding_row_with_a_zero_price_is_still_binding",
+        "kind": "edge",
+        "says": "binding is decided by the slack alone: a row can bind with a price of 0"
+      },
+      {
+        "id": "test_a_greater_or_equal_row_measures_slack_from_its_lower_bound",
+        "kind": "edge",
+        "says": "a >= row's slack is measured from its lower bound, since its upper bound is infinite"
+      },
+      {
+        "id": "test_a_row_within_float_noise_of_its_bound_binds",
+        "kind": "edge",
+        "says": "a slack within the tolerance of zero counts as zero"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "38-sensitivity-for-mip/README_9.2.2.md",
+      "section": "Binding Means Zero Slack; a Binding Row Can Still Have a Zero Price"
+    },
+    "concepts": [
+      "slack, binding and price reported for each row of an LP"
+    ]
+  }
+}

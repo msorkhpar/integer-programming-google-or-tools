@@ -1,0 +1,342 @@
+# 3.4.3 What "Optimal at 0.01%" Means on a $2B Portfolio
+
+A slide in GridCap's board pack says: *"The ten-year capital plan is optimal (MIP gap 0.01%) on a
+$2B portfolio."* It reads like a guarantee that nobody could improve the plan. A board member who
+has sat through a few of these asks three questions. 0.01% of what, and how much money is that?
+Does "optimal" mean the projects on the list are the right ones? And how sure are we of the NPVs
+the plan was optimized on? GridCap is a fictional utility, and its numbers are teaching data.
+
+This lesson answers each question with a program: what a solver means by "optimal", what 0.01% is in
+money and what it is measured on, how a constant in the objective quietly changes it, how much two
+plans within the gap can differ, and how the gap compares with the error in the data. It ends with
+how to choose the tolerance.
+
+## The Model
+
+The project-selection MILP of lesson 3.4.1, with the two changes this lesson makes marked. Each
+program uses the plain model unless it says otherwise.
+
+**Sets.** $`P`$ the candidate projects; $`Y`$ the plan's years; $`M \subseteq P`$ the must-do
+projects; $`\mathcal{G}`$ the alternative groups; $`C \subseteq P`$ the child projects, each with a
+parent $`p(c)`$; and, for the second change, $`S^* \subseteq P`$ the projects of the best plan.
+
+**Parameters.** $`v_i`$, the NPV of project $`i`$ at its earliest start ($k); $`c_{i,y}`$, what
+project $`i`$ spends in year $`y`$ ($k); $`B_y`$, the budget of year $`y`$ ($k); and, for the first
+change, $`K`$, a constant added to the objective ($k), 0 unless stated.
+
+**Variables.** $`x_i \in \{0, 1\}`$ for every $`i \in P`$: 1 if project $`i`$ is in the plan.
+
+**Objective.**
+
+```math
+\max \; \sum_{i \in P} v_i\, x_i + K \qquad \leftarrow K > 0 \text{ only in "A Constant in the Objective"}
+```
+
+**Constraints.**
+
+```math
+\begin{aligned}
+x_i &= 1 && \forall i \in M && \text{(must}_i) \\
+\sum_{i \in g} x_i &\le 1 && \forall g \in \mathcal{G} && \text{(alt}_g) \\
+x_c &\le x_{p(c)} && \forall c \in C && \text{(needs}_c) \\
+\sum_{i \in P} c_{i,y}\, x_i &\le B_y && \forall y \in Y && \text{(budget}_y) \\
+\sum_{i \in S^*} x_i - \sum_{i \in P \setminus S^*} x_i &\le |S^*| - 1 && && \text{(not\_the\_best\_plan)}
+\end{aligned}
+```
+
+The last row is used only in "Plans Within the Gap Can Pick Different Projects", and it is explained
+there. Every run is HiGHS (or SCIP where named) through MathOpt in OR-Tools 9.15, and every number is
+what a program printed; another solver, version or machine can print different ones.
+
+## "Optimal" From a Solver Means Optimal Within a Tolerance
+
+`default_gap.py` solves GridCap medium three times: HiGHS with no parameters at all, SCIP with no
+parameters at all, and HiGHS with `relative_gap_tolerance=0.0`. It also keeps HiGHS's log of the
+first run and prints its final gap line:
+
+```text
+HiGHS, defaults  OPTIMAL  incumbent 224,384  bound 224,406  gap 22 (0.0098%)  nodes 1,662
+SCIP, defaults   OPTIMAL  incumbent 224,384  bound 224,384  gap 0 (0.0000%)  nodes 12,663
+HiGHS, zero gap  OPTIMAL  incumbent 224,384  bound 224,384  gap 0 (0.0000%)  nodes 13,930
+HiGHS log, defaults: Gap               0.0098% (tolerance: 0.01%)
+projects that differ, HiGHS defaults vs zero gap: 0
+```
+
+All three say `OPTIMAL`, and they do not mean the same thing:
+
+- **HiGHS with its defaults stopped at a gap of $22k.** Its log names the tolerance it applied when
+  nobody set one: 0.01%, the documented default of its option `mip_rel_gap`. Its `OPTIMAL` means "no plan is worth more than 0.01% above this one". That
+  is where the 0.01% on the slide most likely comes from: nobody chose it.
+- **SCIP with its defaults closed the gap.** On this model its default stop was the bound meeting the
+  incumbent, after 12,663 nodes.
+- **HiGHS, asked for a zero gap, closed it too**, after 13,930 nodes instead of 1,662: more than eight
+  times the work to prove the last $22k.
+
+On this model, at this size, the default stop happened to return the same plan as the exact run: not
+one project differs. Nothing promised that. The default run proved only that its plan was within
+$22k of the best; that it was the best is something we know from the third run.
+
+So the first answer for the board: **"optimal" from a solver is optimal within the tolerances it
+ran with, and those default to different values in different solvers.** A report that says "optimal"
+should name the tolerance, and a job should set its tolerances itself rather than inherit a default
+it never read.
+
+## 0.01% Is an Amount of Money, Measured on the Objective
+
+A relative gap is a share of the objective, so it becomes money only when you know the objective's
+value. `scale.py` does the arithmetic for the slide, then for GridCap's large portfolio, solved with
+HiGHS's defaults:
+
+```text
+0.01% of $2,000,000k: $200k
+GridCap large: 10,000 projects, budgets $9,954,550k over 10 years
+HiGHS defaults: OPTIMAL, NPV $6,007,096k, bound $6,007,361k, gap $265k (0.0044%), 1 node(s)
+0.01% of this NPV: $601k
+projects with NPV below that: 5,804 of 10,000; median project NPV $435k
+```
+
+Three things to take from it:
+
+1. **Ask what the $2B is.** The gap is measured on the objective. If the slide's $2B is the
+   objective (total NPV), 0.01% is $200k. If it is the portfolio's spend, it says nothing about the
+   gap at all: GridCap large spends up to $9.95B but its objective is $6.0B of NPV, and 0.01% of
+   *that* is $601k.
+2. **A small share of a large number is a large amount.** $601k is more than the NPV of 5,804 of the
+   10,000 candidate projects, and more than the median project's $435k. The tolerance therefore
+   allows the best plan to be worth more than the reported one by more than a typical project.
+3. **The guarantee is about the total, not the parts.** "Within 0.01%" says the plan's NPV is close to
+   the best NPV. It says nothing about which projects the best plan holds; the section after next
+   shows how different two close plans can be.
+
+This run stopped after a single node at a gap of $265k (0.0044%), below the tolerance. Whether
+closing the rest of it would be worth more time is the question of the last two sections.
+
+## A Constant in the Objective Shrinks the Relative Gap Without Improving the Plan
+
+Objectives often carry a constant. A "total portfolio value" that includes the NPV of projects
+already committed, the value of existing assets, or fixed costs that every plan pays: each adds the
+same number $`K`$ to every plan's objective. The constant changes no decision, since the best plan is
+the best plan with or without it. It does change the relative gap, because the gap is divided by the
+incumbent, and the incumbent now includes $`K`$:
+
+```math
+\text{relative gap seen} = \frac{\text{bound} - \text{incumbent}}{\text{incumbent} + K}
+```
+
+`offset.py` adds $`K`$ of 0, $2,000,000k and $20,000,000k to the medium objective and solves each
+with the same relative tolerance of 0.01%:
+
+```python
+for constant in (0, 2_000_000, 20_000_000):
+    sel.model.maximize(npv + constant)
+    result = solve_highs(sel.model, mathopt.SolveParameters(relative_gap_tolerance=1e-4))
+```
+
+It prints the plan's NPV without the constant, the gap in $k, the relative gap the solver saw
+(constant included) and the relative gap on the NPV the plan actually earns:
+
+```text
+   constant reason    plan NPV   gap rel gap seen rel gap on NPV
+          0 OPTIMAL    224,384    22      0.0098%        0.0098%
+  2,000,000 OPTIMAL    224,273   222      0.0100%        0.0990%
+ 20,000,000 OPTIMAL    224,191   420      0.0021%        0.1873%
+```
+
+With no constant the run ends with the best plan. With a $2B constant the solver divides by about
+$2.22B instead of $224M, so 0.01% of what it sees is ten times as much money: it stopped at a gap of
+$222k and a plan $111k worse. With $20B it accepted a plan $193k below the best, and reported a gap
+of 0.0021%, about ninety times smaller than the true 0.1873% on the NPV. The plans got
+worse, and the reported gap got smaller.
+
+This is how a "0.01%" on a slide can hide a gap ten or a hundred times larger on the money the
+decisions control. Two fixes, both simple: keep constants out of the objective and add them in the
+report, or state the tolerance in money with `absolute_gap_tolerance`, which no constant changes
+(the bound and the incumbent move by the same $`K`$, so their difference does not).
+
+<!-- practice 1 -->
+
+## Plans Within the Gap Can Pick Different Projects
+
+A gap is a promise about the plan's value. `near_plans.py` shows what it does not promise. It solves
+the medium model to a zero gap, then with a 1% tolerance, and compares the plans. Then it looks for
+the **second-best plan**: it adds one row that every plan except the best one obeys, and solves
+again.
+
+The row works like this. Let $`S^*`$ be the best plan's projects. For the best plan itself,
+$`\sum_{i \in S^*} x_i = |S^*|`$ and $`\sum_{i \notin S^*} x_i = 0`$, so the left side is $`|S^*|`$,
+one more than the row allows. Any other plan either drops a project of $`S^*`$ (the first sum falls
+by at least 1) or adds one outside it (the second sum rises by at least 1), so the left side is at
+most $`|S^*| - 1`$ and the row holds. The row cuts off exactly one plan:
+
+```python
+sel.model.add_linear_constraint(
+    sum(sel.x[i] for i in best) - sum(sel.x[i] for i in sel.x if i not in best) <= len(best) - 1,
+    name="not_the_best_plan")
+```
+
+```text
+best plan: NPV 224,384, 227 projects
+stopped at 1%: NPV 224,191, adds 8 projects and drops 11
+second-best plan: NPV 224,381
+  adds    ['P218'], NPV 113
+  drops   ['P077', 'P244'], NPV 116
+```
+
+The second-best plan is worth $3k less than the best, a relative difference of about 0.0013%, well
+inside a 0.01% tolerance. It swaps two projects (P077 and P244, $116k of NPV between them) for one
+other (P218, $113k). A run stopped at 0.01% could have returned either plan, and both would be
+"optimal at 0.01%". The plan from the 1% stop differs from the best in 19 projects.
+
+So the second answer for the board: **the gap guarantees the plan's value, not its list of
+projects.** "P077 is in the optimal plan" is a stronger claim than any run within a tolerance proves.
+When a planner's question is about one project ("must P077 be funded?"), answer that question
+directly: solve once with $`x_{P077} = 1`$ and once with $`x_{P077} = 0`$, and compare the two runs.
+If both closed their gaps, compare their values. If they stopped with gaps, compare their brackets
+(lesson 3.4.1): funding P077 is proved better only when the forced-in run's incumbent is above the
+forced-out run's bound, since then some plan with P077 beats every plan without it. When the two
+brackets overlap, the runs have not settled the question, and tighter runs must.
+
+<!-- practice 2 -->
+
+## The Forecast's Error Is Larger Than the Gap
+
+The NPVs the plan is optimized on are forecasts: they depend on failure predictions, costs and a
+discount rate, none of them known to 0.01%. `noise.py` asks what a modest error does. It takes the
+plan HiGHS returns on the forecast NPVs, then three times moves every project's NPV by a random
+amount of up to 5% either way, re-solves, and compares:
+
+- **best plan**: the best plan for the moved NPVs (HiGHS's defaults, so within 0.01% of the best);
+- **our plan**: the original plan, valued at the moved NPVs;
+- **lost**: how much the original plan earns less than the best plan, if the moved NPVs are the true
+  ones;
+- **projects changed**: projects in one plan and not the other.
+
+```text
+plan on the forecast NPVs: OPTIMAL, NPV 224,384, gap 22
+seed best plan  our plan  lost projects changed
+   1   224,944   224,845    99               28
+   2   224,507   224,471    37               18
+   3   224,846   224,651   196               36
+```
+
+The plan's own gap was $22k. If the NPVs are off by up to 5% at random, the plan leaves $37k to $196k
+on the table in these three trials, between 1.7 and 9 times its gap, and the best plan for the true numbers
+differs in 18 to 36 projects. The total NPV itself moves by up to $560k (seed 1: 224,944 against
+224,384). Random errors in single projects partly cancel in a sum of hundreds; an error shared by all
+of them, such as a discount rate that is off, would not cancel.
+
+So the third answer for the board: **the last 0.01% of optimality is smaller than what the data can
+support.** Spending eight times the nodes to close a $22k gap buys less than a better forecast
+would. This does not make gaps irrelevant; it sets their scale. A gap well below the data's error is
+enough, and the time saved is better spent on the forecast, or on re-solving the scenarios the
+planners worry about.
+
+## Choose the Tolerance in Money, Then Set Both
+
+Putting the lesson together, a tolerance is a decision made with the planners, not a default:
+
+1. **Ask what amount of NPV is too small to matter.** A planner's answer is in money: smaller than the
+   smallest project they would argue about, or smaller than the uncertainty in the forecast. Say
+   $50k for GridCap medium.
+2. **Set it as `absolute_gap_tolerance`**, in the objective's units (here $k, so `50`). It means the
+   same thing whatever constants the objective carries and whatever the portfolio's size.
+3. **Set `relative_gap_tolerance` explicitly too**, so that no solver's default decides for you: 0 if
+   the absolute rule should decide alone, or a small share as a second rule.
+4. **Add a time limit as a safety net** (lesson 3.4.2), and treat a run that stops on it as
+   unsettled: report its plan with its bracket.
+5. **Report the bracket in money**: the plan's value, the bound, and the tolerance the run used.
+
+With those, the slide would read: *"The plan's NPV is $224.38M; no plan within these budgets and rules
+is worth more than $50k above it (HiGHS, absolute tolerance $50k). The NPV forecasts carry an
+uncertainty of several hundred thousand dollars."* That is a sentence a board can act on.
+
+<!-- practice 3 -->
+
+## Summary
+
+- **"Optimal" means optimal within the tolerances the run used.** HiGHS's default stopped at a 0.01%
+  gap; SCIP's closed the gap on this model. Name the tolerance in every report.
+- **0.01% is an amount of money, measured on the objective.** On GridCap large's $6.0B NPV it is
+  $601k, more than the NPV of most single projects.
+- **A constant in the objective shrinks the relative gap without improving the plan.** With $20B
+  added, a 0.0021% gap hid a 0.1873% gap on the NPV. Keep constants out, or use an absolute tolerance.
+- **Plans within the gap can pick different projects.** The second-best plan was $3k worse and swapped
+  three projects. Answer questions about one project with two solves.
+- **The forecast's error is larger than the gap.** A 5% error in the NPVs cost $37k to $196k against a
+  $22k gap.
+- **Choose the tolerance in money, then set both tolerances** and a time limit, and report the bracket.
+
+## Reference
+
+| Question | How to answer it |
+| --- | --- |
+| what did "optimal" mean? | the tolerances in force: `SolveParameters` you set, or the solver's default (HiGHS: 0.01%, from its log) |
+| how much money is the gap? | `dual_bound - primal_bound` in the objective's units |
+| is the relative gap inflated? | divide the absolute gap by the objective without its constant |
+| is project *i* in every good plan? | solve with $`x_i = 1`$ and with $`x_i = 0`$; compare the values |
+| how many plans are near the best? | add the $`\text{not\_the\_best\_plan}`$ row and solve again |
+
+| Formula | Meaning |
+| --- | --- |
+| $`\text{rel. tolerance} \times \lvert \text{objective} \rvert`$ | the tolerance in money |
+| $`(\text{bound} - \text{incumbent}) / (\text{incumbent} + K)`$ | the relative gap a solver sees with a constant $`K`$ |
+| $`\sum_{i \in S^*} x_i - \sum_{i \notin S^*} x_i \le \lvert S^* \rvert - 1`$ | every plan except $`S^*`$ |
+
+**Further reading:** [MathOpt `SolveParameters` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/parameters.py) (`absolute_gap_tolerance` and `relative_gap_tolerance`, and the rule that an unset parameter leaves the solver's default in force); [MathOpt `SolveResult`, `Termination` and `ObjectiveBounds` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/result.py) (`OPTIMAL` is "provably optimal up to numerical tolerances", and the primal and dual bounds hold only up to the solver's tolerances); [HiGHS option definitions](https://ergo-code.github.io/HiGHS/dev/options/definitions/) (HiGHS's defaults: `mip_rel_gap` 0.0001 and `mip_abs_gap` 1e-06); [HiGHS terminology: MIP](https://ergo-code.github.io/HiGHS/dev/terminology/) (why HiGHS measures the gap relative to the primal bound, and why stopping at a tolerance is often preferable to closing it); [Integer Programming, Chapter 9 of Applied Mathematical Programming (MIT 15.053)](https://web.mit.edu/15.053/www/AMP-Chapter-09.pdf) (section 9.5: a plan within 10%, then 2.5%, of the bound is already known before the search ends, and the procedure could stop there).
+
+## Challenges
+
+1. A cost-minimization model's objective includes a fixed $40M of operating cost that no decision
+   changes, and the decisions control about $4M. With a 0.01% relative tolerance, roughly how much
+   money can the reported plan leave on the table? What would you change?
+2. The second-best plan above was $3k worse than the best. How would you find the best plan that does
+   *not* contain P077, and what tolerance would you need for the comparison to mean something?
+3. A planner says any plan within $100k is fine, and the objective is about $6B. Which relative
+   tolerance matches, and why is `absolute_gap_tolerance=100` still the better way to say it?
+
+## Design Note: A Gap Is a Statement About One Model, With One Data Set
+
+Every guarantee in this module is relative to the model and its numbers. A 0.01% gap proves the plan
+is nearly the best *for these NPVs, these budgets and these rules*. It cannot cover a rule that is
+missing from the model, or a forecast that is wrong. Teams that report gaps well report them next to
+what they were measured on, and spend their effort where the uncertainty is largest. Section 9 builds
+the tools for explaining a plan, and section 10 those for numerical trust; both start from this
+distinction.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change.
+
+**default_gap.py.** HiGHS and SCIP with their defaults, and HiGHS with a zero gap, on GridCap medium
+(*"Optimal" From a Solver Means Optimal Within a Tolerance*). *Try:* Add a CP-SAT run with no
+parameters. Predict whether its bound meets its incumbent.
+
+- Program: [default_gap.py](src/default_gap.py)
+
+**scale.py.** What 0.01% is in money, on $2B and on GridCap large (*0.01% Is an Amount of Money*).
+*Try:* Count the large projects whose NPV is below the run's actual gap, $265k, instead of below
+$601k. Predict whether it is more or less than half.
+
+- Program: [scale.py](src/scale.py)
+
+**offset.py.** The same solve with three constants added to the objective (*A Constant in the
+Objective*). *Try:* Add a run with the constant 20,000,000 and `absolute_gap_tolerance=22` instead of
+the relative tolerance. Predict the plan's NPV.
+
+- Program: [offset.py](src/offset.py)
+
+**near_plans.py.** The best plan, the plan from a 1% stop, and the second-best plan (*Plans Within the
+Gap Can Pick Different Projects*). *Try:* Add the row a second time with the second-best plan's
+projects, to find the third-best plan. Predict whether it contains P077.
+
+- Program: [near_plans.py](src/near_plans.py)
+
+**noise.py.** The plan's value when every NPV moves by up to 5% (*The Forecast's Error Is Larger Than
+the Gap*). *Try:* Multiply every NPV by 1.05 instead of moving each at random. Predict how many
+projects change.
+
+- Program: [noise.py](src/noise.py)
+
+**selection.py.** The model builder and the quiet HiGHS solve the programs share. It prints nothing.
+
+- Library: [selection.py](src/selection.py)

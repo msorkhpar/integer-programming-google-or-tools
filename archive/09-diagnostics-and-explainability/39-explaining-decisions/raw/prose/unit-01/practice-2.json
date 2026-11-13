@@ -1,0 +1,144 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "09-diagnostics-and-explainability",
+    "39-explaining-decisions"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Which limits refuse the next job",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A school district funds its summer repair jobs from a capital fund and an asphalt fund, with a fixed number of crew-weeks and one roofing crew. The district's optimizer has chosen this summer's jobs, and every limit has some room left except the roofing crew. The facilities manager asks which limits are really holding the plan back: whole jobs cannot use the last few dollars or crew-weeks, so a limit with room left can still be the reason a job was not added."
+    },
+    {
+      "type": "para",
+      "text": "Each limit is a `Limit` with a name, how much of it each job uses (`use`; a job not listed uses none) and its cap. A plan is the set of chosen jobs. In `refusals.py`, write:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`refusals(limits, plan, candidates)`: for each candidate job, the names of the limits that would be over their cap if that one job were added to the plan, sorted by name. A limit filled exactly to its cap is not over it.",
+        "`full_but_not_tight(limits, plan, candidates)`: the names of the limits that have room left at the plan *and* refuse at least one candidate, sorted by name."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "With $`u_{\\ell,j}`$ what job $`j`$ uses of limit $`\\ell`$, $`C_\\ell`$ its cap and $`S`$ the plan, write first the test for \"adding job $`k`$ breaks limit $`\\ell`$\" and the test for \"limit $`\\ell`$ has room at the plan\", each as an inequality in $`\\sum_{j \\in S} u_{\\ell,j}`$, $`u_{\\ell,k}`$ and $`C_\\ell`$. Then code them. Compare amounts with a tolerance of `1e-9`, since uses may be fractional. The tests use their own district; no solver is needed."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Limit:\n    name: str\n    use: dict[str, float]       # job -> how much of this limit the job uses\n    cap: float\n\n\ndef used(limit: Limit, jobs: set[str]) -> float:\n    return sum(limit.use.get(job, 0.0) for job in jobs)\n\n\ndef refusals(limits: list[Limit], plan: set[str], candidates: list[str]) -> dict[str, list[str]]:\n    \"\"\"For each candidate job: the limits that adding it alone to the plan would break, sorted by name.\"\"\"\n    out = {}\n    for job in candidates:\n        jobs = plan | {job}\n        out[job] = sorted(limit.name for limit in limits if used(limit, jobs) - limit.cap > 1e-9)\n    return out\n\n\ndef full_but_not_tight(limits: list[Limit], plan: set[str], candidates: list[str]) -> list[str]:\n    \"\"\"Limits with room left at the plan that still refuse at least one candidate, sorted by name.\"\"\"\n    refusing = {name for names in refusals(limits, plan, candidates).values() for name in names}\n    return sorted(limit.name for limit in limits\n                  if limit.name in refusing and limit.cap - used(limit, plan) > 1e-9)\n\n\nif __name__ == \"__main__\":\n    fund = Limit(\"capital_fund\", {\"roof\": 180, \"boiler\": 220}, 300)\n    print(refusals([fund], {\"roof\"}, [\"boiler\"]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Limit:\n    name: str\n    use: dict[str, float]       # job -> how much of this limit the job uses\n    cap: float\n\n\ndef used(limit: Limit, jobs: set[str]) -> float:\n    return sum(limit.use.get(job, 0.0) for job in jobs)\n\n\ndef refusals(limits: list[Limit], plan: set[str], candidates: list[str]) -> dict[str, list[str]]:\n    \"\"\"For each candidate job: the limits that adding it alone to the plan would break, sorted by name.\"\"\"\n    # TODO: try each candidate on top of the plan.\n    return {}\n\n\ndef full_but_not_tight(limits: list[Limit], plan: set[str], candidates: list[str]) -> list[str]:\n    \"\"\"Limits with room left at the plan that still refuse at least one candidate, sorted by name.\"\"\"\n    # TODO: combine refusals() with the room each limit has at the plan.\n    return []\n\n\nif __name__ == \"__main__\":\n    fund = Limit(\"capital_fund\", {\"roof\": 180, \"boiler\": 220}, 300)\n    print(refusals([fund], {\"roof\"}, [\"boiler\"]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "d043fa57906124aa04c30ecf2fd7b558eaa55860bb597cf3d478cd6969e48942",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Limit:\n    name: str\n    use: dict[str, float]       # job -> how much of this limit the job uses\n    cap: float\n\n\ndef used(limit: Limit, jobs: set[str]) -> float:\n    return sum(limit.use.get(job, 0.0) for job in jobs)\n\n\ndef refusals(limits: list[Limit], plan: set[str], candidates: list[str]) -> dict[str, list[str]]:\n    \"\"\"For each candidate job: the limits that adding it alone to the plan would break, sorted by name.\"\"\"\n    # TODO: try each candidate on top of the plan.\n    return {}\n\n\ndef full_but_not_tight(limits: list[Limit], plan: set[str], candidates: list[str]) -> list[str]:\n    \"\"\"Limits with room left at the plan that still refuse at least one candidate, sorted by name.\"\"\"\n    # TODO: combine refusals() with the room each limit has at the plan.\n    return []\n\n\nif __name__ == \"__main__\":\n    fund = Limit(\"capital_fund\", {\"roof\": 180, \"boiler\": 220}, 300)\n    print(refusals([fund], {\"roof\"}, [\"boiler\"]))\n",
+  "exercise": {
+    "main_path": "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-2/refusals.py",
+    "test_path": "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-2/test_refusals.py",
+    "run_command": [
+      "python3",
+      "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-2/refusals.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-2/target/report.xml",
+      "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-2/test_refusals.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_each_candidate_is_tried_alone_on_top_of_the_plan",
+        "kind": "main",
+        "says": "each candidate job is added alone to the plan, and the limits it breaks are listed"
+      },
+      {
+        "id": "test_a_limit_filled_exactly_is_not_broken",
+        "kind": "edge",
+        "says": "a limit the addition fills exactly is not broken"
+      },
+      {
+        "id": "test_every_limit_a_candidate_breaks_is_listed",
+        "kind": "edge",
+        "says": "a candidate that breaks several limits lists all of them, sorted by name"
+      },
+      {
+        "id": "test_a_limit_with_no_room_left_is_not_counted_as_full_but_not_tight",
+        "kind": "edge",
+        "says": "a limit with no room left at the plan is binding, not full-but-not-tight"
+      },
+      {
+        "id": "test_a_limit_with_room_that_refuses_nothing_is_left_out",
+        "kind": "edge",
+        "says": "a limit with room that refuses no candidate is not reported"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "39-explaining-decisions/README_9.3.1.md",
+      "section": "On a MILP, a Row With Slack Can Still Be the Row That Blocks"
+    },
+    "concepts": [
+      "a row with slack can refuse every whole project that might be added, so the report lists what each row refuses"
+    ]
+  }
+}

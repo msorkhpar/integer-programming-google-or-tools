@@ -1,0 +1,146 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "29-strong-formulations"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "An audit table for several formulations",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A modeling team wants the audit of the lesson as a reusable function, so that every reformulation proposal arrives with the same table. Each formulation is given as a function `build(integer)` that returns the model as a MILP (`integer=True`) or as its LP relaxation (`integer=False`); the first one given is the model as inherited."
+    },
+    {
+      "type": "para",
+      "text": "Write `audit(variants, optimum)` in `audit.py`. It returns one dictionary per formulation, in the order given, with the keys"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`name`, `variables` and `rows`: the formulation's name and size;",
+        "`lp`: its LP bound (GLOP is fine);",
+        "`root`: HiGHS's bound after its root node, read the way the lesson read it;",
+        "`closed`: the share of the **inherited** formulation's gap to `optimum` that this formulation's LP bound closes. If the inherited LP bound already equals `optimum`, there is no gap to close: the reference then reports `closed` as 1.0 on every line, instead of dividing by zero."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Before coding, write the formula for `closed` with the inherited LP bound, this formulation's LP bound and the optimum, and work out its value for the inherited line itself and for a formulation whose LP bound equals the optimum."
+    },
+    {
+      "type": "para",
+      "text": "The tests audit three formulations of a three-item rule, small enough to check every number by hand. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom typing import Callable\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef audit(variants: dict[str, Callable[[bool], mathopt.Model]], optimum: float) -> list[dict]:\n    \"\"\"One line per formulation, in the order given: size, LP bound, root bound and share of gap closed.\n\n    `variants[name](integer)` builds that formulation, as a MILP or (integer=False) as its LP\n    relaxation. `optimum` is the best plan's value. The share of the gap closed is measured against\n    the first variant, the one inherited.\n    \"\"\"\n    lines = []\n    for name, build in variants.items():\n        milp = build(True)\n        lp = mathopt.solve(build(False), mathopt.SolverType.GLOP).objective_value()\n        root = mathopt.solve(milp, mathopt.SolverType.HIGHS,\n                             params=mathopt.SolveParameters(node_limit=1)).best_objective_bound()\n        lines.append({\"name\": name, \"variables\": sum(1 for _ in milp.variables()),\n                      \"rows\": sum(1 for _ in milp.linear_constraints()), \"lp\": lp, \"root\": root})\n    first = lines[0][\"lp\"]\n    for line in lines:\n        line[\"closed\"] = (first - line[\"lp\"]) / (first - optimum) if first != optimum else 1.0\n    return lines\n\n\nif __name__ == \"__main__\":\n    def one(integer):\n        model = mathopt.Model()\n        a = model.add_variable(lb=0, ub=1, is_integer=integer)\n        model.add_linear_constraint(2 * a <= 1)\n        model.maximize(a)\n        return model\n\n    print(audit({\"only\": one}, 0.0))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom typing import Callable\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef audit(variants: dict[str, Callable[[bool], mathopt.Model]], optimum: float) -> list[dict]:\n    \"\"\"One line per formulation, in the order given: size, LP bound, root bound and share of gap closed.\n\n    `variants[name](integer)` builds that formulation, as a MILP or (integer=False) as its LP\n    relaxation. `optimum` is the best plan's value. The share of the gap closed is measured against\n    the first variant, the one inherited.\n    \"\"\"\n    # TODO: measure each variant.\n    return []\n\n\nif __name__ == \"__main__\":\n    def one(integer):\n        model = mathopt.Model()\n        a = model.add_variable(lb=0, ub=1, is_integer=integer)\n        model.add_linear_constraint(2 * a <= 1)\n        model.maximize(a)\n        return model\n\n    print(audit({\"only\": one}, 0.0))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "405e316a62067a947ab7ec6fc7233a3257c91071fcb276517def3ae57f484185",
+  "starting_code": "from __future__ import annotations\n\nfrom typing import Callable\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef audit(variants: dict[str, Callable[[bool], mathopt.Model]], optimum: float) -> list[dict]:\n    \"\"\"One line per formulation, in the order given: size, LP bound, root bound and share of gap closed.\n\n    `variants[name](integer)` builds that formulation, as a MILP or (integer=False) as its LP\n    relaxation. `optimum` is the best plan's value. The share of the gap closed is measured against\n    the first variant, the one inherited.\n    \"\"\"\n    # TODO: measure each variant.\n    return []\n\n\nif __name__ == \"__main__\":\n    def one(integer):\n        model = mathopt.Model()\n        a = model.add_variable(lb=0, ub=1, is_integer=integer)\n        model.add_linear_constraint(2 * a <= 1)\n        model.maximize(a)\n        return model\n\n    print(audit({\"only\": one}, 0.0))\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-2/audit.py",
+    "test_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-2/test_audit.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-2/audit.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-2/target/report.xml",
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-2/test_audit.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_each_formulation_gets_its_line_in_order",
+        "kind": "main",
+        "says": "each formulation gets a line, in the order given, with its variables, rows and LP bound"
+      },
+      {
+        "id": "test_the_share_closed_is_measured_against_the_inherited_gap",
+        "kind": "edge",
+        "says": "the share of the gap closed is measured against the first formulation's gap: 0 for it, 1 for one whose LP bound is the optimum"
+      },
+      {
+        "id": "test_the_root_bound_is_the_solvers_after_its_root_node",
+        "kind": "edge",
+        "says": "the root bound is the solver's bound after one node, which can sit well below the LP bound"
+      },
+      {
+        "id": "test_an_inherited_model_with_no_gap_reports_it_closed",
+        "kind": "edge",
+        "says": "an inherited formulation whose LP bound is already the optimum has its gap reported as closed, 1.0"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "29-strong-formulations/README_6.7.4.md",
+      "section": "The Solver's Own Work Decides Whether a Reformulation Solves Faster"
+    },
+    "concepts": [
+      "size, LP bound and root bound are recorded for each step before any long solve",
+      "whether a reformulation is faster is measured with the production solver and tolerance"
+    ]
+  }
+}

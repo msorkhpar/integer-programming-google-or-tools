@@ -1,0 +1,154 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "49-cloud-deployment"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Index trim-plan runs whose results live in S3",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The trim planner of the vegetation team (lesson 12.5.2's practice) writes each run's result to S3 at `trim-results/<survey digest>/<run id>.json`, a JSON object with `run_id`, `status` and, when the run has a plan, `cost` (whole $k). The planners' tool needs two answers fast: a run's status, and the best run of each survey. Keep a local SQLite index, as the lesson does."
+    },
+    {
+      "type": "para",
+      "text": "`trim_index.py` gives you the schema, `connect`, `record` (which inserts a `submitted` row) and `result_key`. Write:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`poll(conn, s3, bucket, run_id)`: the run's status. A run id the index never saw is `\"unknown\"`. A run already finished in the index answers from its row, without reading S3 again. A `submitted` run looks for its result object: if there is none (`NoSuchKey`), it stays `\"submitted\"`; if there is one, record its `status`, its key and its `cost` (missing for runs with no plan) in the row, and return the status. Any other S3 error propagates.",
+        "`best_runs(conn)`: a dict from survey digest to the best run's id. Only runs with a plan count (`optimal` or `time_limit`); the best has the lowest cost, and equal costs go to the lower run id (compared as text). Surveys with no run that counts are left out."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The schema's `CHECK` refuses a finished row without a result key, as the lesson's does. About 25 lines remain."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport json\nimport sqlite3\n\nfrom botocore.exceptions import ClientError\n\nSCHEMA = \"\"\"\nCREATE TABLE run (\n    run_id     TEXT PRIMARY KEY,\n    digest     TEXT NOT NULL,\n    status     TEXT NOT NULL CHECK (status IN ('submitted', 'optimal', 'time_limit', 'infeasible', 'failed')),\n    result_key TEXT,\n    cost       INTEGER,\n    CHECK ((status = 'submitted') = (result_key IS NULL))\n) STRICT;\n\"\"\"\n\n\ndef connect(path: str) -> sqlite3.Connection:\n    conn = sqlite3.connect(path, autocommit=False)\n    conn.row_factory = sqlite3.Row\n    with conn:\n        conn.executescript(SCHEMA)\n    return conn\n\n\ndef record(conn: sqlite3.Connection, run_id: str, digest: str) -> None:\n    with conn:\n        conn.execute(\"INSERT INTO run (run_id, digest, status) VALUES (?, ?, 'submitted')\", (run_id, digest))\n\n\ndef result_key(digest: str, run_id: str) -> str:\n    return f\"trim-results/{digest}/{run_id}.json\"\n\n\ndef poll(conn: sqlite3.Connection, s3, bucket: str, run_id: str) -> str:\n    \"\"\"The run's status; a waiting run is finished in the index when its result object exists.\"\"\"\n    row = conn.execute(\"SELECT digest, status FROM run WHERE run_id = ?\", (run_id,)).fetchone()\n    if row is None:\n        return \"unknown\"\n    if row[\"status\"] != \"submitted\":\n        return row[\"status\"]\n    key = result_key(row[\"digest\"], run_id)\n    try:\n        result = json.loads(s3.get_object(Bucket=bucket, Key=key)[\"Body\"].read())\n    except ClientError as error:\n        if error.response[\"Error\"][\"Code\"] == \"NoSuchKey\":\n            return \"submitted\"\n        raise\n    with conn:\n        conn.execute(\"UPDATE run SET status = ?, result_key = ?, cost = ? WHERE run_id = ? AND status = 'submitted'\",\n                     (result[\"status\"], key, result.get(\"cost\"), run_id))\n    return result[\"status\"]\n\n\ndef best_runs(conn: sqlite3.Connection) -> dict[str, str]:\n    \"\"\"For each survey digest, the finished run with a plan and the lowest cost (ties: lowest run id).\"\"\"\n    rows = conn.execute(\"SELECT digest, run_id FROM run WHERE status IN ('optimal', 'time_limit') \"\n                        \"ORDER BY digest, cost, run_id\").fetchall()\n    best: dict[str, str] = {}\n    for row in rows:\n        best.setdefault(row[\"digest\"], row[\"run_id\"])\n    return best\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport json  # noqa: F401\nimport sqlite3\n\nfrom botocore.exceptions import ClientError  # noqa: F401\n\nSCHEMA = \"\"\"\nCREATE TABLE run (\n    run_id     TEXT PRIMARY KEY,\n    digest     TEXT NOT NULL,\n    status     TEXT NOT NULL CHECK (status IN ('submitted', 'optimal', 'time_limit', 'infeasible', 'failed')),\n    result_key TEXT,\n    cost       INTEGER,\n    CHECK ((status = 'submitted') = (result_key IS NULL))\n) STRICT;\n\"\"\"\n\n\ndef connect(path: str) -> sqlite3.Connection:\n    conn = sqlite3.connect(path, autocommit=False)\n    conn.row_factory = sqlite3.Row\n    with conn:\n        conn.executescript(SCHEMA)\n    return conn\n\n\ndef record(conn: sqlite3.Connection, run_id: str, digest: str) -> None:\n    with conn:\n        conn.execute(\"INSERT INTO run (run_id, digest, status) VALUES (?, ?, 'submitted')\", (run_id, digest))\n\n\ndef result_key(digest: str, run_id: str) -> str:\n    return f\"trim-results/{digest}/{run_id}.json\"\n\n\ndef poll(conn: sqlite3.Connection, s3, bucket: str, run_id: str) -> str:\n    \"\"\"The run's status; a waiting run is finished in the index when its result object exists.\"\"\"\n    # TODO: read the row; if it waits, look for its result object and record it when it is there.\n    return \"submitted\"\n\n\ndef best_runs(conn: sqlite3.Connection) -> dict[str, str]:\n    \"\"\"For each survey digest, the finished run with a plan and the lowest cost (ties: lowest run id).\"\"\"\n    return {}\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "69adad00fb1796c9ca49ca85de5a7501df5cc3c8364d7e1684013830ac074b8e",
+  "starting_code": "from __future__ import annotations\n\nimport json  # noqa: F401\nimport sqlite3\n\nfrom botocore.exceptions import ClientError  # noqa: F401\n\nSCHEMA = \"\"\"\nCREATE TABLE run (\n    run_id     TEXT PRIMARY KEY,\n    digest     TEXT NOT NULL,\n    status     TEXT NOT NULL CHECK (status IN ('submitted', 'optimal', 'time_limit', 'infeasible', 'failed')),\n    result_key TEXT,\n    cost       INTEGER,\n    CHECK ((status = 'submitted') = (result_key IS NULL))\n) STRICT;\n\"\"\"\n\n\ndef connect(path: str) -> sqlite3.Connection:\n    conn = sqlite3.connect(path, autocommit=False)\n    conn.row_factory = sqlite3.Row\n    with conn:\n        conn.executescript(SCHEMA)\n    return conn\n\n\ndef record(conn: sqlite3.Connection, run_id: str, digest: str) -> None:\n    with conn:\n        conn.execute(\"INSERT INTO run (run_id, digest, status) VALUES (?, ?, 'submitted')\", (run_id, digest))\n\n\ndef result_key(digest: str, run_id: str) -> str:\n    return f\"trim-results/{digest}/{run_id}.json\"\n\n\ndef poll(conn: sqlite3.Connection, s3, bucket: str, run_id: str) -> str:\n    \"\"\"The run's status; a waiting run is finished in the index when its result object exists.\"\"\"\n    # TODO: read the row; if it waits, look for its result object and record it when it is there.\n    return \"submitted\"\n\n\ndef best_runs(conn: sqlite3.Connection) -> dict[str, str]:\n    \"\"\"For each survey digest, the finished run with a plan and the lowest cost (ties: lowest run id).\"\"\"\n    return {}\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-03/practice-2/trim_index.py",
+    "test_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-03/practice-2/test_trim_index.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-03/practice-2/trim_index.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-03/practice-2/target/report.xml",
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-03/practice-2/test_trim_index.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_poll_records_a_finished_run",
+        "kind": "main",
+        "says": "a poll finds a run's result object and records its status, key and cost"
+      },
+      {
+        "id": "test_the_best_run_has_a_plan_and_the_lowest_cost",
+        "kind": "main",
+        "says": "the best run of a survey is the cheapest of its finished runs with a plan"
+      },
+      {
+        "id": "test_a_run_without_a_result_stays_submitted",
+        "kind": "edge",
+        "says": "a run whose result object does not exist yet stays submitted"
+      },
+      {
+        "id": "test_a_recorded_run_is_not_read_again",
+        "kind": "edge",
+        "says": "a run already recorded answers from the index, even if its object is gone"
+      },
+      {
+        "id": "test_an_unknown_run_is_unknown",
+        "kind": "edge",
+        "says": "a run id the index never saw is unknown"
+      },
+      {
+        "id": "test_infeasible_and_failed_runs_are_never_best",
+        "kind": "edge",
+        "says": "infeasible and failed runs, which have no plan, are never the best run"
+      },
+      {
+        "id": "test_each_survey_gets_its_own_best_run_and_ties_go_to_the_lower_id",
+        "kind": "edge",
+        "says": "each survey digest has its own best run, and equal costs go to the lower run id"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-03/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "49-cloud-deployment/README_12.5.3.md",
+      "section": "The Index Can Be Rebuilt From S3, Except for Runs Still Waiting"
+    },
+    "concepts": [
+      "a local SQLite row per run that points at its S3 objects, updated by a poll"
+    ]
+  }
+}

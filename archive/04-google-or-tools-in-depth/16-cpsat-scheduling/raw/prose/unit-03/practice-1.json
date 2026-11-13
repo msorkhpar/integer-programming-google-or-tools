@@ -1,0 +1,141 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "16-cpsat-scheduling"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "One driver, a vehicle per run",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A one-driver courier service plans tomorrow's delivery runs. Each run can be made with any vehicle in its list, and each vehicle gives the run a length in hours and a cost in dollars: a cargo bike is slow and cheap, a van is quicker and dearer. The driver makes one run at a time, and every run must end by the `deadline` hour. Hours are numbered from 0."
+    },
+    {
+      "type": "para",
+      "text": "Write `cheapest_runs(runs, deadline)` in `courier.py`. `runs` maps a run to `(hours, costs)`, two lists of the same length, one entry per vehicle. Return `(total_cost, plan)`, where `plan` maps each run to `(vehicle, start)`: the vehicle's index in the run's lists and the run's start hour, chosen so that the total cost is as small as possible. Every instance in the tests has a plan. `total_cost` is an `int`: `solver.objective_value` is a float, so convert it with `round(...)`, as the reference does, never with `int(...)`, which turns a value such as 49.99999999999999 into 49."
+    },
+    {
+      "type": "para",
+      "text": "The model, with $`R`$ the runs, $`h_{r,v}`$ and $`c_{r,v}`$ the hours and cost of run $`r`$ by vehicle $`v`$, $`V_r`$ the vehicle indices of run $`r`$, and $`D`$ the deadline:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& v_r \\in V_r,\\quad \\ell_r \\in \\{\\min_v h_{r,v}, \\dots, \\max_v h_{r,v}\\},\\quad s_r, e_r \\in \\{0, \\dots, D\\} && \\forall r \\in R \\\\\n& \\min \\; \\textstyle\\sum_{r \\in R} c_{r, v_r} \\\\\n& \\ell_r = h_{r, v_r} && \\forall r \\in R && \\text{(length, element)} \\\\\n& e_r = s_r + \\ell_r && \\forall r \\in R && \\text{(the run's interval)} \\\\\n& \\text{NoOverlap}\\big(\\{[s_r, e_r) : r \\in R\\}\\big) && && \\text{(one driver)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The cost $`c_{r, v_r}`$ is a second element (or a Boolean per vehicle with weighted sums). Remember that an interval's size must be a single variable, not a sum. The tests check the plan you return and its cost, so any optimal plan passes. About twenty lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef cheapest_runs(runs: dict[str, tuple[list[int], list[int]]], deadline: int) -> tuple[int, dict[str, tuple[int, int]]]:\n    \"\"\"(total cost, run -> (vehicle index, start hour)) of the cheapest plan that ends by the deadline.\"\"\"\n    model = cp_model.CpModel()\n    vehicle, start, cost, tasks = {}, {}, {}, []\n    for r, (hours, costs) in runs.items():\n        vehicle[r] = model.new_int_var(0, len(hours) - 1, f\"vehicle_{r}\")\n        length = model.new_int_var(min(hours), max(hours), f\"hours_{r}\")\n        cost[r] = model.new_int_var(min(costs), max(costs), f\"cost_{r}\")\n        model.add_element(vehicle[r], hours, length)\n        model.add_element(vehicle[r], costs, cost[r])\n        start[r] = model.new_int_var(0, deadline, f\"start_{r}\")\n        end = model.new_int_var(0, deadline, f\"end_{r}\")\n        tasks.append(model.new_interval_var(start[r], length, end, f\"run_{r}\"))\n    model.add_no_overlap(tasks)\n    model.minimize(sum(cost.values()))\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.solve(model)\n    return round(solver.objective_value), {r: (solver.value(vehicle[r]), solver.value(start[r])) for r in runs}\n\n\nif __name__ == \"__main__\":\n    print(cheapest_runs({\"north\": ([4, 2], [20, 35]), \"harbor\": ([3, 1], [15, 30])}, 5))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef cheapest_runs(runs: dict[str, tuple[list[int], list[int]]], deadline: int) -> tuple[int, dict[str, tuple[int, int]]]:\n    \"\"\"(total cost, run -> (vehicle index, start hour)) of the cheapest plan that ends by the deadline.\"\"\"\n    # TODO: a vehicle index per run, its hours and cost read by element (or Booleans), an interval\n    # with the hours as its size, one NoOverlap, and minimize the total cost. Placeholders below.\n    return -1, {r: (-1, -1) for r in runs}\n\n\nif __name__ == \"__main__\":\n    print(cheapest_runs({\"north\": ([4, 2], [20, 35]), \"harbor\": ([3, 1], [15, 30])}, 5))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "9f3706997e71331e777bdca973f09570387e9c2e144714431ecce3741191592b",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef cheapest_runs(runs: dict[str, tuple[list[int], list[int]]], deadline: int) -> tuple[int, dict[str, tuple[int, int]]]:\n    \"\"\"(total cost, run -> (vehicle index, start hour)) of the cheapest plan that ends by the deadline.\"\"\"\n    # TODO: a vehicle index per run, its hours and cost read by element (or Booleans), an interval\n    # with the hours as its size, one NoOverlap, and minimize the total cost. Placeholders below.\n    return -1, {r: (-1, -1) for r in runs}\n\n\nif __name__ == \"__main__\":\n    print(cheapest_runs({\"north\": ([4, 2], [20, 35]), \"harbor\": ([3, 1], [15, 30])}, 5))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-03/practice-1/courier.py",
+    "test_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-03/practice-1/test_courier.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-03/practice-1/courier.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-03/practice-1/target/report.xml",
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-03/practice-1/test_courier.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_loose_deadline_takes_the_cheapest_vehicles",
+        "kind": "main",
+        "says": "with time to spare, every run takes its cheapest vehicle and the cost is their sum"
+      },
+      {
+        "id": "test_every_run_gets_a_vehicle_and_a_start",
+        "kind": "main",
+        "says": "every run gets a vehicle index of its own list and a whole-number start hour"
+      },
+      {
+        "id": "test_a_tight_deadline_buys_faster_vehicles",
+        "kind": "edge",
+        "says": "a tight deadline makes some runs take a faster, dearer vehicle, and the run's length follows the vehicle"
+      },
+      {
+        "id": "test_the_runs_never_overlap",
+        "kind": "edge",
+        "says": "the one driver does one run at a time, even when parallel runs would be cheaper"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-03/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "16-cpsat-scheduling/README_4.5.3.md",
+      "section": "One Boolean per Option Does the Same, and an Interval's Size Must Be Affine"
+    },
+    "concepts": [
+      "an interval's size must be affine, so a weighted sum is named by an integer variable first",
+      "element sets a variable to the entry of a list at a variable index"
+    ]
+  }
+}

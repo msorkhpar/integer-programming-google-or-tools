@@ -1,0 +1,185 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "13-capstone",
+    "51-capstone-cipt-lite"
+  ],
+  "variant": "prose",
+  "unit": 5,
+  "kind": "practice",
+  "ordinal": 3,
+  "ingested": "2026-11-13",
+  "title": "Last cycle's plan as a warm start",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "Finance cut every year of this cycle to $300k. Last cycle's approved plan no longer fits, but most of it is still good, and the planners want the solver to start from it rather than from nothing. Your milestone turns last cycle's plan into a **warm start**: a complete, rule-abiding plan handed to HiGHS as a solution hint. The data is a fictional utility's practice portfolio."
+    },
+    {
+      "type": "para",
+      "text": "`warm_start.py` gives you milestone 2's model with a reduced rule set (must-do, at-most-once, alternative, precedence-with-lag and yearly budget rows) as `build(snapshot)`, which returns `(model, x)` with `x[(project, year)]` the start variables, plus `solve(model, model_params)`, `plan_of`, `spend` and the rule checker `check(snapshot, plan)`."
+    },
+    {
+      "type": "para",
+      "text": "Write:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "function",
+        "contract",
+        "lesson"
+      ],
+      "rows": [
+        [
+          "`carry(last, snapshot)`",
+          "last cycle's starts that this cycle's model has a variable for: the project still exists and the year is in its window. A child whose parent is not carried is not carried either (repeat until none is left)",
+          "11.2.1"
+        ],
+        [
+          "`repair(snapshot, plan)`",
+          "while `check` reports a broken `budget_<year>` row, drop one optional project among those that spend in a broken year: the one with the least NPV (at its planned start) per $k of total cost, ties to the smaller id. A dropped project's children, and theirs, go with it. Never drop a must-do, nor a project with a must-do among its children or their children in the plan (dropping it would take the must-do with it); if only such projects are left, stop and return the plan",
+          "11.2.1"
+        ],
+        [
+          "`hint(x, plan)`",
+          "`mathopt.ModelSolveParameters(solution_hints=[mathopt.SolutionHint(variable_values=...)])` with a value for every start variable: 1.0 for the plan's starts, 0.0 for all others",
+          "4.3.3, 11.2.1"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "A hint changes where the search starts, never the answer: the tests check that the hinted solve reaches the same optimum as the plain one, and that the start you hand over breaks no rule. About twenty-five lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Milestone 5: last cycle's plan as a warm start for this cycle's solve.\n\nA practice portfolio is a dict in the milestones' shape, reduced here to years, budget and projects.\nA plan is {project id: start year}. The data is invented for a fictional utility.\n\"\"\"\n\nfrom __future__ import annotations\n\n# ---- given: milestone 2's model and rule checker, with a reduced rule set ----------------------------\n\nimport contextlib\nimport ctypes\nimport os\nimport sys\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef starts(job: dict) -> range:\n    return range(job[\"earliest\"], job[\"latest\"] + 1)\n\n\ndef spend(job: dict, start: int) -> dict[int, int]:\n    \"\"\"What a project started in `start` spends in each year of work.\"\"\"\n    return {start + k: c for k, c in enumerate(job[\"cost\"])}\n\n\ndef build(snapshot: dict, skip: frozenset = frozenset()):\n    \"\"\"Milestone 2's model, with must_, once_, alt_, after_ and budget_ rows only.\n\n    `skip` plants a bug, for testing the tests: \"must\", \"alt\" or \"budget\" leaves those rows out,\n    \"lag\" reads every lag as 0, \"value\" adds a stray 1 to the objective.\n    \"\"\"\n    jobs = snapshot[\"projects\"]\n    model = mathopt.Model(name=\"practice plan\")\n    x = {(j, t): model.add_binary_variable(name=f\"x_{j}_{t}\") for j in sorted(jobs) for t in starts(jobs[j])}\n\n    def started(j):\n        return mathopt.LinearExpression() + mathopt.fast_sum(x[j, t] for t in starts(jobs[j]))\n\n    for j in sorted(jobs):\n        if jobs[j][\"must\"] and \"must\" not in skip:\n            model.add_linear_constraint(started(j) == 1, name=f\"must_{j}\")\n        else:\n            model.add_linear_constraint(started(j) <= 1, name=f\"once_{j}\")\n    groups: dict[str, list[str]] = {}\n    for j in sorted(jobs):\n        if jobs[j][\"group\"]:\n            groups.setdefault(jobs[j][\"group\"], []).append(j)\n    for g, members in sorted(groups.items()):\n        if \"alt\" not in skip:\n            model.add_linear_constraint(mathopt.fast_sum(started(m) for m in members) <= 1, name=f\"alt_{g}\")\n    for c in sorted(jobs):\n        p, lag = jobs[c][\"parent\"], 0 if \"lag\" in skip else jobs[c][\"lag\"]\n        if p:\n            for t in starts(jobs[c]):\n                model.add_linear_constraint(\n                    mathopt.LinearExpression() + mathopt.fast_sum(x[c, u] for u in starts(jobs[c]) if u <= t)\n                    - mathopt.fast_sum(x[p, s] for s in starts(jobs[p]) if s <= t - lag) <= 0, name=f\"after_{c}_{t}\")\n    for y in snapshot[\"years\"]:\n        if \"budget\" not in skip:\n            model.add_linear_constraint(\n                mathopt.LinearExpression() + mathopt.fast_sum(\n                    spend(jobs[j], t).get(y, 0) * v for (j, t), v in x.items()) <= snapshot[\"budget\"][y],\n                name=f\"budget_{y}\")\n    model.maximize(mathopt.fast_sum(jobs[j][\"npv\"][t] * v for (j, t), v in x.items()) + (1 if \"value\" in skip else 0))\n    return model, x\n\n\n@contextlib.contextmanager\ndef _quiet():\n    \"\"\"Keep the bundled HiGHS's stray C output off the screen.\"\"\"\n    sys.stdout.flush()\n    saved, sink = os.dup(1), os.open(os.devnull, os.O_WRONLY)\n    os.dup2(sink, 1)\n    try:\n        yield\n    finally:\n        ctypes.CDLL(None).fflush(None)\n        os.dup2(saved, 1)\n        os.close(saved)\n        os.close(sink)\n\n\ndef solve(model, model_params=None) -> mathopt.SolveResult:\n    \"\"\"HiGHS to a zero gap.\"\"\"\n    with _quiet():\n        return mathopt.solve(model, mathopt.SolverType.HIGHS,\n                             params=mathopt.SolveParameters(relative_gap_tolerance=0.0), model_params=model_params)\n\n\ndef plan_of(x, result) -> dict[str, int]:\n    values = result.variable_values()\n    return {j: t for (j, t), v in x.items() if values[v] > 0.5}\n\n\ndef value(snapshot: dict, plan: dict[str, int]) -> int:\n    return sum(snapshot[\"projects\"][j][\"npv\"][t] for j, t in plan.items())\n\n\ndef check(snapshot: dict, plan: dict[str, int]) -> list[str]:\n    \"\"\"Every rule the plan breaks, by row name, from the data alone.\"\"\"\n    jobs, broken = snapshot[\"projects\"], []\n    broken += [f\"window_{j}\" for j, t in sorted(plan.items()) if t not in starts(jobs[j])]\n    broken += [f\"must_{j}\" for j in sorted(jobs) if jobs[j][\"must\"] and j not in plan]\n    groups: dict[str, int] = {}\n    for j in plan:\n        if jobs[j][\"group\"]:\n            groups[jobs[j][\"group\"]] = groups.get(jobs[j][\"group\"], 0) + 1\n    broken += [f\"alt_{g}\" for g, n in sorted(groups.items()) if n > 1]\n    for c, t in sorted(plan.items()):\n        p = jobs[c][\"parent\"]\n        if p and (p not in plan or plan[p] + jobs[c][\"lag\"] > t):\n            broken.append(f\"after_{c}_{t}\")\n    for y in snapshot[\"years\"]:\n        if sum(spend(jobs[j], t).get(y, 0) for j, t in plan.items()) > snapshot[\"budget\"][y]:\n            broken.append(f\"budget_{y}\")\n    return broken\n\n\n# ---- yours -----------------------------------------------------------------------------------------\n\n\ndef carry(last: dict[str, int], snapshot: dict) -> dict[str, int]:\n    \"\"\"Last cycle's starts that still have a variable; a child whose parent is not carried goes too.\"\"\"\n    jobs = snapshot[\"projects\"]\n    plan = {j: t for j, t in last.items() if j in jobs and t in starts(jobs[j])}\n    while orphans := [j for j in plan if jobs[j][\"parent\"] and jobs[j][\"parent\"] not in plan]:\n        for j in orphans:\n            del plan[j]\n    return plan\n\n\ndef repair(snapshot: dict, plan: dict[str, int]) -> dict[str, int]:\n    \"\"\"Drop optional projects until no budget row is broken, least NPV per $k first, among the projects\n    that spend in a broken year; a dropped project's children (and theirs) go with it. Never a must-do,\n    and never a project with a must-do among its descendants in the plan.\"\"\"\n    jobs, plan = snapshot[\"projects\"], dict(plan)\n\n    def needed(j: str) -> bool:\n        \"\"\"j is a must-do, or dropping it would take a must-do descendant with it.\"\"\"\n        return jobs[j][\"must\"] or any(needed(c) for c in plan if jobs[c][\"parent\"] == j)\n\n    while broken := [int(r.split(\"_\")[1]) for r in check(snapshot, plan) if r.startswith(\"budget_\")]:\n        optional = [j for j, t in plan.items() if not needed(j) and set(spend(jobs[j], t)) & set(broken)]\n        if not optional:\n            break\n        out = [min(optional, key=lambda j: (jobs[j][\"npv\"][plan[j]] / sum(jobs[j][\"cost\"]), j))]\n        while out:\n            j = out.pop()\n            plan.pop(j, None)\n            out += [c for c in plan if jobs[c][\"parent\"] == j]\n    return plan\n\n\ndef hint(x: dict, plan: dict[str, int]) -> mathopt.ModelSolveParameters:\n    \"\"\"A complete hint: every start variable set, 1 for the plan's starts and 0 for the rest.\"\"\"\n    values = {v: 1.0 if plan.get(j) == t else 0.0 for (j, t), v in x.items()}\n    return mathopt.ModelSolveParameters(solution_hints=[mathopt.SolutionHint(variable_values=values)])\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"years\": [2027, 2028], \"budget\": {2027: 100, 2028: 100},\n                \"projects\": {\"J1\": {\"cost\": [80], \"earliest\": 2027, \"latest\": 2028, \"must\": False, \"parent\": None,\n                                    \"lag\": 0, \"group\": None, \"npv\": {2027: 50, 2028: 45}}}}\n    model, x = build(snapshot)\n    start = repair(snapshot, carry({\"J1\": 2027, \"J0\": 2026}, snapshot))\n    result = solve(model, hint(x, start))\n    print(start, result.termination.reason.name, result.objective_value())\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Milestone 5: last cycle's plan as a warm start for this cycle's solve.\n\nA practice portfolio is a dict in the milestones' shape, reduced here to years, budget and projects.\nA plan is {project id: start year}. The data is invented for a fictional utility.\n\"\"\"\n\nfrom __future__ import annotations\n\n# ---- given: milestone 2's model and rule checker, with a reduced rule set ----------------------------\n\nimport contextlib\nimport ctypes\nimport os\nimport sys\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef starts(job: dict) -> range:\n    return range(job[\"earliest\"], job[\"latest\"] + 1)\n\n\ndef spend(job: dict, start: int) -> dict[int, int]:\n    \"\"\"What a project started in `start` spends in each year of work.\"\"\"\n    return {start + k: c for k, c in enumerate(job[\"cost\"])}\n\n\ndef build(snapshot: dict, skip: frozenset = frozenset()):\n    \"\"\"Milestone 2's model, with must_, once_, alt_, after_ and budget_ rows only.\n\n    `skip` plants a bug, for testing the tests: \"must\", \"alt\" or \"budget\" leaves those rows out,\n    \"lag\" reads every lag as 0, \"value\" adds a stray 1 to the objective.\n    \"\"\"\n    jobs = snapshot[\"projects\"]\n    model = mathopt.Model(name=\"practice plan\")\n    x = {(j, t): model.add_binary_variable(name=f\"x_{j}_{t}\") for j in sorted(jobs) for t in starts(jobs[j])}\n\n    def started(j):\n        return mathopt.LinearExpression() + mathopt.fast_sum(x[j, t] for t in starts(jobs[j]))\n\n    for j in sorted(jobs):\n        if jobs[j][\"must\"] and \"must\" not in skip:\n            model.add_linear_constraint(started(j) == 1, name=f\"must_{j}\")\n        else:\n            model.add_linear_constraint(started(j) <= 1, name=f\"once_{j}\")\n    groups: dict[str, list[str]] = {}\n    for j in sorted(jobs):\n        if jobs[j][\"group\"]:\n            groups.setdefault(jobs[j][\"group\"], []).append(j)\n    for g, members in sorted(groups.items()):\n        if \"alt\" not in skip:\n            model.add_linear_constraint(mathopt.fast_sum(started(m) for m in members) <= 1, name=f\"alt_{g}\")\n    for c in sorted(jobs):\n        p, lag = jobs[c][\"parent\"], 0 if \"lag\" in skip else jobs[c][\"lag\"]\n        if p:\n            for t in starts(jobs[c]):\n                model.add_linear_constraint(\n                    mathopt.LinearExpression() + mathopt.fast_sum(x[c, u] for u in starts(jobs[c]) if u <= t)\n                    - mathopt.fast_sum(x[p, s] for s in starts(jobs[p]) if s <= t - lag) <= 0, name=f\"after_{c}_{t}\")\n    for y in snapshot[\"years\"]:\n        if \"budget\" not in skip:\n            model.add_linear_constraint(\n                mathopt.LinearExpression() + mathopt.fast_sum(\n                    spend(jobs[j], t).get(y, 0) * v for (j, t), v in x.items()) <= snapshot[\"budget\"][y],\n                name=f\"budget_{y}\")\n    model.maximize(mathopt.fast_sum(jobs[j][\"npv\"][t] * v for (j, t), v in x.items()) + (1 if \"value\" in skip else 0))\n    return model, x\n\n\n@contextlib.contextmanager\ndef _quiet():\n    \"\"\"Keep the bundled HiGHS's stray C output off the screen.\"\"\"\n    sys.stdout.flush()\n    saved, sink = os.dup(1), os.open(os.devnull, os.O_WRONLY)\n    os.dup2(sink, 1)\n    try:\n        yield\n    finally:\n        ctypes.CDLL(None).fflush(None)\n        os.dup2(saved, 1)\n        os.close(saved)\n        os.close(sink)\n\n\ndef solve(model, model_params=None) -> mathopt.SolveResult:\n    \"\"\"HiGHS to a zero gap.\"\"\"\n    with _quiet():\n        return mathopt.solve(model, mathopt.SolverType.HIGHS,\n                             params=mathopt.SolveParameters(relative_gap_tolerance=0.0), model_params=model_params)\n\n\ndef plan_of(x, result) -> dict[str, int]:\n    values = result.variable_values()\n    return {j: t for (j, t), v in x.items() if values[v] > 0.5}\n\n\ndef value(snapshot: dict, plan: dict[str, int]) -> int:\n    return sum(snapshot[\"projects\"][j][\"npv\"][t] for j, t in plan.items())\n\n\ndef check(snapshot: dict, plan: dict[str, int]) -> list[str]:\n    \"\"\"Every rule the plan breaks, by row name, from the data alone.\"\"\"\n    jobs, broken = snapshot[\"projects\"], []\n    broken += [f\"window_{j}\" for j, t in sorted(plan.items()) if t not in starts(jobs[j])]\n    broken += [f\"must_{j}\" for j in sorted(jobs) if jobs[j][\"must\"] and j not in plan]\n    groups: dict[str, int] = {}\n    for j in plan:\n        if jobs[j][\"group\"]:\n            groups[jobs[j][\"group\"]] = groups.get(jobs[j][\"group\"], 0) + 1\n    broken += [f\"alt_{g}\" for g, n in sorted(groups.items()) if n > 1]\n    for c, t in sorted(plan.items()):\n        p = jobs[c][\"parent\"]\n        if p and (p not in plan or plan[p] + jobs[c][\"lag\"] > t):\n            broken.append(f\"after_{c}_{t}\")\n    for y in snapshot[\"years\"]:\n        if sum(spend(jobs[j], t).get(y, 0) for j, t in plan.items()) > snapshot[\"budget\"][y]:\n            broken.append(f\"budget_{y}\")\n    return broken\n\n\n# ---- yours -----------------------------------------------------------------------------------------\n\n\ndef carry(last: dict[str, int], snapshot: dict) -> dict[str, int]:\n    \"\"\"Last cycle's starts that still have a variable; a child whose parent is not carried goes too.\"\"\"\n    # TODO\n    return {}\n\n\ndef repair(snapshot: dict, plan: dict[str, int]) -> dict[str, int]:\n    \"\"\"Drop optional projects until no budget row is broken, least NPV per $k first, among the projects\n    that spend in a broken year; a dropped project's children (and theirs) go with it. Never a must-do,\n    and never a project with a must-do among its descendants in the plan.\"\"\"\n    # TODO\n    return {}\n\n\ndef hint(x: dict, plan: dict[str, int]) -> mathopt.ModelSolveParameters:\n    \"\"\"A complete hint: every start variable set, 1 for the plan's starts and 0 for the rest.\"\"\"\n    # TODO\n    return mathopt.ModelSolveParameters()\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"years\": [2027, 2028], \"budget\": {2027: 100, 2028: 100},\n                \"projects\": {\"J1\": {\"cost\": [80], \"earliest\": 2027, \"latest\": 2028, \"must\": False, \"parent\": None,\n                                    \"lag\": 0, \"group\": None, \"npv\": {2027: 50, 2028: 45}}}}\n    model, x = build(snapshot)\n    start = repair(snapshot, carry({\"J1\": 2027, \"J0\": 2026}, snapshot))\n    result = solve(model, hint(x, start))\n    print(start, result.termination.reason.name, result.objective_value())\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 1,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "9b2596bff99af312aadc5aab14aacc437c75114a9bdb249d54ce266be5579d7c",
+  "starting_code": "\"\"\"Milestone 5: last cycle's plan as a warm start for this cycle's solve.\n\nA practice portfolio is a dict in the milestones' shape, reduced here to years, budget and projects.\nA plan is {project id: start year}. The data is invented for a fictional utility.\n\"\"\"\n\nfrom __future__ import annotations\n\n# ---- given: milestone 2's model and rule checker, with a reduced rule set ----------------------------\n\nimport contextlib\nimport ctypes\nimport os\nimport sys\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef starts(job: dict) -> range:\n    return range(job[\"earliest\"], job[\"latest\"] + 1)\n\n\ndef spend(job: dict, start: int) -> dict[int, int]:\n    \"\"\"What a project started in `start` spends in each year of work.\"\"\"\n    return {start + k: c for k, c in enumerate(job[\"cost\"])}\n\n\ndef build(snapshot: dict, skip: frozenset = frozenset()):\n    \"\"\"Milestone 2's model, with must_, once_, alt_, after_ and budget_ rows only.\n\n    `skip` plants a bug, for testing the tests: \"must\", \"alt\" or \"budget\" leaves those rows out,\n    \"lag\" reads every lag as 0, \"value\" adds a stray 1 to the objective.\n    \"\"\"\n    jobs = snapshot[\"projects\"]\n    model = mathopt.Model(name=\"practice plan\")\n    x = {(j, t): model.add_binary_variable(name=f\"x_{j}_{t}\") for j in sorted(jobs) for t in starts(jobs[j])}\n\n    def started(j):\n        return mathopt.LinearExpression() + mathopt.fast_sum(x[j, t] for t in starts(jobs[j]))\n\n    for j in sorted(jobs):\n        if jobs[j][\"must\"] and \"must\" not in skip:\n            model.add_linear_constraint(started(j) == 1, name=f\"must_{j}\")\n        else:\n            model.add_linear_constraint(started(j) <= 1, name=f\"once_{j}\")\n    groups: dict[str, list[str]] = {}\n    for j in sorted(jobs):\n        if jobs[j][\"group\"]:\n            groups.setdefault(jobs[j][\"group\"], []).append(j)\n    for g, members in sorted(groups.items()):\n        if \"alt\" not in skip:\n            model.add_linear_constraint(mathopt.fast_sum(started(m) for m in members) <= 1, name=f\"alt_{g}\")\n    for c in sorted(jobs):\n        p, lag = jobs[c][\"parent\"], 0 if \"lag\" in skip else jobs[c][\"lag\"]\n        if p:\n            for t in starts(jobs[c]):\n                model.add_linear_constraint(\n                    mathopt.LinearExpression() + mathopt.fast_sum(x[c, u] for u in starts(jobs[c]) if u <= t)\n                    - mathopt.fast_sum(x[p, s] for s in starts(jobs[p]) if s <= t - lag) <= 0, name=f\"after_{c}_{t}\")\n    for y in snapshot[\"years\"]:\n        if \"budget\" not in skip:\n            model.add_linear_constraint(\n                mathopt.LinearExpression() + mathopt.fast_sum(\n                    spend(jobs[j], t).get(y, 0) * v for (j, t), v in x.items()) <= snapshot[\"budget\"][y],\n                name=f\"budget_{y}\")\n    model.maximize(mathopt.fast_sum(jobs[j][\"npv\"][t] * v for (j, t), v in x.items()) + (1 if \"value\" in skip else 0))\n    return model, x\n\n\n@contextlib.contextmanager\ndef _quiet():\n    \"\"\"Keep the bundled HiGHS's stray C output off the screen.\"\"\"\n    sys.stdout.flush()\n    saved, sink = os.dup(1), os.open(os.devnull, os.O_WRONLY)\n    os.dup2(sink, 1)\n    try:\n        yield\n    finally:\n        ctypes.CDLL(None).fflush(None)\n        os.dup2(saved, 1)\n        os.close(saved)\n        os.close(sink)\n\n\ndef solve(model, model_params=None) -> mathopt.SolveResult:\n    \"\"\"HiGHS to a zero gap.\"\"\"\n    with _quiet():\n        return mathopt.solve(model, mathopt.SolverType.HIGHS,\n                             params=mathopt.SolveParameters(relative_gap_tolerance=0.0), model_params=model_params)\n\n\ndef plan_of(x, result) -> dict[str, int]:\n    values = result.variable_values()\n    return {j: t for (j, t), v in x.items() if values[v] > 0.5}\n\n\ndef value(snapshot: dict, plan: dict[str, int]) -> int:\n    return sum(snapshot[\"projects\"][j][\"npv\"][t] for j, t in plan.items())\n\n\ndef check(snapshot: dict, plan: dict[str, int]) -> list[str]:\n    \"\"\"Every rule the plan breaks, by row name, from the data alone.\"\"\"\n    jobs, broken = snapshot[\"projects\"], []\n    broken += [f\"window_{j}\" for j, t in sorted(plan.items()) if t not in starts(jobs[j])]\n    broken += [f\"must_{j}\" for j in sorted(jobs) if jobs[j][\"must\"] and j not in plan]\n    groups: dict[str, int] = {}\n    for j in plan:\n        if jobs[j][\"group\"]:\n            groups[jobs[j][\"group\"]] = groups.get(jobs[j][\"group\"], 0) + 1\n    broken += [f\"alt_{g}\" for g, n in sorted(groups.items()) if n > 1]\n    for c, t in sorted(plan.items()):\n        p = jobs[c][\"parent\"]\n        if p and (p not in plan or plan[p] + jobs[c][\"lag\"] > t):\n            broken.append(f\"after_{c}_{t}\")\n    for y in snapshot[\"years\"]:\n        if sum(spend(jobs[j], t).get(y, 0) for j, t in plan.items()) > snapshot[\"budget\"][y]:\n            broken.append(f\"budget_{y}\")\n    return broken\n\n\n# ---- yours -----------------------------------------------------------------------------------------\n\n\ndef carry(last: dict[str, int], snapshot: dict) -> dict[str, int]:\n    \"\"\"Last cycle's starts that still have a variable; a child whose parent is not carried goes too.\"\"\"\n    # TODO\n    return {}\n\n\ndef repair(snapshot: dict, plan: dict[str, int]) -> dict[str, int]:\n    \"\"\"Drop optional projects until no budget row is broken, least NPV per $k first, among the projects\n    that spend in a broken year; a dropped project's children (and theirs) go with it. Never a must-do,\n    and never a project with a must-do among its descendants in the plan.\"\"\"\n    # TODO\n    return {}\n\n\ndef hint(x: dict, plan: dict[str, int]) -> mathopt.ModelSolveParameters:\n    \"\"\"A complete hint: every start variable set, 1 for the plan's starts and 0 for the rest.\"\"\"\n    # TODO\n    return mathopt.ModelSolveParameters()\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"years\": [2027, 2028], \"budget\": {2027: 100, 2028: 100},\n                \"projects\": {\"J1\": {\"cost\": [80], \"earliest\": 2027, \"latest\": 2028, \"must\": False, \"parent\": None,\n                                    \"lag\": 0, \"group\": None, \"npv\": {2027: 50, 2028: 45}}}}\n    model, x = build(snapshot)\n    start = repair(snapshot, carry({\"J1\": 2027, \"J0\": 2026}, snapshot))\n    result = solve(model, hint(x, start))\n    print(start, result.termination.reason.name, result.objective_value())\n",
+  "exercise": {
+    "main_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-05/practice-3/warm_start.py",
+    "test_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-05/practice-3/test_warm_start.py",
+    "run_command": [
+      "python3",
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-05/practice-3/warm_start.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/13-capstone/51-capstone-cipt-lite/prose/unit-05/practice-3/target/report.xml",
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-05/practice-3/test_warm_start.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_carry_keeps_only_the_starts_this_cycle_has_a_variable_for",
+        "kind": "main",
+        "says": "a retired project, and a start year this cycle's window no longer allows, are left out of the carried plan"
+      },
+      {
+        "id": "test_the_repaired_start_breaks_no_rule_and_the_hinted_solve_reaches_the_same_optimum",
+        "kind": "main",
+        "says": "the repaired start breaks no rule, the hint carries exactly its starts, and the hinted solve reaches the same optimum as the plain one"
+      },
+      {
+        "id": "test_the_hint_sets_every_variable_zeros_included",
+        "kind": "edge",
+        "says": "the hint is complete: every start variable gets a value, 0 for the starts the plan does not use"
+      },
+      {
+        "id": "test_repair_drops_the_least_npv_per_dollar_first",
+        "kind": "edge",
+        "says": "the project dropped first is the one with the least NPV per $k, not the least NPV"
+      },
+      {
+        "id": "test_repair_drops_only_projects_that_spend_in_a_broken_year",
+        "kind": "edge",
+        "says": "a project that spends only in years within budget is kept, however little it is worth"
+      },
+      {
+        "id": "test_repair_never_drops_a_must_do",
+        "kind": "edge",
+        "says": "a must-do stays even when it is worth the least per $k"
+      },
+      {
+        "id": "test_a_dropped_parent_takes_its_child_with_it",
+        "kind": "edge",
+        "says": "dropping a parent drops its child too, so the start breaks no precedence row"
+      },
+      {
+        "id": "test_carry_drops_a_child_whose_parent_has_no_start_left",
+        "kind": "edge",
+        "says": "a child whose parent has no start variable this cycle is not carried either"
+      },
+      {
+        "id": "test_a_must_do_child_keeps_its_parent",
+        "kind": "edge",
+        "says": "a parent whose child is a must-do is never dropped, so the must-do keeps its start"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-05/practice-3/target/report.xml"
+    },
+    "origin": {
+      "path": "51-capstone-cipt-lite/README_13.1.5.md",
+      "section": "A Warm Start Is Last Cycle's Plan, Repaired and Handed Over as a Hint"
+    },
+    "concepts": [
+      "last cycle's plan carried onto this cycle's variables, repaired, and handed over as a complete hint"
+    ]
+  }
+}

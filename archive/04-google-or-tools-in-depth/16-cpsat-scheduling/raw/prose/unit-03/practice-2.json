@@ -1,0 +1,140 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "16-cpsat-scheduling"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "School bus offers",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A school district buys bus service route by route. Two operators bid: a private company (operator 0) and the city's transit agency (operator 1). Each **offer** is a row `(seats, operator, price)`: that operator will run one route with a bus of that many seats at that price. The city can take at most `city_limit` routes. A route needs a bus with at least as many seats as it has riders."
+    },
+    {
+      "type": "para",
+      "text": "Write `buy_routes(routes, offers, city_limit)` in `buses.py`. `routes` maps a route to its riders. Return `(total, plan)`, with `total` an `int` (`round(solver.objective_value)`, not `int(...)`), where `plan` maps each route to the offer it takes, as the tuple `(seats, operator, price)`, chosen so that the total price is as small as possible. Every instance in the tests has a plan."
+    },
+    {
+      "type": "para",
+      "text": "The model, with $`R`$ the routes, $`n_r`$ their riders, $`O`$ the set of offer rows and $`L`$ the city's limit:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& q_r \\in \\mathbb{Z},\\ k_r \\in \\{0, 1\\},\\ p_r \\in \\mathbb{Z} && \\forall r \\in R && \\text{(seats, operator, price)} \\\\\n& \\min \\; \\textstyle\\sum_{r \\in R} p_r \\\\\n& (q_r, k_r, p_r) \\in O && \\forall r \\in R && \\text{(offer}_r) \\\\\n& q_r \\ge n_r && \\forall r \\in R && \\text{(fits}_r) \\\\\n& \\textstyle\\sum_{r \\in R} k_r \\le L && && \\text{(city\\_limit)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The (offer) rows are table constraints. Bound $`q_r`$ and $`p_r`$ by the smallest and largest seats and prices in the offers. The tests check the plan you return and its total, so any optimal plan passes. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef buy_routes(routes: dict[str, int], offers: list[tuple[int, int, int]],\n               city_limit: int) -> tuple[int, dict[str, tuple[int, int, int]]]:\n    \"\"\"(total price, route -> (seats, operator, price)) of the cheapest set of offers.\"\"\"\n    model = cp_model.CpModel()\n    seats, city, price = {}, {}, {}\n    for r, riders in routes.items():\n        seats[r] = model.new_int_var(min(o[0] for o in offers), max(o[0] for o in offers), f\"seats_{r}\")\n        city[r] = model.new_bool_var(f\"city_{r}\")\n        price[r] = model.new_int_var(min(o[2] for o in offers), max(o[2] for o in offers), f\"price_{r}\")\n        model.add_allowed_assignments([seats[r], city[r], price[r]], offers)\n        model.add(seats[r] >= riders)\n    model.add(sum(city.values()) <= city_limit)\n    model.minimize(sum(price.values()))\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.solve(model)\n    return round(solver.objective_value), {\n        r: (solver.value(seats[r]), solver.value(city[r]), solver.value(price[r])) for r in routes}\n\n\nif __name__ == \"__main__\":\n    print(buy_routes({\"hill\": 25, \"river\": 40}, [(30, 0, 100), (30, 1, 70), (50, 0, 150)], 1))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef buy_routes(routes: dict[str, int], offers: list[tuple[int, int, int]],\n               city_limit: int) -> tuple[int, dict[str, tuple[int, int, int]]]:\n    \"\"\"(total price, route -> (seats, operator, price)) of the cheapest set of offers.\"\"\"\n    # TODO: seats, a city Boolean and a price per route, tied to the offers by a table, seats for\n    # every rider, the city's limit, and minimize the total price. Placeholders below.\n    return -1, {r: (0, 0, 0) for r in routes}\n\n\nif __name__ == \"__main__\":\n    print(buy_routes({\"hill\": 25, \"river\": 40}, [(30, 0, 100), (30, 1, 70), (50, 0, 150)], 1))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "ec96ff23e3811e4366fb9db9d2b1ee1a051e7d3b238b0dd5fac50089ed3a3cb1",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef buy_routes(routes: dict[str, int], offers: list[tuple[int, int, int]],\n               city_limit: int) -> tuple[int, dict[str, tuple[int, int, int]]]:\n    \"\"\"(total price, route -> (seats, operator, price)) of the cheapest set of offers.\"\"\"\n    # TODO: seats, a city Boolean and a price per route, tied to the offers by a table, seats for\n    # every rider, the city's limit, and minimize the total price. Placeholders below.\n    return -1, {r: (0, 0, 0) for r in routes}\n\n\nif __name__ == \"__main__\":\n    print(buy_routes({\"hill\": 25, \"river\": 40}, [(30, 0, 100), (30, 1, 70), (50, 0, 150)], 1))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-03/practice-2/buses.py",
+    "test_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-03/practice-2/test_buses.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-03/practice-2/buses.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-03/practice-2/target/report.xml",
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-03/practice-2/test_buses.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_each_route_gets_the_cheapest_bus_that_fits",
+        "kind": "main",
+        "says": "with no limit in the way, each route gets the cheapest offered bus with enough seats"
+      },
+      {
+        "id": "test_every_route_gets_an_offer",
+        "kind": "main",
+        "says": "every route gets an offer from the list, with seats for all its riders"
+      },
+      {
+        "id": "test_a_price_belongs_to_its_offer",
+        "kind": "edge",
+        "says": "a route pays the price of the offer it takes, even when another operator offers the same bus size at another price"
+      },
+      {
+        "id": "test_the_city_takes_no_more_routes_than_its_limit",
+        "kind": "edge",
+        "says": "the city operator runs no more routes than its limit"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-03/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "16-cpsat-scheduling/README_4.5.3.md",
+      "section": "A Table Lists Every Combination That Is Allowed"
+    },
+    "concepts": [
+      "a table constraint restricts several variables to listed rows and can define values that depend on several choices"
+    ]
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "14-mathopt-advanced"
+  ],
+  "variant": "prose",
+  "unit": 5,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "The best plan so far, from every solution the solver reports",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "An operations dashboard shows a long MIP solve's progress as a line: the value of the best plan found so far, after each solution the solver reports. Lesson 4.3.5 showed that SCIP reports *every* feasible solution its heuristics find, worse ones included, so the callback has to keep the best itself."
+    },
+    {
+      "type": "para",
+      "text": "Write `make_tracker(objective, maximize)`. `objective` is a dict from variable to its objective coefficient; `maximize` says the sense. It returns a pair `(callback, history)`:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`history`, a list, empty at first;",
+        "`callback`, a function for `Event.MIP_SOLUTION`. Given a `mathopt.CallbackData`, it computes the reported solution's objective value $`\\sum_v c_v \\cdot \\text{solution}[v]`$, appends the best value seen so far (the largest when maximizing, the smallest when minimizing) to `history`, and returns an empty `mathopt.CallbackResult()`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The tests call your callback with hand-made `CallbackData` and also register it on a real SCIP solve. About twelve lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef make_tracker(objective: dict, maximize: bool):\n    \"\"\"(callback for MIP_SOLUTION, history of the best objective value after each reported solution).\"\"\"\n    history: list[float] = []\n\n    def callback(data: mathopt.CallbackData) -> mathopt.CallbackResult:\n        value = sum(coef * data.solution.get(v, 0.0) for v, coef in objective.items())\n        if history:\n            value = max(value, history[-1]) if maximize else min(value, history[-1])\n        history.append(value)\n        return mathopt.CallbackResult()\n\n    return callback, history\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    a = model.add_binary_variable(name=\"a\")\n    callback, history = make_tracker({a: 3.0}, maximize=True)\n    callback(mathopt.CallbackData(event=mathopt.Event.MIP_SOLUTION, solution={a: 1.0}))\n    print(history)\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef make_tracker(objective: dict, maximize: bool):\n    \"\"\"(callback for MIP_SOLUTION, history of the best objective value after each reported solution).\"\"\"\n    history: list[float] = []\n\n    def callback(data: mathopt.CallbackData) -> mathopt.CallbackResult:\n        # TODO: this solution's value, then the best so far, appended to history.\n        return mathopt.CallbackResult()\n\n    return callback, history\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    a = model.add_binary_variable(name=\"a\")\n    callback, history = make_tracker({a: 3.0}, maximize=True)\n    callback(mathopt.CallbackData(event=mathopt.Event.MIP_SOLUTION, solution={a: 1.0}))\n    print(history)\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "e2f40a0780827e7e1e381b33b3072ca0c944d88ca69442fcc8058d391695fb23",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef make_tracker(objective: dict, maximize: bool):\n    \"\"\"(callback for MIP_SOLUTION, history of the best objective value after each reported solution).\"\"\"\n    history: list[float] = []\n\n    def callback(data: mathopt.CallbackData) -> mathopt.CallbackResult:\n        # TODO: this solution's value, then the best so far, appended to history.\n        return mathopt.CallbackResult()\n\n    return callback, history\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    a = model.add_binary_variable(name=\"a\")\n    callback, history = make_tracker({a: 3.0}, maximize=True)\n    callback(mathopt.CallbackData(event=mathopt.Event.MIP_SOLUTION, solution={a: 1.0}))\n    print(history)\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-1/tracker.py",
+    "test_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-1/test_tracker.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-1/tracker.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-1/target/report.xml",
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-1/test_tracker.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_improving_solutions_are_recorded",
+        "kind": "main",
+        "says": "two improving solutions of a maximization are recorded as their two values, and the callback asks nothing of the solver"
+      },
+      {
+        "id": "test_a_real_solve_ends_at_the_optimum",
+        "kind": "main",
+        "says": "on a SCIP solve the history is not empty and reaches the optimum"
+      },
+      {
+        "id": "test_a_worse_solution_keeps_the_best",
+        "kind": "edge",
+        "says": "a solution worse than the best so far records the best again"
+      },
+      {
+        "id": "test_a_minimization_keeps_the_lowest",
+        "kind": "edge",
+        "says": "for a minimization the best so far is the lowest value seen"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "14-mathopt-advanced/README_4.3.5.md",
+      "section": "A Solve Callback Runs at Events the Solver Supports"
+    },
+    "concepts": [
+      "a MIP_SOLUTION callback that keeps the best plan value itself"
+    ]
+  }
+}

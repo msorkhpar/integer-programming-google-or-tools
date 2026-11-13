@@ -1,0 +1,140 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "16-cpsat-scheduling"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Buses through the depot's bays",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A bus depot sends each bus through some of its bays (wash, service, inspection) in an order that depends on the bus. A bay handles one bus at a time, a bus is in one bay at a time, and a step, once started, runs to its end. Hours are numbered from 0."
+    },
+    {
+      "type": "para",
+      "text": "Write `plan_depot(buses)` in `depot.py`. `buses` maps a bus to its steps in order, each a pair `(bay, hours)`. Return the start hour of every step as a dict keyed `(bus, k)`, where `k` is the step's position (0 for the first), chosen so that the last bus leaves as early as possible."
+    },
+    {
+      "type": "para",
+      "text": "This is the job shop. With $`J`$ the buses, step $`k`$ of bus $`b`$ on bay $`m_{b,k}`$ for $`d_{b,k}`$ hours, $`K_b`$ the number of steps of bus $`b`$, $`M`$ the bays, and the horizon $`H = \\sum_{b,k} d_{b,k}`$ (every step one after another):"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& s_{b,k} \\in \\{0, \\dots, H\\} && \\forall b \\in J,\\ k < K_b && \\text{(start hour)} \\\\\n& C \\in \\{0, \\dots, H\\} && && \\text{(the hour the last bus leaves)} \\\\\n& \\min \\; C \\\\\n& \\text{NoOverlap}\\big(\\{[s_{b,k}, s_{b,k} + d_{b,k}) : m_{b,k} = m\\}\\big) && \\forall m \\in M && \\text{(bay}_m) \\\\\n& s_{b,k+1} \\ge s_{b,k} + d_{b,k} && \\forall b \\in J,\\ k < K_b - 1 && \\text{(order}_{b,k}) \\\\\n& C = \\max_{b \\in J} \\big(s_{b,K_b-1} + d_{b,K_b-1}\\big) && && \\text{(makespan)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Group the intervals by bay before you add the NoOverlap rows. The tests check the plan you return and how early the depot clears, so any optimal plan passes. About twenty lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef plan_depot(buses: dict[str, list[tuple[str, int]]]) -> dict[tuple[str, int], int]:\n    \"\"\"Start hour of each step (bus, k), so the last bus leaves as early as possible.\"\"\"\n    horizon = sum(hours for steps in buses.values() for _, hours in steps)\n    model = cp_model.CpModel()\n    start, on_bay, last_ends = {}, {}, []\n    for bus, steps in buses.items():\n        for k, (bay, hours) in enumerate(steps):\n            start[bus, k] = model.new_int_var(0, horizon, f\"start_{bus}_{k}\")\n            interval = model.new_fixed_size_interval_var(start[bus, k], hours, f\"{bus}_{k}\")\n            on_bay.setdefault(bay, []).append(interval)\n        for k in range(len(steps) - 1):\n            model.add(start[bus, k + 1] >= start[bus, k] + steps[k][1])\n        last_ends.append(start[bus, len(steps) - 1] + steps[-1][1])\n    for intervals in on_bay.values():\n        model.add_no_overlap(intervals)\n\n    makespan = model.new_int_var(0, horizon, \"makespan\")\n    model.add_max_equality(makespan, last_ends)\n    model.minimize(makespan)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.solve(model)\n    return {key: solver.value(var) for key, var in start.items()}\n\n\nif __name__ == \"__main__\":\n    print(plan_depot({\"bus1\": [(\"wash\", 1), (\"service\", 3)], \"bus2\": [(\"service\", 2), (\"wash\", 1)]}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef plan_depot(buses: dict[str, list[tuple[str, int]]]) -> dict[tuple[str, int], int]:\n    \"\"\"Start hour of each step (bus, k), so the last bus leaves as early as possible.\"\"\"\n    # TODO: an interval per step, a NoOverlap per bay, an order row per pair of steps of a bus,\n    # and minimize the latest end. Every start below is a placeholder.\n    return {(bus, k): -1 for bus, steps in buses.items() for k in range(len(steps))}\n\n\nif __name__ == \"__main__\":\n    print(plan_depot({\"bus1\": [(\"wash\", 1), (\"service\", 3)], \"bus2\": [(\"service\", 2), (\"wash\", 1)]}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "90f800705795b0d9b02ef56bdd1eb41964867615e622b05ca83932e9da17b683",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef plan_depot(buses: dict[str, list[tuple[str, int]]]) -> dict[tuple[str, int], int]:\n    \"\"\"Start hour of each step (bus, k), so the last bus leaves as early as possible.\"\"\"\n    # TODO: an interval per step, a NoOverlap per bay, an order row per pair of steps of a bus,\n    # and minimize the latest end. Every start below is a placeholder.\n    return {(bus, k): -1 for bus, steps in buses.items() for k in range(len(steps))}\n\n\nif __name__ == \"__main__\":\n    print(plan_depot({\"bus1\": [(\"wash\", 1), (\"service\", 3)], \"bus2\": [(\"service\", 2), (\"wash\", 1)]}))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-2/depot.py",
+    "test_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-2/test_depot.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-2/depot.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-2/target/report.xml",
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-2/test_depot.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_every_step_gets_a_start",
+        "kind": "main",
+        "says": "every step of every bus gets a whole-number start hour"
+      },
+      {
+        "id": "test_buses_on_their_own_bays_run_together",
+        "kind": "main",
+        "says": "buses that each use one bay of their own all start at hour 0"
+      },
+      {
+        "id": "test_a_shared_bay_takes_one_bus_at_a_time",
+        "kind": "edge",
+        "says": "two steps on the same bay never overlap, even when they belong to different buses"
+      },
+      {
+        "id": "test_a_bus_finishes_a_step_before_the_next",
+        "kind": "edge",
+        "says": "a bus's next step starts only when its previous step has ended, and the depot still clears as early as possible"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "16-cpsat-scheduling/README_4.5.1.md",
+      "section": "The Job Shop Is One NoOverlap per Machine and One Precedence Row per Step"
+    },
+    "concepts": [
+      "the job shop has one NoOverlap per machine and one precedence row per pair of consecutive steps"
+    ]
+  }
+}

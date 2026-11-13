@@ -1,0 +1,140 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "52-ortools-routing"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Kegs and kilograms: one dimension per load",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A brewery delivers to pubs with two trucks. Each pub takes some kegs and some kilograms of bottled stock, and each truck has two limits: how many kegs fit on it and how much weight it may carry. The second truck is smaller. `loads.py` builds the routes; write `add_loads(routing, manager, demands, capacities)`, where `demands[kind][node]` is what a stop takes of one kind and `capacities[kind][v]` is the most truck `v` may carry of it. Make one dimension per kind, named after the kind, so a planner can look each one up by name."
+    },
+    {
+      "type": "para",
+      "text": "In the lesson's notation, for every kind $`q`$, with $`d^q_a`$ the demand of node $`a`$ and $`K^q_v`$ truck $`v`$'s capacity:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& \\text{load}^q_{s_v} = 0 && \\forall q,\\ v && \\text{(leave the depot empty)} \\\\\n& \\text{load}^q_{\\text{next}_i} = \\text{load}^q_i + d^q_{\\text{node}(i)} && \\forall q,\\ i && \\text{(pick up at each stop)} \\\\\n& \\text{load}^q_i \\le K^q_v && \\forall q,\\ i \\text{ on truck } v\\text{'s route} && \\text{(capacity}^q_v)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Before you code, say why the demand callback takes one index and not two. Then mind two Python traps when you register callbacks in a loop: what a dimension name that is already taken does (the lesson says), and which `demand` list a function defined inside the loop reads when the solver calls it later."
+    },
+    {
+      "type": "para",
+      "text": "The tests ask the model whether hand-built routes are allowed, so any correct formulation passes. About six lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef add_loads(routing, manager, demands: dict[str, list[int]], capacities: dict[str, list[int]]) -> None:\n    \"\"\"One dimension per kind of load, named after it: demands[kind][node] is what a stop adds,\n    capacities[kind][v] is the most vehicle v may carry of that kind.\"\"\"\n    for kind, demand in demands.items():\n        def load(from_index, demand=demand):\n            return demand[manager.IndexToNode(from_index)]\n\n        handle = routing.RegisterUnaryTransitCallback(load)\n        routing.AddDimensionWithVehicleCapacity(handle, 0, capacities[kind], True, kind)\n\n\ndef build(distance: list[list[int]], vehicles: int, demands, capacities):\n    \"\"\"Given: one route per vehicle from the depot (node 0), priced by distance.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(distance), vehicles, 0)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def arc(from_index, to_index):\n        return distance[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    routing.SetArcCostEvaluatorOfAllVehicles(routing.RegisterTransitCallback(arc))\n    add_loads(routing, manager, demands, capacities)\n    return manager, routing\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 4, 5], [4, 0, 3], [5, 3, 0]], 1,\n                             {\"crates\": [0, 2, 3], \"kg\": [0, 40, 70]}, {\"crates\": [6], \"kg\": [100]})\n    print(routing.ReadAssignmentFromRoutes([[1, 2]], True) is not None)\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef add_loads(routing, manager, demands: dict[str, list[int]], capacities: dict[str, list[int]]) -> None:\n    \"\"\"One dimension per kind of load, named after it: demands[kind][node] is what a stop adds,\n    capacities[kind][v] is the most vehicle v may carry of that kind.\"\"\"\n    # TODO: for each kind, a unary demand callback and a capacity dimension named after the kind.\n    return None\n\n\ndef build(distance: list[list[int]], vehicles: int, demands, capacities):\n    \"\"\"Given: one route per vehicle from the depot (node 0), priced by distance.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(distance), vehicles, 0)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def arc(from_index, to_index):\n        return distance[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    routing.SetArcCostEvaluatorOfAllVehicles(routing.RegisterTransitCallback(arc))\n    add_loads(routing, manager, demands, capacities)\n    return manager, routing\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 4, 5], [4, 0, 3], [5, 3, 0]], 1,\n                             {\"crates\": [0, 2, 3], \"kg\": [0, 40, 70]}, {\"crates\": [6], \"kg\": [100]})\n    print(routing.ReadAssignmentFromRoutes([[1, 2]], True) is not None)\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "53437f3495e9f2a6d7e2f3e20a6cd633ef0a498fbeac11ebe3447d7261e3a548",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef add_loads(routing, manager, demands: dict[str, list[int]], capacities: dict[str, list[int]]) -> None:\n    \"\"\"One dimension per kind of load, named after it: demands[kind][node] is what a stop adds,\n    capacities[kind][v] is the most vehicle v may carry of that kind.\"\"\"\n    # TODO: for each kind, a unary demand callback and a capacity dimension named after the kind.\n    return None\n\n\ndef build(distance: list[list[int]], vehicles: int, demands, capacities):\n    \"\"\"Given: one route per vehicle from the depot (node 0), priced by distance.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(distance), vehicles, 0)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def arc(from_index, to_index):\n        return distance[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    routing.SetArcCostEvaluatorOfAllVehicles(routing.RegisterTransitCallback(arc))\n    add_loads(routing, manager, demands, capacities)\n    return manager, routing\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 4, 5], [4, 0, 3], [5, 3, 0]], 1,\n                             {\"crates\": [0, 2, 3], \"kg\": [0, 40, 70]}, {\"crates\": [6], \"kg\": [100]})\n    print(routing.ReadAssignmentFromRoutes([[1, 2]], True) is not None)\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-2/loads.py",
+    "test_path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-2/test_loads.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-2/loads.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-2/target/report.xml",
+      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-2/test_loads.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_truck_may_carry_up_to_its_capacity_and_no_more",
+        "kind": "main",
+        "says": "a route whose load fits its truck is allowed, and one whose load exceeds it is refused"
+      },
+      {
+        "id": "test_every_kind_of_load_has_its_own_limit",
+        "kind": "edge",
+        "says": "with two kinds of load, a route over the second kind's limit is refused even when the first kind fits"
+      },
+      {
+        "id": "test_each_kind_is_counted_with_its_own_demands",
+        "kind": "edge",
+        "says": "each kind's limit is checked against that kind's own demands, not another kind's"
+      },
+      {
+        "id": "test_a_smaller_truck_has_a_smaller_limit",
+        "kind": "edge",
+        "says": "each truck has its own capacity, so a load one truck may carry can be refused on a smaller one"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "52-ortools-routing/README_4.8.2.md",
+      "section": "A Capacity Is a Dimension Whose Transit Is the Demand"
+    },
+    "concepts": [
+      "a load limit is a dimension fed by a unary demand callback, with one capacity per vehicle"
+    ]
+  }
+}

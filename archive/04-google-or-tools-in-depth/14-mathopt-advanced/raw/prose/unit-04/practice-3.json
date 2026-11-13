@@ -1,0 +1,136 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "14-mathopt-advanced"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 3,
+  "ingested": "2026-11-13",
+  "title": "The best plan without some options, with the model left as it was",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A telecom operator chooses which towers to upgrade, with an integer $`u_k \\in \\{0, \\dots, U_k\\}`$ per tower $`k`$ (how many radios it gets). Management keeps asking \"what is the best plan if we leave these towers alone?\". In the model that is"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "u_k \\le 0 \\qquad \\forall k \\in \\text{ruled out}"
+    },
+    {
+      "type": "para",
+      "text": "for that one question only."
+    },
+    {
+      "type": "para",
+      "text": "Write `objective_without(model, variables, solver)`. It sets the upper bound of every variable in `variables` to 0, solves `model` with `mathopt.solve(model, solver)`, and returns the optimal objective value. Whatever happens, the model must be exactly as before when the function returns: each variable's upper bound back to *its own* old value, and nothing deleted. If the solve raises, the error should still reach the caller, with the bounds already restored. About eight lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef objective_without(model: mathopt.Model, variables: list[mathopt.Variable], solver: mathopt.SolverType) -> float:\n    \"\"\"The optimum with every variable in `variables` held at 0; the model is left exactly as it was.\"\"\"\n    old = {v: v.upper_bound for v in variables}\n    try:\n        for v in variables:\n            v.upper_bound = 0.0\n        return mathopt.solve(model, solver).objective_value()\n    finally:\n        for v, bound in old.items():\n            v.upper_bound = bound\n\n\ndef build(towers: dict[str, tuple[float, float, int]], budget: float):\n    \"\"\"towers: name -> (value per radio, cost per radio, most radios).\"\"\"\n    model = mathopt.Model(name=\"towers\")\n    u = {k: model.add_integer_variable(lb=0, ub=towers[k][2], name=f\"u_{k}\") for k in towers}\n    model.add_linear_constraint(sum(towers[k][1] * u[k] for k in towers) <= budget, name=\"budget\")\n    model.maximize(sum(towers[k][0] * u[k] for k in towers))\n    return model, u\n\n\nif __name__ == \"__main__\":\n    model, u = build({\"hill\": (5, 2, 3), \"mall\": (4, 1, 2)}, 6)\n    print(objective_without(model, [u[\"hill\"]], mathopt.SolverType.HIGHS))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef objective_without(model: mathopt.Model, variables: list[mathopt.Variable], solver: mathopt.SolverType) -> float:\n    \"\"\"The optimum with every variable in `variables` held at 0; the model is left exactly as it was.\"\"\"\n    # TODO: remember each upper bound, set it to 0, solve, and put every bound back, whatever happens.\n    return 0.0\n\n\ndef build(towers: dict[str, tuple[float, float, int]], budget: float):\n    \"\"\"towers: name -> (value per radio, cost per radio, most radios).\"\"\"\n    model = mathopt.Model(name=\"towers\")\n    u = {k: model.add_integer_variable(lb=0, ub=towers[k][2], name=f\"u_{k}\") for k in towers}\n    model.add_linear_constraint(sum(towers[k][1] * u[k] for k in towers) <= budget, name=\"budget\")\n    model.maximize(sum(towers[k][0] * u[k] for k in towers))\n    return model, u\n\n\nif __name__ == \"__main__\":\n    model, u = build({\"hill\": (5, 2, 3), \"mall\": (4, 1, 2)}, 6)\n    print(objective_without(model, [u[\"hill\"]], mathopt.SolverType.HIGHS))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "95b7c9255d63d862ca4d2c7caae4b6a57c02e5a303e1d208cb4ac531eea80e6f",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef objective_without(model: mathopt.Model, variables: list[mathopt.Variable], solver: mathopt.SolverType) -> float:\n    \"\"\"The optimum with every variable in `variables` held at 0; the model is left exactly as it was.\"\"\"\n    # TODO: remember each upper bound, set it to 0, solve, and put every bound back, whatever happens.\n    return 0.0\n\n\ndef build(towers: dict[str, tuple[float, float, int]], budget: float):\n    \"\"\"towers: name -> (value per radio, cost per radio, most radios).\"\"\"\n    model = mathopt.Model(name=\"towers\")\n    u = {k: model.add_integer_variable(lb=0, ub=towers[k][2], name=f\"u_{k}\") for k in towers}\n    model.add_linear_constraint(sum(towers[k][1] * u[k] for k in towers) <= budget, name=\"budget\")\n    model.maximize(sum(towers[k][0] * u[k] for k in towers))\n    return model, u\n\n\nif __name__ == \"__main__\":\n    model, u = build({\"hill\": (5, 2, 3), \"mall\": (4, 1, 2)}, 6)\n    print(objective_without(model, [u[\"hill\"]], mathopt.SolverType.HIGHS))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-3/without.py",
+    "test_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-3/test_without.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-3/without.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-3/target/report.xml",
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-3/test_without.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_ruling_out_gives_the_optimum_without_them",
+        "kind": "main",
+        "says": "ruling out two options gives the optimum of the model in which they are 0"
+      },
+      {
+        "id": "test_the_model_is_unchanged_afterwards",
+        "kind": "main",
+        "says": "after the call every variable is still in the model, and a solve gives the base optimum again"
+      },
+      {
+        "id": "test_each_bound_comes_back_to_its_own_value",
+        "kind": "edge",
+        "says": "an integer option whose upper bound was 3 has 3 again afterwards, not 1"
+      },
+      {
+        "id": "test_bounds_come_back_even_when_the_solve_fails",
+        "kind": "edge",
+        "says": "when the solver refuses the model, the error reaches the caller and every bound is back"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-3/target/report.xml"
+    },
+    "origin": {
+      "path": "14-mathopt-advanced/README_4.3.4.md",
+      "section": "Undo Every Edit, and Never Delete What a Scenario Only Switches Off"
+    },
+    "concepts": [
+      "options switched off for one question by their bounds, and every bound restored"
+    ]
+  }
+}

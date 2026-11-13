@@ -1,0 +1,198 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "13-mathopt-core"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Tell the caller what a solve means",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A hospital's staffing service solves a nurse-rostering model every evening and hands the answer to three callers: a dashboard, a nightly report and an alerting job. Each caller only needs to know what to do with the result. Write `verdict(result)` in `verdict.py`, which reads a `mathopt.SolveResult` and returns a `Verdict` with four fields:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "`termination.reason`",
+        "`action`",
+        "`value`",
+        "`gap`",
+        "`limit`"
+      ],
+      "rows": [
+        [
+          "`OPTIMAL`",
+          "`\"use\"`",
+          "the objective value",
+          "`0.0`",
+          "`None`"
+        ],
+        [
+          "`FEASIBLE`",
+          "`\"use-with-gap\"`",
+          "the objective value",
+          "$`\\lvert \\text{dual bound} - \\text{primal bound} \\rvert`$",
+          "the limit's name, such as `\"SOLUTION\"`"
+        ],
+        [
+          "`NO_SOLUTION_FOUND`",
+          "`\"retry\"`",
+          "`None`",
+          "`None`",
+          "the limit's name"
+        ],
+        [
+          "`INFEASIBLE`",
+          "`\"conflict\"`",
+          "`None`",
+          "`None`",
+          "`None`"
+        ],
+        [
+          "`UNBOUNDED`, `INFEASIBLE_OR_UNBOUNDED`",
+          "`\"model-error\"`",
+          "`None`",
+          "`None`",
+          "`None`"
+        ],
+        [
+          "`IMPRECISE`, `NUMERICAL_ERROR`, `OTHER_ERROR`",
+          "`\"solver-error\"`",
+          "`None`",
+          "`None`",
+          "`None`"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "An `UNBOUNDED` result may carry a feasible point; it is still a model error, and its value is `None`. A limit's name is `result.termination.limit.name` (a `Limit` such as `Limit.SOLUTION` has the name `\"SOLUTION\"`). The tests build their results by solving small models of their own, and a few by constructing a `SolveResult` directly."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nR = mathopt.TerminationReason\n\n\n@dataclass(frozen=True)\nclass Verdict:\n    action: str                 # use, use-with-gap, retry, conflict, model-error, solver-error\n    value: float | None         # the plan's objective value, when the plan may be used\n    gap: float | None           # |dual bound - primal bound| when a plan may be used\n    limit: str | None           # the limit's name, when a limit stopped the solve\n\n\ndef verdict(result: mathopt.SolveResult) -> Verdict:\n    \"\"\"What the caller should do with this result.\"\"\"\n    reason = result.termination.reason\n    limit = result.termination.limit.name if result.termination.limit is not None else None\n    if reason == R.OPTIMAL:\n        return Verdict(\"use\", result.objective_value(), 0.0, None)\n    if reason == R.FEASIBLE:\n        gap = abs(result.dual_bound() - result.primal_bound())\n        return Verdict(\"use-with-gap\", result.objective_value(), gap, limit)\n    if reason == R.NO_SOLUTION_FOUND:\n        return Verdict(\"retry\", None, None, limit)\n    if reason == R.INFEASIBLE:\n        return Verdict(\"conflict\", None, None, None)\n    if reason in (R.UNBOUNDED, R.INFEASIBLE_OR_UNBOUNDED):\n        return Verdict(\"model-error\", None, None, None)\n    return Verdict(\"solver-error\", None, None, None)\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_binary_variable(name=\"x\")\n    model.maximize(x)\n    print(verdict(mathopt.solve(model, mathopt.SolverType.HIGHS)))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nR = mathopt.TerminationReason\n\n\n@dataclass(frozen=True)\nclass Verdict:\n    action: str                 # use, use-with-gap, retry, conflict, model-error, solver-error\n    value: float | None         # the plan's objective value, when the plan may be used\n    gap: float | None           # |dual bound - primal bound| when a plan may be used\n    limit: str | None           # the limit's name, when a limit stopped the solve\n\n\ndef verdict(result: mathopt.SolveResult) -> Verdict:\n    \"\"\"What the caller should do with this result.\"\"\"\n    # TODO: one branch per row of the table in the statement.\n    return Verdict(\"unknown\", None, None, None)\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_binary_variable(name=\"x\")\n    model.maximize(x)\n    print(verdict(mathopt.solve(model, mathopt.SolverType.HIGHS)))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 2,
+    "code": 1,
+    "tables": 1,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "be53b4297e379e57eb043549c5a4d3f9b2b007f67fa7c99d5b1c199eae67fb44",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nR = mathopt.TerminationReason\n\n\n@dataclass(frozen=True)\nclass Verdict:\n    action: str                 # use, use-with-gap, retry, conflict, model-error, solver-error\n    value: float | None         # the plan's objective value, when the plan may be used\n    gap: float | None           # |dual bound - primal bound| when a plan may be used\n    limit: str | None           # the limit's name, when a limit stopped the solve\n\n\ndef verdict(result: mathopt.SolveResult) -> Verdict:\n    \"\"\"What the caller should do with this result.\"\"\"\n    # TODO: one branch per row of the table in the statement.\n    return Verdict(\"unknown\", None, None, None)\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_binary_variable(name=\"x\")\n    model.maximize(x)\n    print(verdict(mathopt.solve(model, mathopt.SolverType.HIGHS)))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-1/verdict.py",
+    "test_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-1/test_verdict.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-1/verdict.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-1/target/report.xml",
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-1/test_verdict.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_an_optimal_solve_is_used_with_no_gap",
+        "kind": "main",
+        "says": "an OPTIMAL solve gives action 'use', its objective value and a gap of 0"
+      },
+      {
+        "id": "test_an_infeasible_solve_is_a_conflict_with_no_value",
+        "kind": "main",
+        "says": "an INFEASIBLE solve gives action 'conflict' and no value"
+      },
+      {
+        "id": "test_a_limited_solve_with_a_plan_reports_its_gap_and_limit",
+        "kind": "edge",
+        "says": "a FEASIBLE solve gives action 'use-with-gap', its value, the distance between its bounds and the limit's name"
+      },
+      {
+        "id": "test_a_limited_solve_without_a_plan_says_which_limit",
+        "kind": "edge",
+        "says": "a NO_SOLUTION_FOUND solve gives action 'retry', no value and the limit's name"
+      },
+      {
+        "id": "test_an_unbounded_solve_is_a_model_error_even_with_a_plan",
+        "kind": "edge",
+        "says": "an UNBOUNDED solve gives action 'model-error' and no value, even when it carries a plan"
+      },
+      {
+        "id": "test_infeasible_or_unbounded_is_a_model_error",
+        "kind": "edge",
+        "says": "an INFEASIBLE_OR_UNBOUNDED solve gives action 'model-error'"
+      },
+      {
+        "id": "test_solver_failures_are_reported_as_solver_errors",
+        "kind": "edge",
+        "says": "IMPRECISE, NUMERICAL_ERROR and OTHER_ERROR give action 'solver-error'"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "13-mathopt-core/README_4.2.2.md",
+      "section": "A Handler Turns the Reason Into What the Caller Should Do"
+    },
+    "concepts": [
+      "each termination reason maps to one action for the caller, with no catch-all branch",
+      "objective_value and variable_values read the first solution and raise when there is none, while primal_bound and dual_bound never raise",
+      "termination holds the reason, the limit, the solver's detail, the problem status and the objective bounds"
+    ]
+  }
+}

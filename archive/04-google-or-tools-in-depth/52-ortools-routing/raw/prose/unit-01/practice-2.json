@@ -1,0 +1,135 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "52-ortools-routing"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Solve a tour and walk it",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A pest-control company's van leaves its base each morning, visits every booked customer once and comes back. `walk.py` already builds the routing model (`build`, the same shape as the lesson's). Write `solve_tour(cost, depot)`: solve the model with the `PATH_CHEAPEST_ARC` first-solution strategy, then return the tour as a list of **node** numbers that starts and ends at the depot, and the tour's total cost."
+    },
+    {
+      "type": "para",
+      "text": "The solution holds no list of stops. It holds a successor $`\\text{next}_i`$ for each solver index $`i`$, and the tour is the chain"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "s,\\ \\text{next}_s,\\ \\text{next}_{\\text{next}_s},\\ \\dots,\\ e"
+    },
+    {
+      "type": "para",
+      "text": "from the vehicle's start index $`s`$ to its end index $`e`$, with total $`\\sum c_{\\text{node}(i),\\, \\text{node}(\\text{next}_i)}`$ over every arc of the chain. Before you code, say which call gives $`s`$, which tells you that you have reached $`e`$, and which node $`e`$ stands for."
+    },
+    {
+      "type": "para",
+      "text": "The tests compare your total with the best of every possible order, which this small instance allows. About twelve lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp, routing_enums_pb2\n\n\ndef build(cost: list[list[int]], depot: int):\n    \"\"\"Given: a one-vehicle routing model whose arc from node a to node b costs cost[a][b].\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(cost), 1, depot)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def arc(from_index, to_index):\n        return cost[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    routing.SetArcCostEvaluatorOfAllVehicles(routing.RegisterTransitCallback(arc))\n    return manager, routing\n\n\ndef solve_tour(cost: list[list[int]], depot: int) -> tuple[list[int], int]:\n    \"\"\"The tour as nodes, from the depot back to the depot, and its total cost.\"\"\"\n    manager, routing = build(cost, depot)\n    params = pywrapcp.DefaultRoutingSearchParameters()\n    params.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC\n    solution = routing.SolveWithParameters(params)\n    index, tour, total = routing.Start(0), [], 0\n    while not routing.IsEnd(index):\n        tour.append(manager.IndexToNode(index))\n        following = solution.Value(routing.NextVar(index))\n        total += routing.GetArcCostForVehicle(index, following, 0)\n        index = following\n    tour.append(manager.IndexToNode(index))\n    return tour, total\n\n\nif __name__ == \"__main__\":\n    print(solve_tour([[0, 2, 9, 10], [1, 0, 6, 4], [15, 7, 0, 8], [6, 3, 12, 0]], 0))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp, routing_enums_pb2\n\n\ndef build(cost: list[list[int]], depot: int):\n    \"\"\"Given: a one-vehicle routing model whose arc from node a to node b costs cost[a][b].\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(cost), 1, depot)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def arc(from_index, to_index):\n        return cost[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    routing.SetArcCostEvaluatorOfAllVehicles(routing.RegisterTransitCallback(arc))\n    return manager, routing\n\n\ndef solve_tour(cost: list[list[int]], depot: int) -> tuple[list[int], int]:\n    \"\"\"The tour as nodes, from the depot back to the depot, and its total cost.\"\"\"\n    # TODO: solve with PATH_CHEAPEST_ARC, then walk vehicle 0's route.\n    return [depot, depot], 0\n\n\nif __name__ == \"__main__\":\n    print(solve_tour([[0, 2, 9, 10], [1, 0, 6, 4], [15, 7, 0, 8], [6, 3, 12, 0]], 0))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "46089123a23f499f7ef34c9350ddde89d2c52454908c164518e981b1e10be2a8",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp, routing_enums_pb2\n\n\ndef build(cost: list[list[int]], depot: int):\n    \"\"\"Given: a one-vehicle routing model whose arc from node a to node b costs cost[a][b].\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(cost), 1, depot)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def arc(from_index, to_index):\n        return cost[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    routing.SetArcCostEvaluatorOfAllVehicles(routing.RegisterTransitCallback(arc))\n    return manager, routing\n\n\ndef solve_tour(cost: list[list[int]], depot: int) -> tuple[list[int], int]:\n    \"\"\"The tour as nodes, from the depot back to the depot, and its total cost.\"\"\"\n    # TODO: solve with PATH_CHEAPEST_ARC, then walk vehicle 0's route.\n    return [depot, depot], 0\n\n\nif __name__ == \"__main__\":\n    print(solve_tour([[0, 2, 9, 10], [1, 0, 6, 4], [15, 7, 0, 8], [6, 3, 12, 0]], 0))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-01/practice-2/walk.py",
+    "test_path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-01/practice-2/test_walk.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-01/practice-2/walk.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-01/practice-2/target/report.xml",
+      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-01/practice-2/test_walk.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_tour_visits_every_stop_once_from_the_depot",
+        "kind": "main",
+        "says": "the tour starts and ends at the depot and lists every other stop once, as node numbers"
+      },
+      {
+        "id": "test_the_total_counts_every_arc_including_the_drive_back",
+        "kind": "edge",
+        "says": "the total is the cost of every arc of the tour, the last one back to the depot included"
+      },
+      {
+        "id": "test_a_depot_that_is_not_node_0",
+        "kind": "edge",
+        "says": "the walk starts at the vehicle's start index, which is not index 0 when the depot is another node"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "52-ortools-routing/README_4.8.1.md",
+      "section": "Solve, Then Walk Each Route From Start to End"
+    },
+    "concepts": [
+      "a route is read by following NextVar from the vehicle's start until its end"
+    ]
+  }
+}

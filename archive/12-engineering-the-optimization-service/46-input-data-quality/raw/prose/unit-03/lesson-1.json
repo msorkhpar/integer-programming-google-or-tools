@@ -1,0 +1,401 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "46-input-data-quality"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Versioned snapshots and content hashes",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "12.2.3 Versioned Snapshots and Content Hashes"
+    },
+    {
+      "type": "para",
+      "text": "A regulator asks GridCap which inputs produced the plan of record. Lesson 7.1.3 stamped each scenario with a snapshot id, and lesson 10.2.4 records that id in every run's manifest. Both only work if the id has two properties: the same inputs give the same id on every worker, every day, on every machine; and any change to the inputs, however small, gives a new id. The service now also has to store each snapshot it accepts, so that \"the inputs of the plan of record\" is a file anyone can fetch and check. This lesson builds the id and the store. GridCap is a fictional utility; its data is generated, not real."
+    },
+    {
+      "type": "para",
+      "text": "A **content hash**, or **digest**, is a short fixed-length fingerprint computed from bytes by a cryptographic hash function such as SHA-256: the same bytes always give the same digest, and the function is designed so that finding two different byte strings with the same digest is impractical. So a digest can name content. The work is in deciding which bytes."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "hash() Is Salted per Process, So It Cannot Name a Snapshot"
+    },
+    {
+      "type": "para",
+      "text": "Python's built-in `hash()` looks like a candidate: it turns any immutable value into an integer. `salted_hash.py` asks two fresh Python processes for the same values. `PYTHONHASHSEED` fixes the salt each process draws, so the two runs stand for two workers of the service:"
+    },
+    {
+      "type": "example",
+      "id": "salted_hash-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "46-input-data-quality/src/salted_hash.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "46-input-data-quality/src/salted_hash.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "CHILD = \"\"\"\nimport hashlib, json\nkey = (\"P017\", 2030)\ntext = json.dumps({\"project_id\": \"P017\", \"start\": 2030}, sort_keys=True)\nprint(\"hash(('P017', 2030))  \", hash(key))\nprint(\"hash(text)            \", hash(text))\nprint(\"hash(2030)            \", hash(2030))\nprint(\"sha256(text)[:16]     \", hashlib.sha256(text.encode(\"utf-8\")).hexdigest()[:16])\n\"\"\""
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "process with PYTHONHASHSEED=1\n  hash(('P017', 2030))   5161365552573468133\n  hash(text)             2901424287047090803\n  hash(2030)             2030\n  sha256(text)[:16]      36cd68bf3be04111\nprocess with PYTHONHASHSEED=2\n  hash(('P017', 2030))   -1595038414100490309\n  hash(text)             -5140838139399744365\n  hash(2030)             2030\n  sha256(text)[:16]      36cd68bf3be04111\nhash(-1) == hash(-2): True (both -2)"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The hash of a string, and of a tuple holding one, changes with the process. Python **salts** the hash of every `str` and `bytes` value with a random number drawn when the process starts, unless `PYTHONHASHSEED` fixes it. The salt protects dictionaries against inputs crafted to collide, and it means a value computed with `hash()` in one worker means nothing in another. Lesson 10.2.1 showed what the salt does to a set's order; here it rules out `hash()` as an id."
+    },
+    {
+      "type": "para",
+      "text": "The hash of an integer is not salted, and is still no fingerprint: in CPython `hash(-1)` and `hash(-2)` are both `-2`. `hash()` exists to spread keys across a dictionary's slots, where an occasional collision only costs a comparison. It promises nothing across processes and accepts collisions by design. The SHA-256 digest from `hashlib` depends only on the bytes it is given, and is the same in both processes."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Hash the Validated Content in Canonical Form, Not the File"
+    },
+    {
+      "type": "para",
+      "text": "SHA-256 of what, though? `same_content.py` writes the same GridCap small snapshot twice, the way two honest exports can differ: the second has its projects in reverse order (a database returns rows in no promised order), is pretty-printed with sorted keys, and has its discount rate computed as `0.7 / 10`, which is the float `0.06999999999999999`, not `0.07`. Three candidate digests of each:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "               file bytes    model_dump_json  canonical\nfirst export   5c93c4fcf0fe  16ad8c936d61     730c8b40b1eb\nsecond export  276d089ce04d  dc34483063ad     730c8b40b1eb"
+    },
+    {
+      "type": "para",
+      "text": "The file's bytes differ, so their digests do, although the content is the same. Re-serializing the validated `Snapshot` with pydantic's `model_dump_json()` does not help either: it keeps the projects in the order they arrived, and pydantic documents no option for sorted output. Only the third column, the **canonical form**, agrees. A canonical form is one chosen way to write a value, so that equal values always give equal bytes. It is built from the validated snapshot in four steps:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def canonical(snap: Snapshot) -> bytes:\n    \"\"\"The snapshot's content as bytes: validated values, sorted keys and records, fixed floats.\"\"\"\n    tree = normalize(snap.model_dump(mode=\"json\"))\n    return json.dumps(tree, sort_keys=True, separators=(\",\", \":\"), ensure_ascii=True,\n                      allow_nan=False).encode(\"ascii\")"
+    },
+    {
+      "type": "para",
+      "text": "**Start from the validated snapshot, not the file.** `model_dump(mode=\"json\")` turns the validated object into plain JSON-ready data (tuples become lists). Everything the schema of lesson 12.2.1 settled is now fixed: types are exact, and a renamed key or a string number never reaches the hash, because it never got past the schema."
+    },
+    {
+      "type": "para",
+      "text": "**Sort what has no order, and only that.** Some lists are sets in disguise: the budget records, the crew records, the floors and the projects mean the same in any order. Others carry their meaning in their order: `years`, a project's `cost_profile` (year of work 0, then 1) and its `npv` (by start year). Sorting those would make two different snapshots look equal. So the canonical form names the unordered lists, with the fields that sort them, and leaves every other list alone:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "UNORDERED = {\"budget\": (\"year\",), \"crews\": (\"program\", \"year\"), \"region_floor\": (\"region\",),\n             \"projects\": (\"project_id\",)}"
+    },
+    {
+      "type": "para",
+      "text": "**Fix every float's precision.** Python writes a float as the shortest text that reads back as exactly the same float, so `0.07` and `0.06999999999999999` are written differently, and a value computed in another order can differ in its last bit. Each float is cut to a fixed number of decimals by fixed-point formatting, which also turns `-0.0` into `0.0` and refuses NaN and infinity, which have no JSON form:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def fixed(value: float) -> float:\n    \"\"\"A float cut to FLOAT_PLACES decimals by fixed formatting; -0.0 becomes 0.0; NaN and inf are refused.\"\"\"\n    if not math.isfinite(value):\n        raise ValueError(f\"{value} has no canonical form\")\n    return float(f\"{value:.{FLOAT_PLACES}f}\") + 0.0           # + 0.0 turns -0.0 into 0.0"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "discount_rate in canonical form: 0.07\nfixed(): 0.06999999999999999 -> 0.07, 0.30000000000000004 -> 0.3, -0.0 -> 0.0"
+    },
+    {
+      "type": "para",
+      "text": "`0.30000000000000004` is what `0.1 + 0.2` gives. `FLOAT_PLACES` is 6 here. The choice is a statement about the data: two discount rates closer than one millionth are the same input. It is part of the contract, so changing it changes every digest and needs a new schema version. GridCap keeps money in whole $k precisely so that only the discount rate is a float."
+    },
+    {
+      "type": "para",
+      "text": "**Write the result one way.** `sort_keys=True` sorts every object's keys, `separators=(\",\", \":\")` removes all optional spaces, `ensure_ascii=True` escapes every non-ASCII character so the bytes do not depend on an encoding, and `allow_nan=False` refuses NaN, which `json.dumps` writes by default although JSON has no such value. The start of the result:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "canonical bytes start: {\"budget\":[{\"amount\":8890,\"year\":2027},{\"amount\":8120,\"year\":2028},{\"amo"
+    },
+    {
+      "type": "para",
+      "text": "The digest is the SHA-256 of these bytes. A real change gives a new one, including a change that only moves numbers around inside an ordered list:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "2029 budget $1k lower  canonical 7528a9565c17\nP039 profile reversed  canonical 7ca2949636fb"
+    },
+    {
+      "type": "para",
+      "text": "P039 spending $880k and then $1,170k is a different project from P039 spending $1,170k first, and the digest says so. And the digest does not depend on the process: computed in two child processes with different hash salts, it is the same."
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "canonical digest in a process with PYTHONHASHSEED=1: 730c8b40b1eb\ncanonical digest in a process with PYTHONHASHSEED=2: 730c8b40b1eb"
+    },
+    {
+      "type": "para",
+      "text": "What about other machines? The canonical bytes depend only on the snapshot's values: integers and strings are written exactly, floats are fixed to six decimals before they are written, and keys and records are sorted. SHA-256 is a published standard computed over bytes. The module's tests pin the full digest of GridCap small, `730c8b40b1eb…`, as `gridcap`'s own tests pin its portfolios' hashes, so a machine or a library version that wrote different bytes would fail a test instead of quietly minting new ids."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Snapshot Is Stored Once Under Its Digest and Checked Again on Every Read"
+    },
+    {
+      "type": "para",
+      "text": "With a trustworthy digest, storage is simple. A **content-addressed store** saves each snapshot under its own digest, `<digest>.json`. The same content always lands on the same name, so it is stored once; a file is never overwritten, because new content has a new name. A version log records which digest each version of a scenario had, and which version it came from:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "    def put(self, snap: Snapshot, note: str) -> str:\n        \"\"\"Store a snapshot; return its digest. Equal content is stored once.\"\"\"\n        data = canonical(snap)\n        key = hashlib.sha256(data).hexdigest()\n        path = self.root / f\"{key}.json\"\n        if not path.exists():\n            path.write_bytes(data)"
+    },
+    {
+      "type": "para",
+      "text": "The file holds the canonical bytes themselves, which are valid snapshot JSON: the fixed floats are still JSON numbers. Read back, it gives the same content, with its records in canonical order. `snapshot_store.py` stores the planning export, sends the same export again (pretty-printed this time), then stores the next version, in which finance cut 2029 to $7,000k and a planner committed P024:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "v1  730c8b40b1eb  parent None          planning export\nv2  c3bf82b48197  parent 730c8b40b1eb  2029 cut, P024 committed\nre-sent export stored as v1 again: True | files: 2\nv1 -> v2: budget 2029: 8760 -> 7000; P024.must_do: False -> True"
+    },
+    {
+      "type": "para",
+      "text": "The re-sent export got v1's digest, so it added neither a file nor a version. Each version names its parent, so the log is a chain from the plan of record back to the first export, and `changes` compares any two versions field by field: the regulator's \"what changed between these inputs\" is two lines."
+    },
+    {
+      "type": "para",
+      "text": "A digest also lets every reader check what it reads. `get` hashes the file again and compares the result with the name before it trusts a byte:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "    def get(self, key: str) -> Snapshot:\n        \"\"\"Read a snapshot back, re-hash it, and validate it again; refuse a file that changed.\"\"\"\n        data = (self.root / f\"{key}.json\").read_bytes()\n        found = hashlib.sha256(data).hexdigest()\n        if found != key:\n            raise Corrupted(f\"{key[:12]}.json now hashes to {found[:12]}\")\n        return Snapshot.model_validate_json(data)"
+    },
+    {
+      "type": "para",
+      "text": "Someone \"fixes\" v2 in place, changing its 2029 budget from $7,000k to $7,900k in the stored file:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "read v2 after an edit in place: refused, c3bf82b48197.json now hashes to eb44f4224c5e"
+    },
+    {
+      "type": "para",
+      "text": "The edit is caught on the next read, whoever made it and however small it was. Without the check, a rerun of the plan of record would quietly use different inputs from the ones its manifest names. The right way to change a snapshot is the one v2 took: put the new content, which gets a new digest and a new version, and leaves v1 and its plan untouched. Lesson 12.5.3 moves the snapshots to S3."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**hash() is salted per process, so it cannot name a snapshot.** `str` and `bytes` hashes change with each process's salt, and even unsalted integer hashes collide by design. Use a `hashlib` digest of bytes.",
+        "**Hash the validated content in canonical form, not the file.** Start from the validated snapshot; sort the lists that have no order and only those; fix every float's precision; write with sorted keys, no spaces, ASCII only, no NaN. Equal content gives equal bytes, in every process, and a pinned digest in the tests guards the rest.",
+        "**A snapshot is stored once under its digest and checked again on every read.** Equal content lands on one file; a new version gets a new digest and names its parent; a reader that re-hashes refuses a file that was edited in place."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Step",
+        "Code"
+      ],
+      "rows": [
+        [
+          "validated content as JSON-ready data",
+          "`snap.model_dump(mode=\"json\")`"
+        ],
+        [
+          "sort unordered lists by their key fields",
+          "`UNORDERED` and `normalize` in `canonical.py`"
+        ],
+        [
+          "fixed float precision",
+          "`float(f\"{value:.6f}\") + 0.0`; refuse `nan`, `inf`"
+        ],
+        [
+          "one byte string",
+          "`json.dumps(tree, sort_keys=True, separators=(\",\", \":\"), ensure_ascii=True, allow_nan=False)`"
+        ],
+        [
+          "digest",
+          "`hashlib.sha256(data).hexdigest()`"
+        ],
+        [
+          "store",
+          "write `<digest>.json` once; log version, digest, parent"
+        ],
+        [
+          "read",
+          "re-hash, compare with the name, validate again"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Term",
+        "Meaning"
+      ],
+      "rows": [
+        [
+          "content hash, digest",
+          "SHA-256 of a byte string: equal bytes, equal digest"
+        ],
+        [
+          "salt",
+          "a random number mixed into `hash()` of `str` and `bytes`, drawn per process"
+        ],
+        [
+          "canonical form",
+          "the one chosen way to write a value, so equal values give equal bytes"
+        ],
+        [
+          "content-addressed store",
+          "files named by the digest of their content"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [Python `hashlib`](https://docs.python.org/3/library/hashlib.html) (`sha256()`, `hexdigest()`, and repeated `update()` calls equal to one call on the joined bytes); [Python data model: `__hash__`](https://docs.python.org/3/reference/datamodel.html#object.__hash__) (`str` and `bytes` hashes are salted with an unpredictable value, constant within a process and not across runs, as a defence against crafted collisions); [`PYTHONHASHSEED`](https://docs.python.org/3/using/cmdline.html#envvar-PYTHONHASHSEED) (random by default; a fixed integer makes hashes repeatable, 0 turns salting off); [Python `json`](https://docs.python.org/3/library/json.html) (`sort_keys`, `separators`, `ensure_ascii`, and `allow_nan`, which by default writes `NaN` although JSON has none); [Floating-point arithmetic: issues and limitations](https://docs.python.org/3/tutorial/floatingpoint.html) (float `repr` is the shortest text that reads back as the same value, and sums that should be equal often are not); [Pydantic: serialization](https://pydantic.dev/docs/validation/latest/concepts/serialization/) (`model_dump(mode=\"json\")` and `model_dump_json()`, with no option for sorted output)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "The canonical form sorts `projects` by id. A future version lets two records share an id with different `variant` fields. What must `UNORDERED` say then, and what goes wrong if it does not?",
+        "Should the digest cover the snapshot's `name`? Give one reason for and one against, thinking of a scenario copied under a new name (lesson 12.1.1).",
+        "A worker computes digests with `FLOAT_PLACES = 6`, another with 8. Which snapshots get different ids on the two workers, and how does the pinned test catch it?"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Hash What You Validated"
+    },
+    {
+      "type": "para",
+      "text": "The canonical form is built from the validated `Snapshot`, never from the file. Hashing the file would give two ids to one content; hashing a dict that skipped validation would let a string `\"8890\"` and a number `8890` give two ids, or a renamed key slip into the id unnoticed. Validation decides what the content is; the canonical form only writes it down. So the order in the service is fixed: schema, then the quality gate, then the digest and the store, then the solve."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**salted_hash.py.** Two processes with different hash salts compare `hash()` and SHA-256 on the same values (*hash() Is Salted per Process*). *Try:* Set both seeds to `\"0\"`. Predict whether the two `hash()` columns then agree, and whether that would make `hash()` safe as an id."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [salted_hash.py](src/salted_hash.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**same_content.py.** Two exports of the same snapshot hashed as files, through `model_dump_json`, and in canonical form; two real changes; the digest in two processes (*Hash the Validated Content*). *Try:* Set the discount rate of the second export to `0.0700004`. Predict whether its canonical digest changes."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [same_content.py](src/same_content.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**snapshot_store.py.** Stores two versions and a re-sent copy, lists the version log, compares the versions, and catches an edit in place (*A Snapshot Is Stored Once Under Its Digest*). *Try:* Put v1 again after v2. Predict whether the log gains a v3."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [snapshot_store.py](src/snapshot_store.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The canonical form is in `canonical.py`, and the store in `store.py`."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [canonical.py](src/canonical.py)",
+        "Library: [store.py](src/store.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 9,
+    "paras": 28,
+    "code": 12,
+    "tables": 2,
+    "lists": 6,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 1
+  },
+  "content_sha256": "81ca9dc34a3f0cd414425850b07f2ce4352838d9788b77767cd9e584aeb8851f"
+}

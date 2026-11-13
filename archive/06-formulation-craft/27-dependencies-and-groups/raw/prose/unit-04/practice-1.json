@@ -1,0 +1,153 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "27-dependencies-and-groups"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Resurfacing after the water mains settle",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A city's public works department schedules water-main replacements and street resurfacing for 2027 to 2033. The model in `streets.py` has a binary `x[pid, t]` for each project and each year `t` in its `starts`; each project starts at most once (given). A water main takes `duration` years of work: one started in 2028 with a duration of 2 is dug up through 2029."
+    },
+    {
+      "type": "para",
+      "text": "`after` maps a resurfacing project to a pair `(main, settle)`. The rule: a street may be resurfaced only after the water main under it is finished, and only once the trench has settled for `settle` full years. With the main above and `settle = 1`, 2030 is the settling year, and the street may be resurfaced in 2031 or later. A resurfacing project whose main is not funded may not be done at all. A resurfacing project that is not in `after` has no such rule."
+    },
+    {
+      "type": "para",
+      "text": "Write `add_after_rules(model, x, projects, after)` so that the model allows exactly the plans that keep the rule."
+    },
+    {
+      "type": "para",
+      "text": "The model so far, with $`P`$ the projects, $`T_i`$ project $`i`$'s start years and $`d_i`$ its duration:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& x_{i,t} \\in \\{0, 1\\} && \\forall i \\in P,\\ t \\in T_i && \\text{(project } i \\text{ starts in year } t\\text{)} \\\\\n& \\textstyle\\sum_{t \\in T_i} x_{i,t} \\le 1 && \\forall i \\in P && \\text{(once}_i\\text{, given)} \\\\\n& \\text{?} && && \\text{(your rows)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "First turn the rule into a least number of years between the two *starts*, and check it on the example above. Then write one row per resurfacing project and year, with its quantifier and a label, before you code it."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix every `x[pid, t]` through its bounds and ask the solver whether the model accepts the plan, so any correct formulation passes. About eight lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n    duration: int = 1\n\n\ndef add_after_rules(model: mathopt.Model, x: dict, projects: list[Project],\n                    after: dict[str, tuple[str, int]]) -> None:\n    \"\"\"Each resurfacing starts only once its water main is finished and the trench has settled.\"\"\"\n    by_id = {p.pid: p for p in projects}\n    for street, (main, settle) in after.items():\n        gap = by_id[main].duration + settle\n        for t in by_id[street].starts:\n            paved_by = sum(x[street, u] for u in by_id[street].starts if u <= t)\n            ready_by = sum(x[main, s] for s in by_id[main].starts if s + gap <= t)\n            model.add_linear_constraint(paved_by <= ready_by, name=f\"settled_{street}_{t}\")\n\n\ndef build(projects: list[Project], after: dict[str, tuple[str, int]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"streets\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_after_rules(model, x, projects, after)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"MAIN\", (2027, 2028), 2), Project(\"PAVE\", (2029, 2030, 2031))]\n    model, x = build(projects, {\"PAVE\": (\"MAIN\", 1)})\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n    duration: int = 1\n\n\ndef add_after_rules(model: mathopt.Model, x: dict, projects: list[Project],\n                    after: dict[str, tuple[str, int]]) -> None:\n    \"\"\"Each resurfacing starts only once its water main is finished and the trench has settled.\"\"\"\n    # TODO: one row per resurfacing project and year.\n    return None\n\n\ndef build(projects: list[Project], after: dict[str, tuple[str, int]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"streets\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_after_rules(model, x, projects, after)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"MAIN\", (2027, 2028), 2), Project(\"PAVE\", (2029, 2030, 2031))]\n    model, x = build(projects, {\"PAVE\": (\"MAIN\", 1)})\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 6,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "16dead1f4b6ff26755fd9b48509536c90615e221451116f14d093b025ecdbbdc",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n    duration: int = 1\n\n\ndef add_after_rules(model: mathopt.Model, x: dict, projects: list[Project],\n                    after: dict[str, tuple[str, int]]) -> None:\n    \"\"\"Each resurfacing starts only once its water main is finished and the trench has settled.\"\"\"\n    # TODO: one row per resurfacing project and year.\n    return None\n\n\ndef build(projects: list[Project], after: dict[str, tuple[str, int]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"streets\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_after_rules(model, x, projects, after)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"MAIN\", (2027, 2028), 2), Project(\"PAVE\", (2029, 2030, 2031))]\n    model, x = build(projects, {\"PAVE\": (\"MAIN\", 1)})\n    print(model.get_num_linear_constraints(), \"rows\")\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-1/streets.py",
+    "test_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-1/test_streets.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-1/streets.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-1/target/report.xml",
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-1/test_streets.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_resurfacing_waits_for_its_main",
+        "kind": "main",
+        "says": "resurfacing well after its water main is allowed, and resurfacing with no water main is refused"
+      },
+      {
+        "id": "test_a_street_without_a_main_is_free",
+        "kind": "main",
+        "says": "a street with no water main under it may be resurfaced in any of its years"
+      },
+      {
+        "id": "test_resurfacing_waits_for_the_main_to_finish",
+        "kind": "edge",
+        "says": "resurfacing while the water main is still being dug is refused"
+      },
+      {
+        "id": "test_the_settling_year_counts",
+        "kind": "edge",
+        "says": "resurfacing in the year right after the water main finishes is refused when the ground must settle a year"
+      },
+      {
+        "id": "test_resurfacing_right_after_settling_is_allowed",
+        "kind": "edge",
+        "says": "resurfacing as soon as the settling time is over is allowed"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "27-dependencies-and-groups/README_6.5.4.md",
+      "section": "A Lag Is Measured Between Two Events; Convert Every Lag to Start-to-Start"
+    },
+    "concepts": [
+      "every lag is turned into a least distance between two starts before a row is written"
+    ]
+  }
+}

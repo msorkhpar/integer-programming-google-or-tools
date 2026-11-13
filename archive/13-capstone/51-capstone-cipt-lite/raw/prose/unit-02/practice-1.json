@@ -1,0 +1,225 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "13-capstone",
+    "51-capstone-cipt-lite"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Check a plan against every rule, without the model",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "Milestone 2's solver hands back a plan, and the planning team will not take the solver's word that it is valid: a wrong row would approve its own plan. You write the checker that reads only the practice snapshot and the plan, with no model and no solver, and names every row the plan breaks. Milestone 5's properties will call it on hundreds of plans."
+    },
+    {
+      "type": "para",
+      "text": "A plan is `{project id: start year}`. Project $`j`$ started in year $`t`$ spends `cost[k]` in year $`t + k`$ and keeps its `crews` crew-months busy in each of those years; years past the horizon are not counted. A region's floor is met by the whole cost (`sum(cost)`) of its funded projects."
+    },
+    {
+      "type": "para",
+      "text": "In `checker.py`, write:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "function",
+        "contract",
+        "lesson"
+      ],
+      "rows": [
+        [
+          "`spend_by_year(snap, plan)`",
+          "`{year: $k}` for every year of the horizon",
+          "6.4.2"
+        ],
+        [
+          "`broken(snap, plan)`",
+          "the sorted names of every broken row, `[]` for a valid plan",
+          "12.3.2"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "row",
+        "broken when",
+        "lesson"
+      ],
+      "rows": [
+        [
+          "`window_J1`",
+          "J1's start is outside `earliest`..`latest`",
+          "6.4.1"
+        ],
+        [
+          "`must_J1`",
+          "J1 is must-do and not in the plan",
+          "6.5.1"
+        ],
+        [
+          "`alt_G1`",
+          "two or more projects of group G1 are in the plan",
+          "6.5.3"
+        ],
+        [
+          "`after_J2_2028`",
+          "J2 starts in 2028 and its parent is not in the plan, or started later than 2028 minus J2's lag",
+          "6.5.2, 6.5.4"
+        ],
+        [
+          "`budget_2028`",
+          "the plan spends more than the 2028 budget",
+          "6.4.2"
+        ],
+        [
+          "`region_South_2028`",
+          "the plan's South projects spend more than South's 2028 budget",
+          "6.5.5"
+        ],
+        [
+          "`crews_lines_2028`",
+          "the `lines` projects at work in 2028 need more crew-months than 2028 has",
+          "6.4.2"
+        ],
+        [
+          "`floor_North`",
+          "the whole cost of the funded North projects is below North's floor",
+          "6.5.5"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "A limit equal to the use is met. A region missing from `region_budget`, a program missing from `crews` and a region missing from `floor` have no limit of that kind: no row, so nothing to break. About forty lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\n\ndef spend_by_year(snap: dict, plan: dict[str, int]) -> dict[int, int]:\n    \"\"\"What the plan spends in each year of the horizon, $k: cost[k] lands in year start + k.\"\"\"\n    out = {y: 0 for y in snap[\"years\"]}\n    for pid, start in plan.items():\n        for k, amount in enumerate(snap[\"projects\"][pid][\"cost\"]):\n            if start + k in out:\n                out[start + k] += amount\n    return out\n\n\ndef broken(snap: dict, plan: dict[str, int]) -> list[str]:\n    \"\"\"The names of every row the plan breaks, sorted, read from the data alone.\"\"\"\n    projects, years = snap[\"projects\"], snap[\"years\"]\n    out = []\n    for pid, start in plan.items():\n        p = projects[pid]\n        if not p[\"earliest\"] <= start <= p[\"latest\"]:\n            out.append(f\"window_{pid}\")\n    out += [f\"must_{pid}\" for pid, p in projects.items() if p[\"must\"] and pid not in plan]\n    groups: dict[str, int] = {}\n    for pid in plan:\n        group = projects[pid][\"group\"]\n        if group is not None:\n            groups[group] = groups.get(group, 0) + 1\n    out += [f\"alt_{g}\" for g, n in groups.items() if n > 1]\n    for pid, start in plan.items():\n        parent, lag = projects[pid][\"parent\"], projects[pid][\"lag\"]\n        if parent is not None and (parent not in plan or plan[parent] + lag > start):\n            out.append(f\"after_{pid}_{start}\")\n    total = spend_by_year(snap, plan)\n    out += [f\"budget_{y}\" for y in years if total[y] > snap[\"budget\"][y]]\n    for region, limits in snap[\"region_budget\"].items():\n        mine = spend_by_year(snap, {i: t for i, t in plan.items() if projects[i][\"region\"] == region})\n        out += [f\"region_{region}_{y}\" for y in years if mine[y] > limits[y]]\n    for program, limits in snap[\"crews\"].items():\n        use = {y: 0 for y in years}\n        for pid, start in plan.items():\n            p = projects[pid]\n            if p[\"program\"] == program:\n                for y in range(start, start + len(p[\"cost\"])):\n                    if y in use:\n                        use[y] += p[\"crews\"]\n        out += [f\"crews_{program}_{y}\" for y in years if use[y] > limits[y]]\n    for region, floor in snap[\"floor\"].items():\n        funded = sum(sum(projects[i][\"cost\"]) for i in plan if projects[i][\"region\"] == region)\n        if funded < floor:\n            out.append(f\"floor_{region}\")\n    return sorted(out)\n\n\nif __name__ == \"__main__\":\n    snap = {\"years\": [2027, 2028], \"rate\": 0.05, \"budget\": {2027: 100, 2028: 100},\n            \"region_budget\": {\"North\": {2027: 100, 2028: 100}}, \"crews\": {\"lines\": {2027: 1, 2028: 1}},\n            \"floor\": {\"North\": 0},\n            \"projects\": {\"J1\": {\"program\": \"lines\", \"region\": \"North\", \"cost\": [80, 40], \"earliest\": 2027,\n                                \"latest\": 2027, \"must\": True, \"parent\": None, \"lag\": 0, \"group\": None,\n                                \"crews\": 1, \"npv\": {2027: 30}}}}\n    print(broken(snap, {\"J1\": 2027}), broken(snap, {}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\n\ndef spend_by_year(snap: dict, plan: dict[str, int]) -> dict[int, int]:\n    \"\"\"What the plan spends in each year of the horizon, $k: cost[k] lands in year start + k.\"\"\"\n    # TODO\n    return {y: 0 for y in snap[\"years\"]}\n\n\ndef broken(snap: dict, plan: dict[str, int]) -> list[str]:\n    \"\"\"The names of every row the plan breaks, sorted, read from the data alone.\"\"\"\n    # TODO: window, must, alt, after, budget, region, crews and floor.\n    return [\"not checked\"]\n\n\nif __name__ == \"__main__\":\n    snap = {\"years\": [2027, 2028], \"rate\": 0.05, \"budget\": {2027: 100, 2028: 100},\n            \"region_budget\": {\"North\": {2027: 100, 2028: 100}}, \"crews\": {\"lines\": {2027: 1, 2028: 1}},\n            \"floor\": {\"North\": 0},\n            \"projects\": {\"J1\": {\"program\": \"lines\", \"region\": \"North\", \"cost\": [80, 40], \"earliest\": 2027,\n                                \"latest\": 2027, \"must\": True, \"parent\": None, \"lag\": 0, \"group\": None,\n                                \"crews\": 1, \"npv\": {2027: 30}}}}\n    print(broken(snap, {\"J1\": 2027}), broken(snap, {}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 2,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "c017b811177a2cb6b48fa9c26b692aead4f12f9cec76c45e52f9422e9edc9979",
+  "starting_code": "from __future__ import annotations\n\n\ndef spend_by_year(snap: dict, plan: dict[str, int]) -> dict[int, int]:\n    \"\"\"What the plan spends in each year of the horizon, $k: cost[k] lands in year start + k.\"\"\"\n    # TODO\n    return {y: 0 for y in snap[\"years\"]}\n\n\ndef broken(snap: dict, plan: dict[str, int]) -> list[str]:\n    \"\"\"The names of every row the plan breaks, sorted, read from the data alone.\"\"\"\n    # TODO: window, must, alt, after, budget, region, crews and floor.\n    return [\"not checked\"]\n\n\nif __name__ == \"__main__\":\n    snap = {\"years\": [2027, 2028], \"rate\": 0.05, \"budget\": {2027: 100, 2028: 100},\n            \"region_budget\": {\"North\": {2027: 100, 2028: 100}}, \"crews\": {\"lines\": {2027: 1, 2028: 1}},\n            \"floor\": {\"North\": 0},\n            \"projects\": {\"J1\": {\"program\": \"lines\", \"region\": \"North\", \"cost\": [80, 40], \"earliest\": 2027,\n                                \"latest\": 2027, \"must\": True, \"parent\": None, \"lag\": 0, \"group\": None,\n                                \"crews\": 1, \"npv\": {2027: 30}}}}\n    print(broken(snap, {\"J1\": 2027}), broken(snap, {}))\n",
+  "exercise": {
+    "main_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-02/practice-1/checker.py",
+    "test_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-02/practice-1/test_checker.py",
+    "run_command": [
+      "python3",
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-02/practice-1/checker.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/13-capstone/51-capstone-cipt-lite/prose/unit-02/practice-1/target/report.xml",
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-02/practice-1/test_checker.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_each_rule_names_its_row_and_an_allowed_plan_breaks_none",
+        "kind": "main",
+        "says": "an allowed plan breaks nothing; a plan without its must-do, one with two alternatives, one over a region's budget and one outside a window each name exactly the rows they break"
+      },
+      {
+        "id": "test_a_lag_counts_years_between_the_starts",
+        "kind": "edge",
+        "says": "a child with a one-year lag may start the year after its parent, not the same year"
+      },
+      {
+        "id": "test_a_child_without_its_parent_breaks_its_row",
+        "kind": "edge",
+        "says": "a child funded without its parent breaks its precedence row"
+      },
+      {
+        "id": "test_money_lands_in_every_year_of_work",
+        "kind": "edge",
+        "says": "a two-year project's second-year cost counts against the second year's budget"
+      },
+      {
+        "id": "test_spend_equal_to_the_budget_is_allowed",
+        "kind": "edge",
+        "says": "spending exactly the budget is allowed; one more project over it is not"
+      },
+      {
+        "id": "test_crews_work_every_year_of_a_project",
+        "kind": "edge",
+        "says": "a two-year project keeps its crews in its second year"
+      },
+      {
+        "id": "test_a_floor_counts_each_projects_whole_cost",
+        "kind": "edge",
+        "says": "a region's floor counts each funded project's whole cost, not its first year"
+      },
+      {
+        "id": "test_a_region_or_program_without_a_limit_is_unlimited",
+        "kind": "edge",
+        "says": "a region or program the snapshot gives no limit has no row, so its spend breaks nothing"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "51-capstone-cipt-lite/README_13.1.2.md",
+      "section": "A Run Stops at a Stated Gap, and Its Plan Is Checked Without the Model"
+    },
+    "concepts": [
+      "a checker that reads only the snapshot and a plan and names every row the plan breaks, with no model and no solver"
+    ]
+  }
+}

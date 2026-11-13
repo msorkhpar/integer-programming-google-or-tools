@@ -1,0 +1,139 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "14-mathopt-advanced"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Generators that are either off or above their minimum",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A small island grid schedules its diesel units for the next hour. Each unit in `units` has a name, a minimum output `min_mw` and a maximum `max_mw`. A unit is either off, and then it makes no power at all, or on, and then it must run at least at its minimum: a diesel engine cannot idle at 3 MW when its minimum stable load is 10 MW."
+    },
+    {
+      "type": "para",
+      "text": "The model in `units.py` already has, for every unit $`u`$, a binary $`\\text{on}_u`$ and a continuous output $`0 \\le p_u \\le \\text{max}_u`$, and a row making the units meet the hour's demand. Write `add_unit_rules(model, on, power, units)` so that the model states the two rules, each as one MathOpt indicator constraint per unit:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\text{on}_u = 0 \\;&\\Longrightarrow\\; p_u \\le 0 && \\forall u && \\text{(off}_u) \\\\\n\\text{on}_u = 1 \\;&\\Longrightarrow\\; p_u \\ge \\text{min}_u && \\forall u && \\text{(on}_u)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "With $`p_u \\ge 0`$ as a bound, $`p_u \\le 0`$ means $`p_u = 0`$, and the bound $`p_u \\le \\text{max}_u`$ already caps a running unit. Each implied row has one side, which is what SCIP accepts (lesson 4.3.1)."
+    },
+    {
+      "type": "para",
+      "text": "`on` and `power` are dicts keyed by unit name. Name the constraints `off_<name>` and `on_<name>`."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix each unit's on/off state and output, and ask SCIP whether the model accepts that hour, so any correct way of writing the two rules passes. HiGHS would refuse the model: lesson 4.3.1 shows which solvers take indicator constraints. About six lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Unit:\n    name: str\n    min_mw: float\n    max_mw: float\n\n\ndef add_unit_rules(model: mathopt.Model, on: dict, power: dict, units: list[Unit]) -> None:\n    \"\"\"Off makes no power; on runs between the unit's minimum and maximum.\"\"\"\n    for u in units:\n        model.add_indicator_constraint(indicator=on[u.name], activate_on_zero=True,\n                                       implied_constraint=power[u.name] <= 0, name=f\"off_{u.name}\")\n        model.add_indicator_constraint(indicator=on[u.name], implied_constraint=power[u.name] >= u.min_mw,\n                                       name=f\"on_{u.name}\")\n\n\ndef build(units: list[Unit], demand: float) -> tuple[mathopt.Model, dict, dict]:\n    model = mathopt.Model(name=\"island hour\")\n    on = {u.name: model.add_binary_variable(name=f\"on_{u.name}\") for u in units}\n    power = {u.name: model.add_variable(lb=0, ub=u.max_mw, name=f\"p_{u.name}\") for u in units}\n    add_unit_rules(model, on, power, units)\n    model.add_linear_constraint(sum(power.values()) >= demand, name=\"demand\")\n    model.minimize(sum(on.values()))\n    return model, on, power\n\n\nif __name__ == \"__main__\":\n    model, on, power = build([Unit(\"D1\", 10, 40), Unit(\"D2\", 25, 60)], 50)\n    print(model.get_num_indicator_constraints(), \"indicator constraints\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Unit:\n    name: str\n    min_mw: float\n    max_mw: float\n\n\ndef add_unit_rules(model: mathopt.Model, on: dict, power: dict, units: list[Unit]) -> None:\n    \"\"\"Off makes no power; on runs between the unit's minimum and maximum.\"\"\"\n    # TODO: two indicator constraints per unit, `off_<name>` and `on_<name>`.\n    return None\n\n\ndef build(units: list[Unit], demand: float) -> tuple[mathopt.Model, dict, dict]:\n    model = mathopt.Model(name=\"island hour\")\n    on = {u.name: model.add_binary_variable(name=f\"on_{u.name}\") for u in units}\n    power = {u.name: model.add_variable(lb=0, ub=u.max_mw, name=f\"p_{u.name}\") for u in units}\n    add_unit_rules(model, on, power, units)\n    model.add_linear_constraint(sum(power.values()) >= demand, name=\"demand\")\n    model.minimize(sum(on.values()))\n    return model, on, power\n\n\nif __name__ == \"__main__\":\n    model, on, power = build([Unit(\"D1\", 10, 40), Unit(\"D2\", 25, 60)], 50)\n    print(model.get_num_indicator_constraints(), \"indicator constraints\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "0c5991d4a8746b95d570c30073e3d0190b38302b24cdee393b082de6e915aa3c",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Unit:\n    name: str\n    min_mw: float\n    max_mw: float\n\n\ndef add_unit_rules(model: mathopt.Model, on: dict, power: dict, units: list[Unit]) -> None:\n    \"\"\"Off makes no power; on runs between the unit's minimum and maximum.\"\"\"\n    # TODO: two indicator constraints per unit, `off_<name>` and `on_<name>`.\n    return None\n\n\ndef build(units: list[Unit], demand: float) -> tuple[mathopt.Model, dict, dict]:\n    model = mathopt.Model(name=\"island hour\")\n    on = {u.name: model.add_binary_variable(name=f\"on_{u.name}\") for u in units}\n    power = {u.name: model.add_variable(lb=0, ub=u.max_mw, name=f\"p_{u.name}\") for u in units}\n    add_unit_rules(model, on, power, units)\n    model.add_linear_constraint(sum(power.values()) >= demand, name=\"demand\")\n    model.minimize(sum(on.values()))\n    return model, on, power\n\n\nif __name__ == \"__main__\":\n    model, on, power = build([Unit(\"D1\", 10, 40), Unit(\"D2\", 25, 60)], 50)\n    print(model.get_num_indicator_constraints(), \"indicator constraints\")\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-1/units.py",
+    "test_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-1/test_units.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-1/units.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-1/target/report.xml",
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-1/test_units.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_an_off_unit_makes_no_power",
+        "kind": "main",
+        "says": "a unit that is off and makes no power is allowed, and one that is off but makes power is refused"
+      },
+      {
+        "id": "test_an_on_unit_runs_at_or_above_its_minimum",
+        "kind": "main",
+        "says": "a unit that is on at or above its minimum is allowed, and one that is on below it is refused"
+      },
+      {
+        "id": "test_each_unit_has_its_own_minimum",
+        "kind": "edge",
+        "says": "a second unit with a higher minimum is refused at a level the first unit's minimum would allow"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "14-mathopt-advanced/README_4.3.1.md",
+      "section": "An Indicator Constraint Is a Binary, a Row and the Value That Switches It On"
+    },
+    "concepts": [
+      "an implication written as an indicator constraint, switched on at zero or at one, with one or two bounds"
+    ]
+  }
+}

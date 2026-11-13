@@ -1,0 +1,139 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "28-piecewise-linear"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A treatment plant expanded in stages, each finished before the next",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A county expands its wastewater treatment plant this decade in stages, given in `widths` as the capacity each stage adds (ML/day), in order: for example 4, 3 and 5. The engineers' rule is that **a stage may not begin until the stage before it is finished**. A stage may be left part built (the plan can stop anywhere inside a stage), and nothing need be built at all."
+    },
+    {
+      "type": "para",
+      "text": "The model in `expansion.py` has a continuous `built[k]` per stage, between 0 and `widths[k]`: how much of stage `k`'s capacity the plan builds. Write `add_stage_order(model, built, widths)` so that the model allows exactly the plans that respect the rule. Add whatever variables you need. The tests use other widths too."
+    },
+    {
+      "type": "para",
+      "text": "With $`k = 1, \\dots, K`$ the stages and $`W_k`$ their widths, the model so far is"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& 0 \\le u_k \\le W_k && k = 1, \\dots, K && \\text{(capacity built in stage } k\\text{, ML/day)} \\\\\n& \\text{?} && && \\text{(your variables and rows)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "No curve is involved, but the rule is one you have seen: the order in which segments are used. Watch the units: `built[k]` is in ML/day, not a share of the stage."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix every stage's `built` value and ask the solver whether the model accepts the plan, so any correct formulation passes. About five lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_stage_order(model: mathopt.Model, built: list[mathopt.Variable], widths: list[float]) -> None:\n    \"\"\"Stage k may begin only when stage k - 1 is finished.\"\"\"\n    for k in range(len(widths) - 1):\n        done = model.add_binary_variable(name=f\"done_{k}\")                     # stage k is finished\n        model.add_linear_constraint(widths[k] * done <= built[k], name=f\"finished_{k}\")\n        model.add_linear_constraint(built[k + 1] <= widths[k + 1] * done, name=f\"may_begin_{k + 1}\")\n\n\ndef build(widths: list[float]) -> tuple[mathopt.Model, list[mathopt.Variable]]:\n    model = mathopt.Model(name=\"expansion\")\n    built = [model.add_variable(lb=0, ub=w, name=f\"built_{k}\") for k, w in enumerate(widths)]\n    add_stage_order(model, built, widths)\n    model.maximize(sum(built))\n    return model, built\n\n\nif __name__ == \"__main__\":\n    model, built = build([4.0, 3.0, 5.0])\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_stage_order(model: mathopt.Model, built: list[mathopt.Variable], widths: list[float]) -> None:\n    \"\"\"Stage k may begin only when stage k - 1 is finished.\"\"\"\n    # TODO: one binary per stage boundary, and the two rows that tie it to the stages around it.\n    return None\n\n\ndef build(widths: list[float]) -> tuple[mathopt.Model, list[mathopt.Variable]]:\n    model = mathopt.Model(name=\"expansion\")\n    built = [model.add_variable(lb=0, ub=w, name=f\"built_{k}\") for k, w in enumerate(widths)]\n    add_stage_order(model, built, widths)\n    model.maximize(sum(built))\n    return model, built\n\n\nif __name__ == \"__main__\":\n    model, built = build([4.0, 3.0, 5.0])\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "7f9a5a5de7f08b4cbe3b86f6b996de677aed7bbf925d8aad29de9b79d81bc8a1",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_stage_order(model: mathopt.Model, built: list[mathopt.Variable], widths: list[float]) -> None:\n    \"\"\"Stage k may begin only when stage k - 1 is finished.\"\"\"\n    # TODO: one binary per stage boundary, and the two rows that tie it to the stages around it.\n    return None\n\n\ndef build(widths: list[float]) -> tuple[mathopt.Model, list[mathopt.Variable]]:\n    model = mathopt.Model(name=\"expansion\")\n    built = [model.add_variable(lb=0, ub=w, name=f\"built_{k}\") for k, w in enumerate(widths)]\n    add_stage_order(model, built, widths)\n    model.maximize(sum(built))\n    return model, built\n\n\nif __name__ == \"__main__\":\n    model, built = build([4.0, 3.0, 5.0])\n    print(model.get_num_linear_constraints(), \"rows\")\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-03/practice-1/expansion.py",
+    "test_path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-03/practice-1/test_expansion.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-03/practice-1/expansion.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/28-piecewise-linear/prose/unit-03/practice-1/target/report.xml",
+      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-03/practice-1/test_expansion.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_stage_starts_only_after_the_one_before_is_finished",
+        "kind": "main",
+        "says": "a second stage under way after a finished first is allowed, and one started beside a barely begun first is refused"
+      },
+      {
+        "id": "test_a_later_stage_waits_for_every_earlier_one",
+        "kind": "main",
+        "says": "a third stage started with the second not begun is refused, and all three under way in order is allowed"
+      },
+      {
+        "id": "test_a_stage_well_along_but_not_finished_holds_the_next",
+        "kind": "edge",
+        "says": "a first stage more than one unit along but not finished, with the second started, is refused"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-03/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "28-piecewise-linear/README_6.6.3.md",
+      "section": "The Incremental Form Fills Segments in Order, With a Binary for Each Full One"
+    },
+    "concepts": [
+      "an ordering rule written with one binary per boundary between stages"
+    ]
+  }
+}

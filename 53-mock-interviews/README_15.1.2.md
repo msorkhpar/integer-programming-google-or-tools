@@ -1,0 +1,355 @@
+# 15.1.2 Mock 2: Solvers, OR-Tools and the Search
+
+The second round checks that you know what a solver does with your model and how to read what it
+hands back. The interviewer's team (fictional, like GridCap) runs its planning model through
+OR-Tools, and the questions move from branch-and-bound to the API calls a reviewer expects to see in
+your code. Answer each question aloud before you open the model answer; the follow-ups are what
+comes next if your answer is good.
+
+| Part | Minutes |
+| --- | --- |
+| Round 1: the search, three questions | 6 |
+| Code practice: a gap report | 5 |
+| Round 2: OR-Tools, three questions | 5 |
+| Trap questions | 5 |
+| Whiteboard and its code practice | 10 |
+
+## Round 1: The Search Brackets the Optimum Between Two Numbers
+
+**Q1. What is the LP relaxation of a MILP, and how does branch-and-bound use it?**
+
+<details>
+<summary>Model answer</summary>
+
+The LP relaxation drops the whole-number rule, so a binary may take any value in $`[0, 1]`$. Every
+allowed plan is a point of the relaxation, so its value bounds every plan: from above when
+maximizing, $`z_\text{LP} \ge z_\text{MILP}`$. Branch-and-bound solves that LP, picks a variable with
+a fractional value and splits the problem into two children, $`x \le \lfloor v \rfloor`$ and
+$`x \ge \lceil v \rceil`$; every integer plan lies in exactly one child and the fractional point in
+neither. A node is pruned when its LP is infeasible, when its LP answer is integral (a plan, maybe a
+new incumbent), or when its bound cannot beat the incumbent. The size of a model does not decide how
+hard it is; the strength of the bound does: GridCap medium's 400 binaries were solved at the first
+node, while a 30-binary puzzle with a weak relaxation was not solved in 100,000.
+
+*Follow-ups.* "Which node next?" Depth-first finds plans early and keeps few nodes; best-first
+solves the fewest nodes but holds many and finds its first plan late; no rule wins everywhere, so
+measure on your own model.
+"Why not round the LP answer?" Rounding up broke GridCap's budget on all 30 small portfolios tried,
+rounding to the nearest on 13; rounding down kept the rows and lost 3.1% on average. A rounded plan
+comes with no proof of how far it is from the best.
+
+*Taught in:* lesson 3.1.1; lesson 3.1.3; lesson 3.2.1; lesson 3.2.2; lesson 3.2.3.
+
+</details>
+
+**Q2. The log says the gap is 0.01% and the status is `OPTIMAL`. What exactly do you know?**
+
+<details>
+<summary>Model answer</summary>
+
+A MILP solver keeps two numbers: the incumbent, the best plan found (the primal bound), and the best
+bound, a value no plan can beat (the dual bound). The optimum lies between them, and the run stops
+when they are close enough. `OPTIMAL` means optimal within the tolerances the run used: HiGHS's
+default relative gap is $`10^{-4}`$ (lesson 3.4.3 measured it in the HiGHS log), so its `OPTIMAL`
+can leave a gap above zero. 0.01% is an amount
+of money: on GridCap large's $6.0B NPV it is $601k, more than most single projects. Plans within the
+gap can pick different projects, so a question about one project needs its own solves. Report the
+tolerance and the bracket, and choose the tolerance in money.
+
+*Follow-ups.* "Can the relative gap exceed 100%?" Yes; nothing caps it. "What if a constant is in
+the objective?" It shrinks the relative gap without improving the plan: with $20B added, a 0.0021%
+gap hid a 0.1873% gap on the NPV.
+
+*Taught in:* lesson 3.4.1; lesson 3.4.2; lesson 3.4.3.
+
+</details>
+
+**Q3. Walk me through a MIP log: what happens before the first branch?**
+
+<details>
+<summary>Model answer</summary>
+
+The header says what the solver received (sizes, coefficient ranges). Presolve then rewrites the
+model into a smaller one with the same optimal value: on the five-year model, 400 binaries
+became 172. At the root, cutting planes cut off the LP's fractional point without removing any plan, and
+primal heuristics (rounding, diving, RINS) race to find plans, so the gap can fall from `Large` to a
+fraction of a percent before any branching. Each table row is a snapshot of nodes, bound, incumbent
+and gap; a letter says which heuristic found each new plan. The final report is the verdict, and
+`Optimal` there means within the gap tolerance: the default run stopped at 274,979 against a proved
+optimum of 274,999.
+
+*Follow-ups.* "Do cuts and heuristics matter?" On the five-year model SCIP needed 718 nodes with
+cuts and 1,966 without, and 1,333 without heuristics. "Should I turn presolve off?" It changes the
+work, not the answer; measure before deciding.
+
+*Taught in:* lesson 3.3.1; lesson 3.3.2; lesson 3.3.3; lesson 3.3.4.
+
+</details>
+
+A gap is a number you will compute and report yourself, for logs, dashboards and finance. The first
+code practice writes the report, with both denominators the course measured.
+
+<!-- practice 1 -->
+
+## Round 2: The API Is Chosen by the Model, and the Result Is Read in Order
+
+**Q4. MathOpt, CP-SAT or the linear solver wrapper: which for a multi-year capital plan, and
+which for a crew schedule with intervals?**
+
+<details>
+<summary>Model answer</summary>
+
+Start in MathOpt: it keeps the model apart from the solver, so one model is built once and solved by
+HiGHS, SCIP or CP-SAT by changing one argument, and it is the API that returns LP duals when the
+model has continuous amounts. Intervals, sequencing and dense logic over integers go to CP-SAT,
+which has no continuous variables and returns no duals. A problem that is exactly an assignment,
+flow or knapsack can go to its special solver, until one rule cannot be said in its inputs; routes
+go to the routing library. `pywraplp` is for code you inherit and migrate. On a plain selection
+both MathOpt with HiGHS and CP-SAT prove the same optimum; on GridCap medium's ten-year selection
+HiGHS ended closest to proven, and on a big-M disjunction CP-SAT proved optima HiGHS could not.
+
+*Follow-ups.* "How do you choose for sure?" Measure on your own model: one model, deterministic
+limits, statuses and bounds, several instances.
+
+*Taught in:* lesson 4.1.1; lesson 4.1.3; lesson 4.4.4; lesson 4.7.2.
+
+</details>
+
+**Q5. Your code calls `result.objective_value()` right after `mathopt.solve`. What is missing?**
+
+<details>
+<summary>Model answer</summary>
+
+The termination check. Read `result.termination.reason` first: `OPTIMAL` and `FEASIBLE` carry a
+plan, `INFEASIBLE` and `NO_SOLUTION_FOUND` do not, and `objective_value()` and `variable_values()`
+raise `ValueError` when there is no plan. A gap stop ends `OPTIMAL`; a time, node or solution limit
+ends `FEASIBLE` (a plan) or `NO_SOLUTION_FOUND` (none), with `termination.limit` naming the limit. A
+limit without a plan means "unknown", never "infeasible". The bounds, `primal_bound()` and
+`dual_bound()`, are always there and use infinities for "nothing found" and "nothing proven". Map
+each reason to what the caller does, with no catch-all branch.
+
+*Follow-ups.* "And dual values?" Only from an LP solve, after checking
+`has_dual_feasible_solution()`; no solver returns duals for a MILP.
+
+*Taught in:* lesson 4.2.2; lesson 3.4.2; lesson 9.1.1.
+
+</details>
+
+**Q6. How do you set a time limit and a gap for HiGHS, and what happens if you pass a parameter
+the solver does not take?**
+
+<details>
+<summary>Model answer</summary>
+
+Through `mathopt.SolveParameters`: `time_limit` as a `timedelta` and `relative_gap_tolerance` or
+`absolute_gap_tolerance`; those three worked on every solver tried. Solver-specific options go in
+that solver's own parameters and win over common ones. Each solver accepts only some common
+parameters: HiGHS refuses `threads`, `solution_pool_size` and `cuts`, CP-SAT refuses `node_limit`.
+A refusal raises before the solve; in OR-Tools 9.15 it surfaces as an `AttributeError` whose real
+error is on `__context__`. HiGHS's thread count is fixed at the first solve of a process.
+Lesson 4.2.4 measured each of these: which solver refuses which parameter, and the error on
+`__context__`.
+
+*Follow-ups.* "Which solvers ship in the pip package?" GLOP, PDLP, HiGHS, SCIP and CP-SAT; Gurobi
+needs its own library and license.
+
+*Taught in:* lesson 4.2.4; lesson 4.2.3.
+
+</details>
+
+## Trap Questions: Claims About the API That Do Not Hold
+
+**T1. "The relative gap is $`|P - D| / \max(10^{-10}, |P|)`$." Is that the definition?**
+
+<details>
+<summary>What is wrong</summary>
+
+It is one convention, not the definition. Solvers divide by different things, and MathOpt's own
+docstring calls the normalization solver-dependent. Lesson 3.4.1 stopped HiGHS and SCIP at their
+first plans and matched each log against three divisions: HiGHS divides by the incumbent, SCIP by
+the smaller of the two numbers in size. The same tolerance therefore asks the two solvers for
+slightly different stops. Near zero a relative gap means little (dividing by an incumbent of 0 gives
+infinity), so profit-like models are judged by the absolute gap.
+
+*Taught in:* lesson 3.4.1.
+
+</details>
+
+**T2. "Call `solver.SolveWithAssumptions(model, flags)`, and
+`SufficientAssumptionsForInfeasibility()` gives you the minimal conflict." Right?**
+
+<details>
+<summary>What is wrong</summary>
+
+Neither half. The Python API has no `SolveWithAssumptions`: assumptions are added to the model with
+`add_assumptions`, the model is solved as usual with one worker, and the solver reports
+`sufficient_assumptions_for_infeasibility()`, a list of variable indices to map back to rule names.
+The set is sufficient for the conflict, not promised minimal. `solver_traps.py` guards five rules
+with flags, three of which clash:
+
+```text
+CpSolver has SolveWithAssumptions: False
+CpModel has add_assumptions: True
+CpSolver has sufficient_assumptions_for_infeasibility: True
+status INFEASIBLE; flags named: crew_cap, must_J1, must_J2
+after a deletion filter: crew_cap, must_J1, must_J2
+```
+
+Here the named set was already minimal, as it was in lesson 9.1.5; on GridCap small at 60% of the
+budget, lesson 4.6.2 got all 28 rule flags back, and a deletion filter cut them to 3. Check a named
+set with a filter before calling it minimal.
+
+*Taught in:* lesson 4.6.2; lesson 9.1.5.
+
+</details>
+
+**T3. "Import `google.ortools.math_opt`, solve with `SolverType.GUROBI`, and MathOpt has no IIS, so
+switch to gurobipy for that." What is wrong?**
+
+<details>
+<summary>What is wrong</summary>
+
+Three things. The import is `from ortools.math_opt.python import mathopt`. MathOpt does have an IIS
+call, `mathopt.compute_infeasible_subsystem`; in the course runner HiGHS, SCIP and CP-SAT refuse it
+with `UNIMPLEMENTED`, its docstring names Gurobi as the only solver that supports it, and Gurobi
+cannot be loaded through MathOpt in the runner (OR-Tools 9.15 against the Gurobi 13 library), so no
+lesson shows a MathOpt-Gurobi result. A deletion filter finds a conflict with any solver, and
+gurobipy's `computeIIS` is the route when Gurobi is available.
+
+*Taught in:* lesson 4.1.2; lesson 4.3.5; lesson 9.1.3.
+
+</details>
+
+**T4. "CP-SAT is fast, so give it the whole model through MathOpt, budget amounts in dollars and
+cents included." Fine?**
+
+<details>
+<summary>What is wrong</summary>
+
+CP-SAT has no continuous variables. Handed one through MathOpt, it rounds it and still reports
+`OPTIMAL`, so the plan answers a different model. Give CP-SAT all-integer models, scaling any
+fractional data to whole numbers yourself with an exact multiplier, or keep continuous amounts in a
+MIP solver.
+
+*Taught in:* lesson 4.2.3; lesson 4.4.3.
+
+</details>
+
+**T5. "The GPU solver said `OPTIMAL`, so the plan is exact."**
+
+<details>
+<summary>What is wrong</summary>
+
+`OPTIMAL` means optimal within the run's tolerances on any solver (Q2), and a GPU's LP method works
+to a looser one. PDLP stops when its errors fall below a tolerance, not at an exact vertex as the
+simplex method does. On the same 1M-variable transportation LP, HiGHS's GPU PDLP landed within
+$`2 \times 10^{-9}`$ relative of the interior point optimum, and cuOpt's PDLP about
+$`3 \times 10^{-5}`$ away at its default tolerance. On a MILP, cuOpt's answer is a plan within the
+gap, like any solver's. Read the tolerance with the status, record it in the run's manifest, and
+check the plan's feasibility and objective on the CPU before anyone relies on it.
+
+*Taught in:* lesson 11.4.1; lesson 11.4.3; lesson 11.4.5; lesson 3.4.3.
+
+</details>
+
+## Whiteboard: One Inspection Crew, Release Weeks and Blocked Weeks
+
+"One crew inspects substations. Each job takes a number of whole weeks, cannot start before its
+release week, and must be finished by its deadline. The crew is unavailable in some blocks of weeks.
+Minimize the sum of the jobs' end weeks. Model it for CP-SAT, then code it."
+
+Write the formulation first: which variables are integers with which domains, and which constraints
+CP-SAT states natively.
+
+<details>
+<summary>Model formulation</summary>
+
+**Sets.** $`J`$ the jobs; $`K`$ the blocked periods.
+
+**Parameters.** $`d_j`$, job $`j`$'s duration (weeks); $`r_j`$, its release week; $`D_j`$, its
+deadline; $`(f_k, l_k)`$, the first and last week of blocked period $`k`$; $`H`$, the horizon. A job
+started in week $`s`$ works weeks $`s, \dots, s + d_j - 1`$ and ends at $`s + d_j`$.
+
+**Variables.** $`s_j \in \{r_j, \dots, H - d_j\}`$, integer: job $`j`$'s start week. Each job has an
+interval $`I_j = [s_j, s_j + d_j)`$, and each blocked period a fixed interval
+$`[f_k, l_k + 1)`$ of size $`l_k - f_k + 1`$.
+
+**Objective.**
+
+```math
+\min \; \sum_{j \in J} (s_j + d_j)
+```
+
+**Constraints.**
+
+```math
+\begin{aligned}
+& \text{NoOverlap}\big(\{I_j : j \in J\} \cup \{[f_k, l_k + 1) : k \in K\}\big) && && \text{(crew)} \\
+& s_j + d_j \le D_j && \forall j \in J && \text{(due}_j)
+\end{aligned}
+```
+
+The release week is a bound on $`s_j`$, not a row. Follow-ups: "Two crews?" Optional intervals, one
+per crew with a presence literal, exactly one present, one NoOverlap per crew (lesson 4.5.1). "Due
+dates cannot all be met?" Make lateness $`\max(0, e_j - D_j)`$ part of the objective instead of a
+hard row (lesson 4.5.4).
+
+</details>
+
+<!-- practice 2 -->
+
+## Summary
+
+- **The search.** The LP relaxation bounds every plan; branch-and-bound splits on a fractional
+  variable and prunes nodes that are infeasible, integral or cannot beat the incumbent. The
+  optimum lies between the incumbent and the best bound, and `OPTIMAL` means within the run's
+  tolerances, a gap that is an amount of money.
+- **The relative gap's denominator is the solver's choice:** HiGHS divides by the incumbent, SCIP
+  by the smaller of the two numbers in size. A max of $`10^{-10}`$ and the incumbent is one
+  convention, not the definition, and near zero only the absolute gap means much.
+- **The API.** MathOpt for general models and LP duals, CP-SAT for intervals and dense integer
+  logic, and the termination reason read before any value. A limit without a plan is unknown, not
+  infeasible.
+- **Traps.** CP-SAT's Python API adds assumptions to the model and reports a sufficient set, which
+  is not promised minimal. MathOpt has `compute_infeasible_subsystem`, which only Gurobi supports and
+  which no runner solver accepts. CP-SAT rounds a continuous variable and still says `OPTIMAL`. A
+  GPU's PDLP says `OPTIMAL` at a tolerance, not at an exact vertex.
+
+## Reference
+
+| Question | Lessons |
+| --- | --- |
+| Q1 relaxation and branch-and-bound | 3.1.1; 3.1.3; 3.2.1; 3.2.2; 3.2.3 |
+| Q2, T1 gaps | 3.4.1; 3.4.2; 3.4.3 |
+| Q3 the log | 3.3.1; 3.3.2; 3.3.3; 3.3.4 |
+| Q4 choosing an API | 4.1.1; 4.1.3; 4.4.4; 4.7.2 |
+| Q5, Q6 results and parameters | 4.2.2; 4.2.3; 4.2.4 |
+| T2 assumptions | 4.6.2; 9.1.5 |
+| T3 IIS and Gurobi | 4.1.2; 4.3.5; 9.1.3 |
+| T4 CP-SAT and continuous amounts | 4.2.3; 4.4.3 |
+| T5 a GPU's `OPTIMAL` | 11.4.1; 11.4.3; 11.4.5; 3.4.3 |
+| Whiteboard | 4.5.1; 4.5.4; project lesson *A trim takes weeks on one crew: from MILP to CP-SAT intervals* |
+
+**Further reading:** [CP-SAT Python API `cp_model.py` (OR-Tools source, read in the pinned 9.15 wheel)](https://github.com/google/or-tools/blob/stable/ortools/sat/python/cp_model.py) (`add_assumptions`, `clear_assumptions` and `sufficient_assumptions_for_infeasibility`, "the indices of the infeasible assumptions", and no `SolveWithAssumptions`); [MathOpt `solve.py` (OR-Tools source, read in the pinned 9.15 wheel)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/solve.py) (`solve` and `compute_infeasible_subsystem`, whose docstring names Gurobi as the only supported solver); [MathOpt `result.py` (OR-Tools source, read in the pinned 9.15 wheel)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/result.py) (termination reasons, the two bounds and when `objective_value()` raises).
+
+## Challenges
+
+1. In `solver_traps.py`, add a sixth rule that clashes with `must_J4` and predict which flags the
+   solver names.
+2. Give the whiteboard model a second objective term: weeks the crew stands idle between jobs. Which
+   variables do you need?
+3. Write the follow-up "two crews" version of the whiteboard formulation in full.
+
+## Design Note: Name the Number You Report
+
+"Gap 0.01%" is three numbers hiding in one: the incumbent, the bound and the denominator. Reports
+that print the bracket in money and name the solver's convention survive the follow-up questions;
+reports that print one percentage do not.
+
+## The Full Programs
+
+**solver_traps.py.** Five flagged rules on four jobs, the assumption calls CP-SAT's Python API
+offers, the set it names, and a deletion filter over it (*Trap Questions: Claims About the API That
+Do Not Hold*). *Try:* Put `must_J4` first in the list and predict whether the named set changes.
+
+- Program: [solver_traps.py](src/solver_traps.py)

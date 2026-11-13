@@ -1,0 +1,155 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "49-cloud-deployment"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Where a failed Task state goes next",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's report-publishing state machine has a Task state that posts a finished plan to the planners' reporting system. That system throttles, times out and rejects bad input, and the operations team wants to know, before deploying, what the state will do for a given run of errors. Write a function that answers it, by the rules the lesson quotes from the Step Functions documentation."
+    },
+    {
+      "type": "para",
+      "text": "In `error_routing.py`, write `route(state, errors)`. `state` is a Task state's dict (its `Retry` and `Catch` lists may be missing). `errors` are the error names of consecutive failed attempts; if the state is still going after the last one, the next attempt succeeds. Return the list of what happened, one entry per error, using `\"retry\"`, `\"catch:<Next>\"` and `\"fail\"`, and `\"succeeded\"` at the end if the state got there. Stop at the first catch or fail."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "For each error, the **first** retrier whose `ErrorEquals` names it decides. If that retrier has retries left (`MaxAttempts`, 3 when missing; 0 means never), it is a retry, counted against that retrier only.",
+        "Otherwise (no retrier names the error, or the first one that does is used up) the first catcher whose `ErrorEquals` names the error gives `catch:<its Next>`. With no such catcher, `fail`.",
+        "Write `matches(names, error)`: `States.ALL` matches any error; `States.TaskFailed` matches any error except `States.Timeout`; any other name matches only itself."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Waiting times (`IntervalSeconds`, `BackoffRate`) do not change the route; ignore them. About 20 lines remain."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\n\ndef matches(names: list[str], error: str) -> bool:\n    \"\"\"Whether an ErrorEquals list names `error`, with the two wildcards.\"\"\"\n    return any(name == error or name == \"States.ALL\"\n               or (name == \"States.TaskFailed\" and error != \"States.Timeout\") for name in names)\n\n\ndef route(state: dict, errors: list[str]) -> list[str]:\n    \"\"\"What the Task state does when its attempts fail with `errors`, in order, and the next one succeeds.\"\"\"\n    used = [0] * len(state.get(\"Retry\", []))\n    actions = []\n    for error in errors:\n        retriers = [i for i, r in enumerate(state.get(\"Retry\", [])) if matches(r[\"ErrorEquals\"], error)]\n        if retriers:\n            i = retriers[0]\n            if used[i] < state[\"Retry\"][i].get(\"MaxAttempts\", 3):\n                used[i] += 1\n                actions.append(\"retry\")\n                continue\n        catcher = next((c for c in state.get(\"Catch\", []) if matches(c[\"ErrorEquals\"], error)), None)\n        actions.append(f\"catch:{catcher['Next']}\" if catcher else \"fail\")\n        return actions\n    return actions + [\"succeeded\"]\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\n\ndef matches(names: list[str], error: str) -> bool:\n    \"\"\"Whether an ErrorEquals list names `error`, with the two wildcards.\"\"\"\n    return False\n\n\ndef route(state: dict, errors: list[str]) -> list[str]:\n    \"\"\"What the Task state does when its attempts fail with `errors`, in order, and the next one succeeds.\"\"\"\n    actions: list[str] = []\n    # TODO: retriers first (the first matching one, within its MaxAttempts), then catchers, else fail.\n    return actions\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "8c66c5ac3bcc82f16c9bb8b863d143fb94ae25e509d6629623dfac4da72e27b3",
+  "starting_code": "from __future__ import annotations\n\n\ndef matches(names: list[str], error: str) -> bool:\n    \"\"\"Whether an ErrorEquals list names `error`, with the two wildcards.\"\"\"\n    return False\n\n\ndef route(state: dict, errors: list[str]) -> list[str]:\n    \"\"\"What the Task state does when its attempts fail with `errors`, in order, and the next one succeeds.\"\"\"\n    actions: list[str] = []\n    # TODO: retriers first (the first matching one, within its MaxAttempts), then catchers, else fail.\n    return actions\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-02/practice-2/error_routing.py",
+    "test_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-02/practice-2/test_error_routing.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-02/practice-2/error_routing.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-02/practice-2/target/report.xml",
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-02/practice-2/test_error_routing.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_retries_then_success_and_a_caught_error",
+        "kind": "main",
+        "says": "a retried error then a success, and an error sent straight to its catcher"
+      },
+      {
+        "id": "test_a_retrier_stops_at_its_max_attempts",
+        "kind": "edge",
+        "says": "two errors of one retrier's list use its two attempts; the third goes to a catcher"
+      },
+      {
+        "id": "test_max_attempts_defaults_to_three",
+        "kind": "edge",
+        "says": "a retrier without MaxAttempts retries three times"
+      },
+      {
+        "id": "test_each_retrier_counts_its_own_attempts",
+        "kind": "edge",
+        "says": "attempts are counted per retrier, not across the state"
+      },
+      {
+        "id": "test_an_exhausted_retrier_does_not_fall_through_to_a_later_one",
+        "kind": "edge",
+        "says": "once the first matching retrier is used up, a later matching retrier is not tried"
+      },
+      {
+        "id": "test_task_failed_matches_everything_but_a_timeout",
+        "kind": "edge",
+        "says": "States.TaskFailed catches any error except States.Timeout"
+      },
+      {
+        "id": "test_max_attempts_zero_never_retries",
+        "kind": "edge",
+        "says": "MaxAttempts 0 means the error is never retried"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "49-cloud-deployment/README_12.5.2.md",
+      "section": "Step Functions Waits for the Job and Catches What the Worker Cannot"
+    },
+    "concepts": [
+      "how a state's retriers and catchers decide where an error goes"
+    ]
+  }
+}

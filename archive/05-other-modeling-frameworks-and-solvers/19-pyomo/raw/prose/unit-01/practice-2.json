@@ -1,0 +1,146 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "05-other-modeling-frameworks-and-solvers",
+    "19-pyomo"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Trimming feeder lines inside their windows",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A distribution company trims trees along its feeder lines in spring. Each line needs a number of crew hours, removes some risk once it is trimmed, and may only be trimmed in certain months (a nesting season or a road permit closes the others). The crews have a fixed number of hours in each month. Some lines have no allowed month this year, and some months have no line allowed in them."
+    },
+    {
+      "type": "para",
+      "text": "Write `trim_plan(circuits, crew_hours)` in `trim.py` with Pyomo. `circuits` maps a line's name to a `Circuit(hours, risk, months)`; `crew_hours` maps each month to the crew hours it has. Return the most risk the plan removes and a dict from each trimmed line to its month."
+    },
+    {
+      "type": "para",
+      "text": "`crew_hours` lists every month the crews work. A line may name a month that `crew_hours` leaves out: that month has no crew hours, so the line cannot be trimmed in it."
+    },
+    {
+      "type": "para",
+      "text": "The formulation, with $`C`$ the lines, $`M`$ the months of `crew_hours` and $`A = \\{(c, k) : k \\in M \\text{ is an allowed month of } c\\}`$:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& \\sum_{(c,k) \\in A} \\text{risk}_c\\, x_{c,k} \\\\\n& \\sum_{k : (c,k) \\in A} x_{c,k} \\le 1 && \\forall c \\in C && \\text{(once}_c) \\\\\n& \\sum_{c : (c,k) \\in A} \\text{hours}_c\\, x_{c,k} \\le \\text{cap}_k && \\forall k \\in M && \\text{(crews}_k) \\\\\n& x_{c,k} \\in \\{0, 1\\} && \\forall (c,k) \\in A\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Declare $`C`$, $`M`$ and $`A`$ as Pyomo Sets, the data as Params, $`x`$ over $`A`$ only, and each family of rows as an indexed Constraint with a rule. Solve with `appsi_highs` and a zero `mip_gap`. About twenty-five lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pyomo.environ as pyo\n\n\n@dataclass(frozen=True)\nclass Circuit:\n    hours: int                  # crew hours to trim it\n    risk: float                 # risk removed if it is trimmed\n    months: tuple[str, ...]     # the months it may be trimmed in\n\n\ndef trim_plan(circuits: dict[str, Circuit], crew_hours: dict[str, int]) -> tuple[float, dict[str, str]]:\n    \"\"\"The most risk the crews can remove, and the month each trimmed circuit is trimmed in.\"\"\"\n    m = pyo.ConcreteModel()\n    m.C = pyo.Set(initialize=list(circuits))\n    m.M = pyo.Set(initialize=list(crew_hours))\n    m.A = pyo.Set(dimen=2, initialize=[(c, k) for c, circuit in circuits.items() for k in circuit.months\n                                       if k in crew_hours])     # a month with no crew hours is no option\n    m.hours = pyo.Param(m.C, initialize={c: circuit.hours for c, circuit in circuits.items()})\n    m.risk = pyo.Param(m.C, initialize={c: circuit.risk for c, circuit in circuits.items()})\n    m.cap = pyo.Param(m.M, initialize=crew_hours)\n    m.x = pyo.Var(m.A, domain=pyo.Binary)\n\n    def once_rule(m, c):\n        terms = [m.x[c, k] for (d, k) in m.A if d == c]\n        if not terms:\n            return pyo.Constraint.Skip\n        return sum(terms) <= 1\n    m.once = pyo.Constraint(m.C, rule=once_rule)\n\n    def crews_rule(m, k):\n        terms = [m.hours[c] * m.x[c, j] for (c, j) in m.A if j == k]\n        if not terms:\n            return pyo.Constraint.Skip\n        return sum(terms) <= m.cap[k]\n    m.crews = pyo.Constraint(m.M, rule=crews_rule)\n\n    m.removed = pyo.Objective(expr=sum(m.risk[c] * m.x[c, k] for (c, k) in m.A), sense=pyo.maximize)\n    solver = pyo.SolverFactory(\"appsi_highs\")\n    solver.config.mip_gap = 0.0\n    solver.solve(m)\n    plan = {c: k for (c, k) in m.A if pyo.value(m.x[c, k]) > 0.5}\n    return pyo.value(m.removed), plan\n\n\nif __name__ == \"__main__\":\n    lines = {\"L1\": Circuit(60, 9.0, (\"Apr\", \"May\")), \"L2\": Circuit(50, 7.0, (\"Apr\",)),\n             \"L3\": Circuit(40, 4.0, (\"May\", \"Jun\"))}\n    print(trim_plan(lines, {\"Apr\": 80, \"May\": 60, \"Jun\": 30}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pyomo.environ as pyo\n\n\n@dataclass(frozen=True)\nclass Circuit:\n    hours: int                  # crew hours to trim it\n    risk: float                 # risk removed if it is trimmed\n    months: tuple[str, ...]     # the months it may be trimmed in\n\n\ndef trim_plan(circuits: dict[str, Circuit], crew_hours: dict[str, int]) -> tuple[float, dict[str, str]]:\n    \"\"\"The most risk the crews can remove, and the month each trimmed circuit is trimmed in.\"\"\"\n    # TODO: Sets for circuits, months and allowed (circuit, month) pairs; Params; x over the pairs;\n    #       the once and crews rows; the objective; solve with appsi_highs and read the plan.\n    return 0.0, {}\n\n\nif __name__ == \"__main__\":\n    lines = {\"L1\": Circuit(60, 9.0, (\"Apr\", \"May\")), \"L2\": Circuit(50, 7.0, (\"Apr\",)),\n             \"L3\": Circuit(40, 4.0, (\"May\", \"Jun\"))}\n    print(trim_plan(lines, {\"Apr\": 80, \"May\": 60, \"Jun\": 30}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "d077e5a9c9ee527c5fa07b7ff1f34c19e7432d8438c098627e2536dfd870c1a0",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pyomo.environ as pyo\n\n\n@dataclass(frozen=True)\nclass Circuit:\n    hours: int                  # crew hours to trim it\n    risk: float                 # risk removed if it is trimmed\n    months: tuple[str, ...]     # the months it may be trimmed in\n\n\ndef trim_plan(circuits: dict[str, Circuit], crew_hours: dict[str, int]) -> tuple[float, dict[str, str]]:\n    \"\"\"The most risk the crews can remove, and the month each trimmed circuit is trimmed in.\"\"\"\n    # TODO: Sets for circuits, months and allowed (circuit, month) pairs; Params; x over the pairs;\n    #       the once and crews rows; the objective; solve with appsi_highs and read the plan.\n    return 0.0, {}\n\n\nif __name__ == \"__main__\":\n    lines = {\"L1\": Circuit(60, 9.0, (\"Apr\", \"May\")), \"L2\": Circuit(50, 7.0, (\"Apr\",)),\n             \"L3\": Circuit(40, 4.0, (\"May\", \"Jun\"))}\n    print(trim_plan(lines, {\"Apr\": 80, \"May\": 60, \"Jun\": 30}))\n",
+  "exercise": {
+    "main_path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-2/trim.py",
+    "test_path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-2/test_trim.py",
+    "run_command": [
+      "python3",
+      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-2/trim.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-2/target/report.xml",
+      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-2/test_trim.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_plan_removes_the_most_risk_within_windows_and_hours",
+        "kind": "main",
+        "says": "the plan removes the most risk, trims each line in one of its months and stays within each month's crew hours"
+      },
+      {
+        "id": "test_tighter_crews_change_the_plan",
+        "kind": "main",
+        "says": "with fewer crew hours the plan changes and still respects every rule"
+      },
+      {
+        "id": "test_a_month_no_circuit_may_use_and_a_circuit_with_no_month",
+        "kind": "edge",
+        "says": "a month that no line may use and a line with no allowed month still give a plan"
+      },
+      {
+        "id": "test_a_month_missing_from_crew_hours_has_no_crews",
+        "kind": "edge",
+        "says": "a month a line lists but crew_hours leaves out has no crews, so no line is trimmed in it"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "19-pyomo/README_5.1.1.md",
+      "section": "HiGHS Solves the Model, and a Scalar Mutable Param Changes Between Solves"
+    },
+    "concepts": [
+      "one row per index from a rule, and indices that get none",
+      "an index set that lists only the allowed pairs",
+      "declaring each variable family with its domain"
+    ]
+  }
+}

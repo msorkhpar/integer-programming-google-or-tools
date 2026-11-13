@@ -1,0 +1,120 @@
+{
+  "quiz_api": 1,
+  "address": [
+    "12-engineering-the-optimization-service",
+    "49-cloud-deployment"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "ordinal": 3,
+  "title": "Containerizing a solver service",
+  "exercise": {
+    "provenance": "generated",
+    "trust": "advisory",
+    "kind": "quiz",
+    "questions": [
+      {
+        "id": "q-bad-settings",
+        "stem": "A Batch job starts the lesson's solve worker with no RESULT_BUCKET, a 12-character SNAPSHOT_DIGEST and TIME_LIMIT_S set to \"fast\". What does the worker do?",
+        "options": [
+          {
+            "id": "a",
+            "text": "It reports the first problem only, and exits with code 2 before it reads any snapshot",
+            "correct": false,
+            "says": "The page: 'All three mistakes are reported at once', in one refusal message."
+          },
+          {
+            "id": "b",
+            "text": "It reports all three problems in one message, and exits with code 0 so Batch retries it",
+            "correct": false,
+            "says": "Exit code 0 means the job succeeded; the worker returns 2, and 'its exit code tells Batch the job failed'."
+          },
+          {
+            "id": "c",
+            "text": "It reports all three problems in one message, and exits with code 2, reading no snapshot",
+            "correct": true,
+            "says": "Right: every problem is collected first, the refusal comes before any snapshot is read, and main returns 2."
+          },
+          {
+            "id": "d",
+            "text": "It reports all three problems in one message, and writes a failed result for the run in S3",
+            "correct": false,
+            "says": "The page: the refusal comes before any snapshot is read or any solve starts, and no result is written."
+          }
+        ],
+        "origin": {
+          "path": "49-cloud-deployment/README_12.5.1.md",
+          "section": "Settings Come From the Environment, All Checked Before the Solve"
+        }
+      },
+      {
+        "id": "q-cpu",
+        "stem": "A CP-SAT roster worker runs as a Fargate job sized at 4 vCPUs, on a host with many more cores. Its job sets PYTHON_CPU_COUNT=4 and leaves num_workers at its default. What should change, by the lesson?",
+        "options": [
+          {
+            "id": "a",
+            "text": "Nothing: CP-SAT reads PYTHON_CPU_COUNT through Python, so it starts 4 workers",
+            "correct": false,
+            "says": "The page: PYTHON_CPU_COUNT changes what Python's functions report, and CP-SAT counts cores in its C++ code, not through Python."
+          },
+          {
+            "id": "b",
+            "text": "Set num_workers to 4: its default of 0 follows what the machine shows, not the 4 vCPUs",
+            "correct": true,
+            "says": "Right: num_workers 0 means trying to use all cores on the machine, and inside a container the machine may be the host, not the job's share."
+          },
+          {
+            "id": "c",
+            "text": "Set num_workers to 4: its default of 0 runs a single worker, leaving three vCPUs idle",
+            "correct": false,
+            "says": "The parameter file says 0 means using all cores; 1 is the value that means no parallelism."
+          },
+          {
+            "id": "d",
+            "text": "Set num_workers to 0: its default of 1 runs one search, leaving three vCPUs idle",
+            "correct": false,
+            "says": "The default is 0, not 1: the parameter file says 0 means trying to use all cores on the machine."
+          }
+        ],
+        "origin": {
+          "path": "49-cloud-deployment/README_12.5.1.md",
+          "section": "Tell the Solver How Many CPUs the Container Has"
+        }
+      },
+      {
+        "id": "q-keys",
+        "stem": "A teammate proposes an ENV line in the Dockerfile with an AWS access key, so the solve worker can write its results to S3. What does the lesson say instead?",
+        "options": [
+          {
+            "id": "a",
+            "text": "Keep the key in ENV: ENV values are encrypted in the image, so a private image keeps it safe",
+            "correct": false,
+            "says": "The page: anyone who can pull an image can read every file and every ENV in it."
+          },
+          {
+            "id": "b",
+            "text": "Keep the key out of ENV and list it in .dockerignore, which hands it to the container only at run time",
+            "correct": false,
+            "says": ".dockerignore filters the build context so files never reach the image; it hands nothing to a running container."
+          },
+          {
+            "id": "c",
+            "text": "Keep the key out of ENV and COPY a .env file holding it, as the files in an image stay unreadable",
+            "correct": false,
+            "says": "The page: anyone who can pull an image can read every file in it, so the image holds no AWS keys and no .env file; .dockerignore keeps .env out."
+          },
+          {
+            "id": "d",
+            "text": "Keep the key out of the image, and give the Batch job a role that supplies credentials at run time",
+            "correct": true,
+            "says": "Right: the image holds no secret; the job role (jobRoleArn) gives the container temporary credentials boto3 finds itself."
+          }
+        ],
+        "origin": {
+          "path": "49-cloud-deployment/README_12.5.1.md",
+          "section": "The Image Runs as a Non-Root User and Holds No Credentials"
+        }
+      }
+    ]
+  }
+}

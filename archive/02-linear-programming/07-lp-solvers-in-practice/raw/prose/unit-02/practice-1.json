@@ -1,0 +1,141 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "02-linear-programming",
+    "07-lp-solvers-in-practice"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Read the verdict of a HiGHS log",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A pumping-station operator runs its energy LP every night on HiGHS and keeps only the log. Their monitoring script needs the verdict from it: how the run ended, how much work it did, and the objective, but only when the objective is an answer."
+    },
+    {
+      "type": "para",
+      "text": "Write `read_footer(log)` in `footer.py`. `log` is the list of lines a HiGHS solve wrote. Return a dict with three keys:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`\"status\"`: the text after `Model status` (`\"Optimal\"`, `\"Infeasible\"`, `\"Unbounded\"`, ...).",
+        "`\"iterations\"`: a dict from the kind of iteration to its count, read from each footer line ending in `iterations`, keyed by the line's first word: `Simplex   iterations: 7` gives `{\"Simplex\": 7}`. A run with no such line gives `{}`.",
+        "`\"objective\"`: the number after `Objective value` as a float when the status is `\"Optimal\"`, and `None` for any other status, even though HiGHS prints the line anyway."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The footer's labels are padded with spaces to line up their colons, so split each line at its first `:` and strip both sides, rather than matching exact spacing. Lines without a `:` are skipped."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\n\ndef read_footer(log: list[str]) -> dict:\n    \"\"\"Read the verdict of a HiGHS log: its status, its iterations by kind, and its objective.\n\n    The objective is an answer only when the status is Optimal; otherwise it is None.\n    \"\"\"\n    status = None\n    iterations: dict[str, int] = {}\n    objective = None\n    for line in log:\n        if \":\" not in line:\n            continue\n        key, value = (part.strip() for part in line.split(\":\", 1))\n        if key == \"Model status\":\n            status = value\n        elif key.endswith(\"iterations\"):\n            iterations[key.split()[0]] = int(value)\n        elif key == \"Objective value\":\n            objective = float(value)\n    if status != \"Optimal\":\n        objective = None\n    return {\"status\": status, \"iterations\": iterations, \"objective\": objective}\n\n\nif __name__ == \"__main__\":\n    demo = [\"Model name          : demo\", \"Model status        : Optimal\", \"Simplex   iterations: 3\",\n            \"Objective value     :  1.2500000000e+02\", \"HiGHS run time      :          0.00\"]\n    print(read_footer(demo))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\n\ndef read_footer(log: list[str]) -> dict:\n    \"\"\"Read the verdict of a HiGHS log: its status, its iterations by kind, and its objective.\n\n    The objective is an answer only when the status is Optimal; otherwise it is None.\n    \"\"\"\n    # TODO: find the \"Model status\", \"... iterations\" and \"Objective value\" lines.\n    return {\"status\": None, \"iterations\": {\"Simplex\": -1}, \"objective\": 0.0}\n\n\nif __name__ == \"__main__\":\n    demo = [\"Model name          : demo\", \"Model status        : Optimal\", \"Simplex   iterations: 3\",\n            \"Objective value     :  1.2500000000e+02\", \"HiGHS run time      :          0.00\"]\n    print(read_footer(demo))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "2623916a3686f0c027a2865eb990dd17f7f889895bd7878fc50a85d64848f736",
+  "starting_code": "from __future__ import annotations\n\n\ndef read_footer(log: list[str]) -> dict:\n    \"\"\"Read the verdict of a HiGHS log: its status, its iterations by kind, and its objective.\n\n    The objective is an answer only when the status is Optimal; otherwise it is None.\n    \"\"\"\n    # TODO: find the \"Model status\", \"... iterations\" and \"Objective value\" lines.\n    return {\"status\": None, \"iterations\": {\"Simplex\": -1}, \"objective\": 0.0}\n\n\nif __name__ == \"__main__\":\n    demo = [\"Model name          : demo\", \"Model status        : Optimal\", \"Simplex   iterations: 3\",\n            \"Objective value     :  1.2500000000e+02\", \"HiGHS run time      :          0.00\"]\n    print(read_footer(demo))\n",
+  "exercise": {
+    "main_path": "practice/02-linear-programming/07-lp-solvers-in-practice/prose/unit-02/practice-1/footer.py",
+    "test_path": "practice/02-linear-programming/07-lp-solvers-in-practice/prose/unit-02/practice-1/test_footer.py",
+    "run_command": [
+      "python3",
+      "practice/02-linear-programming/07-lp-solvers-in-practice/prose/unit-02/practice-1/footer.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/02-linear-programming/07-lp-solvers-in-practice/prose/unit-02/practice-1/target/report.xml",
+      "practice/02-linear-programming/07-lp-solvers-in-practice/prose/unit-02/practice-1/test_footer.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_an_optimal_log_gives_its_status_iterations_and_objective",
+        "kind": "main",
+        "says": "an optimal simplex log gives Optimal, its simplex iterations and its objective"
+      },
+      {
+        "id": "test_a_barrier_log_counts_its_iterations_under_their_own_kind",
+        "kind": "edge",
+        "says": "a barrier log's iterations are counted under IPM, the word its footer uses"
+      },
+      {
+        "id": "test_an_infeasible_log_has_no_objective_and_no_iterations",
+        "kind": "edge",
+        "says": "an infeasible log gives no objective, though it prints 0, and no iterations"
+      },
+      {
+        "id": "test_an_unbounded_log_has_iterations_but_no_objective",
+        "kind": "edge",
+        "says": "an unbounded log gives its iterations but no objective, though it prints one"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/02-linear-programming/07-lp-solvers-in-practice/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "07-lp-solvers-in-practice/README_2.4.2.md",
+      "section": "A Failed Run's Objective Line Means Nothing"
+    },
+    "concepts": [
+      "a HiGHS footer gives the status, the iterations by kind and the objective",
+      "an infeasible or unbounded run prints an objective line that is not an answer"
+    ]
+  }
+}

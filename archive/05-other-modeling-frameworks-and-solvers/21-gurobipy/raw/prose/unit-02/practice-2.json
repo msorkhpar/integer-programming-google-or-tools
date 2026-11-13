@@ -1,0 +1,141 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "05-other-modeling-frameworks-and-solvers",
+    "21-gurobipy"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "A budget forecast that knows where its price stops",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A regional transit agency solves an LP in gurobipy and keeps, for one row, its attributes after the solve: the optimal objective `ObjVal`, the row's price `Pi`, its right-hand side `RHS`, and its range `SARHSLow` to `SARHSUp`. Planners ask \"what if this row's right-hand side were `new_rhs`?\" many times a day, and a re-solve each time is too slow."
+    },
+    {
+      "type": "para",
+      "text": "Write `forecast(objval, pi, rhs, low, up, new_rhs)`. Inside the range, including both ends, the current basis stays optimal and the objective moves linearly:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\text{forecast} = \\text{ObjVal} + \\pi\\,(\\text{new\\_rhs} - \\text{RHS}) \\qquad \\text{if } \\text{low} \\le \\text{new\\_rhs} \\le \\text{up}"
+    },
+    {
+      "type": "para",
+      "text": "Outside the range the price no longer holds, and the function returns `None` (a re-solve is needed). Use `Pi` with its sign as given: in a minimization a $`\\le`$ row's price is negative, and more capacity then lowers the cost. `low` and `up` may be infinite (`float(\"inf\")`). No Gurobi license is needed. About five lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\n\ndef forecast(objval: float, pi: float, rhs: float, low: float, up: float, new_rhs: float) -> float | None:\n    \"\"\"The objective at new_rhs if the current basis stays optimal there, else None.\"\"\"\n    if not low <= new_rhs <= up:\n        return None\n    return objval + pi * (new_rhs - rhs)\n\n\nif __name__ == \"__main__\":\n    print(forecast(1000.0, 2.0, 50.0, 40.0, 70.0, 60.0))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\n\ndef forecast(objval: float, pi: float, rhs: float, low: float, up: float, new_rhs: float) -> float | None:\n    \"\"\"The objective at new_rhs if the current basis stays optimal there, else None.\"\"\"\n    # TODO: check the range (ends included), then move the objective by the price times the change.\n    return objval\n\n\nif __name__ == \"__main__\":\n    print(forecast(1000.0, 2.0, 50.0, 40.0, 70.0, 60.0))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "71a338e868c3e33bccd0bbbcf281d28833d7284bb2056914f1864f6ace9f370f",
+  "starting_code": "from __future__ import annotations\n\n\ndef forecast(objval: float, pi: float, rhs: float, low: float, up: float, new_rhs: float) -> float | None:\n    \"\"\"The objective at new_rhs if the current basis stays optimal there, else None.\"\"\"\n    # TODO: check the range (ends included), then move the objective by the price times the change.\n    return objval\n\n\nif __name__ == \"__main__\":\n    print(forecast(1000.0, 2.0, 50.0, 40.0, 70.0, 60.0))\n",
+  "exercise": {
+    "main_path": "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-02/practice-2/forecast.py",
+    "test_path": "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-02/practice-2/test_forecast.py",
+    "run_command": [
+      "python3",
+      "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-02/practice-2/forecast.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-02/practice-2/target/report.xml",
+      "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-02/practice-2/test_forecast.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_raise_inside_the_range_moves_the_objective_by_the_price",
+        "kind": "main",
+        "says": "a right-hand side raised within its range moves the objective by Pi times the change"
+      },
+      {
+        "id": "test_a_cut_inside_the_range_moves_it_back_by_the_price",
+        "kind": "main",
+        "says": "a right-hand side lowered within its range moves the objective down by Pi times the cut"
+      },
+      {
+        "id": "test_outside_the_range_there_is_no_forecast",
+        "kind": "edge",
+        "says": "a new right-hand side above SARHSUp or below SARHSLow gives None"
+      },
+      {
+        "id": "test_the_ends_of_the_range_are_inside",
+        "kind": "edge",
+        "says": "a new right-hand side exactly at SARHSUp or SARHSLow still gets a forecast"
+      },
+      {
+        "id": "test_a_minimizations_negative_price_lowers_the_cost",
+        "kind": "edge",
+        "says": "in a cost-minimizing model a negative Pi makes more capacity lower the objective"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "21-gurobipy/README_5.3.2.md",
+      "section": "A Price Holds Only Inside SARHSLow to SARHSUp"
+    },
+    "concepts": [
+      "an objective forecast that stops at the ends of the right-hand-side range"
+    ]
+  }
+}

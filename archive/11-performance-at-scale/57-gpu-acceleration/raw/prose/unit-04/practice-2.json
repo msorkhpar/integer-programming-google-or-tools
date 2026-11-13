@@ -1,0 +1,145 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "11-performance-at-scale",
+    "57-gpu-acceleration"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "A manifest entry that states its own promise",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility's optimisation service writes a manifest entry for every solve, and its runs now happen on CPUs and on a GPU, with HiGHS, OR-Tools and cuOpt. The auditors need each entry to say what was promised, and to name nothing that identifies a machine."
+    },
+    {
+      "type": "para",
+      "text": "Write `entry(settings, result, device)` in `manifest.py`. `settings` holds the `solver`, `method`, `tolerance` and `threads` the service asked for; `result` is what the solver returned (it may hold more than the manifest should); `device` is where the solve ran: `{\"device\": \"cpu\"}`, or a GPU report with `\"device\": \"gpu\"`, the card's `name`, `driver_cuda`, `cuda_runtime` and other fields, some of which identify one card. Return:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "a `\"solver\"` block with the keys `name` (the solver's name, from `settings[\"solver\"]`), `method`, `tolerance`, `threads` and `device`; for a GPU also `device_name` (the card's model), `driver_cuda` and `cuda_runtime`, and nothing else from the report;",
+        "when the method asked for is `\"concurrent\"`, the block's `method` is the one that won (`result[\"solved_by\"]`), and the block also holds the key `requested` with the value `\"concurrent\"` (inside the `\"solver\"` block, not beside it); with no winner in the result, return None instead of an entry. A run that is not concurrent has no `requested` key;",
+        "a `\"result\"` block with only `status`, `objective`, `x_digest` and `iterations` (those present)."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nKEPT = (\"status\", \"objective\", \"x_digest\", \"iterations\")\n\n\ndef entry(settings: dict, result: dict, device: dict) -> dict | None:\n    \"\"\"The manifest's solver and result blocks for one run, or None when a concurrent run lacks its winner.\n\n    settings: {\"solver\", \"method\", \"tolerance\", \"threads\"}; result: what the solver returned; device: where\n    the solve ran, {\"device\": \"cpu\"} or a GPU report with \"name\", \"driver_cuda\", \"cuda_runtime\" and more.\n    \"\"\"\n    method = settings[\"method\"]\n    if method == \"concurrent\":\n        method = result.get(\"solved_by\")\n        if method is None:\n            return None\n    solver = {\"name\": settings[\"solver\"], \"method\": method, \"tolerance\": settings[\"tolerance\"],\n              \"threads\": settings[\"threads\"], \"device\": device[\"device\"]}\n    if settings[\"method\"] == \"concurrent\":\n        solver[\"requested\"] = \"concurrent\"\n    if device[\"device\"] == \"gpu\":\n        solver.update(device_name=device[\"name\"], driver_cuda=device[\"driver_cuda\"],\n                      cuda_runtime=device[\"cuda_runtime\"])\n    return {\"solver\": solver, \"result\": {k: result[k] for k in KEPT if k in result}}\n\n\nif __name__ == \"__main__\":\n    print(entry({\"solver\": \"highs\", \"method\": \"simplex\", \"tolerance\": 1e-7, \"threads\": 1},\n                {\"status\": \"Optimal\", \"objective\": 12.0, \"x_digest\": \"ab\", \"iterations\": 4}, {\"device\": \"cpu\"}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nKEPT = (\"status\", \"objective\", \"x_digest\", \"iterations\")\n\n\ndef entry(settings: dict, result: dict, device: dict) -> dict | None:\n    \"\"\"The manifest's solver and result blocks for one run, or None when a concurrent run lacks its winner.\n\n    settings: {\"solver\", \"method\", \"tolerance\", \"threads\"}; result: what the solver returned; device: where\n    the solve ran, {\"device\": \"cpu\"} or a GPU report with \"name\", \"driver_cuda\", \"cuda_runtime\" and more.\n    \"\"\"\n    # TODO: the solver block (with the winner of a race, and a GPU's model and CUDA versions), then the\n    # result block with only the kept fields.\n    return {}\n\n\nif __name__ == \"__main__\":\n    print(entry({\"solver\": \"highs\", \"method\": \"simplex\", \"tolerance\": 1e-7, \"threads\": 1},\n                {\"status\": \"Optimal\", \"objective\": 12.0, \"x_digest\": \"ab\", \"iterations\": 4}, {\"device\": \"cpu\"}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "f0b1923f7d56649a68941b1233c5cfb1a74fab741299069aea772aead52b994f",
+  "starting_code": "from __future__ import annotations\n\nKEPT = (\"status\", \"objective\", \"x_digest\", \"iterations\")\n\n\ndef entry(settings: dict, result: dict, device: dict) -> dict | None:\n    \"\"\"The manifest's solver and result blocks for one run, or None when a concurrent run lacks its winner.\n\n    settings: {\"solver\", \"method\", \"tolerance\", \"threads\"}; result: what the solver returned; device: where\n    the solve ran, {\"device\": \"cpu\"} or a GPU report with \"name\", \"driver_cuda\", \"cuda_runtime\" and more.\n    \"\"\"\n    # TODO: the solver block (with the winner of a race, and a GPU's model and CUDA versions), then the\n    # result block with only the kept fields.\n    return {}\n\n\nif __name__ == \"__main__\":\n    print(entry({\"solver\": \"highs\", \"method\": \"simplex\", \"tolerance\": 1e-7, \"threads\": 1},\n                {\"status\": \"Optimal\", \"objective\": 12.0, \"x_digest\": \"ab\", \"iterations\": 4}, {\"device\": \"cpu\"}))\n",
+  "exercise": {
+    "main_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-2/manifest.py",
+    "test_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-2/test_manifest.py",
+    "run_command": [
+      "python3",
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-2/manifest.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-2/target/report.xml",
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-2/test_manifest.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_cpu_run_records_its_solver_and_its_result",
+        "kind": "main",
+        "says": "a CPU run records its solver block and its result"
+      },
+      {
+        "id": "test_a_gpu_run_records_the_card_model_and_cuda_but_not_its_uuid",
+        "kind": "main",
+        "says": "a GPU run records the card's model and CUDA versions, and never its UUID"
+      },
+      {
+        "id": "test_a_concurrent_run_records_the_method_that_won",
+        "kind": "edge",
+        "says": "a race records the method that won, beside the one requested"
+      },
+      {
+        "id": "test_a_concurrent_run_without_its_winner_is_refused",
+        "kind": "edge",
+        "says": "a race whose winner is unknown is not recorded"
+      },
+      {
+        "id": "test_the_clock_and_the_machine_stay_out_of_the_result",
+        "kind": "edge",
+        "says": "the clock and the machine's name stay out of the result"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "57-gpu-acceleration/README_11.4.4.md",
+      "section": "The Manifest Records the Device, the Method and the Tolerance"
+    },
+    "concepts": [
+      "the manifest records the device, the winning method and the tolerance, and nothing that names a machine"
+    ]
+  }
+}

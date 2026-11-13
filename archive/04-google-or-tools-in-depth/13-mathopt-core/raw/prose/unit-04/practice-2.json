@@ -1,0 +1,145 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "13-mathopt-core"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Name the reason a solve was refused",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A logistics platform logs every solve that MathOpt refuses, and its on-call engineers want one line per refusal: the status code's name and the solver's message. In OR-Tools 9.15 a refusal reaches you as `AttributeError: 'StatusNotOk' object has no attribute 'canonical_code'`, and the real error is on the exception's `__context__`: an object with an integer `code` and a `message`. A later OR-Tools that fixes the bug raises MathOpt's own exception instead, whose message ends with ` (was C++ INVALID_ARGUMENT)` or another code's name."
+    },
+    {
+      "type": "para",
+      "text": "Write `refusal(error)` in `refusal.py`, returning `(code_name, message)`:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "When `error.__context__` has a `code` and a `message`, return the code's name from `CODE_NAMES` (or `\"UNKNOWN\"` for a code not in it) and that message as it is.",
+        "Otherwise, when the error's text ends with ` (was C++ NAME)`, return `NAME` and the text before that suffix.",
+        "Otherwise return `\"UNKNOWN\"` and the error's text, `str(error)`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`CODE_NAMES` is given: it maps the absl status codes MathOpt uses to their names."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport re\n\nCODE_NAMES = {3: \"INVALID_ARGUMENT\", 9: \"FAILED_PRECONDITION\", 12: \"UNIMPLEMENTED\", 13: \"INTERNAL\"}\nSUFFIX = re.compile(r\"^(?P<message>.*) \\(was C\\+\\+ (?P<code>[A-Z_]+)\\)$\", re.S)\n\n\ndef refusal(error: BaseException) -> tuple[str, str]:\n    \"\"\"(status code name, message) of a refused solve, whichever way OR-Tools raised it.\"\"\"\n    hidden = error.__context__\n    if hidden is not None and hasattr(hidden, \"code\") and hasattr(hidden, \"message\"):\n        return CODE_NAMES.get(hidden.code, \"UNKNOWN\"), hidden.message\n    match = SUFFIX.match(str(error))\n    if match:\n        return match[\"code\"], match[\"message\"]\n    return \"UNKNOWN\", str(error)\n\n\nif __name__ == \"__main__\":\n    print(refusal(ValueError(\"threads not supported (was C++ INVALID_ARGUMENT)\")))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport re\n\nCODE_NAMES = {3: \"INVALID_ARGUMENT\", 9: \"FAILED_PRECONDITION\", 12: \"UNIMPLEMENTED\", 13: \"INTERNAL\"}\n\n\ndef refusal(error: BaseException) -> tuple[str, str]:\n    \"\"\"(status code name, message) of a refused solve, whichever way OR-Tools raised it.\"\"\"\n    # TODO: the hidden status first, then the '(was C++ ...)' suffix, then UNKNOWN.\n    return \"\", \"\"\n\n\nif __name__ == \"__main__\":\n    print(refusal(ValueError(\"threads not supported (was C++ INVALID_ARGUMENT)\")))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "bd0e622aee9ebc43722a95d3ca5d87d421407ac63bcc00e77d2f2ab6530276d9",
+  "starting_code": "from __future__ import annotations\n\nimport re\n\nCODE_NAMES = {3: \"INVALID_ARGUMENT\", 9: \"FAILED_PRECONDITION\", 12: \"UNIMPLEMENTED\", 13: \"INTERNAL\"}\n\n\ndef refusal(error: BaseException) -> tuple[str, str]:\n    \"\"\"(status code name, message) of a refused solve, whichever way OR-Tools raised it.\"\"\"\n    # TODO: the hidden status first, then the '(was C++ ...)' suffix, then UNKNOWN.\n    return \"\", \"\"\n\n\nif __name__ == \"__main__\":\n    print(refusal(ValueError(\"threads not supported (was C++ INVALID_ARGUMENT)\")))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-04/practice-2/refusal.py",
+    "test_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-04/practice-2/test_refusal.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-04/practice-2/refusal.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-04/practice-2/target/report.xml",
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-04/practice-2/test_refusal.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_refused_parameter_gives_its_code_and_message",
+        "kind": "main",
+        "says": "a refused HiGHS thread count gives ('INVALID_ARGUMENT', the solver's message without the bracketed code)"
+      },
+      {
+        "id": "test_a_refused_model_gives_its_code_and_message",
+        "kind": "main",
+        "says": "an integer model sent to GLOP gives ('INVALID_ARGUMENT', 'Glop does not support integer variables')"
+      },
+      {
+        "id": "test_an_unimplemented_feature_gives_its_own_code",
+        "kind": "edge",
+        "says": "a quadratic objective sent to HiGHS gives the code 'UNIMPLEMENTED'"
+      },
+      {
+        "id": "test_an_exception_mathopt_converted_is_read_from_its_suffix",
+        "kind": "edge",
+        "says": "a ValueError ending in '(was C++ INVALID_ARGUMENT)' gives that code and the message before the suffix"
+      },
+      {
+        "id": "test_an_error_with_no_status_is_unknown",
+        "kind": "edge",
+        "says": "a RuntimeError or an AttributeError with no hidden status gives ('UNKNOWN', its own message)"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-04/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "13-mathopt-core/README_4.2.4.md",
+      "section": "A Refusal Is Raised as an AttributeError in OR-Tools 9.15, and Its Reason Is on __context__"
+    },
+    "concepts": [
+      "in OR-Tools 9.15 a refusal arrives as an AttributeError whose __context__ carries the status code and message"
+    ]
+  }
+}

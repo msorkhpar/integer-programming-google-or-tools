@@ -1,0 +1,382 @@
+# 9.3.1 A Binding-Constraints Report
+
+GridCap's base plan for the small portfolio is solved: 27 of 40 projects, NPV $24,260k, every rule
+kept (the plan of lessons 6.4.1 and 7.1.4). The planning director now asks the question every
+review of an optimized plan starts with: *which of our rules actually shaped this plan?* If the
+answer is "the 2030 budget", finance knows where an extra dollar would matter; if it is "the
+alternative rule on asset A001", the asset team knows which decision to revisit. The job this
+course prepares for, building the optimization engine of a utility's capital planning tool (a
+Capital Investment Planning & Prioritization Tool, CIPT for short), lists this output by name, next
+to shadow prices and marginal values: the binding constraints.
+
+This lesson builds a **binding-constraints report** for a MILP plan, in three rules. The first is
+the definition, read straight off the plan. The second separates "binding" from "priced", which a
+popular shortcut runs together. The third is the part that is new for integer models: a row with
+money left can still be the row that blocks every project that might be added.
+
+GridCap is a fictional utility, generated for this course; no number in it describes a real one.
+
+Three words first. A **row** is one constraint of the model, with the name the code gave it
+(`budget_2030`). Its **activity** is the value of its left-hand side at the plan: for a budget row,
+what the plan spends that year. Its **slack** is how far the activity is from the row's limit,
+measured so that a row the plan keeps has slack $`\ge 0`$:
+
+```math
+\text{slack} =
+\begin{cases}
+b - a^\top x & \text{for a row } a^\top x \le b \\
+a^\top x - b & \text{for a row } a^\top x \ge b \\
+-\,|a^\top x - b| & \text{for a row } a^\top x = b
+\end{cases}
+```
+
+A row **binds** at a plan when its slack is zero (in practice, within a small tolerance such as
+$`10^{-6}`$, because solvers work in floating point; lesson 10.1.1). This is the definition lesson
+2.3.2 used for an LP, and it applies to any plan, from any model, because it needs only the plan
+and the row.
+
+## The Model
+
+The rows this lesson reports on are those of the timing model of lesson 6.4.1, unchanged. Each has a
+name, and the report speaks in those names.
+
+**Sets.** $`P`$ the projects; $`Y`$ the plan's years, 2027 to 2031; $`T_i \subseteq Y`$ the start
+years project $`i`$ may use (its window); $`M \subseteq P`$ the must-do projects; $`\mathcal{G}`$
+the alternative groups, each a set of projects; $`C \subseteq P`$ the child projects, with parent
+$`p(c)`$ and lag $`L_c`$ years.
+
+**Parameters.** $`\text{npv}_{i,t}`$, the NPV of project $`i`$ started in year $`t`$ ($k);
+$`c_{i,k}`$, what project $`i`$ spends in its $`k`$-th year of work, $`k = 0, 1, \dots`$ ($k);
+$`B_y`$, the budget of year $`y`$ ($k).
+
+**Variables.** $`x_{i,t} \in \{0, 1\}`$ for every $`i \in P`$ and $`t \in T_i`$: project $`i`$
+starts in year $`t`$. We write $`\text{started}(i) = \sum_{t \in T_i} x_{i,t}`$ and
+$`\text{by}(i, t) = \sum_{s \in T_i,\, s \le t} x_{i,s}`$.
+
+**Objective.**
+
+```math
+\max \; \sum_{i \in P} \sum_{t \in T_i} \text{npv}_{i,t}\, x_{i,t}
+```
+
+**Constraints.**
+
+```math
+\begin{aligned}
+\text{started}(i) &\le 1 && \forall i \in P \setminus M && \text{(once}_i) \\
+\text{started}(i) &= 1 && \forall i \in M && \text{(must}_i) \\
+\textstyle\sum_{i \in g} \text{started}(i) &\le 1 && \forall g \in \mathcal{G} && \text{(alt}_g) \\
+\text{by}(c, t) &\le \text{by}(p(c),\, t - L_c) && \forall c \in C,\ t \in T_c && \text{(after}_{c,t}) \\
+\textstyle\sum_{i \in P} \sum_{t \in T_i,\, t \le y} c_{i,\,y-t}\, x_{i,t} &\le B_y && \forall y \in Y && \text{(budget}_y)
+\end{aligned}
+```
+
+| Label | Row name in `explain_model.py` | On GridCap small |
+| --- | --- | --- |
+| once$`_i`$, must$`_i`$ | `once_P001`, `must_P017` | 36 and 4 rows |
+| alt$`_g`$ | `alt_G001` | 2 rows |
+| after$`_{c,t}`$ | `after_P016_2030` | 2 rows |
+| budget$`_y`$ | `budget_2030` | 5 rows |
+
+`explain_model.build` writes this model and keeps every row in a dictionary by name, so a report can
+go from a name to the row and back.
+
+## A Row Binds When the Plan Leaves It No Slack
+
+Slack needs nothing from the solver but the plan. MathOpt keeps each row's bounds
+(`lower_bound`, `upper_bound`, infinite when absent) and its nonzero terms (`terms()`, each a
+`LinearTerm` with a `variable` and a `coefficient`), so the definition above becomes:
+
+```python
+def activity(row: mathopt.LinearConstraint, values: dict[mathopt.Variable, float]) -> float:
+    """The row's left-hand side evaluated at the plan."""
+    return sum(term.coefficient * values[term.variable] for term in row.terms())
+
+
+def slack(row: mathopt.LinearConstraint, values: dict[mathopt.Variable, float]) -> float:
+    """Room left before the row's nearest bound: >= 0 when the row holds, 0 when it binds."""
+    a = activity(row, values)
+    room = []
+    if row.upper_bound < math.inf:
+        room.append(row.upper_bound - a)
+    if row.lower_bound > -math.inf:
+        room.append(a - row.lower_bound)
+    return min(room)
+```
+
+One function covers all three kinds of row: a $`\le`$ row has only an upper bound, a $`\ge`$ row only
+a lower one, and an equality row has both, equal, so the smaller of the two rooms is
+$`-|a^\top x - b|`$. The `values` dictionary gives each start variable its 0 or 1 in the plan
+(`plan_values`), which is what the solver returned, rounded.
+
+`slack_report.py` measures every row of the model at the base plan and counts, for each family of
+rules, how many rows bind:
+
+```text
+OPTIMAL: NPV $24,260k, 27 of 40 projects funded
+
+family  rows  binding  least slack
+once      36       23            0
+must       4        4            0
+alt        2        2            0
+after      2        2            0
+budget     5        0           50
+
+row          limit    used  slack
+budget_2027   8,890   8,750    140
+budget_2028   8,120   7,970    150
+budget_2029   8,760   8,630    130
+budget_2030   8,610   8,560     50
+budget_2031   7,850   7,720    130
+```
+
+Read it family by family, because "binds" means something different in each.
+
+- **once:** 23 of the 36 rows bind, one for each funded project that is not a must-do (27 funded,
+  less the 4 must-dos). A once row binds exactly when its project is in the plan. That says the
+  project was chosen; it does not say the rule held anything back.
+- **must:** all 4 bind, always: an equality row that the plan keeps has slack 0 by definition.
+- **alt:** both groups have one option funded (P001 in G001, P031 in G030), so both rows bind. These
+  do hold something back: P002 and P030 cannot join while their alternatives are in.
+- **after:** both precedence rows of P016 bind; P016 starts in 2030, the year its parent P015 allows.
+- **budget:** no budget row binds. Every year has money left, $50k to $150k.
+
+So a list of zero-slack rows, on its own, says that the plan used the rules it used, and leaves out
+the rule everyone knows shaped the plan: the money. The next two rules explain why both happen.
+
+<!-- practice 1 -->
+
+## A MILP Has No Prices, and Binding Means Zero Slack Even When the Price Is Zero
+
+For an LP, lesson 2.3.3 read a second number for each row: its **shadow price** (MathOpt's
+`dual_values`), the change in the best objective per unit of the row's bound. Ask the MILP for one
+and MathOpt refuses:
+
+```python
+try:
+    milp.result.dual_values(milp.built.rows["budget_2030"])
+except ValueError as error:
+    print(f"MILP dual_values: ValueError: {error}")
+```
+
+```text
+MILP dual_values: ValueError: Best solution does not have an associated dual feasible solution.
+```
+
+The MathOpt source says why in its docstrings: dual solutions are returned only for convex
+problems such as LPs, so a MIP solve has none. Lesson 9.2.1 shows what goes wrong with the idea of a
+price on a MILP, and lessons 9.2.2 to 9.2.4 build the prices that do mean something. For this
+report it settles one thing: on a MILP, "binding" has to be read from slack, because there is no
+price to read.
+
+The LP relaxation (every $`x_{i,t}`$ allowed between 0 and 1, lesson 3.1.1) does have prices, and it
+shows why the two numbers must stay separate even where both exist. `zero_price.py` solves it and
+sorts every row by whether it binds and whether its price is zero:
+
+```python
+for name, row in relaxed.rows.items():
+    binding = abs(slack(row, values)) <= TOL
+    priced = abs(result.dual_values(row)) > TOL
+    kinds[family(name), "binding" if binding else "slack", "priced" if priced else "price 0"] += 1
+```
+
+```text
+LP relaxation: OPTIMAL, NPV $26,587.4k
+
+family  slack?    price?   rows
+after   binding   price 0     1
+after   slack     price 0     1
+alt     binding   priced      2
+budget  binding   priced      5
+must    binding   price 0     1
+must    binding   priced      3
+once    binding   price 0     9
+once    binding   priced     11
+once    slack     price 0    16
+
+must_P003    slack   0  price    0.0000
+must_P039    slack   0  price -663.3661
+budget_2031  slack   0  price    0.3158
+P003: NPV 107, uses 2031 budget worth 140 x 0.3158 = 44.2
+```
+
+Eleven rows bind with a price of exactly zero: one precedence row, nine once rows and the must-do
+row of P003. Take P003. It is a must-do, so its row is an equality and binds. But at the LP's prices
+P003 is worth funding anyway: it brings $107k of NPV and uses $140k of 2031 budget that the LP
+values at $0.3158k per $1k, $44.2k in all. Remove the must-do row and the LP would still fund P003,
+so the row has no effect on the optimum, and its price, the effect of moving its bound, is zero.
+Compare P039, a must-do the LP would not choose on its own: its row binds with price $-663.37$, the
+NPV the plan gives up per unit of "P039 must start" (negative because raising the bound costs
+value; lesson 2.3.3 covers the signs).
+
+A binding row with a zero price is the mark of a **degenerate** LP optimum (lesson 2.2.3): more rows
+are tight at the vertex than are needed to pin it, and some of them carry no price. Complementary
+slackness (lesson 2.3.2) only forbids the other combination, a row with slack and a nonzero price;
+every row in the table that has slack has price 0.
+
+Some study guides define a binding row as "zero slack *and* a nonzero shadow price". This course
+does not, and the table shows why: under that definition must_P003 would not bind, though the plan
+sits exactly on it. Keep the definition (zero slack) and report the price, where one exists, in its
+own column. "Binds and is priced" means the rule is costing value at the margin; "binds at price 0"
+means the plan touches the rule without being pushed by it.
+
+## On a MILP, a Row With Slack Can Still Be the Row That Blocks
+
+Back to the MILP plan, and to the budgets that bind nowhere. Projects are whole: a row with $50k
+left in 2030 cannot take any project that needs more than $50k in 2030, and in GridCap small none
+needs so little. So the useful question for an integer plan is not only "which rows have no slack?"
+but "which rows refuse the next project?".
+
+`binding.refusals` answers it directly. For each project the plan leaves out and each year it may
+start in, it adds that one start to the plan as it stands and lists the rows the result breaks
+(negative slack):
+
+```python
+def refusals(built: Built, plan: dict[str, int]) -> dict[tuple[str, int], list[str]]:
+    """For every project the plan leaves out and every start year it allows: the rows that adding it breaks."""
+    out = {}
+    for p in built.portfolio.projects:
+        if p.project_id in plan:
+            continue
+        for t in p.starts():
+            values = plan_values(built, {**plan, p.project_id: t})
+            out[p.project_id, t] = [name for name, row in built.rows.items() if slack(row, values) < -TOL]
+    return out
+```
+
+```text
+25 single additions tried, 0 fit
+
+row          slack  refuses
+budget_2027    140   3 of 25
+budget_2028    150   7 of 25
+budget_2029    130   9 of 25
+budget_2030     50  15 of 25
+budget_2031    130   9 of 25
+alt_G001         0   2 of 25
+alt_G030         0   2 of 25
+
+add P004 in 2028: breaks budget_2028 (needs 300, slack 150)
+add P037 in 2030: breaks budget_2030 (needs 2,120, slack 50)
+add P037 in 2031: breaks budget_2031 (needs 2,120, slack 130)
+add P002 in 2027: breaks alt_G001 (slack 0), budget_2027 (needs 460, slack 140)
+add P002 in 2028: breaks alt_G001 (slack 0), budget_2028 (needs 460, slack 150)
+```
+
+The 13 unfunded projects have 25 possible starts between them, and not one fits. Every budget row
+refuses some of them, and `budget_2030`, the year with $50k left, refuses 15 of the 25: it is the
+tightest rule in the plan although it does not bind. P004 needs $300k in 2028, where $150k is left;
+P002 is refused twice over, by its alternative row and by the money.
+
+This is what a binding-constraints report on a MILP is for: a table with, per row, its slack, its
+price where the model has one, and what it refuses. The third column is what a planner means by "the
+2030 budget is what's binding": not that it is used to the dollar, but that it is too full for any
+project left out.
+
+The test has a limit worth saying in the report. It adds one project to the plan *as it stands*.
+The solver is free to do more: drop one project, move two others, and then fit the new one. Whether
+that is worth doing, and what it costs, is a question for a re-solve, which lesson 9.3.2 asks.
+
+<!-- practice 2 -->
+
+## Summary
+
+- **A row binds when the plan leaves it no slack.** Slack is measured from the plan and the row,
+  with no help from the solver, so it works on any model. On a MILP, the once, must, alt and after
+  rows that bind mostly record what was chosen.
+- **A MILP has no prices, and binding means zero slack even when the price is zero.** MathOpt
+  raises `ValueError` for MILP duals. In the LP relaxation, 11 GridCap rows bind at price 0; that is
+  degeneracy, not "non-binding". Report the price in its own column.
+- **On a MILP, a row with slack can still be the row that blocks.** Whole projects cannot use the
+  last few dollars. List, for each row, the single additions it refuses; on GridCap small no
+  unfunded project fits, and the 2030 budget refuses 15 of 25 starts.
+
+## Reference
+
+| Row kind | Slack | Binds when |
+| --- | --- | --- |
+| $`a^\top x \le b`$ | $`b - a^\top x`$ | the plan uses the row to its limit |
+| $`a^\top x \ge b`$ | $`a^\top x - b`$ | the plan sits on the floor |
+| $`a^\top x = b`$ | $`-\lvert a^\top x - b\rvert`$ | always, when the plan keeps the row |
+
+| Report column | What it says | Available on |
+| --- | --- | --- |
+| slack | room left at the plan; 0 means binding | any plan |
+| price (`dual_values`) | objective change per unit of the bound | LPs, and the fixed-integer LP of lesson 9.2.2 |
+| refuses | the single additions this row blocks | any plan, by testing each addition |
+
+| Combination | Meaning |
+| --- | --- |
+| slack 0, price $`\ne 0`$ | binding, and costing value at the margin |
+| slack 0, price 0 | binding without effect: a degenerate optimum |
+| slack $`> 0`$, price 0 | not binding (complementary slackness) |
+| slack $`> 0`$, price $`\ne 0`$ | impossible at an LP optimum |
+
+**Further reading:** the OR-Tools [MathOpt overview](https://developers.google.com/optimization/math_opt)
+(models kept separate from solvers, and the dual solutions MathOpt can return);
+[MathOpt `result.py` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/result.py)
+(the docstrings of `dual_values` and `has_dual_feasible_solution`: dual solutions only for convex
+problems, and the `ValueError` when the best solution has none);
+[MathOpt `linear_constraints.py` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/linear_constraints.py)
+(a row's `lower_bound`, `upper_bound` and `terms()`, which `slack` reads); the
+[Gurobi reference for linear constraint attributes](https://docs.gurobi.com/projects/optimizer/en/current/reference/attributes/constraintlinear.html)
+(`Slack` is a property of the current solution, and `Pi` exists only for continuous models, the same
+split as MathOpt's); [Integer Programming, Chapter 9 of Applied Mathematical Programming (MIT 15.053)](https://web.mit.edu/15.053/www/AMP-Chapter-09.pdf)
+(section 9.1: capital budgeting as go/no-go variables against one resource row per period, the shape
+of GridCap's budget rows). The CIPT job this course prepares for lists binding constraints first
+among the outputs that explain a result.
+
+## Challenges
+
+1. Lower the 2030 budget by $50k so that `budget_2030` binds, re-solve, and predict whether the
+   plan changes. Then run it.
+2. Which once rows would bind at price 0 in the LP if every project were a must-do? Think about what
+   the budget rows would then have to do.
+3. Extend `refusals` to try adding *two* unfunded projects at once. How many pairs are there on
+   GridCap small, and why does the count make a re-solve the better tool?
+
+## Design Note: Read Binding From the Plan, Not From the Solver's Status Codes
+
+An LP solver also reports a **basis status** for each row (`constraint_status`, lesson 2.3.3): a
+row `AT_UPPER_BOUND` is tight. It is tempting to build the report from those codes. They exist only
+for an LP solved by simplex, and a MILP has none. They also describe the solver's basis rather than
+the plan: `zero_price.py` asks for the status of the 11 rows that bind at price 0, and gets
+
+```text
+basis status of the binding rows priced 0: {'BASIC': 11}
+```
+
+All 11 are tight, and the basis calls every one of them `BASIC`, the status lesson 2.3.3 met on a
+row with room (its slack in the basis): at a degenerate vertex a basic slack can sit at exactly zero. Slack computed from the
+plan and the row works on every model, every solver and every plan, including one a planner typed
+in by hand. Keep the solver's numbers as extra columns, never as the definition.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson
+shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy
+of the code, so the course's own files never change.
+
+**slack_report.py.** Solves GridCap small and prints the binding rows by family, and the budget rows
+with their slack (*A Row Binds When the Plan Leaves It No Slack*). *Try:* Print the once rows that
+have slack. Predict which projects they belong to before you run it.
+
+- Program: [slack_report.py](src/slack_report.py)
+
+**zero_price.py.** Shows that the MILP has no dual values, then sorts the LP relaxation's rows by
+slack and price (*A MILP Has No Prices*). *Try:* Make P003 cost 400 instead of 140 in the program's
+copy of the portfolio. Predict whether `must_P003` keeps its zero price.
+
+- Program: [zero_price.py](src/zero_price.py)
+
+**refusals.py.** Tries every single addition to the base plan and counts the rows that refuse each
+(*On a MILP, a Row With Slack Can Still Be the Row That Blocks*). *Try:* Raise the 2030 budget by
+$300k. Predict how many of the 25 additions fit.
+
+- Program: [refusals.py](src/refusals.py)
+
+**binding.py** and **explain_model.py.** The report's two functions, and the named model with its
+`slack` and `plan_values`. They run nothing themselves.
+
+- Library: [binding.py](src/binding.py)
+- Library: [explain_model.py](src/explain_model.py)

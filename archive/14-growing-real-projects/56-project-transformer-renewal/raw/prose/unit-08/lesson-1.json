@@ -1,0 +1,370 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "14-growing-real-projects",
+    "56-project-transformer-renewal"
+  ],
+  "variant": "prose",
+  "unit": 8,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Handoff: tests, packaging and a report for finance",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "14.3.8 Handoff: Tests, Packaging and a Report for Finance"
+    },
+    {
+      "type": "para",
+      "text": "The plan is ready to leave the engineer's machine. Two teams will take it from here, and the last request comes from both:"
+    },
+    {
+      "type": "quote",
+      "blocks": [
+        {
+          "type": "para",
+          "text": "**Request 8.** Finance wants the plan as a table they can read: money and risk by year, against each year's budget, with a line saying how good the plan is. The operations analysts will run it themselves, so it needs a command, a version, and tests that tell them when a change has moved the answer. Same input, same report, every time."
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The code before this lesson is snapshot `steps/07`; after it, `steps/08`. The fleets are invented (GridCap is fictional), and the report says so on its second line."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Code Prints for Its Author, Not for Finance"
+    },
+    {
+      "type": "para",
+      "text": "After seven lessons the project answers every planning question so far, but the only way to get an answer is `python -m renewal`, which prints a few lines meant for the engineer: units replaced, the objective, the bound, a line per year. It has no version, so nobody can say which code made a given plan; it has no flags, so a different fleet size or budget means editing `__main__.py`; and nothing checks that the next change leaves a reviewed plan alone. The tests of the earlier lessons check rules, one at a time. None of them would notice if a refactoring kept every rule and moved forty units to other years."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Design Decision: A Report Function, a Command, and a Golden File"
+    },
+    {
+      "type": "para",
+      "text": "Three pieces, each the smallest that does the job:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Need",
+        "Choice",
+        "Alternatives considered"
+      ],
+      "rows": [
+        [
+          "a table finance reads",
+          "`finance.py`: lines per year, then Markdown",
+          "a spreadsheet file (a new dependency); an HTML page (more than asked)"
+        ],
+        [
+          "a way to run it",
+          "`cli.py` with `argparse`, declared as the `renewal` command in `pyproject.toml`",
+          "keep `python -m` only (no version, no install)"
+        ],
+        [
+          "notice when an answer moves",
+          "a golden report, reviewed once, compared on every test run (the section 12 lesson *Golden Datasets and Regression Tests*)",
+          "value tolerances only (miss moved units)"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The report's numbers come from one function, `finance_lines`, and the Markdown is only a rendering of them. Tests check the numbers against the plan; the golden file checks the rendering and the plan together."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model Does Not Change"
+    },
+    {
+      "type": "para",
+      "text": "This lesson changes no row, variable or objective. The model is the last lesson's, solved on the base curves by default. That is worth saying in a handoff: finance is told which model produced the table, and a reader of the code sees that the step touched reporting and packaging only."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Change, File by File"
+    },
+    {
+      "type": "para",
+      "text": "**`finance.py` (new): the plan as finance reads it.** One `YearLine` per plan year, years with no work included, so the table always has the plan's ten rows:"
+    },
+    {
+      "type": "code",
+      "lang": "diff",
+      "text": "--- 07/renewal/finance.py\n+++ 08/renewal/finance.py\n@@\n+@dataclass(frozen=True)\n+class YearLine:\n+    year: int\n+    units: int              # transformers replaced\n+    replacement: int        # $k for the units\n+    outages: int            # substation outages\n+    outage_cost: int        # $k for the outages\n+    total: int              # $k, replacement + outage_cost\n+    budget: int             # $k\n+    risk_removed: float     # $k over the risk window, discounted to FIRST_YEAR, base curves"
+    },
+    {
+      "type": "para",
+      "text": "`finance_lines(fleet, request, plan)` fills one `YearLine` per year of `request.plan_years()`, in order, and its body is yours to write in the practice. For each year: the units the plan replaces that year and the sum of their costs; the number of that year's pairs in `report.outages` and that number times `request.outage_cost`; as the total, that year's entry of `report.spend_by_year` with the request's outage cost, 0 for a year with no work; `request.budget`; and the sum of `risk_removed(t, year, request)` over the year's units, on the base curves."
+    },
+    {
+      "type": "para",
+      "text": "The money comes from `report.spend_by_year` and `report.outages`, the same functions the tests of the outage lesson pinned; the risk from `risk.risk_removed`, the model's own coefficient. Nothing is computed twice in two ways. The last line of the report states the bound in finance's terms:"
+    },
+    {
+      "type": "code",
+      "lang": "diff",
+      "text": "--- 07/renewal/finance.py\n+++ 08/renewal/finance.py\n@@\n+    gap = (plan.bound - plan.value) / plan.bound if plan.bound else 0.0\n+    out += [\"\", f\"Solver status {plan.status}. No plan under these rules removes more than \"\n+                f\"${plan.bound:,.0f}k; this one is within {gap:.2%} of that bound.\"]\n+    return \"\\n\".join(out) + \"\\n\""
+    },
+    {
+      "type": "para",
+      "text": "**`cli.py` (new): the command.** It holds the 500-unit request that `__main__.py` used to hold, scales it for larger fleets, and lets an analyst set the fleet size, seed, budget and gap:"
+    },
+    {
+      "type": "code",
+      "lang": "diff",
+      "text": "--- 07/renewal/cli.py\n+++ 08/renewal/cli.py\n@@\n+    parser = argparse.ArgumentParser(prog=\"renewal\", description=__doc__)\n+    parser.add_argument(\"--units\", type=int, default=500, help=\"fleet size (fictional fleet)\")\n+    parser.add_argument(\"--seed\", type=int, default=2027, help=\"the fleet generator's seed\")\n+    parser.add_argument(\"--budget\", type=int, help=\"$k per year (default: 10,000 per 500 units)\")\n+    parser.add_argument(\"--gap\", type=float, help=\"stop within this share of the bound (default 0.02)\")\n+    parser.add_argument(\"--out\", help=\"write the report here instead of printing it\")"
+    },
+    {
+      "type": "para",
+      "text": "`main` returns 0 when a plan was found and 2 when not, so a script that runs it can tell the two apart. A `Plan` carries its status as the termination reason's name, a string, so `solve.py` gains `FOUND_NAMES`, the names of the reasons in `FOUND`, and `main` tests the status against it:"
+    },
+    {
+      "type": "code",
+      "lang": "diff",
+      "text": "--- 07/renewal/solve.py\n+++ 08/renewal/solve.py\n@@\n FOUND = (mathopt.TerminationReason.OPTIMAL, mathopt.TerminationReason.FEASIBLE)\n+FOUND_NAMES = {reason.name for reason in FOUND}"
+    },
+    {
+      "type": "code",
+      "lang": "diff",
+      "text": "--- 07/renewal/cli.py\n+++ 08/renewal/cli.py\n@@\n+from .solve import FOUND_NAMES\n@@\n+    return 0 if got.status in FOUND_NAMES else 2"
+    },
+    {
+      "type": "para",
+      "text": "`main` takes `argv` as an argument, so tests call it directly instead of starting a process."
+    },
+    {
+      "type": "para",
+      "text": "**`__main__.py`: one line.** `python -m renewal` now runs the same `main` as the installed command:"
+    },
+    {
+      "type": "code",
+      "lang": "diff",
+      "text": "--- 07/renewal/__main__.py\n+++ 08/renewal/__main__.py\n@@\n-\"\"\"python -m renewal [UNITS]: a ten-year replacement plan for a fictional fleet (500 units unless\n-UNITS is given, a multiple of 500), with outages, crews and spares.\"\"\"\n+\"\"\"python -m renewal: the same as the `renewal` command.\"\"\""
+    },
+    {
+      "type": "para",
+      "text": "**`pyproject.toml` and `__init__.py`: a package with a version.** The stub file becomes a project declaration: a name, a version, the pinned OR-Tools it was tested with, and the `renewal` command. `__version__` repeats the version in the code, and a test keeps the two equal."
+    },
+    {
+      "type": "code",
+      "lang": "diff",
+      "text": "--- 07/pyproject.toml\n+++ 08/pyproject.toml\n@@\n [project]\n name = \"renewal\"\n+version = \"1.0.0\"\n+description = \"Transformer fleet renewal planning with OR-Tools MathOpt and HiGHS\"\n+requires-python = \">=3.12\"\n+dependencies = [\"ortools==9.15.6755\", \"numpy>=2\"]\n+\n+[project.scripts]\n+renewal = \"renewal.cli:main\""
+    },
+    {
+      "type": "para",
+      "text": "One limit, stated plainly: the course's runner image has no `setuptools`, so `pip install .` cannot build this package inside it, and the lesson does not claim it does. What the runner can do is pack the package into one runnable file with the standard library's `zipapp`, which is how `handoff.py` checks that the package runs from outside its folder."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Report for the 500-Unit Fleet"
+    },
+    {
+      "type": "para",
+      "text": "`handoff.py` runs the command on the 500-unit fleet with the default request (gap 2%, per-unit outage rows, base curves):"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "$ renewal --units 500\n# Transformer renewal plan, 2027-2036\n\nFleet of 500 transformers (fictional data). All money in $k.\n\n| Year | Units | Replacement | Outages | Outage cost | Total | Budget | Risk removed |\n| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n| 2027 | 21 | 7,730 | 7 | 2,100 | 9,830 | 10,000 | 103,272 |\n| 2028 | 18 | 7,750 | 7 | 2,100 | 9,850 | 10,000 | 79,625 |\n| 2029 | 22 | 7,830 | 7 | 2,100 | 9,930 | 10,000 | 67,083 |\n| 2030 | 14 | 8,120 | 6 | 1,800 | 9,920 | 10,000 | 51,499 |\n| 2031 | 13 | 7,950 | 6 | 1,800 | 9,750 | 10,000 | 42,695 |\n| 2032 | 12 | 8,150 | 4 | 1,200 | 9,350 | 10,000 | 35,430 |\n| 2033 | 11 | 8,470 | 5 | 1,500 | 9,970 | 10,000 | 25,927 |\n| 2034 | 12 | 7,660 | 7 | 2,100 | 9,760 | 10,000 | 23,245 |\n| 2035 | 14 | 7,870 | 7 | 2,100 | 9,970 | 10,000 | 18,770 |\n| 2036 | 6 | 8,300 | 5 | 1,500 | 9,800 | 10,000 | 13,540 |\n| Total | 143 | 79,830 | 61 | 18,300 | 98,130 | 100,000 | 461,085 |\n\nSolver status OPTIMAL. No plan under these rules removes more than $469,076k; this one is within 1.70% of that bound."
+    },
+    {
+      "type": "para",
+      "text": "Finance can read three things off it without knowing what a model is. The plan spends $98,130k of $100,000k, and $18,300k of that, almost a fifth, is outages, which is the cost of the substation rule. The risk removed per year falls steadily, from $103,272k for the 2027 work to $13,540k for 2036's, because each later replacement is counted over fewer of the 20 risk years and the riskiest units go first. And the last line says the plan is within 1.70% of the best any plan could do under these rules, which is the honest form of \"optimal\" at a 2% tolerance."
+    },
+    {
+      "type": "para",
+      "text": "Then the packed file, run on the small fleet the golden test uses:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "packed 15 modules into renewal.pyz\nrenewal.pyz exit 0; report equals the golden file: True"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Tests Guard the Numbers, the Report, Repeatability and the Declaration"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**the finance lines add up to the plan:** on a 40-unit fleet, one line per year; units, totals and risk add up to the plan's own counts, `spend_by_year` and objective; and every year's total is its replacements plus its outages and within budget.",
+        "**the report matches the reviewed golden file:** `main` on a 30-unit fleet, exact solve, writes a report equal to `tests/golden/plan_30.md`, character for character. The golden file was produced once by this code and read before it was kept; a change that moves the plan fails this test until someone reviews the new report and replaces the file on purpose.",
+        "**two runs write the same report:** the same input gives the same bytes. HiGHS is run with its defaults here, and the test is what says that, on this fleet and image, its answer repeats (the determinism lessons, 10.2.1 to 10.2.5, list what would break it: threads, time limits, ties).",
+        "**the package declares its version and command:** `pyproject.toml` names `renewal.cli:main` as the `renewal` command, and its version equals `renewal.__version__`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Of the four, only the golden test notices a plan that moved. The other three would pass on it: the finance lines add up to whatever plan the code found, two runs of the changed code still write the same report as each other, and the declaration test reads `pyproject.toml` and `__version__`, never a plan."
+    },
+    {
+      "type": "para",
+      "text": "The golden fleet is small and solved exactly (`--gap 0`) on purpose. A golden test of a run stopped at 2% would compare whichever plan the solver stopped at, and a harmless change in the search could move it."
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "step 08 tests on the code of step 07 (before): 32 passed, 4 failed\n  FAILED test_handoff.py::test_the_finance_lines_add_up_to_the_plan (AssertionError)\n         assert [] == [2027, 2028, 2029, 2030]\n  FAILED test_handoff.py::test_the_report_matches_the_reviewed_golden_file (AssertionError)\n         assert 1 == 0\n  FAILED test_handoff.py::test_two_runs_write_the_same_report (AssertionError)\n         assert 1 == 0\n  FAILED test_handoff.py::test_the_package_declares_its_version_and_command (AssertionError)\n         assert None == 'renewal.cli:main'\nstep 08 tests on the code of step 08 (after): 36 passed, 0 failed\ntests step 08 adds or changes: 4"
+    },
+    {
+      "type": "para",
+      "text": "On the last lesson's code, the stub `finance_lines` returns no lines, the stub `main` returns 1, and the stub `pyproject.toml` declares no command; each test fails on that assertion. The practice is set up differently on one point: it gives `pyproject.toml` finished and read-only, with the command and the version declared, so in the practice the declaration test passes its first assertion and fails on its second, because the starting package has no `__version__`."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "What the Step Did to the Code, and to the Project Overall"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "step  files  lines  functions  tests  test lines  most branching function\n00        7    104          7      4          25  rank.worst_first (3)\n01       10    167         13      8          55  solve.read_plan (3)\n02       10    195         17     15          97  solve.read_plan (3)\n03       10    225         19     19         121  model.build (13)\n04       11    251         22     22         143  model.build (23)\n05       13    337         27     25         177  reference.build_reference (23)\n06       13    415         29     29         216  reference.build_reference (23)\n07       15    439         34     32         245  model.build (24)\n08       15    497         34     36         277  model.build (24)"
+    },
+    {
+      "type": "para",
+      "text": "This step added 58 code lines and no branching to the model: the report and command are straight code. Over the whole module the package grew from 104 lines to 497 and the tests from 4 to 36, with about one line of test for every two lines of code. The two numbers that deserve a reviewer's eye are the branching ones. `model.build` reached 23 when crews and spares were added and 24 with the scenario objectives, and its reference copy keeps the old 23 alongside it. A next request should begin by splitting `build` into one function per constraint family, each taking the shared variables: the rows are already written as separate blocks, so the split moves code rather than changing it, and the reference-model test of the scale lesson says whether it was moved correctly."
+    },
+    {
+      "type": "para",
+      "text": "**Practice.** This lesson's project practice starts from the code before this step, the whole package (snapshot `steps/07`). It is graded by the tests in the practice's `tests/` folder and by a check that `main.py` prints the practice's `expected/report.txt`; the practice's statement gives the request `main.py` makes and the format of every line it prints. This step's `main.py` runs the `renewal` command's `main` on a tiny fleet of 25 units, drawn from seed 56, and prints the finance report."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**A handoff adds no rules.** It adds a report function, a command, a version and tests that watch the answer, and leaves the model alone.",
+        "**The report's numbers come from the code the tests already pinned**, and the Markdown is only their rendering; its last line states the bound and the gap in finance's terms.",
+        "**A golden file catches a moved plan that every rule test misses.** Keep its run exact and small, and update it on purpose, after review.",
+        "**Same input, same report** is a test, not an assumption."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Piece",
+        "Where"
+      ],
+      "rows": [
+        [
+          "lines by year",
+          "`finance.finance_lines` → `YearLine`"
+        ],
+        [
+          "the report",
+          "`finance.finance_report` (Markdown)"
+        ],
+        [
+          "the command",
+          "`cli.main(argv)`; `renewal` in `pyproject.toml`; `python -m renewal`"
+        ],
+        [
+          "the golden report",
+          "`tests/golden/plan_30.md`, checked by `test_the_report_matches_the_reviewed_golden_file`"
+        ],
+        [
+          "one runnable file",
+          "`zipapp.create_archive(src, \"renewal.pyz\", main=\"renewal.cli:main\")`"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [Python `zipapp` (CPython source)](https://github.com/python/cpython/blob/3.14/Lib/zipapp.py) (`create_archive` and its `main` argument, the entry point written into the archive's `__main__.py`); [Python `tomllib` (CPython source)](https://github.com/python/cpython/tree/3.14/Lib/tomllib) (`loads`, which the declaration test uses to read `pyproject.toml`); [MathOpt `parameters.py` (OR-Tools source, v9.15)](https://github.com/google/or-tools/blob/v9.15/ortools/math_opt/python/parameters.py) (`relative_gap_tolerance` and the solver-dependent gap, the number the report's last line restates). All three were read from the copies installed in the course's runner image. Lessons 10.2.1 to 10.2.5 (determinism) and the section 12 lesson *Golden Datasets and Regression Tests* are the course's background for this step."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Finance asks for a CSV next to the Markdown. Which function gives you every number already, and what test keeps the CSV and the Markdown in agreement?",
+        "A teammate changes the default gap from 2% to 1%. Which test fails, which does not, and why?",
+        "Split `model.build` into one function per constraint family. Which test tells you the split kept the model?"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: The Report States the Bound, Not \"Optimal\""
+    },
+    {
+      "type": "para",
+      "text": "`OPTIMAL` from a solver stopped at a 2% gap means \"within 2%\". Finance reads \"optimal\" as \"best\". So the report's last line says what the run proved, a bound no plan can beat and how close this one is, and keeps the solver's word for the status only. A handoff document that overstates the answer is a bug the tests cannot catch."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**handoff.py.** Runs the `renewal` command's `main` on the 500-unit fleet, packs the package into one runnable file with `zipapp`, runs that file on the golden fleet and compares its report with the golden file, and runs the step's tests before and after the change (*every section*). *Try:* Pass `--seed 7` to the 500-unit run. Predict which lines of the report change."
+    },
+    {
+      "type": "para",
+      "text": "**growth.py.** Counts every snapshot (*What the Step Did to the Code, and to the Project Overall*)."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [handoff.py](src/handoff.py)",
+        "Program: [growth.py](src/growth.py)",
+        "Library: [steps.py](src/steps.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 13,
+    "paras": 28,
+    "code": 11,
+    "tables": 2,
+    "lists": 4,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 1,
+    "html": 1,
+    "disclosures": 0
+  },
+  "content_sha256": "af83f6c410d2b80c021caf77ac165e7ed5edf227e496823ae0d6b133b9ef1473"
+}

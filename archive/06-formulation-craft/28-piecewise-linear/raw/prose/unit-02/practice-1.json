@@ -1,0 +1,166 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "28-piecewise-linear"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A booster pump's power curve, exact in both directions",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility models the electricity drawn by a booster pump station as a function of the flow it delivers. The pump's measured curve is given as breakpoints `xs` (flow, L/s, starting at 0) and `ys` (power, kW), with straight lines in between:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Flow (L/s)",
+        "0",
+        "20",
+        "40",
+        "60",
+        "80"
+      ],
+      "rows": [
+        [
+          "Power (kW)",
+          "0",
+          "30",
+          "42",
+          "70",
+          "120"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The pump is most efficient in the middle band, so the slopes fall and then rise: the curve is neither convex nor concave. The station's model uses the power in two places, as a cost in the energy bill and as a load that a backup generator must be able to carry, so the power is pushed down in one row and up in another. The pump cannot deliver more than the last breakpoint's flow."
+    },
+    {
+      "type": "para",
+      "text": "The model in `booster.py` has two continuous variables, `flow >= 0` and `power` (free). Write `add_power_curve(model, flow, power, xs, ys)` so that the model allows exactly the pairs `(flow, power)` that lie on the curve. Add whatever variables you need. The tests use other curves too."
+    },
+    {
+      "type": "para",
+      "text": "With $`(X_j, F_j)`$, $`j = 0, \\dots, K`$, the breakpoints, the model so far is"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& q \\ge 0 && && \\text{(flow, L/s)} \\\\\n& p \\in \\mathbb{R} && && \\text{(power, kW)} \\\\\n& \\text{?} && && \\text{(your variables and rows: } p = f(q)\\text{)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Neither push nor shape helps here, so every point must be tied to one segment. The lesson's lambda form is one way; any formulation that allows exactly the curve's points passes."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix the flow and the power and ask the solver whether the model accepts the pair, so any correct formulation passes. About ten lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_power_curve(model: mathopt.Model, flow: mathopt.Variable, power: mathopt.Variable,\n                    xs: tuple[float, ...], ys: tuple[float, ...]) -> None:\n    \"\"\"Rows that make power = f(flow) exactly, for the curve through (xs[j], ys[j]).\"\"\"\n    pick, part_flow, part_power = [], [], []\n    for s in range(len(xs) - 1):\n        on = model.add_binary_variable(name=f\"on_{s}\")                  # the pump runs in band s\n        q = model.add_variable(lb=0, name=f\"q_{s}\")                    # the flow, if in band s, else 0\n        model.add_linear_constraint(q >= xs[s] * on, name=f\"band_lo_{s}\")\n        model.add_linear_constraint(q <= xs[s + 1] * on, name=f\"band_hi_{s}\")\n        rate = (ys[s + 1] - ys[s]) / (xs[s + 1] - xs[s])\n        pick.append(on)\n        part_flow.append(q)\n        part_power.append((ys[s] - rate * xs[s]) * on + rate * q)\n    model.add_linear_constraint(sum(pick) == 1, name=\"one_band\")\n    model.add_linear_constraint(flow == sum(part_flow), name=\"flow_parts\")\n    model.add_linear_constraint(power == sum(part_power), name=\"power_parts\")\n\n\ndef build(xs: tuple[float, ...], ys: tuple[float, ...]) -> tuple[mathopt.Model, mathopt.Variable, mathopt.Variable]:\n    model = mathopt.Model(name=\"booster\")\n    flow = model.add_variable(lb=0, name=\"flow\")\n    power = model.add_variable(lb=-1e9, ub=1e9, name=\"power\")\n    add_power_curve(model, flow, power, xs, ys)\n    return model, flow, power\n\n\nif __name__ == \"__main__\":\n    model, flow, power = build((0, 20, 40, 60, 80), (0, 30, 42, 70, 120))\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_power_curve(model: mathopt.Model, flow: mathopt.Variable, power: mathopt.Variable,\n                    xs: tuple[float, ...], ys: tuple[float, ...]) -> None:\n    \"\"\"Rows that make power = f(flow) exactly, for the curve through (xs[j], ys[j]).\"\"\"\n    # TODO: tie each (flow, power) to one segment of the curve.\n    return None\n\n\ndef build(xs: tuple[float, ...], ys: tuple[float, ...]) -> tuple[mathopt.Model, mathopt.Variable, mathopt.Variable]:\n    model = mathopt.Model(name=\"booster\")\n    flow = model.add_variable(lb=0, name=\"flow\")\n    power = model.add_variable(lb=-1e9, ub=1e9, name=\"power\")\n    add_power_curve(model, flow, power, xs, ys)\n    return model, flow, power\n\n\nif __name__ == \"__main__\":\n    model, flow, power = build((0, 20, 40, 60, 80), (0, 30, 42, 70, 120))\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 6,
+    "code": 2,
+    "tables": 1,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "b9c4989e65bdcf04df8cd5f421f887516a52394c798cfd34532b8f3a5b18903f",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_power_curve(model: mathopt.Model, flow: mathopt.Variable, power: mathopt.Variable,\n                    xs: tuple[float, ...], ys: tuple[float, ...]) -> None:\n    \"\"\"Rows that make power = f(flow) exactly, for the curve through (xs[j], ys[j]).\"\"\"\n    # TODO: tie each (flow, power) to one segment of the curve.\n    return None\n\n\ndef build(xs: tuple[float, ...], ys: tuple[float, ...]) -> tuple[mathopt.Model, mathopt.Variable, mathopt.Variable]:\n    model = mathopt.Model(name=\"booster\")\n    flow = model.add_variable(lb=0, name=\"flow\")\n    power = model.add_variable(lb=-1e9, ub=1e9, name=\"power\")\n    add_power_curve(model, flow, power, xs, ys)\n    return model, flow, power\n\n\nif __name__ == \"__main__\":\n    model, flow, power = build((0, 20, 40, 60, 80), (0, 30, 42, 70, 120))\n    print(model.get_num_linear_constraints(), \"rows\")\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-1/booster.py",
+    "test_path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-1/test_booster.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-1/booster.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-1/target/report.xml",
+      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-1/test_booster.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_points_on_the_curve_are_allowed",
+        "kind": "main",
+        "says": "a flow and the power the curve gives it are allowed, and powers far above or below every breakpoint's reach are refused"
+      },
+      {
+        "id": "test_no_flow_past_the_last_breakpoint",
+        "kind": "main",
+        "says": "the largest flow on the curve is allowed and a larger one is refused"
+      },
+      {
+        "id": "test_no_point_between_the_curve_and_its_chords",
+        "kind": "edge",
+        "says": "a power a little below or above the curve at a mid-segment flow is refused"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "28-piecewise-linear/README_6.6.2.md",
+      "section": "One Binary per Segment Enforces the Neighbour Rule"
+    },
+    "concepts": [
+      "only two neighbouring weights may be positive, the SOS2 rule",
+      "one binary per segment writes the neighbour rule for a curve of any shape",
+      "a point of the curve as weights on the breakpoints, and why weights alone are not enough"
+    ]
+  }
+}

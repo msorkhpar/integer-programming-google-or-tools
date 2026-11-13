@@ -1,0 +1,154 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "09-diagnostics-and-explainability",
+    "39-explaining-decisions"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Slack and binding rows of a fleet plan",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A city transit agency plans next year's bus purchases with a small MILP, and its board wants a report of the rules the chosen plan sits on. The agency's model is stored as data: each row is a `Row` with a name, its coefficients by variable, a sense (`\"<=\"`, `\">=\"` or `\"==\"`) and a right-hand side. A plan gives each variable a value; a variable the plan does not mention is 0."
+    },
+    {
+      "type": "para",
+      "text": "Write two functions in `slacks.py`:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`slack(row, plan)`: the room the plan leaves on the row, $`\\ge 0`$ when the row holds, $`0`$ when the plan sits exactly on it, and negative when the plan breaks it. An `==` row is broken by any miss, above or below.",
+        "`binding(rows, plan, tol=1e-6)`: the names of the rows the plan keeps with no room left, within `tol`, in the order given."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "With $`a`$ a row's coefficients, $`x`$ the plan and $`b`$ its right-hand side, write the slack of each kind of row first, then code it:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\text{slack}(a^\\top x \\le b) = \\;? \\qquad \\text{slack}(a^\\top x \\ge b) = \\;? \\qquad \\text{slack}(a^\\top x = b) = \\;?"
+    },
+    {
+      "type": "para",
+      "text": "\"Binding\" here means what the board will read: the plan keeps the row and has no room left on it. A row the plan breaks is a different finding, and the tests check that it is not reported as binding. The tests use their own rows and plans; no solver is needed."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Row:\n    name: str\n    coefs: dict[str, float]     # variable -> coefficient\n    sense: str                  # \"<=\", \">=\" or \"==\"\n    rhs: float\n\n\ndef slack(row: Row, plan: dict[str, float]) -> float:\n    \"\"\"Room left at the plan: >= 0 when the row holds, 0 when it binds, < 0 when it is broken.\"\"\"\n    activity = sum(c * plan.get(var, 0.0) for var, c in row.coefs.items())\n    if row.sense == \"<=\":\n        return row.rhs - activity\n    if row.sense == \">=\":\n        return activity - row.rhs\n    return -abs(activity - row.rhs)\n\n\ndef binding(rows: list[Row], plan: dict[str, float], tol: float = 1e-6) -> list[str]:\n    \"\"\"Names of the rows the plan keeps with no slack left, in the order given.\"\"\"\n    return [row.name for row in rows if abs(slack(row, plan)) <= tol]\n\n\nif __name__ == \"__main__\":\n    depot = Row(\"depot_space\", {\"bus_a\": 12, \"bus_b\": 9}, \"<=\", 40)\n    print(slack(depot, {\"bus_a\": 2, \"bus_b\": 1}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Row:\n    name: str\n    coefs: dict[str, float]     # variable -> coefficient\n    sense: str                  # \"<=\", \">=\" or \"==\"\n    rhs: float\n\n\ndef slack(row: Row, plan: dict[str, float]) -> float:\n    \"\"\"Room left at the plan: >= 0 when the row holds, 0 when it binds, < 0 when it is broken.\"\"\"\n    # TODO: the activity of the row at the plan, then the room left, by the row's sense.\n    return 0.0\n\n\ndef binding(rows: list[Row], plan: dict[str, float], tol: float = 1e-6) -> list[str]:\n    \"\"\"Names of the rows the plan keeps with no slack left, in the order given.\"\"\"\n    # TODO: use slack().\n    return []\n\n\nif __name__ == \"__main__\":\n    depot = Row(\"depot_space\", {\"bus_a\": 12, \"bus_b\": 9}, \"<=\", 40)\n    print(slack(depot, {\"bus_a\": 2, \"bus_b\": 1}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "8c7b62363d917f6a7b0c2359bd42c07aa6ead2d08c5b7f7af606669ceb27ef40",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Row:\n    name: str\n    coefs: dict[str, float]     # variable -> coefficient\n    sense: str                  # \"<=\", \">=\" or \"==\"\n    rhs: float\n\n\ndef slack(row: Row, plan: dict[str, float]) -> float:\n    \"\"\"Room left at the plan: >= 0 when the row holds, 0 when it binds, < 0 when it is broken.\"\"\"\n    # TODO: the activity of the row at the plan, then the room left, by the row's sense.\n    return 0.0\n\n\ndef binding(rows: list[Row], plan: dict[str, float], tol: float = 1e-6) -> list[str]:\n    \"\"\"Names of the rows the plan keeps with no slack left, in the order given.\"\"\"\n    # TODO: use slack().\n    return []\n\n\nif __name__ == \"__main__\":\n    depot = Row(\"depot_space\", {\"bus_a\": 12, \"bus_b\": 9}, \"<=\", 40)\n    print(slack(depot, {\"bus_a\": 2, \"bus_b\": 1}))\n",
+  "exercise": {
+    "main_path": "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-1/slacks.py",
+    "test_path": "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-1/test_slacks.py",
+    "run_command": [
+      "python3",
+      "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-1/slacks.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-1/target/report.xml",
+      "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-1/test_slacks.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_plan_s_slack_and_its_binding_rows",
+        "kind": "main",
+        "says": "a plan's slack on a capacity row, and the list of rows it leaves no room on"
+      },
+      {
+        "id": "test_a_floor_row_has_room_above_its_floor",
+        "kind": "edge",
+        "says": "a >= row has positive slack when the plan is above its floor"
+      },
+      {
+        "id": "test_an_equality_row_missed_from_below_is_broken",
+        "kind": "edge",
+        "says": "an == row missed on either side has negative slack"
+      },
+      {
+        "id": "test_a_broken_row_is_not_binding",
+        "kind": "edge",
+        "says": "a row the plan breaks is not reported as binding"
+      },
+      {
+        "id": "test_a_slack_within_the_tolerance_binds",
+        "kind": "edge",
+        "says": "a slack within the tolerance of zero counts as binding"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "39-explaining-decisions/README_9.3.1.md",
+      "section": "A Row Binds When the Plan Leaves It No Slack"
+    },
+    "concepts": [
+      "a row binds when the plan keeps it with zero slack, within a tolerance",
+      "a row's slack is measured from the plan and the row's sense and bound, with no help from the solver"
+    ]
+  }
+}

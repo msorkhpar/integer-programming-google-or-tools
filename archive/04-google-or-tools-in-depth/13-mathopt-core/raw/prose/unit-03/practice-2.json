@@ -1,0 +1,151 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "13-mathopt-core"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Shortlist the solvers a model can go to",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A freight company's planning service receives models from several teams and must send each to a solver that will answer the model as written. You decide from the model alone, before any solve."
+    },
+    {
+      "type": "para",
+      "text": "Write `shortlist(model, need_duals=False)` in `shortlist.py`. It returns the solvers of `CANDIDATES` (GLOP, PDLP, HiGHS, SCIP, CP-SAT, in that order) that may take the model, keeping that order:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**GLOP and PDLP** solve LPs only: drop them if any variable is integer.",
+        "**CP-SAT** works over integers: drop it if any variable is continuous, since it would round that variable and still report `OPTIMAL`.",
+        "**Dual values** (`need_duals=True`) come only from GLOP, PDLP and HiGHS, and only for an LP: drop SCIP and CP-SAT, and if any variable is integer, no solver can give them, so return an empty list."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Read each variable's `integer` flag through `model.variables()`."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nS = mathopt.SolverType\nCANDIDATES = (S.GLOP, S.PDLP, S.HIGHS, S.GSCIP, S.CP_SAT)\nLP_ONLY = {S.GLOP, S.PDLP}\nGIVES_LP_DUALS = {S.GLOP, S.PDLP, S.HIGHS}\n\n\ndef shortlist(model: mathopt.Model, need_duals: bool = False) -> list[mathopt.SolverType]:\n    \"\"\"The candidate solvers that answer this model as written, in CANDIDATES order.\"\"\"\n    flags = [v.integer for v in model.variables()]\n    has_integer, has_continuous = any(flags), not all(flags)\n    if need_duals and has_integer:\n        return []\n    chosen = []\n    for solver in CANDIDATES:\n        if solver in LP_ONLY and has_integer:\n            continue\n        if solver == S.CP_SAT and has_continuous:\n            continue\n        if need_duals and solver not in GIVES_LP_DUALS:\n            continue\n        chosen.append(solver)\n    return chosen\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    model.add_binary_variable(name=\"ship\")\n    model.add_variable(lb=0, ub=40, name=\"tons\")\n    print([s.name for s in shortlist(model)])\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nS = mathopt.SolverType\nCANDIDATES = (S.GLOP, S.PDLP, S.HIGHS, S.GSCIP, S.CP_SAT)\n\n\ndef shortlist(model: mathopt.Model, need_duals: bool = False) -> list[mathopt.SolverType]:\n    \"\"\"The candidate solvers that answer this model as written, in CANDIDATES order.\"\"\"\n    # TODO: drop the solvers each rule of the statement rules out.\n    return list(CANDIDATES)\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    model.add_binary_variable(name=\"ship\")\n    model.add_variable(lb=0, ub=40, name=\"tons\")\n    print([s.name for s in shortlist(model)])\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "1a1ed598a0abaac170e635affb4399063d9a4ba8af302b4d959443c021b443c5",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nS = mathopt.SolverType\nCANDIDATES = (S.GLOP, S.PDLP, S.HIGHS, S.GSCIP, S.CP_SAT)\n\n\ndef shortlist(model: mathopt.Model, need_duals: bool = False) -> list[mathopt.SolverType]:\n    \"\"\"The candidate solvers that answer this model as written, in CANDIDATES order.\"\"\"\n    # TODO: drop the solvers each rule of the statement rules out.\n    return list(CANDIDATES)\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    model.add_binary_variable(name=\"ship\")\n    model.add_variable(lb=0, ub=40, name=\"tons\")\n    print([s.name for s in shortlist(model)])\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-2/shortlist.py",
+    "test_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-2/test_shortlist.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-2/shortlist.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-2/target/report.xml",
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-2/test_shortlist.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_an_lp_goes_to_every_solver_but_cp_sat",
+        "kind": "main",
+        "says": "a model with only continuous variables is shortlisted for GLOP, PDLP, HiGHS and SCIP"
+      },
+      {
+        "id": "test_an_all_integer_model_goes_to_the_three_milp_solvers",
+        "kind": "main",
+        "says": "a model with only integer variables is shortlisted for HiGHS, SCIP and CP-SAT"
+      },
+      {
+        "id": "test_every_shortlisted_solver_solves_the_model",
+        "kind": "main",
+        "says": "each solver on a shortlist solves the model to OPTIMAL"
+      },
+      {
+        "id": "test_a_mixed_model_is_kept_from_cp_sat",
+        "kind": "edge",
+        "says": "a model with integer and continuous variables is shortlisted for HiGHS and SCIP only"
+      },
+      {
+        "id": "test_an_lp_that_needs_duals_skips_scip",
+        "kind": "edge",
+        "says": "an LP whose caller needs dual values is shortlisted for GLOP, PDLP and HiGHS"
+      },
+      {
+        "id": "test_a_milp_that_needs_duals_has_no_solver",
+        "kind": "edge",
+        "says": "a model with an integer variable whose caller needs dual values gets an empty shortlist"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "13-mathopt-core/README_4.2.3.md",
+      "section": "Five Solvers Are Built Into the pip Package, and Gurobi Needs Its Own Library and License"
+    },
+    "concepts": [
+      "CP-SAT rounds continuous variables and still reports OPTIMAL, so it gets all-integer models only",
+      "GLOP and PDLP refuse integer variables, and only GLOP, PDLP and HiGHS return LP duals"
+    ]
+  }
+}

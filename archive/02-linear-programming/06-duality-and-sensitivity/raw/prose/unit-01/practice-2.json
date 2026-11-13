@@ -1,0 +1,163 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "02-linear-programming",
+    "06-duality-and-sensitivity"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Write and solve the dual",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A facilities team plans a week of inspection, repair and painting hours. Some of its rules are limits, some are minimums, and one is a contract that fixes an amount exactly. The team lead wants the price of every rule, and the proof that the plan is the best one, from a single function that writes the dual LP and solves it."
+    },
+    {
+      "type": "para",
+      "text": "The team's LP, with $`A`$ the activities, $`R`$ the rows, $`v_j`$ the value per unit of activity $`j`$, $`a_{ij}`$ its coefficient in row $`i`$ (0 if it does not appear), $`b_i`$ the row's right-hand side, and each row a limit, a minimum or an equality:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\sum_{j \\in A} v_j\\, x_j \\quad \\text{s.t.} \\quad \\sum_{j \\in A} a_{ij}\\, x_j \\;\\; (\\le,\\ \\ge \\text{ or } =) \\;\\; b_i \\;\\; \\forall i \\in R, \\qquad x_j \\ge 0 \\;\\; \\forall j \\in A"
+    },
+    {
+      "type": "para",
+      "text": "Its dual has one price $`y_i`$ per row and one cover row per activity:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\min \\sum_{i \\in R} b_i\\, y_i \\quad \\text{s.t.} \\quad \\sum_{i \\in R} a_{ij}\\, y_i \\ge v_j \\;\\; \\forall j \\in A \\quad \\text{(cover}_j)"
+    },
+    {
+      "type": "para",
+      "text": "with $`y_i \\ge 0`$ for a $`\\le`$ row, $`y_i \\le 0`$ for a $`\\ge`$ row, and $`y_i`$ free for an $`=`$ row."
+    },
+    {
+      "type": "para",
+      "text": "Write `solve_dual(value, rows)` in `dual.py`. `value` maps each activity to $`v_j`$; `rows` maps each row's name to `(coefficients, sense, rhs)`, with `sense` one of `\"<=\"`, `\">=\"`, `\"==\"` and `coefficients` mapping the activities in that row to $`a_{ij}`$. Build the dual in MathOpt, solve it with GLOP, and return `(value, prices)`: the dual's optimal value and a dict of each row's price. If the solve does not end `OPTIMAL`, return `(None, {})`."
+    },
+    {
+      "type": "para",
+      "text": "An activity may appear in no row (every $`a_{ij} = 0`$). Its cover row is then $`0 \\ge v_j`$: if $`v_j > 0`$ no prices satisfy it, so the dual is infeasible (the LP itself is unbounded, since that activity can grow forever) and the function returns `(None, {})`; if $`v_j \\le 0`$ the row always holds, and the dual is solved as usual. Either way the function must not raise. A Python `sum` over no terms is the number `0`, and `0 >= v_j` is a `bool`, which `add_linear_constraint` refuses with a `TypeError`; start such a sum from `mathopt.LinearExpression()`, or keep a zero term for each row, so the cover row is always a MathOpt expression."
+    },
+    {
+      "type": "para",
+      "text": "A free variable is `add_variable(lb=-math.inf, ub=math.inf)`; MathOpt's default lower bound is also $`-\\infty`$, so write each bound you mean. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef solve_dual(value: dict[str, float],\n               rows: dict[str, tuple[dict[str, float], str, float]]) -> tuple[float | None, dict[str, float]]:\n    \"\"\"Build and solve the dual of the maximization LP; return its optimal value and the row prices.\"\"\"\n    dual = mathopt.Model(name=\"dual\")\n    price = {}\n    for name, (_, sense, _) in rows.items():\n        if sense == \"<=\":\n            price[name] = dual.add_variable(lb=0, name=f\"y_{name}\")\n        elif sense == \">=\":\n            price[name] = dual.add_variable(lb=-math.inf, ub=0, name=f\"y_{name}\")\n        else:\n            price[name] = dual.add_variable(lb=-math.inf, ub=math.inf, name=f\"y_{name}\")\n    for activity, worth in value.items():\n        column = sum(coeffs.get(activity, 0) * price[name] for name, (coeffs, _, _) in rows.items())\n        dual.add_linear_constraint(column >= worth, name=f\"cover_{activity}\")\n    dual.minimize(sum(rhs * price[name] for name, (_, _, rhs) in rows.items()))\n    result = mathopt.solve(dual, mathopt.SolverType.GLOP)\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None, {}\n    return result.objective_value(), {name: result.variable_values(y) for name, y in price.items()}\n\n\nif __name__ == \"__main__\":\n    value = {\"inspect\": 4, \"repair\": 3}\n    rows = {\"hours\": ({\"inspect\": 1, \"repair\": 1}, \"<=\", 10), \"inspect_cap\": ({\"inspect\": 1}, \"<=\", 6)}\n    print(solve_dual(value, rows))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef solve_dual(value: dict[str, float],\n               rows: dict[str, tuple[dict[str, float], str, float]]) -> tuple[float | None, dict[str, float]]:\n    \"\"\"Build and solve the dual of the maximization LP; return its optimal value and the row prices.\"\"\"\n    # TODO: write the dual on paper first: one price per row (its sign set by the row's sense),\n    # one cover row per activity, and the objective. Then build it, solve it with GLOP, and read it.\n    return 0.0, {}\n\n\nif __name__ == \"__main__\":\n    value = {\"inspect\": 4, \"repair\": 3}\n    rows = {\"hours\": ({\"inspect\": 1, \"repair\": 1}, \"<=\", 10), \"inspect_cap\": ({\"inspect\": 1}, \"<=\", 6)}\n    print(solve_dual(value, rows))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 7,
+    "code": 3,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "d7ec78e9ea669bd09ff7e78f3f1f1023fc440747a79138ce34e5de1f5b863767",
+  "starting_code": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef solve_dual(value: dict[str, float],\n               rows: dict[str, tuple[dict[str, float], str, float]]) -> tuple[float | None, dict[str, float]]:\n    \"\"\"Build and solve the dual of the maximization LP; return its optimal value and the row prices.\"\"\"\n    # TODO: write the dual on paper first: one price per row (its sign set by the row's sense),\n    # one cover row per activity, and the objective. Then build it, solve it with GLOP, and read it.\n    return 0.0, {}\n\n\nif __name__ == \"__main__\":\n    value = {\"inspect\": 4, \"repair\": 3}\n    rows = {\"hours\": ({\"inspect\": 1, \"repair\": 1}, \"<=\", 10), \"inspect_cap\": ({\"inspect\": 1}, \"<=\", 6)}\n    print(solve_dual(value, rows))\n",
+  "exercise": {
+    "main_path": "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-01/practice-2/dual.py",
+    "test_path": "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-01/practice-2/test_dual.py",
+    "run_command": [
+      "python3",
+      "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-01/practice-2/dual.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-01/practice-2/target/report.xml",
+      "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-01/practice-2/test_dual.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_dual_value_equals_the_optimum_and_prices_the_rows",
+        "kind": "main",
+        "says": "the dual of an LP with <= rows has the LP's optimal value, and its prices are the rows' prices"
+      },
+      {
+        "id": "test_a_minimum_row_gets_a_price_at_most_zero",
+        "kind": "edge",
+        "says": "a >= row's price is at most zero, so a binding minimum gets a negative price"
+      },
+      {
+        "id": "test_an_equality_row_may_get_a_negative_price",
+        "kind": "edge",
+        "says": "an == row's price is free, and here it is negative"
+      },
+      {
+        "id": "test_an_activity_in_no_row_gets_a_cover_row_all_the_same",
+        "kind": "edge",
+        "says": "an activity in no row still gets a cover row, 0 >= its value, so the dual is infeasible when the value is positive"
+      },
+      {
+        "id": "test_each_cover_row_weights_prices_by_the_activitys_coefficients",
+        "kind": "edge",
+        "says": "an activity's cover row multiplies each row's price by the activity's coefficient in that row"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "06-duality-and-sensitivity/README_2.3.1.md",
+      "section": "A Row's Direction Sets the Sign of Its Price"
+    },
+    "concepts": [
+      "the smallest bound is an LP: rows become prices, variables become cover rows, max becomes min",
+      "a <= row's price is nonnegative, a >= row's nonpositive, and an == row's free"
+    ]
+  }
+}

@@ -1,0 +1,144 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "29-strong-formulations"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Clashing talks as clique rows",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A utility's training week (not GridCap) has more proposed talks than it can run. Each talk has a speaker, a value, and a number of hours of the one shared demonstration lab, which is open for $`H`$ hours over the week. Two rules: a speaker gives at most one talk, and the lab hours of **any two** accepted talks must fit together within $`H`$ (the lab is booked in pairs of sessions; that is the planners' rule, take it as given). With $`x_t \\in \\{0, 1\\}`$ for \"talk $`t`$ is accepted\", the model maximizes $`\\sum_t v_t\\, x_t`$."
+    },
+    {
+      "type": "para",
+      "text": "Write two functions in `programme.py`:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`clashes(talks, lab_hours)`: the pairs of talks that no allowed programme accepts together, as a set of `frozenset({name, name})`;",
+        "`add_clash_rows(model, x, pairs)`: rows that refuse exactly those pairs, written so the LP bound is as tight as you can make it, and returning how many rows were added."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Pair rows $`x_a + x_b \\le 1`$ would refuse the right programmes, but the lesson showed why they leave the LP loose. Decide on paper which groups of talks can share one \"at most one\" row, why that row is valid, and how to cover every clash with such rows. Then write the rows with labels before coding."
+    },
+    {
+      "type": "para",
+      "text": "The tests try every programme of five talks against the rules, so any correct set of rows passes them; two of them also check the LP bound. About twenty lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport itertools\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Talk:\n    name: str\n    speaker: str\n    lab_hours: int             # hours of the shared lab the talk's demonstration needs\n    value: int\n\n\ndef clashes(talks: list[Talk], lab_hours: int) -> set[frozenset[str]]:\n    \"\"\"Pairs of talks no programme can accept together.\"\"\"\n    pairs = set()\n    for a, b in itertools.combinations(talks, 2):\n        same_speaker = a.speaker == b.speaker                         # a speaker gives one talk\n        too_long = a.lab_hours + b.lab_hours > lab_hours              # the two overrun the lab\n        if same_speaker or too_long:\n            pairs.add(frozenset((a.name, b.name)))\n    return pairs\n\n\ndef add_clash_rows(model: mathopt.Model, x: dict, pairs: set[frozenset[str]]) -> int:\n    \"\"\"Cover every clash with a row 'at most one of these talks', as few and as wide as greedily found.\"\"\"\n    names = sorted(x)\n    clash = {n: {m for m in names if frozenset((n, m)) in pairs} for n in names}\n    covered: set[frozenset[str]] = set()\n    rows = 0\n    for first in names:\n        for second in sorted(clash[first]):\n            if frozenset((first, second)) in covered:\n                continue\n            group = [first, second]\n            for other in names:\n                if other not in group and all(other in clash[g] for g in group):\n                    group.append(other)\n            model.add_linear_constraint(sum(x[g] for g in group) <= 1, name=f\"clash_{rows}\")\n            covered |= {frozenset(p) for p in itertools.combinations(group, 2)}\n            rows += 1\n    return rows\n\n\ndef build(talks: list[Talk], lab_hours: int, *, integer: bool = True) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"programme\")\n    x = {t.name: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{t.name}\") for t in talks}\n    add_clash_rows(model, x, clashes(talks, lab_hours))\n    model.maximize(sum(t.value * x[t.name] for t in talks))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    talks = [Talk(\"T1\", \"ana\", 5, 3), Talk(\"T2\", \"ben\", 4, 2), Talk(\"T3\", \"ana\", 1, 1)]\n    print(sorted(sorted(p) for p in clashes(talks, 8)))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport itertools\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Talk:\n    name: str\n    speaker: str\n    lab_hours: int             # hours of the shared lab the talk's demonstration needs\n    value: int\n\n\ndef clashes(talks: list[Talk], lab_hours: int) -> set[frozenset[str]]:\n    \"\"\"Pairs of talks no programme can accept together.\"\"\"\n    # TODO: the pairs that clash, and why.\n    return set()\n\n\ndef add_clash_rows(model: mathopt.Model, x: dict, pairs: set[frozenset[str]]) -> int:\n    \"\"\"Cover every clash with a row 'at most one of these talks', as few and as wide as greedily found.\"\"\"\n    # TODO: rows that cover every clash.\n    return 0\n\n\ndef build(talks: list[Talk], lab_hours: int, *, integer: bool = True) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"programme\")\n    x = {t.name: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{t.name}\") for t in talks}\n    add_clash_rows(model, x, clashes(talks, lab_hours))\n    model.maximize(sum(t.value * x[t.name] for t in talks))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    talks = [Talk(\"T1\", \"ana\", 5, 3), Talk(\"T2\", \"ben\", 4, 2), Talk(\"T3\", \"ana\", 1, 1)]\n    print(sorted(sorted(p) for p in clashes(talks, 8)))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "39856735c3b59ffb0ed87a0c1340b1dadf2de196d030806b6b7bcbbfb5feb2cf",
+  "starting_code": "from __future__ import annotations\n\nimport itertools\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Talk:\n    name: str\n    speaker: str\n    lab_hours: int             # hours of the shared lab the talk's demonstration needs\n    value: int\n\n\ndef clashes(talks: list[Talk], lab_hours: int) -> set[frozenset[str]]:\n    \"\"\"Pairs of talks no programme can accept together.\"\"\"\n    # TODO: the pairs that clash, and why.\n    return set()\n\n\ndef add_clash_rows(model: mathopt.Model, x: dict, pairs: set[frozenset[str]]) -> int:\n    \"\"\"Cover every clash with a row 'at most one of these talks', as few and as wide as greedily found.\"\"\"\n    # TODO: rows that cover every clash.\n    return 0\n\n\ndef build(talks: list[Talk], lab_hours: int, *, integer: bool = True) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"programme\")\n    x = {t.name: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{t.name}\") for t in talks}\n    add_clash_rows(model, x, clashes(talks, lab_hours))\n    model.maximize(sum(t.value * x[t.name] for t in talks))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    talks = [Talk(\"T1\", \"ana\", 5, 3), Talk(\"T2\", \"ben\", 4, 2), Talk(\"T3\", \"ana\", 1, 1)]\n    print(sorted(sorted(p) for p in clashes(talks, 8)))\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-02/practice-2/programme.py",
+    "test_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-02/practice-2/test_programme.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-02/practice-2/programme.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/29-strong-formulations/prose/unit-02/practice-2/target/report.xml",
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-02/practice-2/test_programme.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_every_programme_the_rules_allow_is_allowed_and_no_other",
+        "kind": "main",
+        "says": "every programme the two rules allow is allowed, and every other refused"
+      },
+      {
+        "id": "test_one_speaker_two_talks_clash_even_with_lab_room",
+        "kind": "edge",
+        "says": "two talks by one speaker clash even when the lab has room for both"
+      },
+      {
+        "id": "test_two_talks_that_exactly_fill_the_lab_may_both_run",
+        "kind": "edge",
+        "says": "two talks whose lab hours add up to exactly the lab's hours may both run"
+      },
+      {
+        "id": "test_talks_that_clash_two_by_two_share_one_row",
+        "kind": "edge",
+        "says": "talks that clash two by two, for whatever reason, share one row, so the LP cannot accept half of each"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "29-strong-formulations/README_6.7.2.md",
+      "section": "A Clique of Conflicts Is One Valid Row, Stronger Than Its Pairs"
+    },
+    "concepts": [
+      "a set of pairwise conflicts gives one row that implies its pair rows and cuts more",
+      "pairs no allowed plan uses together come from once, alternative and capacity rows"
+    ]
+  }
+}

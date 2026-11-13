@@ -1,0 +1,368 @@
+# 9.2.1 Why a MILP Has No Duals
+
+GridCap's finance partner asks the question every capital plan meets: "What is one more $1k of
+capital budget worth?" In lesson 2.3.4 the answer was a shadow price, read from the LP's dual
+values. GridCap's real plan is the selection model of lesson 1.1.3, where each project is funded
+or not. That model is a MILP (a mixed-integer linear program: a linear program in which some
+variables must take whole values). This lesson asks the solver for the MILP's dual values, sees
+why there are none, and finds out what a dual of a MILP has to be instead. GridCap is a fictional
+utility; none of its numbers describe a real one.
+
+## The Model
+
+The one-period selection model on GridCap's small portfolio (40 projects), with the budget $`B`$
+as a parameter, so that later sections can change it.
+
+**Sets.** $`P`$ the projects; $`M \subseteq P`$ the must-do projects; $`C \subseteq P`$ the child
+projects, each with a parent $`p(c)`$; $`\mathcal{G}`$ the alternative groups, each a set of
+projects.
+
+**Parameters.** $`v_i`$, the NPV of project $`i`$ if it starts as early as it can ($k);
+$`c_i`$, its capital cost ($k); $`B`$, the capital budget ($k; the small portfolio's is 38,390).
+
+**Variables.** $`x_i \in \{0, 1\}`$ for every $`i \in P`$: project $`i`$ is funded.
+
+**Objective.**
+
+```math
+V(B) \;=\; \max \; \sum_{i \in P} v_i\, x_i
+```
+
+**Constraints.**
+
+```math
+\begin{aligned}
+\sum_{i \in P} c_i\, x_i &\le B && && \text{(budget)} \\
+x_i &= 1 && \forall i \in M && \text{(must}_i) \\
+x_c &\le x_{p(c)} && \forall c \in C && \text{(parent}_c) \\
+\sum_{i \in g} x_i &\le 1 && \forall g \in \mathcal{G} && \text{(alt}_g)
+\end{aligned}
+```
+
+The **LP relaxation** (lesson 3.1.1) is the same model with $`0 \le x_i \le 1`$ in place of
+$`x_i \in \{0, 1\}`$: a project may be funded in part. The code builds both from one function,
+`build(portfolio, budget, integer=...)` in `selection.py`, and names each row as the labels do
+(`budget`, `must_P003`, `parent_P016`, `alt_G001`).
+
+$`V(B)`$, the best NPV the model can reach with budget $`B`$, is the model's **value function**.
+Read as a function of $`B`$, it is the curve finance is asking about.
+
+## A Solver Reports No Dual Values for a MILP
+
+Solve the selection model at the small portfolio's budget and ask for the budget row's dual value,
+exactly as lesson 2.3.3 did for an LP:
+
+```python
+milp = build(small, B)
+result = solve_highs(milp.model)
+print(f"MILP {result.termination.reason.name}  value {result.objective_value():,.0f}  budget {B:,}")
+print("has_dual_feasible_solution:", result.has_dual_feasible_solution())
+try:
+    result.dual_values(milp.budget)
+except ValueError as error:
+    print("dual_values:", error)
+```
+
+```text
+MILP OPTIMAL  value 25,336  budget 38,390
+has_dual_feasible_solution: False
+dual_values: Best solution does not have an associated dual feasible solution.
+```
+
+The solve is optimal, and the result says it carries no dual solution. MathOpt's
+`SolveResult.dual_values` raises `ValueError` in that case, as its docstring says, so a report
+that reads prices should check `has_dual_feasible_solution()` first, the guard the OR-Tools sample
+`advanced_linear_programming.py` uses. Lesson 4.2.2 reads the same flag, and lesson 5.3.2 shows
+gurobipy refusing `Pi` on a MIP in the same way.
+
+This is not a missing feature. The rest of this lesson shows that a MILP has no dual made of one
+number per row, so the solver has none to give.
+
+## The LP Relaxation Has a Price, but It Prices a Plan Nobody Can Fund
+
+The LP relaxation does have dual values. Solve it with GLOP (OR-Tools' simplex solver, lesson 2.4.1):
+
+```python
+lp = build(small, B, integer=False)          # the LP relaxation: 0 <= x_i <= 1
+relaxed = solve_glop(lp.model)
+price = relaxed.dual_values(lp.budget)
+print(f"LP relaxation  value {relaxed.objective_value():,.1f}  budget price {clean(price)}")
+print(f"gap between the two: {relaxed.objective_value() - result.objective_value():,.1f}")
+```
+
+```text
+LP relaxation  value 25,451.3  budget price 0.5867
+gap between the two: 115.3
+fractional projects in the LP optimum: {'P022': 0.522}
+```
+
+The relaxation says one more $1k of budget is worth $0.5867k. But its optimum funds 52.2% of
+project P022, a transmission line that is either built or not. Its value, 25,451.3, is $115.3k
+above the best plan GridCap can actually fund.
+
+The sign follows MathOpt's convention for a $`\le`$ row in a maximization: the dual value is zero or
+positive, and it is the rate at which the best value rises as the row's right-hand side grows.
+Solving the same relaxation with $1k more budget shows the rise directly:
+
+```python
+more = solve_glop(build(small, B + 1, integer=False).model)  # the same relaxation with $1k more budget
+```
+
+```text
+LP relaxation at B + 1: value 25,451.8533, up 0.5867
+```
+
+So a positive `dual_values` entry on the budget row means more budget, more value: here $0.5867k
+per $1k, exactly the printed price.
+
+Lesson 2.3.2 proved weak duality for an LP: any feasible dual prices give an upper bound on every
+plan. The relaxation's prices are feasible prices for the relaxation, and every integer plan is
+also a plan of the relaxation, so they still bound the MILP: no funded plan is worth more
+than 25,451.3. What fails is strong duality. For an LP the best bound equals the best plan; here the
+best bound the LP's prices can give is 25,451.3, and the best plan is 25,336. The difference is
+the **integrality gap** of lesson 3.1.2. A price whose bound is not tight does not describe the
+optimum it sits next to, so it is not the MILP's marginal value.
+
+## A Price Is a Line That Touches the Value Function From Above, and a Step Function Has Almost None
+
+What does a shadow price mean as a picture? In lesson 2.3.3 the price held over a range: within
+it, the LP's value moved by exactly price × change. So the line through $`(B, V(B))`$ with slope
+$`p`$ touched the value curve at $`B`$, and outside the range the curve fell below that line.
+For an LP this always works, because an LP's value function, for a maximization, is **concave**:
+the curve never dips below the straight segment (the chord) between two of its points, so at
+every budget some line touches it from above. In symbols, $`p`$ is a price at $`B`$ when
+
+```math
+V(B') \;\le\; V(B) + p\,(B' - B) \qquad \text{for every budget } B'.
+```
+
+The MILP's value function is not concave. Three solves are enough to see it:
+
+```python
+values = {b: round(solve_highs(build(small, b).model).objective_value()) for b in (38370, 38380, 38390)}
+chord = (values[38370] + values[38390]) / 2
+```
+
+```text
+MILP V(B): {38370: 25317, 38380: 25317, 38390: 25336} chord at 38,380: 25,326.5 below the chord
+```
+
+$`V`$ stays at 25,317 from 38,370 to 38,380 and jumps to 25,336 at 38,390. At 38,380 the curve
+sits below the chord from its neighbours, which a concave function never does.
+
+To see which budgets do get a price, take a model small enough to compute its whole value
+function. GridCap buys pole-replacement work in three standard packages (this lesson's own
+example): a package of 3 crew-weeks worth $40k, one of 5 crew-weeks worth $70k, and one of 7
+crew-weeks worth $100k. Any whole number of each may be bought, within $`d`$ crew-weeks.
+
+**Sets.** $`J = \{1, 2, 3\}`$, the package types. **Parameters.** $`a_j`$, the crew-weeks package
+$`j`$ uses, $`a = (3, 5, 7)`$; $`c_j`$, its value in $10k, $`c = (4, 7, 10)`$; $`d`$, the
+crew-weeks available. **Variables.** $`x_j \in \{0, 1, 2, \dots\}`$, the number of packages of
+type $`j`$ bought.
+
+```math
+z(d) \;=\; \max \sum_{j \in J} c_j\, x_j
+\qquad \text{s.t.} \quad \sum_{j \in J} a_j\, x_j \le d \quad \text{(weeks)}, \qquad x_j \in \mathbb{Z}_{\ge 0}\ \ \forall j \in J
+```
+
+Its value function $`z(d)`$ comes from a short recurrence: with $`d`$ weeks, either leave one week
+unused or end with one more package. The program also tests, at each $`d`$, which slopes $`p`$
+satisfy the touching-line inequality above. A price must be at least every forward slope
+$`(z(e) - z(d)) / (e - d)`$ for $`e > d`$, and at most every backward slope for $`e < d`$:
+
+```python
+def value_function(D: int) -> list[int]:
+    """z(d) = max sum c_j x_j  s.t.  sum a_j x_j <= d,  x_j in {0, 1, 2, ...}, for d = 0..D."""
+    z = [0] * (D + 1)
+    for d in range(1, D + 1):
+        z[d] = max([z[d - 1]] + [z[d - a] + c for a, c in zip(weeks, worth) if a <= d])
+    return z
+```
+
+```python
+for d in range(0, 22):
+    up = max((z[e] - z[d]) / (e - d) for e in range(d + 1, D + 1))        # a price must be at least this
+    down = min([(z[d] - z[e]) / (d - e) for e in range(d)] or [math.inf])  # ... and at most this
+    support = f"any p in [{up:.3f}, {down:.3f}]" if up <= down else "none"
+```
+
+```text
+ d z(d)     LP  price that supports z at d
+ 0    0   0.00  any p in [1.429, inf]
+ 1    0   1.43  none
+ 2    0   2.86  none
+ 3    4   4.29  none
+ 4    4   5.71  none
+ 5    7   7.14  none
+ 6    8   8.57  none
+ 7   10  10.00  any p in [1.429, 1.429]
+ 8   11  11.43  none
+ 9   12  12.86  none
+10   14  14.29  none
+11   15  15.71  none
+12   17  17.14  none
+13   18  18.57  none
+14   20  20.00  any p in [1.429, 1.429]
+15   21  21.43  none
+16   22  22.86  none
+17   24  24.29  none
+18   25  25.71  none
+19   27  27.14  none
+20   28  28.57  none
+21   30  30.00  any p in [1.429, 1.429]
+```
+
+The column LP is the LP relaxation's value, $`\tfrac{10}{7} d`$: the 7-week package has the best
+value per week, 10/7 ≈ 1.429, and the relaxation buys fractions of it. A price exists at
+$`d = 0, 7, 14, 21`$, the budgets where the integer value meets the LP's line, so the
+integrality gap is zero there. It is the LP's price, 1.429. At every other budget no line
+touches $`z`$ from above, so no single number can be "the value of one more crew-week". At
+$`d = 4`$, for example, the next week is worth 3 ($`z(5) - z(4)`$), so a price must be at least 3;
+but the week before was worth nothing ($`z(4) = z(3)`$), so a price must be at most 0. Both cannot
+hold.
+
+<!-- practice 1 -->
+
+## A MILP's Dual Is a Function, Not a Number
+
+The LP dual of lesson 2.3.1 gives each row a price $`p`$, and a plan's bound is $`p \times`$ the
+right side. Integer programming theory keeps the idea of a dual, a problem whose every feasible
+answer bounds every plan, but lets the price be any function $`F`$ of the right side instead of a
+straight line through zero. This is the **subadditive dual** of Jeroslow and Johnson, surveyed by
+Güzelsoy and Ralphs (section 3). They write it for minimization, where $`F`$ must be
+subadditive; for a maximization like ours the same rules hold with every inequality turned
+around, and $`F`$ must be **superadditive**: $`F(d) + F(e) \le F(d + e)`$ for all $`d, e`$.
+
+For the package problem, a function $`F`$ on $`0, 1, \dots, D`$ is **dual feasible** when
+
+```math
+\begin{aligned}
+F(0) &= 0, \qquad F(1) \ge 0 && \text{(a week left unused is worth nothing, never less)} \\
+F(d) + F(e) &\le F(d + e) && \forall d, e \ge 0,\ d + e \le D \quad \text{(superadditive)} \\
+F(a_j) &\ge c_j && \forall j \in J \quad \text{(each package's column)}
+\end{aligned}
+```
+
+and then $`F(d)`$ bounds every plan's value with $`d`$ weeks. It is an upper bound and nothing
+more: it does not promise that some plan reaches it, nor that every plan is worth at least that
+much, and it does not price the next week. The proof is three steps. A plan
+uses its weeks on packages and leaves $`s \ge 0`$ unused, so $`d = \sum_j a_j x_j + s`$. Apply
+superadditivity once per package bought and once per unused week:
+
+```math
+F(d) \;\ge\; \sum_{j} x_j\, F(a_j) + s\,F(1) \;\ge\; \sum_{j} c_j\, x_j .
+```
+
+This is **weak duality**. **Strong duality** holds too: the value function $`z`$ is itself dual
+feasible, and $`F = z`$ gives $`F(d) = z(d)`$, the best plan exactly (Güzelsoy and Ralphs, Theorem
+6, due to Jeroslow and to Wolsey). The program checks four candidate functions against the rules:
+
+```python
+def is_dual_function(F) -> list[str]:
+    """What a function F on 0..D must satisfy to bound every plan: the subadditive dual's rows."""
+    broken = []
+    if F(0) != 0:
+        broken.append("F(0) = 0")
+    if F(1) < 0:
+        broken.append("F(1) >= 0 (the slack column)")
+    if any(F(d) + F(e) > F(d + e) + 1e-9 for d in range(D + 1) for e in range(D + 1 - d)):
+        broken.append("superadditive")
+    broken += [f"F({a}) >= {c}" for a, c in zip(weeks, worth) if F(a) < c - 1e-9]
+    return broken
+```
+
+```text
+value function z         dual feasible                F(4) = 4.00 vs z = 4, F(20) = 28.00 vs z = 28
+LP price 10d/7           dual feasible                F(4) = 5.71 vs z = 4, F(20) = 28.57 vs z = 28
+rounded LP floor(10d/7)  dual feasible                F(4) = 5.00 vs z = 4, F(20) = 28.00 vs z = 28
+price 1.3d               breaks F(3) >= 4; F(5) >= 7; F(7) >= 10 F(4) = 5.20 vs z = 4, F(20) = 26.00 vs z = 28
+```
+
+Read the four rows in order:
+
+- **The value function** is dual feasible and exact at every budget, as strong duality promises.
+- **The LP price** $`\tfrac{10}{7}d`$ is the linear dual function: feasible, so a valid bound, but
+  loose (5.71 against 4 at $`d = 4`$). The LP dual is the subadditive dual restricted to straight
+  lines, which is why its bound has a gap.
+- **The rounded LP price** $`\lfloor \tfrac{10}{7} d \rfloor`$ is not linear, yet it is
+  superadditive (rounding down two numbers loses at least as much as rounding down their sum), so
+  it is feasible. It closes the gap at $`d = 20`$ and narrows it at $`d = 4`$ (5, where the LP
+  price gave 5.71). Functions built from
+  rounded linear ones like this are how cutting planes (lesson 3.3.1) tighten an LP.
+- **The price 1.3 per week** fails every column rule: 1.3 × 7 = 9.1 is less than the 7-week
+  package's value of 10. Its "bound" at $`d = 20`$, 26, is below a plan GridCap can actually buy
+  (worth 28), so it bounds nothing.
+
+So a MILP does have a dual, but its answer is a function of the whole right side, not a number per
+row, and "the value of the next unit" depends on where you stand on that function. No solver
+hands you that function. Computing it means knowing the best plan at every right side, which is
+harder than solving the MILP once. Güzelsoy and Ralphs (section 4.7) show that a finished
+branch-and-cut tree does contain one valid dual function, assembled from the LP duals at its
+leaves, but MathOpt does not expose the tree. In practice, then, a MILP is priced in two other
+ways, which the rest of this module teaches. Lesson 9.2.2 fixes the integers and reads LP prices
+that hold under that condition. Lessons 9.2.3 and 9.2.4 re-solve at many budgets and read $`V(B)`$
+directly.
+
+<!-- practice 2 -->
+
+## Summary
+
+- **A solver reports no dual values for a MILP.** MathOpt says so with
+  `has_dual_feasible_solution() == False`, and `dual_values` raises `ValueError`; check the flag
+  before reading prices.
+- **The LP relaxation has a price, but it prices a plan nobody can fund.** Its prices still bound
+  every integer plan (weak duality), but the bound is not tight: on the small portfolio it is
+  $115.3k above the best plan.
+- **A price is a line that touches the value function from above, and a step function has almost
+  none.** The MILP's $`V(B)`$ steps; a price exists only where the integer value meets the LP's
+  line, and there it is the LP's price.
+- **A MILP's dual is a function, not a number.** Any superadditive $`F`$ with $`F(0) = 0`$ that
+  covers every column's value bounds every plan; the value function is the best such $`F`$.
+
+## Reference
+
+| Question | Answer |
+| --- | --- |
+| Does a MILP solve return dual values? | No: `has_dual_feasible_solution()` is `False`; `dual_values` raises `ValueError` |
+| What does the LP relaxation's price give? | An upper bound on every integer plan, with a gap; it prices fractional projects |
+| When does a single price support $`V`$ at $`B`$? | When $`V(B') \le V(B) + p(B' - B)`$ for every $`B'`$; for a MILP, only where the integrality gap is zero |
+| What is a MILP's dual? | A function $`F`$ of the right side: superadditive (max) or subadditive (min), $`F(0) = 0`$, each column's value covered |
+| Weak duality | $`F(b) \ge`$ every plan's value for every dual-feasible $`F`$ |
+| Strong duality | The value function is dual feasible and exact |
+
+**Further reading:** [MathOpt `result.py` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/result.py) (`dual_values` and `reduced_costs` raise `ValueError` when the best solution has no dual feasible solution, and `has_dual_feasible_solution` is not promised even at an optimal termination); [MathOpt sample `advanced_linear_programming.py`](https://github.com/google/or-tools/blob/stable/ortools/math_opt/samples/python/advanced_linear_programming.py) (checks `has_dual_feasible_solution()` before reading `dual_values` and `reduced_costs`); [MathOpt (OR-Tools)](https://developers.google.com/optimization/math_opt) (lists duality among MathOpt's features for LPs and MIPs); [Güzelsoy and Ralphs, Duality for Mixed Integer Linear Programs (COR@L report 06T-009-R1)](https://coral.ise.lehigh.edu/%7Eted/files/papers/MILPD06.pdf) (the survey states every MILP as a minimization, $`z_{IP} = \min cx`$, so its dual functions bound the value function from below and its subadditive dual becomes this lesson's superadditive one; for our maximization, read each "lower bound" as an upper bound and each "below" as "above"; section 2: the value function and dual functions that bound it from below, with a one-row example whose value function is a sawtooth; section 3: the subadditive dual, weak duality as Theorem 2 and strong duality as Theorem 6; section 4.7: a dual function from a branch-and-cut tree); [Wolsey, Integer programming duality: price functions and sensitivity analysis (CORE reprint 431)](https://ideas.repec.org/p/cor/louvrp/431.html) (the section 9 resource library's entry; the page is a bibliographic record, Mathematical Programming 20, 1981, with no abstract, and the survey above reviews the paper).
+
+## Challenges
+
+1. In the package problem, add a 2-week package worth $25k. Predict the new LP price per week, and
+   at which $`d`$ a price exists now.
+2. Is $`F(d) = 4\lfloor d/3 \rfloor`$ dual feasible for the package problem? Find the first rule
+   it breaks, or argue that it breaks none.
+3. The finance partner says: "The LP relaxation is within 0.5% of the MILP, so its price is good
+   enough." What does the touching-line test say about that argument at 38,380?
+
+## Design Note: Read the Flag, Not the Exception
+
+A pricing report that wraps `dual_values` in `try` works, but it hides the reason. Check
+`has_dual_feasible_solution()` and the model's type before reading prices, and say in the report
+which kind of price it is: an LP's shadow price, a relaxation's price, or a fixed-integer price
+(lesson 9.2.2). The three answer different questions.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson
+shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy
+of the code, so the course's own files never change.
+
+**no_duals.py.** Solves the selection model as a MILP and as its LP relaxation, shows the missing
+duals, the gap, the price's sign checked with $1k more budget, and the step that breaks concavity (*the first three sections*). *Try:* Change
+the budget to 38,410. Predict whether the LP relaxation still has a fractional project.
+
+**integer_dual.py.** Computes the package problem's value function, finds where a price supports
+it, and checks four candidate dual functions (*the last two sections*). *Try:* Change the 7-week
+package's value from 10 to 9. Predict which package now sets the LP price, and where a price
+exists.
+
+- Program: [no_duals.py](src/no_duals.py)
+- Program: [integer_dual.py](src/integer_dual.py)
+- Library: [selection.py](src/selection.py)

@@ -1,0 +1,152 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "17-cpsat-tuning-and-diagnostics"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Progress lines as events",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A crew-rostering service maximizes a score with CP-SAT and wants a chart of each solve's progress. The log's progress lines look like this:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "#Bound   0.02s best:-inf  next:[300,5200] main\n#1       0.03s best:4100 next:[4101,5200] main\n#Done    0.09s main"
+    },
+    {
+      "type": "para",
+      "text": "`#1`, `#2`, ... announce a new plan, `#Bound` a better bound, and `#Done` the end of the search. After the time come `best:` (the best plan's value, `-inf` before any plan exists), `next:[low,high]` (for a maximization, `high` is the bound) and the worker that caused the event, sometimes followed by a comment. `#Model` lines report model changes and are not progress events."
+    },
+    {
+      "type": "para",
+      "text": "Write two functions in `progress.py`:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`events(log)`: a list with one tuple `(kind, best, bound, worker)` per `#N`, `#Bound` and `#Done` line, in order. `kind` is `\"solution\"`, `\"bound\"` or `\"done\"`; `best` and `bound` are integers, or `None` when the line has no number for them (`-inf`, or a `#Done` line); `worker` is the worker's name alone.",
+        "`stopped_by_a_limit(log)`: `True` if the log has no `#Done` line."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "A `#Done` line has no `best:` or `next:` part, so a pattern for the range, such as the lesson's `RANGE`, does not match it. Read such a line's worker as the first word after the time, as the reference does (`rest.split()[0]` on what follows the time, or `\"\"` if nothing follows), and give it `None` for `best` and `bound`."
+    },
+    {
+      "type": "para",
+      "text": "Skip every other line. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport re\n\nEVENT = re.compile(r\"^#(\\d+|Bound|Done)\\s+\\S+\\s*(.*)$\")\nRANGE = re.compile(r\"best:(\\S+)\\s+next:\\[(\\S+),(\\S+)\\]\\s*(\\S*)\")\n\n\ndef number(text: str) -> int | None:\n    return None if \"inf\" in text else int(text)\n\n\ndef events(log: str) -> list[tuple[str, int | None, int | None, str]]:\n    \"\"\"(kind, best, bound, worker) per progress line of a maximization; kind is solution, bound or done.\"\"\"\n    out = []\n    for line in log.splitlines():\n        found = EVENT.match(line)\n        if not found:\n            continue\n        tag, rest = found.groups()\n        kind = \"solution\" if tag.isdigit() else tag.lower()\n        progress = RANGE.match(rest)\n        if progress:\n            best, _, high, worker = progress.groups()\n            out.append((kind, number(best), number(high), worker))\n        else:\n            out.append((kind, None, None, rest.split()[0] if rest else \"\"))\n    return out\n\n\ndef stopped_by_a_limit(log: str) -> bool:\n    \"\"\"True if the search never reached its #Done line.\"\"\"\n    return not any(kind == \"done\" for kind, *_ in events(log))\n\n\nif __name__ == \"__main__\":\n    print(events(\"#1       0.10s best:208873 next:[208874,225336] main\\n#Done    0.14s main\"))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport re\n\nEVENT = re.compile(r\"^#(\\d+|Bound|Done)\\s+\\S+\\s*(.*)$\")\nRANGE = re.compile(r\"best:(\\S+)\\s+next:\\[(\\S+),(\\S+)\\]\\s*(\\S*)\")\n\n\ndef number(text: str) -> int | None:\n    return None if \"inf\" in text else int(text)\n\n\ndef events(log: str) -> list[tuple[str, int | None, int | None, str]]:\n    \"\"\"(kind, best, bound, worker) per progress line of a maximization; kind is solution, bound or done.\"\"\"\n    # TODO: one tuple per #N, #Bound and #Done line.\n    return []\n\n\ndef stopped_by_a_limit(log: str) -> bool:\n    \"\"\"True if the search never reached its #Done line.\"\"\"\n    return False\n\n\nif __name__ == \"__main__\":\n    print(events(\"#1       0.10s best:208873 next:[208874,225336] main\\n#Done    0.14s main\"))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "1c4aaab439af7b17748ff6f613ce0aa846a71712f348659655132368b252dd60",
+  "starting_code": "from __future__ import annotations\n\nimport re\n\nEVENT = re.compile(r\"^#(\\d+|Bound|Done)\\s+\\S+\\s*(.*)$\")\nRANGE = re.compile(r\"best:(\\S+)\\s+next:\\[(\\S+),(\\S+)\\]\\s*(\\S*)\")\n\n\ndef number(text: str) -> int | None:\n    return None if \"inf\" in text else int(text)\n\n\ndef events(log: str) -> list[tuple[str, int | None, int | None, str]]:\n    \"\"\"(kind, best, bound, worker) per progress line of a maximization; kind is solution, bound or done.\"\"\"\n    # TODO: one tuple per #N, #Bound and #Done line.\n    return []\n\n\ndef stopped_by_a_limit(log: str) -> bool:\n    \"\"\"True if the search never reached its #Done line.\"\"\"\n    return False\n\n\nif __name__ == \"__main__\":\n    print(events(\"#1       0.10s best:208873 next:[208874,225336] main\\n#Done    0.14s main\"))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-04/practice-2/progress.py",
+    "test_path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-04/practice-2/test_progress.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-04/practice-2/progress.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-04/practice-2/target/report.xml",
+      "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-04/practice-2/test_progress.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_each_progress_line_becomes_one_event",
+        "kind": "main",
+        "says": "each #N, #Bound and #Done line becomes one event with its plan value, bound and worker"
+      },
+      {
+        "id": "test_a_log_without_done_was_stopped_by_a_limit",
+        "kind": "main",
+        "says": "a log with no #Done line was stopped by a limit, and one with it was not"
+      },
+      {
+        "id": "test_the_worker_is_named_without_its_comment",
+        "kind": "edge",
+        "says": "a worker name followed by a comment in brackets is read as the name alone"
+      },
+      {
+        "id": "test_model_lines_are_not_events",
+        "kind": "edge",
+        "says": "#Model lines are skipped"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-04/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "17-cpsat-tuning-and-diagnostics/README_4.6.4.md",
+      "section": "Each Progress Line Is an Event: a New Plan or a Better Bound"
+    },
+    "concepts": [
+      "each progress line is a plan, a bound or the end, with the best value, the bound and the worker"
+    ]
+  }
+}

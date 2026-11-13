@@ -1,0 +1,621 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "03-integer-programming-foundations",
+    "10-cuts-presolve-heuristics"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Cutting planes: Gomory and cover cuts by hand",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "3.3.1 Cutting Planes: Gomory and Cover Cuts by Hand"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's planners have watched HiGHS solve their selection models in under a second, and they have seen its log print a column called `Cuts` with numbers like 906 in it. A reviewer asks the obvious question: what is the solver cutting, and why does it help? This lesson answers it by doing the cutting by hand, on the smallest GridCap portfolio first and then on a two-variable model where every number fits on a line. GridCap is a fictional utility; its numbers are teaching data."
+    },
+    {
+      "type": "para",
+      "text": "Lessons 3.1.1 and 3.2.2 use the words below too. They are defined again here, so this lesson can be read on its own."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The **budget knapsack**: fund each project or not, under one budget, for the most value. It is the one-period selection model of section 1 with every rule except the budget left out, so the cuts of this lesson have one row to work on."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`P`$ the candidate projects."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`v_i`$, the value (NPV at the earliest start) of project $`i`$, in $k; $`c_i`$, its total cost (capex), in $k; $`B`$, the capital budget, in $k."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_i \\in \\{0, 1\\}`$ for every $`i \\in P`$: 1 if project $`i`$ is funded."
+    },
+    {
+      "type": "para",
+      "text": "**Objective and constraint.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& \\sum_{i \\in P} v_i\\, x_i \\\\\n\\text{s.t. }& \\sum_{i \\in P} c_i\\, x_i \\le B && \\text{(budget)} \\\\\n& x_i \\in \\{0, 1\\} && \\forall i \\in P\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The code is `selection.knapsack`. With `integer=False` it builds the same model with $`0 \\le x_i \\le 1`$ instead of $`x_i \\in \\{0, 1\\}`$:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def knapsack(portfolio: Portfolio, *, integer: bool = True) -> Selection:\n    \"\"\"max sum v_i x_i  s.t.  sum c_i x_i <= B (the one budget row), 0 <= x_i <= 1.\"\"\"\n    model = mathopt.Model(name=f\"{portfolio.name} knapsack\")\n    x = {p.project_id: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{p.project_id}\")\n         for p in portfolio.projects}\n    model.maximize(sum(p.value * x[p.project_id] for p in portfolio.projects))\n    budget = model.add_linear_constraint(\n        sum(p.capex * x[p.project_id] for p in portfolio.projects) <= portfolio.capital_budget, name=\"budget\")\n    return Selection(model, x, {\"budget\": budget})"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The LP Relaxation Overestimates, and a Cut Removes Its Optimum Without Removing Any Plan"
+    },
+    {
+      "type": "para",
+      "text": "The **LP relaxation** of a model with integer variables is the same model with the integrality dropped: here, $`x_i \\in \\{0, 1\\}`$ becomes $`0 \\le x_i \\le 1`$. It is an LP, so it solves fast (section 2), and for a maximization its optimum is an **upper bound** on what any plan can reach (lesson 3.1.2 gives the argument). On GridCap tiny:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "budget 7,390\n  P001  cost 2,150  value 1,386  value per $k 0.645\n  P002  cost 2,730  value   871  value per $k 0.319\n  P003  cost 2,470  value   576  value per $k 0.233\n  P004  cost 3,000  value 2,120  value per $k 0.707\n  P005  cost   250  value   123  value per $k 0.492\n  P006  cost 1,970  value 1,247  value per $k 0.633\n  P007  cost   290  value   265  value per $k 0.914\n  P008  cost   580  value   137  value per $k 0.236\nLP relaxation: value 5,005.3\n  x[P001] = 1.0000, x[P004] = 1.0000, x[P006] = 0.9898, x[P007] = 1.0000\ninteger optimum: value 4,876, funds P001, P004, P005, P006\nintegrality gap: 129.3"
+    },
+    {
+      "type": "para",
+      "text": "The LP funds the projects with the most value per $k first: P007, P004, P001, and then 99% of P006, because only $1,950k of the budget is left and P006 costs $1,970k. Its value, 5,005.3, is 129.3 above the best real plan. That difference is the **integrality gap** of this instance (lesson 3.1.2 measures it across GridCap)."
+    },
+    {
+      "type": "para",
+      "text": "A branch-and-bound solver (lessons 3.2.1 to 3.2.4) uses the LP bound to throw away whole families of plans: if a part of the search can reach at most 4,900 and a plan worth 4,950 is already known, that part is never explored. The closer the bound is to the true best value, the more it throws away. There are two ways to bring the bound down: split the problem into cases (branching, lessons 3.2.1 to 3.2.4), or add rows that the LP must also satisfy. The second is this lesson."
+    },
+    {
+      "type": "para",
+      "text": "A **valid inequality** is a linear row that every 0-1 plan of the model satisfies. Adding one changes no plan's feasibility, so the integer optimum stays the same. A **cut** (or **cutting plane**) is a valid inequality that the current LP optimum breaks: adding it removes that fractional point, so the LP must move to another point, whose value is no higher. Finding a cut for a given LP point is called **separation**: the cut separates the point from the plans."
+    },
+    {
+      "type": "para",
+      "text": "Two things decide whether a cut is any good: it must be valid (or the solver can lose the optimum), and it must be broken by the current LP point (or it changes nothing now). The rest of this lesson builds two kinds of cut that satisfy both, by construction."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Cover Is a Set of Projects That Cannot All Be Funded"
+    },
+    {
+      "type": "para",
+      "text": "Take any set $`C`$ of projects whose costs add up to more than the budget:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_{i \\in C} c_i > B"
+    },
+    {
+      "type": "para",
+      "text": "Such a set is a **cover** (it \"covers\" more than the budget). No plan can fund every project in it. So every 0-1 plan funds at most $`|C| - 1`$ of them:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_{i \\in C} x_i \\le |C| - 1 \\qquad \\text{(cover inequality)}"
+    },
+    {
+      "type": "para",
+      "text": "This holds for every 0-1 plan, so it is valid. It says nothing about money: it only counts projects. That is why it can cut fractional points the budget row allows."
+    },
+    {
+      "type": "para",
+      "text": "On tiny, P001, P004, P006 and P007 cost 2,150 + 3,000 + 1,970 + 290 = 7,410, which is more than 7,390. They form a cover, and the cover inequality says at most 3 of the 4 are funded. The LP point funds 3.9898 of them:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "cover ['P001', 'P004', 'P006', 'P007']: weight 7,410 > 7,390? True; minimal? True\n  at the LP point: sum of x = 3.9898, |C| - 1 = 3, violation 0.9898"
+    },
+    {
+      "type": "para",
+      "text": "The **violation** is how far the point is on the wrong side: $`\\sum_{i \\in C} x_i - (|C| - 1)`$. Positive means the point breaks the inequality, so it is a cut."
+    },
+    {
+      "type": "para",
+      "text": "A cover is **minimal** when dropping any one of its projects leaves a set that fits in the budget. Minimal covers give the strongest cover inequalities. Add P005 to the cover above and it is still a cover (it costs even more), but no longer minimal, since without P005 it is still a cover. Its inequality allows 4 of 5, and the LP point satisfies it:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "cover ['P001', 'P004', 'P006', 'P007', 'P005']: minimal? False; violation -0.0102"
+    },
+    {
+      "type": "para",
+      "text": "In general a non-minimal cover inequality is the minimal one with an extra variable on the left and 1 more on the right. Any point that satisfies the minimal one satisfies the longer one too, but not the other way round, so the longer one cuts less."
+    },
+    {
+      "type": "para",
+      "text": "The three tests, as code:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def is_cover(cover: list[str], a: dict[str, float], b: float) -> bool:\n    \"\"\"A cover is a set of items whose weights add up to more than the row's right-hand side.\"\"\"\n    return sum(a[i] for i in cover) > b\n\n\ndef is_minimal(cover: list[str], a: dict[str, float], b: float) -> bool:\n    \"\"\"Minimal: a cover, and dropping any one item leaves a set that fits.\"\"\"\n    return is_cover(cover, a, b) and all(not is_cover([j for j in cover if j != i], a, b) for i in cover)\n\n\ndef violation(cover: list[str], x: dict[str, float]) -> float:\n    \"\"\"How far x breaks  sum_{i in C} x_i <= |C| - 1; positive means the cut removes x.\"\"\"\n    return sum(x[i] for i in cover) - (len(cover) - 1)"
+    },
+    {
+      "type": "para",
+      "text": "The comparison is strict: a set that costs exactly $`B`$ fits, so it is not a cover, and its \"inequality\" would remove a real plan."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Separation Finds a Cover the LP Point Breaks"
+    },
+    {
+      "type": "para",
+      "text": "A planner does not pick covers by hand on a 400-project portfolio. The solver needs a rule that, given the LP point $`x^*`$, finds a cover whose inequality $`x^*`$ breaks. Rewrite the violation:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_{i \\in C} x^*_i > |C| - 1\n\\iff\n\\sum_{i \\in C} \\left(1 - x^*_i\\right) < 1"
+    },
+    {
+      "type": "para",
+      "text": "(subtract both sides from $`|C|`$). Each project in the cover \"costs\" $`1 - x^*_i`$, how far the LP is from funding it fully, and the cover is violated when those costs add up to less than 1. Projects the LP funds fully cost nothing; a project at 0 costs a full 1, so a violated cover never contains one. So separation asks: find a set whose weights exceed $`B`$, while keeping $`\\sum (1 - x^*_i)`$ below 1."
+    },
+    {
+      "type": "para",
+      "text": "That is itself a knapsack problem, so solvers solve it approximately. A greedy rule works well: take projects in order of $`(1 - x^*_i) / c_i`$, cheapest violation per $k of weight first, until the set covers the budget; then make it minimal by dropping projects, the worst ones first, while it stays a cover; and keep it only if it is violated."
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def separate(a: dict[str, float], b: float, x: dict[str, float]) -> list[str] | None:\n    \"\"\"Greedy separation: a minimal cover that x violates, or None if this greedy finds none.\n\n    Items cheap to include, those with x_i near 1 per unit of weight, go in first, until the set\n    overruns b; then items are dropped, worst first, while the set stays a cover.\n    \"\"\"\n    order = sorted((i for i in a if a[i] > 0), key=lambda i: ((1 - x[i]) / a[i], i))\n    cover, weight = [], 0.0\n    for i in order:\n        cover.append(i)\n        weight += a[i]\n        if weight > b:\n            break\n    else:\n        return None\n    for i in sorted(cover, key=lambda i: (-(1 - x[i]), i)):\n        if is_cover([j for j in cover if j != i], a, b):\n            cover.remove(i)\n    return cover if violation(cover, x) > EPS else None"
+    },
+    {
+      "type": "para",
+      "text": "On tiny it takes P001, P004 and P007 (each at 1, so they cost 0), then P006 (cost 0.0102), and the set now weighs 7,410: a cover, already minimal, with violation 0.9898. The same four projects found by hand:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "greedy separation finds: ['P001', 'P004', 'P007', 'P006']"
+    },
+    {
+      "type": "para",
+      "text": "A greedy rule can miss a violated cover that exists. When it returns `None`, that means \"this rule found none\", not \"there is none\". Exact separation is a knapsack problem of its own, and solving one exactly for every LP point would cost more than the cut is worth."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Each Round of Cuts Lowers the Bound, and the Gain Tails Off"
+    },
+    {
+      "type": "para",
+      "text": "One cut is one step. Repeat it: solve the LP, separate, add the cut, solve again, until the separation finds nothing. Each new LP has every cut so far."
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def cover_rounds(values: dict[str, float], a: dict[str, float], b: float, max_rounds: int = 20):\n    \"\"\"Solve the LP, add the cover it violates, repeat. Yields (round, bound, fractional items, cut).\"\"\"\n    cuts: list[list[str]] = []\n    for k in range(max_rounds + 1):\n        bound, x = lp_with_cuts(values, a, b, cuts)\n        fractional = sorted(i for i in x if EPS < x[i] < 1 - EPS)\n        cover = separate(a, b, x)\n        yield k, bound, {i: x[i] for i in fractional}, cover\n        if cover is None:\n            return\n        cuts.append(cover)"
+    },
+    {
+      "type": "para",
+      "text": "`lp_with_cuts` builds the LP relaxation with one row $`\\sum_{i \\in C} x_i \\le |C| - 1`$ per cut and solves it with GLOP. The share of the gap closed after a round is $`(\\text{first bound} - \\text{bound}) / (\\text{first bound} - \\text{integer optimum})`$. On tiny and on small (40 projects):"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "tiny: integer optimum 4,876\n  round 0: bound 5,005.3 (gap closed 0%); fractional: P006 0.990; add P001 + P004 + P007 + P006 <= 3\n  round 1: bound 4,882.4 (gap closed 95%); fractional: P002 0.007; add P004 + P006 + P002 <= 2\n  round 2: bound 4,880.7 (gap closed 96%); fractional: P008 0.034; no violated cover found\nsmall: integer optimum 27,384\n  round  0: bound 27,424.6 (gap closed  0%); 1 fractional; add a cover of 15 projects\n  round  1: bound 27,423.2 (gap closed  3%); 2 fractional; add a cover of 15 projects\n  round  2: bound 27,422.9 (gap closed  4%); 2 fractional; add a cover of 18 projects\n  round  3: bound 27,421.9 (gap closed  7%); 3 fractional; add a cover of 18 projects\n  round  4: bound 27,420.8 (gap closed  9%); 4 fractional; add a cover of 19 projects\n  round  5: bound 27,419.7 (gap closed 12%); 5 fractional; add a cover of 13 projects\n  round  6: bound 27,415.6 (gap closed 22%); 2 fractional; add a cover of 18 projects\n  round  7: bound 27,414.0 (gap closed 26%); 3 fractional; add a cover of 18 projects\n  round  8: bound 27,413.4 (gap closed 28%); 3 fractional; add a cover of 18 projects\n  round  9: bound 27,412.8 (gap closed 29%); 7 fractional; add a cover of 19 projects\n  round 10: bound 27,412.7 (gap closed 29%); 9 fractional; add a cover of 18 projects\n  round 11: bound 27,412.5 (gap closed 30%); 2 fractional; add a cover of 14 projects\n  round 12: bound 27,412.1 (gap closed 31%); 11 fractional; no violated cover found"
+    },
+    {
+      "type": "para",
+      "text": "Read the tiny run line by line. The first cut removes the point with P006 at 0.99. The new LP optimum funds a sliver of P002 instead, at 0.007, and the bound falls by 122.9: most of the gap. The second cut, on P004, P006 and P002 (7,700 together), closes a little more. Then the LP point has P008 at 0.034 and the greedy separation finds no violated cover. The bound is 4,880.7, still above 4,876: covers alone did not close the gap."
+    },
+    {
+      "type": "para",
+      "text": "On small, the pattern that matters shows: every round lowers the bound (it never rises, since each LP has one row more than the one before), but by less and less, and after 12 rounds 31% of the gap is closed. This is called **tailing off**, and it is typical of cutting planes. The LP point moves a little, a new fractional variable appears, and the next cut removes only that little piece."
+    },
+    {
+      "type": "para",
+      "text": "That is why no modern solver relies on cuts alone. It cuts at the root of the search tree (the first node, before any branching) while the bound falls fast, then branches, and may cut again inside the tree. Branch-and-bound plus cutting planes is called **branch-and-cut**. HiGHS and SCIP both run it: the HiGHS log that lesson 3.3.4 reads counts its cuts in a column of their own."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Gomory Cut Comes From Any Tableau Row With a Fractional Right-Hand Side"
+    },
+    {
+      "type": "para",
+      "text": "Cover cuts need a budget-like row. Ralph Gomory's cut needs only an optimal simplex tableau (lesson 2.2.2), so it applies to any model whose variables, slacks included, must be integers. To see every number, take a two-variable model. GridCap buys substation packages and feeder packages from a contractor, in whole packages only:"
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`d \\in \\mathbb{Z}_{\\ge 0}`$ substation packages, $`t \\in \\mathbb{Z}_{\\ge 0}`$ feeder packages."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** A substation package is worth 5 and a feeder package 8 (risk points removed); each takes one crew, and 6 crews are free; they cost $5M and $9M, and the budget is $45M."
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& 5d + 8t \\\\\n\\text{s.t. }& d + t \\le 6 && \\text{(crews)} \\\\\n& 5d + 9t \\le 45 && \\text{(money)} \\\\\n& d,\\ t \\in \\mathbb{Z}_{\\ge 0}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Adding slack $`s_1`$ to crews and $`s_2`$ to money and running the simplex method gives this final tableau (the program uses exact fractions, so 9/4 is exactly 2.25):"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "round 1: LP optimum d = 9/4, t = 15/4, value 165/4\n     basis       d       t      s1      s2     rhs\n         d       1       0     9/4    -1/4     9/4\n         t       0       1    -5/4     1/4    15/4\n       obj       0       0     5/4     3/4   165/4"
+    },
+    {
+      "type": "para",
+      "text": "The LP optimum is $`d = 2.25`$, $`t = 3.75`$, value 41.25. Not a plan: packages are whole."
+    },
+    {
+      "type": "para",
+      "text": "Take the row of $`t`$. Written out, it is an equation every point of the model satisfies:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "t - \\tfrac{5}{4} s_1 + \\tfrac{1}{4} s_2 = \\tfrac{15}{4}"
+    },
+    {
+      "type": "para",
+      "text": "Now split every number into its **integer part** (the floor, $`\\lfloor a \\rfloor`$, the largest integer not above $`a`$) and its **fractional part** $`f(a) = a - \\lfloor a \\rfloor`$, which is always in $`[0, 1)`$. Watch the negative one: $`\\lfloor -5/4 \\rfloor = -2`$, so $`f(-5/4) = -5/4 + 2 = 3/4`$, not $`1/4`$."
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "t + (-2 + \\tfrac{3}{4}) s_1 + (0 + \\tfrac{1}{4}) s_2 = 3 + \\tfrac{3}{4}"
+    },
+    {
+      "type": "para",
+      "text": "Move the integer parts to the left and the fractional parts to the right:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "t - 2 s_1 + 0 \\cdot s_2 - 3 = \\tfrac{3}{4} - \\tfrac{3}{4} s_1 - \\tfrac{1}{4} s_2"
+    },
+    {
+      "type": "para",
+      "text": "Now reason about a real plan, where $`d`$, $`t`$ are whole numbers. Then $`s_1 = 6 - d - t`$ and $`s_2 = 45 - 5d - 9t`$ are whole numbers too, because the data are whole numbers. So the left side is an integer, and the right side must be one as well. The right side is $`3/4`$ minus something that is $`\\ge 0`$ (the slacks are $`\\ge 0`$), so it is at most $`3/4`$; an integer at most $`3/4`$ is at most 0. So every plan satisfies"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\tfrac{3}{4} s_1 + \\tfrac{1}{4} s_2 \\ge \\tfrac{3}{4} \\qquad \\text{(Gomory cut of the row of } t\\text{)}"
+    },
+    {
+      "type": "para",
+      "text": "At the LP optimum $`s_1 = s_2 = 0`$ (they are nonbasic), so the left side is 0 and the cut is broken: it is a cut. The general rule, for a tableau row $`x_B + \\sum_j \\bar a_j w_j = \\bar b`$ over the nonbasic variables $`w_j`$, with $`\\bar b`$ fractional:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_{j} f(\\bar a_j)\\, w_j \\ge f(\\bar b)"
+    },
+    {
+      "type": "para",
+      "text": "In code, `frac` must use the floor, which Python's `math.floor` gives for negative numbers too:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def frac(v: Fraction) -> Fraction:\n    \"\"\"The fractional part v - floor(v): always in [0, 1), also for negative v (frac(-1/4) = 3/4).\"\"\"\n    return v - floor(v)\n\n\ndef gomory(row: list[Fraction]) -> tuple[list[Fraction], Fraction]:\n    \"\"\"The Gomory cut of one tableau row:  sum_j frac(a_j) w_j >= frac(b), over every column j.\n\n    Basic columns have entries 0 or 1 in the row, so only nonbasic columns get a nonzero coefficient.\n    \"\"\"\n    return [frac(v) for v in row[:-1]], frac(row[-1])"
+    },
+    {
+      "type": "para",
+      "text": "`int(v)` would be wrong here: it rounds toward zero, so `int(-5/4)` is $`-1`$ and the \"fractional part\" comes out as $`-1/4`$, which breaks the argument above."
+    },
+    {
+      "type": "para",
+      "text": "A cut in slacks is hard to read. Substitute $`s_1 = 6 - d - t`$ and $`s_2 = 45 - 5d - 9t`$: $`\\tfrac{3}{4}(6 - d - t) + \\tfrac{1}{4}(45 - 5d - 9t) \\ge \\tfrac{3}{4}`$, which simplifies to $`2d + 3t \\le 15`$. Each fractional row gives its own cut, and the program prints both, then adds the one whose right-hand side has the largest fractional part (a common choice):"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "  row of d: rhs 9/4, cut 1/4*s1 + 3/4*s2 >= 1/4; in d and t: 4*d + 7*t <= 35\n  row of t: rhs 15/4, cut 3/4*s1 + 1/4*s2 >= 3/4; in d and t: 2*d + 3*t <= 15\n  add the cut of row t (largest fractional part)\nround 2: LP optimum d = 0, t = 5, value 40\n  integer: done"
+    },
+    {
+      "type": "para",
+      "text": "Check both cuts against the LP point: $`2(2.25) + 3(3.75) = 15.75 > 15`$ and $`4(2.25) + 7(3.75) = 35.25 > 35`$, so each removes it. Check against the plan the second LP found: $`2 \\cdot 0 + 3 \\cdot 5 = 15`$, allowed. With $`2d + 3t \\le 15`$ added, the LP optimum is $`d = 0`$, $`t = 5`$, value 40: whole numbers, so it is the integer optimum, found by one cut and no branching. The model is the worked example of MIT's chapter on integer programming (section 9.8, see Further reading), with $`d`$ and $`t`$ for its $`x_1`$ and $`x_2`$; it derives the same two cuts from the same tableau, and draws them. Most models are not this kind: Gomory's own proof says a careful sequence of such cuts always ends, but in floating point the fractional parts of long rows pick up rounding error, and a \"cut\" built from $`0.9999999`$ instead of 1 can remove a real plan. Production solvers use a stronger relative, the Gomory mixed-integer cut, and must guard it against exactly this rounding."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Solvers Generate Many Cut Families and Choose Which to Keep"
+    },
+    {
+      "type": "para",
+      "text": "Cover and Gomory cuts are two of many **cut families**: rules that each produce one kind of valid inequality from one kind of structure (flow covers from flow rows, clique cuts from rows like $`x_a + x_b \\le 1`$, and more). A solver runs several separation routines at the root and does not keep every cut it finds, since each kept cut makes every later LP bigger: the HiGHS log of lesson 3.3.4 shows 906 cuts in HiGHS's cut pool and 39 of them in the LP at one point of its root."
+    },
+    {
+      "type": "para",
+      "text": "You can see the effect without knowing the families. The five-year selection model (lesson 3.3.2 states it in full: 400 projects of GridCap medium, five yearly budget rows, must-do, parent and alternative rules) solved by SCIP, the solver of the SCIP Optimization Suite that ships with OR-Tools, with its cuts on and off through MathOpt's common `cuts` parameter:"
+    },
+    {
+      "type": "example",
+      "id": "cut_families-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "10-cuts-presolve-heuristics/src/cut_families.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "10-cuts-presolve-heuristics/src/cut_families.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "model = five_year(medium).model\nfor label, cuts in ((\"cuts on (default)\", None), (\"cuts off\", mathopt.Emphasis.OFF)):\n    result = solve_quiet(model, mathopt.SolverType.GSCIP, mathopt.SolveParameters(cuts=cuts))\n    print(f\"SCIP, {label:17}: {result.termination.reason.name}, value {result.objective_value():,.0f}, \"\n          f\"nodes {result.solve_stats.node_count:,}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "LP relaxation bound: 275,164.8\nSCIP, cuts on (default): OPTIMAL, value 274,999, nodes 718\nSCIP, cuts off         : OPTIMAL, value 274,999, nodes 1,966\nHiGHS, cuts off: refused (AttributeError)\n  raised : 'StatusNotOk' object has no attribute 'canonical_code'\n  reason : cuts solve parameter unsupported for HiGHS"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Same answer, as it must be: cuts never change the optimum, only how fast it is proved. Without cuts SCIP explored 1,966 nodes of its search tree instead of 718. A **node** is one subproblem of the branch-and-bound search: the model with some variables fixed by branching. A weaker bound prunes fewer of them."
+    },
+    {
+      "type": "para",
+      "text": "The last line is a warning about the tools. MathOpt's `cuts` parameter is common to all solvers in name only: HiGHS, as bundled with OR-Tools 9.15, rejects it. The rejection also arrives badly: in OR-Tools 9.15 the exception `mathopt.solve` raises is an `AttributeError` about a missing `canonical_code`, a bug in the Python wrapper, and HiGHS's own reason (\"cuts solve parameter unsupported for HiGHS\") is only on the exception's `__context__`, as the last two lines show. MathOpt's parameter reference allows such a refusal: setting an effort parameter to `OFF` returns an error when the solver cannot switch that feature off. Lesson 4.2.4 lists which solver accepts which common parameter."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**The LP relaxation overestimates, and a cut removes its optimum without removing any plan.** A valid inequality holds for every 0-1 plan; a cut is one the current LP optimum breaks.",
+        "**A cover is a set of projects that cannot all be funded:** $`\\sum_{i \\in C} c_i > B`$ gives $`\\sum_{i \\in C} x_i \\le |C| - 1`$. Minimal covers give the strongest of these.",
+        "**Separation finds a cover the LP point breaks:** violated exactly when $`\\sum_{i \\in C} (1 - x^*_i) < 1`$; a greedy rule picks low $`(1 - x^*_i)/c_i`$ first.",
+        "**Each round of cuts lowers the bound, and the gain tails off**, so solvers cut at the root and then branch: branch-and-cut.",
+        "**A Gomory cut comes from any tableau row with a fractional right-hand side:** $`\\sum_j f(\\bar a_j) w_j \\ge f(\\bar b)`$, with $`f(a) = a - \\lfloor a \\rfloor`$.",
+        "**Solvers generate many cut families and choose which to keep.** On the five-year model, SCIP needed 718 nodes with cuts and 1,966 without."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Term",
+        "Meaning"
+      ],
+      "rows": [
+        [
+          "LP relaxation",
+          "the model with $`x_i \\in \\{0,1\\}`$ replaced by $`0 \\le x_i \\le 1`$; its optimum bounds every plan"
+        ],
+        [
+          "integrality gap",
+          "LP relaxation value minus integer optimum value"
+        ],
+        [
+          "valid inequality",
+          "a row every integer-feasible plan satisfies"
+        ],
+        [
+          "cut",
+          "a valid inequality the current LP optimum breaks"
+        ],
+        [
+          "separation",
+          "finding a cut for a given LP point"
+        ],
+        [
+          "cover $`C`$",
+          "$`\\sum_{i \\in C} c_i > B`$ for a row $`\\sum c_i x_i \\le B`$"
+        ],
+        [
+          "cover inequality",
+          "$`\\sum_{i \\in C} x_i \\le \\lvert C \\rvert - 1`$"
+        ],
+        [
+          "minimal cover",
+          "a cover that stops being one when any single item is dropped"
+        ],
+        [
+          "violated cover",
+          "$`\\sum_{i \\in C} (1 - x^*_i) < 1`$"
+        ],
+        [
+          "fractional part",
+          "$`f(a) = a - \\lfloor a \\rfloor \\in [0, 1)`$; $`f(-5/4) = 3/4`$"
+        ],
+        [
+          "Gomory cut",
+          "$`\\sum_j f(\\bar a_j)\\, w_j \\ge f(\\bar b)`$ from a row $`x_B + \\sum_j \\bar a_j w_j = \\bar b`$"
+        ],
+        [
+          "tailing off",
+          "each cut round improving the bound by less than the one before"
+        ],
+        [
+          "branch-and-cut",
+          "branch-and-bound with cuts added at the root and inside the tree"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [MathOpt `SolveParameters` (OR-Tools source)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/parameters.py) (the common `cuts` parameter, an effort level for a stronger LP relaxation, MIP only); [MathOpt parameter and result reference (OR-Tools)](https://developers.google.com/optimization/service/reference/rpc/google.research.optimization.v1/mathopt) (the `Emphasis` rules: unset keeps the solver's default, and `OFF` is an error where a feature cannot be switched off); [HiGHS solvers](https://ergo-code.github.io/HiGHS/dev/solvers/) (HiGHS solves MIPs with a branch-and-cut solver); [HiGHS option definitions](https://ergo-code.github.io/HiGHS/dev/options/definitions/) (`mip_allow_cut_separation_at_nodes`, `mip_lp_age_limit` and the cut pool limits); [Integer Programming, Chapter 9 of Applied Mathematical Programming (MIT 15.053)](https://web.mit.edu/15.053/www/AMP-Chapter-09.pdf) (section 9.8 derives the Gomory cuts of the package model, and notes that branch-and-bound almost always beats cuts alone); [Vielma, Mixed Integer Linear Programming Formulation Techniques](https://juan-pablo-vielma.github.io/publications/Mixed-Integer-Linear-Programming-Formulation-Techniques.pdf) (section 2.2: a formulation whose LP relaxation is already strong needs fewer of the solver's cuts)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "On tiny, write the cover inequality for {P002, P003, P004}. Is it minimal? Does the first LP point break it?",
+        "In the two-variable model, add the cut of the row of $`d`$ ($`4d + 7t \\le 35`$) instead of the one of $`t`$. Predict whether one cut is still enough, then change the program and run it.",
+        "A row $`3x_1 + 3x_2 + 3x_3 \\le 5`$ has every pair as a minimal cover. Write the three cover inequalities, then find one valid inequality that implies all three."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Why the Model You Write Matters More Than the Cuts the Solver Finds"
+    },
+    {
+      "type": "para",
+      "text": "Every cut in this lesson is a row the modeler could have written. The cumulative precedence form of lesson 6.4.3 is exactly that: a tighter formulation is a set of good cuts added before the solver starts, and it costs the solver nothing to find them. Solver cuts are a safety net for the structure you did not see. When a model's root bound is far from its best plan, look at the formulation first (big-M constants, aggregated rows), and at the cut settings only after."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**relaxation.py.** Solves the budget knapsack on GridCap tiny as an LP and as a MILP and prints the gap between them (*The LP Relaxation Overestimates*). *Try:* Raise the budget by 20, to 7,410. Predict whether any variable stays fractional in the LP optimum, then run it."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [relaxation.py](src/relaxation.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**cover_cuts.py.** Checks one cover by hand, runs the greedy separation, then runs rounds of cover cuts on tiny and small (*A Cover Is a Set of Projects*, *Separation*, *Each Round of Cuts*). *Try:* Set `max_rounds` to 3 for small. Predict the last bound printed before you run it."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [cover_cuts.py](src/cover_cuts.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**gomory_cuts.py.** Solves the two-variable package model with an exact tableau, prints every fractional row's Gomory cut, adds one and solves again (*A Gomory Cut Comes From Any Tableau Row*). *Try:* Change the money row to `5d + 9t <= 44`. Predict whether the first LP optimum is still fractional."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [gomory_cuts.py](src/gomory_cuts.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**cut_families.py.** Solves the five-year selection model with SCIP's cuts on and off, and shows HiGHS refusing the same switch (*Solvers Generate Many Cut Families*). *Try:* Set `cuts` to `mathopt.Emphasis.HIGH`. Predict whether the node count rises or falls."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [cut_families.py](src/cut_families.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**covers.py.** The cover tests, the greedy separation and the round loop the programs import."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [covers.py](src/covers.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**tableau.py.** The exact tableau simplex, the fractional part and the Gomory cut."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [tableau.py](src/tableau.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**selection.py.** The module's two selection models and its quiet solve helpers."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [selection.py](src/selection.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 13,
+    "paras": 60,
+    "code": 22,
+    "tables": 1,
+    "lists": 9,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 1
+  },
+  "content_sha256": "dc6f32f1d76794d7c51d82d62913fbfda8544fa02dcd59c92a24dd0ee8a3aa8b"
+}

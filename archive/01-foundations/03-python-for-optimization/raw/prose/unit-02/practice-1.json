@@ -1,0 +1,200 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "01-foundations",
+    "03-python-for-optimization"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Validate an asset register, row by row",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The asset-health team sends its register as CSV, and every cell arrives as text. The risk model of lesson 1.1.2 computes each asset's probability of having failed by age $`t`$ as $`F(t) = 1 - e^{-(t/\\eta)^{\\beta}}`$, which only makes sense for a shape $`\\beta > 0`$ and a scale $`\\eta > 0`$. Give the register a type, so a bad row is caught here and not inside the model."
+    },
+    {
+      "type": "para",
+      "text": "In `assets.py`, give `AssetRow` its real fields, and write `parse_assets(rows)`. `rows` is a list of dicts of strings, one per CSV row. It returns the valid rows as `AssetRow` objects, in order, and a list of `(index, field)` pairs, one per invalid row, where `index` is the row's position in `rows` and `field` the name of the field that failed. Each invalid row in the tests has one bad field."
+    },
+    {
+      "type": "table",
+      "headers": [
+        "field",
+        "type",
+        "rule"
+      ],
+      "rows": [
+        [
+          "`asset_id`, `kind`",
+          "text",
+          "any"
+        ],
+        [
+          "`region`",
+          "text",
+          "one of `North`, `South`, `East`, `West`"
+        ],
+        [
+          "`age`",
+          "whole years",
+          "0 or more"
+        ],
+        [
+          "`weibull_beta` ($`\\beta`$)",
+          "number",
+          "above 0"
+        ],
+        [
+          "`weibull_eta` ($`\\eta`$, years)",
+          "number",
+          "above 0"
+        ],
+        [
+          "`rul`",
+          "whole years",
+          "0 or more"
+        ],
+        [
+          "`cof`",
+          "whole $k",
+          "0 or more"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "A value that would need a guess to read, such as `\"1,800\"`, is invalid."
+    },
+    {
+      "type": "para",
+      "text": "About twelve lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom typing import Literal\n\nfrom pydantic import BaseModel, ConfigDict, Field, ValidationError\n\n\nclass AssetRow(BaseModel):\n    model_config = ConfigDict(frozen=True)\n\n    asset_id: str\n    kind: str\n    region: Literal[\"North\", \"South\", \"East\", \"West\"]\n    age: int = Field(ge=0)\n    weibull_beta: float = Field(gt=0)\n    weibull_eta: float = Field(gt=0)\n    rul: int = Field(ge=0)\n    cof: int = Field(ge=0)\n\n\ndef parse_assets(rows: list[dict[str, str]]) -> tuple[list[AssetRow], list[tuple[int, str]]]:\n    \"\"\"The valid rows as AssetRow objects, and (row index, field) for each row that is not valid.\"\"\"\n    assets, rejected = [], []\n    for index, row in enumerate(rows):\n        try:\n            assets.append(AssetRow.model_validate(row))\n        except ValidationError as error:\n            rejected.append((index, str(error.errors()[0][\"loc\"][0])))\n    return assets, rejected\n\n\nif __name__ == \"__main__\":\n    row = {\"asset_id\": \"X1\", \"kind\": \"pole\", \"region\": \"North\", \"age\": \"30\", \"weibull_beta\": \"2.5\",\n           \"weibull_eta\": \"45\", \"rul\": \"12\", \"cof\": \"300\"}\n    print(parse_assets([row, {**row, \"age\": \"-1\"}]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom typing import Literal\n\nfrom pydantic import BaseModel, ConfigDict, Field, ValidationError\n\n\nclass AssetRow(BaseModel):\n    model_config = ConfigDict(frozen=True)\n\n    # TODO: give each field its real type and bounds (see the statement's table).\n    asset_id: str\n    kind: str\n    region: str\n    age: str\n    weibull_beta: str\n    weibull_eta: str\n    rul: str\n    cof: str\n\n\ndef parse_assets(rows: list[dict[str, str]]) -> tuple[list[AssetRow], list[tuple[int, str]]]:\n    \"\"\"The valid rows as AssetRow objects, and (row index, field) for each row that is not valid.\"\"\"\n    # TODO: validate each row; a row that fails goes to the rejected list with its first bad field.\n    return [], [(-1, \"not checked yet\")]\n\n\nif __name__ == \"__main__\":\n    row = {\"asset_id\": \"X1\", \"kind\": \"pole\", \"region\": \"North\", \"age\": \"30\", \"weibull_beta\": \"2.5\",\n           \"weibull_eta\": \"45\", \"rul\": \"12\", \"cof\": \"300\"}\n    print(parse_assets([row, {**row, \"age\": \"-1\"}]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 1,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "df5c86d6df8dfbd05091ddcd54f4f9a8ba4866beabf4a4435be78465760ce08f",
+  "starting_code": "from __future__ import annotations\n\nfrom typing import Literal\n\nfrom pydantic import BaseModel, ConfigDict, Field, ValidationError\n\n\nclass AssetRow(BaseModel):\n    model_config = ConfigDict(frozen=True)\n\n    # TODO: give each field its real type and bounds (see the statement's table).\n    asset_id: str\n    kind: str\n    region: str\n    age: str\n    weibull_beta: str\n    weibull_eta: str\n    rul: str\n    cof: str\n\n\ndef parse_assets(rows: list[dict[str, str]]) -> tuple[list[AssetRow], list[tuple[int, str]]]:\n    \"\"\"The valid rows as AssetRow objects, and (row index, field) for each row that is not valid.\"\"\"\n    # TODO: validate each row; a row that fails goes to the rejected list with its first bad field.\n    return [], [(-1, \"not checked yet\")]\n\n\nif __name__ == \"__main__\":\n    row = {\"asset_id\": \"X1\", \"kind\": \"pole\", \"region\": \"North\", \"age\": \"30\", \"weibull_beta\": \"2.5\",\n           \"weibull_eta\": \"45\", \"rul\": \"12\", \"cof\": \"300\"}\n    print(parse_assets([row, {**row, \"age\": \"-1\"}]))\n",
+  "exercise": {
+    "main_path": "practice/01-foundations/03-python-for-optimization/prose/unit-02/practice-1/assets.py",
+    "test_path": "practice/01-foundations/03-python-for-optimization/prose/unit-02/practice-1/test_assets.py",
+    "run_command": [
+      "python3",
+      "practice/01-foundations/03-python-for-optimization/prose/unit-02/practice-1/assets.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/01-foundations/03-python-for-optimization/prose/unit-02/practice-1/target/report.xml",
+      "practice/01-foundations/03-python-for-optimization/prose/unit-02/practice-1/test_assets.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_valid_rows_become_typed_assets",
+        "kind": "main",
+        "says": "valid rows come back as assets whose fields have their real types"
+      },
+      {
+        "id": "test_a_negative_age_is_rejected",
+        "kind": "main",
+        "says": "a row with a negative age is rejected, naming the age field"
+      },
+      {
+        "id": "test_a_new_asset_of_age_zero_is_valid",
+        "kind": "edge",
+        "says": "an asset of age zero is valid"
+      },
+      {
+        "id": "test_a_weibull_shape_of_zero_is_rejected",
+        "kind": "edge",
+        "says": "a Weibull shape of zero is rejected"
+      },
+      {
+        "id": "test_a_blank_weibull_scale_is_rejected",
+        "kind": "edge",
+        "says": "a blank Weibull scale is rejected, not taken as unknown"
+      },
+      {
+        "id": "test_a_cost_with_a_comma_is_rejected",
+        "kind": "edge",
+        "says": "a consequence of failure written as \"1,800\" is rejected, not repaired"
+      },
+      {
+        "id": "test_a_fractional_remaining_life_is_rejected",
+        "kind": "edge",
+        "says": "a remaining life of 2.5 years is rejected"
+      },
+      {
+        "id": "test_a_region_outside_the_list_is_rejected",
+        "kind": "edge",
+        "says": "a region outside the four allowed names is rejected"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/01-foundations/03-python-for-optimization/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "03-python-for-optimization/README_1.3.2.md",
+      "section": "Pydantic Converts Each Field at the Boundary, or Says Why It Cannot"
+    },
+    "concepts": [
+      "each field's type and bounds are declared on a pydantic model, and a row that cannot be converted without a guess is rejected with the field it failed on"
+    ]
+  }
+}

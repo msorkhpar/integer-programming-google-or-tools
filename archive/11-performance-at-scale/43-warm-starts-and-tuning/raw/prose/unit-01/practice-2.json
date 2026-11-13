@@ -1,0 +1,163 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "11-performance-at-scale",
+    "43-warm-starts-and-tuning"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "A greedy renewal plan as a start",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility renews pipe in one-year jobs. Each job $`j`$ has a cost $`c_j`$ ($k, all spent in the year it is done), a value $`v_j`$ ($k), the years $`Y_j`$ it may be done in (earliest first), and a must-do flag. Each year $`y`$ has a budget $`B_y`$. The planners' model has a binary $`x_{j,y}`$ for each job and each $`y \\in Y_j`$, at most one year per job (exactly one for a must-do), and one budget row per year. Solves are stopped early on busy nights, so they want a plan in hand from the first moment: a greedy one, handed to the solver as a start."
+    },
+    {
+      "type": "para",
+      "text": "Before you code, write the greedy rule as an order on the jobs and a placement rule: which jobs come first, how the others are ranked (ties by name), and which year a job takes given the money left in each year, $`B_y - \\sum_{j' \\text{ placed in } y} c_{j'}`$. A job that fits no year is left out. The must-do jobs come first and are ranked among themselves by the same rule as the others, so when two must-do jobs compete for one year, the one with more value per $k gets it."
+    },
+    {
+      "type": "para",
+      "text": "Write two functions in `renewal.py`:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`greedy_plan(jobs, budget)` returns `{job name: year}` for the jobs the rule places.",
+        "`as_hint(x, plan)` turns a plan into a `mathopt.SolutionHint` for the variables `x[(name, year)]`. Give the solver a complete start, as lesson 11.2.1 does."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "One test builds the model and asks HiGHS, through MathOpt, whether it accepts your start, by reading its log. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    cost: int                        # $k, all spent in the year the job is done\n    value: int                       # $k of benefit, whatever the year\n    years: tuple[int, ...]           # the years it may be done in, earliest first\n    must: bool = False\n\n\ndef greedy_plan(jobs: list[Job], budget: dict[int, int]) -> dict[str, int]:\n    \"\"\"Must-do jobs first, then the rest by value per $k (ties by name), each in its earliest year that still fits.\"\"\"\n    left = dict(budget)\n    plan = {}\n    order = sorted(jobs, key=lambda j: (not j.must, -j.value / j.cost, j.name))\n    for job in order:\n        for year in job.years:\n            if job.cost <= left.get(year, 0):\n                plan[job.name] = year\n                left[year] -= job.cost\n                break\n    return plan\n\n\ndef as_hint(x: dict[tuple[str, int], mathopt.Variable], plan: dict[str, int]) -> mathopt.SolutionHint:\n    \"\"\"The plan as a complete start: 1 for each (job, year) the plan uses, 0 for every other variable.\"\"\"\n    return mathopt.SolutionHint(variable_values={v: 1.0 if plan.get(name) == year else 0.0\n                                                 for (name, year), v in x.items()})\n\n\nif __name__ == \"__main__\":\n    jobs = [Job(\"main-st\", 300, 900, (2028, 2029), must=True), Job(\"elm-ave\", 200, 500, (2028,))]\n    print(greedy_plan(jobs, {2028: 400, 2029: 300}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    cost: int                        # $k, all spent in the year the job is done\n    value: int                       # $k of benefit, whatever the year\n    years: tuple[int, ...]           # the years it may be done in, earliest first\n    must: bool = False\n\n\ndef greedy_plan(jobs: list[Job], budget: dict[int, int]) -> dict[str, int]:\n    \"\"\"Must-do jobs first, then the rest by value per $k (ties by name), each in its earliest year that still fits.\"\"\"\n    # TODO: write the rule down first, then fill the plan one job at a time.\n    return {}\n\n\ndef as_hint(x: dict[tuple[str, int], mathopt.Variable], plan: dict[str, int]) -> mathopt.SolutionHint:\n    \"\"\"The plan as a complete start: 1 for each (job, year) the plan uses, 0 for every other variable.\"\"\"\n    # TODO: one value for each variable in x.\n    return mathopt.SolutionHint()\n\n\nif __name__ == \"__main__\":\n    jobs = [Job(\"main-st\", 300, 900, (2028, 2029), must=True), Job(\"elm-ave\", 200, 500, (2028,))]\n    print(greedy_plan(jobs, {2028: 400, 2029: 300}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "53a35dca8a4d59f2b703257d0d41bb705cd6fbd350c9e709907c4aa379968ca8",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    cost: int                        # $k, all spent in the year the job is done\n    value: int                       # $k of benefit, whatever the year\n    years: tuple[int, ...]           # the years it may be done in, earliest first\n    must: bool = False\n\n\ndef greedy_plan(jobs: list[Job], budget: dict[int, int]) -> dict[str, int]:\n    \"\"\"Must-do jobs first, then the rest by value per $k (ties by name), each in its earliest year that still fits.\"\"\"\n    # TODO: write the rule down first, then fill the plan one job at a time.\n    return {}\n\n\ndef as_hint(x: dict[tuple[str, int], mathopt.Variable], plan: dict[str, int]) -> mathopt.SolutionHint:\n    \"\"\"The plan as a complete start: 1 for each (job, year) the plan uses, 0 for every other variable.\"\"\"\n    # TODO: one value for each variable in x.\n    return mathopt.SolutionHint()\n\n\nif __name__ == \"__main__\":\n    jobs = [Job(\"main-st\", 300, 900, (2028, 2029), must=True), Job(\"elm-ave\", 200, 500, (2028,))]\n    print(greedy_plan(jobs, {2028: 400, 2029: 300}))\n",
+  "exercise": {
+    "main_path": "practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-01/practice-2/renewal.py",
+    "test_path": "practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-01/practice-2/test_renewal.py",
+    "run_command": [
+      "python3",
+      "practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-01/practice-2/renewal.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-01/practice-2/target/report.xml",
+      "practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-01/practice-2/test_renewal.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_plan_keeps_every_budget_and_funds_every_must_do",
+        "kind": "main",
+        "says": "the greedy plan keeps every year's budget and funds every must-do job"
+      },
+      {
+        "id": "test_highs_accepts_the_plan_as_a_feasible_start",
+        "kind": "main",
+        "says": "HiGHS reports the plan, passed as a hint, as a feasible start"
+      },
+      {
+        "id": "test_jobs_are_taken_by_value_per_dollar_not_by_value",
+        "kind": "edge",
+        "says": "optional jobs are ranked by value per $k, not by value alone"
+      },
+      {
+        "id": "test_a_job_moves_to_its_next_year_when_the_earliest_is_full",
+        "kind": "edge",
+        "says": "a job goes to its earliest year that still has room, not only its first year"
+      },
+      {
+        "id": "test_must_do_jobs_are_placed_before_better_optional_ones",
+        "kind": "edge",
+        "says": "must-do jobs take their money before any optional job does"
+      },
+      {
+        "id": "test_a_job_that_fits_nowhere_does_not_stop_the_fill",
+        "kind": "edge",
+        "says": "a job that fits no year is skipped and the fill goes on"
+      },
+      {
+        "id": "test_the_start_gives_every_variable_a_value",
+        "kind": "edge",
+        "says": "the start is complete: zeros are given too"
+      },
+      {
+        "id": "test_must_do_jobs_compete_by_value_per_dollar_among_themselves",
+        "kind": "edge",
+        "says": "two must-do jobs that cannot both fit are ranked by value per $k, like the others"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "43-warm-starts-and-tuning/README_11.2.1.md",
+      "section": "Check the Start Against This Cycle's Rows Before Any Solver Sees It"
+    },
+    "concepts": [
+      "a start is checked against this cycle's rows and built to be feasible, here greedily, before a solver sees it"
+    ]
+  }
+}

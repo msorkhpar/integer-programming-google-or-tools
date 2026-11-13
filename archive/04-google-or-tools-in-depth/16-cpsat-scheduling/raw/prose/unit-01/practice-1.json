@@ -1,0 +1,145 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "16-cpsat-scheduling"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A welding rig with booked days",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A pipeline company has one welding rig. It repairs segments one at a time, and some days it is booked elsewhere: a safety stand-down, a maintenance visit. Each booking is given as its first and last day, both included, so `(4, 4)` books day 4 only. Days are numbered from 0."
+    },
+    {
+      "type": "para",
+      "text": "Write `shortest_schedule(jobs, booked, horizon)` in `rig.py`. `jobs` maps a segment to its days of work, `booked` lists the bookings, and the rig's work must end by day `horizon`. Return each segment's start day, chosen so that the last repair ends as early as possible."
+    },
+    {
+      "type": "para",
+      "text": "The model, with $`J`$ the segments, $`d_j`$ their days of work, $`B`$ the bookings with first and last day $`f_b`$ and $`l_b`$, and $`H`$ the horizon:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& s_j \\in \\{0, \\dots, H - d_j\\} && \\forall j \\in J && \\text{(start day)} \\\\\n& C \\in \\{0, \\dots, H\\} && && \\text{(the day the last repair ends)} \\\\\n& \\min \\; C \\\\\n& \\text{NoOverlap}\\big(\\{[s_j, s_j + d_j) : j \\in J\\} \\cup \\{[f_b, l_b + 1) : b \\in B\\}\\big) && && \\text{(one\\_at\\_a\\_time)} \\\\\n& C = \\max_{j \\in J} (s_j + d_j) && && \\text{(makespan)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Each $`[s_j, s_j + d_j)`$ is an interval variable; each booking is a fixed interval. Before you code a booking, work out its size from its first and last day."
+    },
+    {
+      "type": "para",
+      "text": "The tests check the schedule you return (no overlap, no booked day used) and how early it ends, so any optimal schedule passes. Every test's horizon leaves room for a schedule, so you need not handle the case where none exists; the reference does not check the solve status. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef shortest_schedule(jobs: dict[str, int], booked: list[tuple[int, int]], horizon: int) -> dict[str, int]:\n    \"\"\"Start day of each job on one rig, so the last job ends as early as possible.\"\"\"\n    model = cp_model.CpModel()\n    start, intervals = {}, []\n    for name, days in jobs.items():\n        start[name] = model.new_int_var(0, horizon - days, f\"start_{name}\")\n        intervals.append(model.new_fixed_size_interval_var(start[name], days, f\"work_{name}\"))\n    for first, last in booked:\n        intervals.append(model.new_fixed_size_interval_var(first, last - first + 1, f\"booked_{first}\"))\n    model.add_no_overlap(intervals)\n\n    makespan = model.new_int_var(0, horizon, \"makespan\")\n    model.add_max_equality(makespan, [start[name] + days for name, days in jobs.items()])\n    model.minimize(makespan)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.solve(model)\n    return {name: solver.value(start[name]) for name in jobs}\n\n\nif __name__ == \"__main__\":\n    print(shortest_schedule({\"S1\": 3, \"S2\": 2, \"S3\": 4}, [(4, 5)], 20))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef shortest_schedule(jobs: dict[str, int], booked: list[tuple[int, int]], horizon: int) -> dict[str, int]:\n    \"\"\"Start day of each job on one rig, so the last job ends as early as possible.\"\"\"\n    # TODO: one interval per job, one fixed interval per booking, NoOverlap over all of them,\n    # and minimize the latest end. Every start below is a placeholder.\n    return {name: -1 for name in jobs}\n\n\nif __name__ == \"__main__\":\n    print(shortest_schedule({\"S1\": 3, \"S2\": 2, \"S3\": 4}, [(4, 5)], 20))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "02cce2edae69ad7d543db638f5914742b0c57992159396e755f0c62d33f40e00",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef shortest_schedule(jobs: dict[str, int], booked: list[tuple[int, int]], horizon: int) -> dict[str, int]:\n    \"\"\"Start day of each job on one rig, so the last job ends as early as possible.\"\"\"\n    # TODO: one interval per job, one fixed interval per booking, NoOverlap over all of them,\n    # and minimize the latest end. Every start below is a placeholder.\n    return {name: -1 for name in jobs}\n\n\nif __name__ == \"__main__\":\n    print(shortest_schedule({\"S1\": 3, \"S2\": 2, \"S3\": 4}, [(4, 5)], 20))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-1/rig.py",
+    "test_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-1/test_rig.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-1/rig.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-1/target/report.xml",
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-1/test_rig.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_every_job_gets_a_start",
+        "kind": "main",
+        "says": "every job gets one whole-number start day inside the horizon"
+      },
+      {
+        "id": "test_jobs_never_overlap_and_finish_early",
+        "kind": "main",
+        "says": "with nothing booked, the jobs run one at a time and the last one ends as early as possible"
+      },
+      {
+        "id": "test_booked_days_stay_free",
+        "kind": "edge",
+        "says": "no job runs on a booked day, and the last job still ends as early as the bookings allow"
+      },
+      {
+        "id": "test_a_one_day_booking_blocks_its_day",
+        "kind": "edge",
+        "says": "a booking whose first and last day are the same day still blocks that day"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "16-cpsat-scheduling/README_4.5.1.md",
+      "section": "Fixed Intervals Block Weeks the Crew Cannot Work"
+    },
+    "concepts": [
+      "time a resource cannot use is a fixed interval in the same NoOverlap",
+      "NoOverlap keeps every pair of present intervals in a list apart, in place of an order Boolean per pair"
+    ]
+  }
+}

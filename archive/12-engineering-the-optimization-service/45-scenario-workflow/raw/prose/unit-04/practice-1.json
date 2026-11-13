@@ -1,0 +1,132 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "45-scenario-workflow"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Replace an estimate in one transaction",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "Riverbend Water (invented for this practice) keeps one cost estimate per main-replacement project: one `estimate` row and its `estimate_line` rows (`estimate.py` has the schema; a line's amount may not be negative). Engineers revise estimates often, and a revision replaces the project's earlier estimate. A report that finds a header without its lines prints a $0 job, and one that finds no estimate at all drops the project, so a failed revision must leave the old estimate exactly as it was. Street names such as O'Brien Street are common."
+    },
+    {
+      "type": "para",
+      "text": "Write `save_estimate(conn, project, lines)` in `estimate.py`. `lines` is a list of `(item, amount)`. It replaces the project's estimate, if it has one, with a new header and the given lines, and returns the new `estimate_id`. If any line is refused by the database, the exception reaches the caller and the database is as it was before the call. A saved estimate must be visible to other connections to the same database file. `connect` already opens connections with foreign keys on and `autocommit=False` (an argument of Python `3.12` and later; the runner has `3.14.7`). The foreign key is checked on every statement, so to replace an estimate, delete the old estimate's lines before its header: a header deleted while its lines still point at it is refused. About eight lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport sqlite3\n\nSCHEMA = \"\"\"\nCREATE TABLE estimate (estimate_id INTEGER PRIMARY KEY, project TEXT NOT NULL UNIQUE) STRICT;\nCREATE TABLE estimate_line (\n    estimate_id INTEGER NOT NULL REFERENCES estimate (estimate_id),\n    item        TEXT NOT NULL,\n    amount      INTEGER NOT NULL CHECK (amount >= 0)\n) STRICT;\n\"\"\"\n\n\ndef connect(path: str) -> sqlite3.Connection:\n    conn = sqlite3.connect(path, autocommit=True)\n    conn.execute(\"PRAGMA foreign_keys = ON\")\n    conn.autocommit = False\n    return conn\n\n\ndef save_estimate(conn: sqlite3.Connection, project: str, lines: list[tuple[str, int]]) -> int:\n    \"\"\"Store the project's estimate, replacing any earlier one; all of it is committed, or none.\"\"\"\n    with conn:\n        conn.execute(\"DELETE FROM estimate_line WHERE estimate_id IN \"\n                     \"(SELECT estimate_id FROM estimate WHERE project = ?)\", (project,))\n        conn.execute(\"DELETE FROM estimate WHERE project = ?\", (project,))\n        estimate_id = conn.execute(\"INSERT INTO estimate (project) VALUES (?)\", (project,)).lastrowid\n        for item, amount in lines:\n            conn.execute(\"INSERT INTO estimate_line VALUES (?, ?, ?)\", (estimate_id, item, amount))\n    return estimate_id\n\n\nif __name__ == \"__main__\":\n    conn = connect(\":memory:\")\n    conn.executescript(SCHEMA)\n    print(save_estimate(conn, \"Elm Street main\", [(\"pipe\", 120), (\"paving\", 40)]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport sqlite3\n\nSCHEMA = \"\"\"\nCREATE TABLE estimate (estimate_id INTEGER PRIMARY KEY, project TEXT NOT NULL UNIQUE) STRICT;\nCREATE TABLE estimate_line (\n    estimate_id INTEGER NOT NULL REFERENCES estimate (estimate_id),\n    item        TEXT NOT NULL,\n    amount      INTEGER NOT NULL CHECK (amount >= 0)\n) STRICT;\n\"\"\"\n\n\ndef connect(path: str) -> sqlite3.Connection:\n    conn = sqlite3.connect(path, autocommit=True)\n    conn.execute(\"PRAGMA foreign_keys = ON\")\n    conn.autocommit = False\n    return conn\n\n\ndef save_estimate(conn: sqlite3.Connection, project: str, lines: list[tuple[str, int]]) -> int:\n    \"\"\"Store the project's estimate, replacing any earlier one; all of it is committed, or none.\"\"\"\n    # TODO: replace the project's estimate so that all of it is committed, or none of it.\n    return 0\n\n\nif __name__ == \"__main__\":\n    conn = connect(\":memory:\")\n    conn.executescript(SCHEMA)\n    print(save_estimate(conn, \"Elm Street main\", [(\"pipe\", 120), (\"paving\", 40)]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 2,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "a1b79b7dadc6c3ead2be41656f01737035acb0d7cbef618a643c8293dcf04d36",
+  "starting_code": "from __future__ import annotations\n\nimport sqlite3\n\nSCHEMA = \"\"\"\nCREATE TABLE estimate (estimate_id INTEGER PRIMARY KEY, project TEXT NOT NULL UNIQUE) STRICT;\nCREATE TABLE estimate_line (\n    estimate_id INTEGER NOT NULL REFERENCES estimate (estimate_id),\n    item        TEXT NOT NULL,\n    amount      INTEGER NOT NULL CHECK (amount >= 0)\n) STRICT;\n\"\"\"\n\n\ndef connect(path: str) -> sqlite3.Connection:\n    conn = sqlite3.connect(path, autocommit=True)\n    conn.execute(\"PRAGMA foreign_keys = ON\")\n    conn.autocommit = False\n    return conn\n\n\ndef save_estimate(conn: sqlite3.Connection, project: str, lines: list[tuple[str, int]]) -> int:\n    \"\"\"Store the project's estimate, replacing any earlier one; all of it is committed, or none.\"\"\"\n    # TODO: replace the project's estimate so that all of it is committed, or none of it.\n    return 0\n\n\nif __name__ == \"__main__\":\n    conn = connect(\":memory:\")\n    conn.executescript(SCHEMA)\n    print(save_estimate(conn, \"Elm Street main\", [(\"pipe\", 120), (\"paving\", 40)]))\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-1/estimate.py",
+    "test_path": "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-1/test_estimate.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-1/estimate.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-1/target/report.xml",
+      "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-1/test_estimate.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_an_estimate_is_stored_with_its_lines",
+        "kind": "main",
+        "says": "a saved estimate has its header and its three lines in the database"
+      },
+      {
+        "id": "test_a_revision_replaces_the_old_estimate",
+        "kind": "main",
+        "says": "a revised estimate leaves one header and only the new lines, none of the old ones"
+      },
+      {
+        "id": "test_a_bad_revision_keeps_the_old_estimate",
+        "kind": "edge",
+        "says": "a revision with a negative line is refused and the old estimate stays whole"
+      },
+      {
+        "id": "test_a_project_name_with_a_quote_is_stored_as_written",
+        "kind": "edge",
+        "says": "a project name with an apostrophe is stored exactly as written"
+      },
+      {
+        "id": "test_another_connection_sees_the_saved_estimate",
+        "kind": "edge",
+        "says": "a second connection to the same file sees the saved estimate"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "45-scenario-workflow/README_12.1.4.md",
+      "section": "A Change and Its Audit Entry Commit Together, or Not at All"
+    },
+    "concepts": [
+      "rows that belong together are written in one transaction with placeholders"
+    ]
+  }
+}

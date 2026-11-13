@@ -1,0 +1,153 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "29-strong-formulations"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Identical rented units, numbered once",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A storm-response team (not GridCap) rents identical mobile units for the season. Each outage site needs one unit for a number of days, a unit serves its sites one after another, and each unit is rented for 30 days. `build` in `fleet.py` already has the model: $`x_{s,k} = 1`$ if site $`s`$ is served by unit $`k`$, $`y_k = 1`$ if unit $`k`$ is rented, and"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\min \\;& \\sum_k y_k \\\\\n\\text{s.t. }& \\sum_k x_{s,k} = 1 && \\forall s && \\text{(served}_s) \\\\\n& \\sum_s d_s\\, x_{s,k} \\le 30\\, y_k && \\forall k && \\text{(rental}_k)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Renumbering the units gives the same plan, so every plan appears many times. Write `add_symmetry_breaking(fleet, days, units)`: rows that refuse every numbering that breaks one of these two rules:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "the rented units are the first ones (no unit is rented while a lower-numbered one is not), and",
+        "the sites, taken in the order the dict `days` lists them (its key order, as given, not sorted by their number of days), fill the units in order: site number $`n`$ (from 0) may only use units $`0, \\dots, n`$. `fleet.py`'s own 14 sites happen to be listed longest first; one test's sites are not."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Unlike the lesson's crews, here a unit can stay unrented, so decide what the first rule means as a row on the $`y`$. Before coding, write both families with their labels and argue on paper that every plan can be renumbered to satisfy both at once, so the fewest units cannot change. Check the second family on the first site: which units may it use?"
+    },
+    {
+      "type": "para",
+      "text": "Then run `fleet.py`: it solves the same 14 sites with and without your rows and prints HiGHS's node counts. Write down both. The lesson found that ordering rows can cost nodes as well as save them; see which happens here."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix whole plans and ask whether each is allowed, so any rows that keep this numbering pass. About six lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nRENTAL_DAYS = 30           # days one mobile unit is rented for\n\n\n@dataclass\nclass Fleet:\n    model: mathopt.Model\n    x: dict                # x[s, k] = 1: site s is served by unit k\n    y: dict                # y[k] = 1: unit k is rented\n\n\ndef build(days: dict, units: int, *, ordered: bool = False) -> Fleet:\n    \"\"\"Serve every site with one rented unit; a unit's sites fit in its rental; rent as few as possible.\"\"\"\n    model = mathopt.Model(name=\"mobile units\")\n    x = {(s, k): model.add_binary_variable(name=f\"x_{s}_{k}\") for s in days for k in range(units)}\n    y = {k: model.add_binary_variable(name=f\"y_{k}\") for k in range(units)}\n    for s in days:\n        model.add_linear_constraint(sum(x[s, k] for k in range(units)) == 1, name=f\"served_{s}\")\n    for k in range(units):\n        model.add_linear_constraint(sum(d * x[s, k] for s, d in days.items()) <= RENTAL_DAYS * y[k],\n                                    name=f\"rental_{k}\")\n    fleet = Fleet(model, x, y)\n    if ordered:\n        add_symmetry_breaking(fleet, days, units)\n    model.minimize(sum(y.values()))\n    return fleet\n\n\ndef add_symmetry_breaking(fleet: Fleet, days: dict, units: int) -> None:\n    \"\"\"Keep one numbering of the identical units: rented units come first, and sites fill them in order.\"\"\"\n    for k in range(units - 1):\n        fleet.model.add_linear_constraint(fleet.y[k] >= fleet.y[k + 1], name=f\"rent_in_order_{k}\")\n    for n, s in enumerate(days):\n        # Site number n is served by one of the units 0..n (its served row then leaves the rest at 0).\n        fleet.model.add_linear_constraint(sum(fleet.x[s, k] for k in range(min(n + 1, units))) == 1,\n                                          name=f\"site_order_{s}\")\n\n\ndef nodes(days: dict, units: int, ordered: bool) -> tuple[float, int]:\n    result = mathopt.solve(build(days, units, ordered=ordered).model, mathopt.SolverType.HIGHS,\n                           params=mathopt.SolveParameters(relative_gap_tolerance=0.0))\n    return result.objective_value(), result.solve_stats.node_count\n\n\nif __name__ == \"__main__\":\n    days = {f\"S{i:02d}\": d for i, d in enumerate([16, 16, 14, 13, 13, 13, 12, 12, 12, 11, 11, 10, 9, 8])}\n    for ordered in (False, True):\n        units, count = nodes(days, 8, ordered)\n        print(f\"symmetry rows {ordered!s:5}  units rented {units:.0f}  nodes {count}\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nRENTAL_DAYS = 30           # days one mobile unit is rented for\n\n\n@dataclass\nclass Fleet:\n    model: mathopt.Model\n    x: dict                # x[s, k] = 1: site s is served by unit k\n    y: dict                # y[k] = 1: unit k is rented\n\n\ndef build(days: dict, units: int, *, ordered: bool = False) -> Fleet:\n    \"\"\"Serve every site with one rented unit; a unit's sites fit in its rental; rent as few as possible.\"\"\"\n    model = mathopt.Model(name=\"mobile units\")\n    x = {(s, k): model.add_binary_variable(name=f\"x_{s}_{k}\") for s in days for k in range(units)}\n    y = {k: model.add_binary_variable(name=f\"y_{k}\") for k in range(units)}\n    for s in days:\n        model.add_linear_constraint(sum(x[s, k] for k in range(units)) == 1, name=f\"served_{s}\")\n    for k in range(units):\n        model.add_linear_constraint(sum(d * x[s, k] for s, d in days.items()) <= RENTAL_DAYS * y[k],\n                                    name=f\"rental_{k}\")\n    fleet = Fleet(model, x, y)\n    if ordered:\n        add_symmetry_breaking(fleet, days, units)\n    model.minimize(sum(y.values()))\n    return fleet\n\n\ndef add_symmetry_breaking(fleet: Fleet, days: dict, units: int) -> None:\n    \"\"\"Keep one numbering of the identical units: rented units come first, and sites fill them in order.\"\"\"\n    # TODO: rows that keep one numbering of the units.\n    return None\n\ndef nodes(days: dict, units: int, ordered: bool) -> tuple[float, int]:\n    result = mathopt.solve(build(days, units, ordered=ordered).model, mathopt.SolverType.HIGHS,\n                           params=mathopt.SolveParameters(relative_gap_tolerance=0.0))\n    return result.objective_value(), result.solve_stats.node_count\n\n\nif __name__ == \"__main__\":\n    days = {f\"S{i:02d}\": d for i, d in enumerate([16, 16, 14, 13, 13, 13, 12, 12, 12, 11, 11, 10, 9, 8])}\n    for ordered in (False, True):\n        units, count = nodes(days, 8, ordered)\n        print(f\"symmetry rows {ordered!s:5}  units rented {units:.0f}  nodes {count}\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "dc856973494a47f637ef19f98e2ad48d99a3f9300f065b6cbf117976714535f8",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nRENTAL_DAYS = 30           # days one mobile unit is rented for\n\n\n@dataclass\nclass Fleet:\n    model: mathopt.Model\n    x: dict                # x[s, k] = 1: site s is served by unit k\n    y: dict                # y[k] = 1: unit k is rented\n\n\ndef build(days: dict, units: int, *, ordered: bool = False) -> Fleet:\n    \"\"\"Serve every site with one rented unit; a unit's sites fit in its rental; rent as few as possible.\"\"\"\n    model = mathopt.Model(name=\"mobile units\")\n    x = {(s, k): model.add_binary_variable(name=f\"x_{s}_{k}\") for s in days for k in range(units)}\n    y = {k: model.add_binary_variable(name=f\"y_{k}\") for k in range(units)}\n    for s in days:\n        model.add_linear_constraint(sum(x[s, k] for k in range(units)) == 1, name=f\"served_{s}\")\n    for k in range(units):\n        model.add_linear_constraint(sum(d * x[s, k] for s, d in days.items()) <= RENTAL_DAYS * y[k],\n                                    name=f\"rental_{k}\")\n    fleet = Fleet(model, x, y)\n    if ordered:\n        add_symmetry_breaking(fleet, days, units)\n    model.minimize(sum(y.values()))\n    return fleet\n\n\ndef add_symmetry_breaking(fleet: Fleet, days: dict, units: int) -> None:\n    \"\"\"Keep one numbering of the identical units: rented units come first, and sites fill them in order.\"\"\"\n    # TODO: rows that keep one numbering of the units.\n    return None\n\ndef nodes(days: dict, units: int, ordered: bool) -> tuple[float, int]:\n    result = mathopt.solve(build(days, units, ordered=ordered).model, mathopt.SolverType.HIGHS,\n                           params=mathopt.SolveParameters(relative_gap_tolerance=0.0))\n    return result.objective_value(), result.solve_stats.node_count\n\n\nif __name__ == \"__main__\":\n    days = {f\"S{i:02d}\": d for i, d in enumerate([16, 16, 14, 13, 13, 13, 12, 12, 12, 11, 11, 10, 9, 8])}\n    for ordered in (False, True):\n        units, count = nodes(days, 8, ordered)\n        print(f\"symmetry rows {ordered!s:5}  units rented {units:.0f}  nodes {count}\")\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-03/practice-1/fleet.py",
+    "test_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-03/practice-1/test_fleet.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-03/practice-1/fleet.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/29-strong-formulations/prose/unit-03/practice-1/target/report.xml",
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-03/practice-1/test_fleet.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_rows_keep_the_fewest_units_and_a_plan_numbered_in_order",
+        "kind": "main",
+        "says": "with your rows the fewest units is unchanged, a plan numbered in order is allowed, and the same plan shifted to start at unit 1 is refused"
+      },
+      {
+        "id": "test_a_unit_is_rented_only_after_the_one_before_it",
+        "kind": "edge",
+        "says": "a plan that rents unit 2 while unit 1 stays idle is refused"
+      },
+      {
+        "id": "test_site_number_n_goes_to_one_of_the_first_n_plus_one_units",
+        "kind": "edge",
+        "says": "a plan that puts the first site on the second unit is refused"
+      },
+      {
+        "id": "test_a_lighter_first_unit_stays_allowed",
+        "kind": "edge",
+        "says": "a plan numbered by first site whose unit 0 carries fewer days than unit 1 stays allowed"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-03/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "29-strong-formulations/README_6.7.3.md",
+      "section": "An Ordering Row Keeps at Least One Copy of Every Plan and Removes the Rest"
+    },
+    "concepts": [
+      "the node count with and without the rows is measured, since rows can also cost nodes",
+      "ordering rows refuse some numberings and keep at least one copy of every plan"
+    ]
+  }
+}

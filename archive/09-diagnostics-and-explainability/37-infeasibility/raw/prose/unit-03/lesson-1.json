@@ -1,0 +1,577 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "09-diagnostics-and-explainability",
+    "37-infeasibility"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "IIS with MathOpt, gurobipy and Pyomo",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "9.1.3 IIS With MathOpt, gurobipy and Pyomo"
+    },
+    {
+      "type": "para",
+      "text": "The pre-solve checks of lesson 9.1.2 found one cause in GridCap's Budget Lock scenario, P017's crews. With those crews restored the model was still infeasible, and no check could say why. The planners now need the rules that clash, by name, and they want to know that the answer does not depend on which tool produced it. This lesson asks three tools for an **irreducible infeasible subsystem** (IIS) of the same model: MathOpt with a hand-written filter, gurobipy's `computeIIS`, and Pyomo's two tools. It compares their answers. They do not agree, and each disagreement has a reason worth knowing. GridCap is a fictional utility; none of its numbers are real."
+    },
+    {
+      "type": "para",
+      "text": "Lesson 4.3.5 already showed two things this lesson builds on. MathOpt's `compute_infeasible_subsystem` is refused by every solver that loads in the runner, and Gurobi cannot be loaded through MathOpt in OR-Tools 9.15: `SolverType.GUROBI` raises `RuntimeError: bad_function_call`, because this MathOpt cannot load the Gurobi 13 library in the runner. It also found an IIS by hand with a deletion filter on another scenario. gurobipy's `computeIIS` was introduced in lesson 5.3.3, and Pyomo's IIS tools in lesson 5.1.4. Here the same ideas are compared head to head on one scenario that has more than one conflict."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The model is lesson 9.1.1's, unchanged: its full formulation is there, with every row's label. The IIS works on its 70 named rows, and on the bounds and integrality of its 80 variables $`x_{i,t} \\in \\{0, 1\\}`$. The rows the answers below name:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{t \\in T_i} x_{i,t} &= 1 && i \\in \\{\\text{P017}, \\text{P039}\\} && \\text{(must}_i) \\\\\nx_{\\text{P023},2029} &\\le \\sum_{s \\in T_{\\text{P022}},\\, s \\le 2028} x_{\\text{P022},s} && && \\text{(after}_{\\text{P023},2029}) \\\\\n\\sum_{i \\in P} \\sum_{t \\in T_i} c_{i,\\,2028-t}\\, x_{i,t} &\\le 6{,}000 && && \\text{(budget}_{2028}) \\\\\n\\sum_{i:\\, q(i) = q} \\ \\sum_{t \\in T_i,\\ t \\le y < t + d_i} m_i\\, x_{i,t} &\\le K_{q,y} && (q, y) \\text{ as named} && \\text{(crews}_{q,y}) \\\\\n\\sum_{t \\in T_{\\text{P023}}} x_{\\text{P023},t} &\\ge 1 && && \\text{(force}_{\\text{P023}}) \\\\\nx_{\\text{P032},2028} &\\ge 1 && && \\text{(force}_{\\text{P032},2028})\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "P023's window is the single year 2029 and its lag behind P022 is one year, so its precedence row for 2029 says \"P023 in 2029 needs P022 started by 2028\". The Budget Lock scenario sets $`K_{\\text{transmission},2030} = K_{\\text{transmission},2031} = 12`$. The other crew rows keep GridCap's figures: $`K_{\\text{transmission},2028} = 19`$ and $`K_{\\text{distribution},2030} = 8`$."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "An IIS Is One Conflict: Irreducible, but Neither Unique nor the Smallest"
+    },
+    {
+      "type": "para",
+      "text": "An IIS is a set of the model's constraints (rows, variable bounds, and for a MIP the integrality of variables) with two properties:"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "**infeasible**: no point meets all of them;",
+        "**irreducible**: drop any one member and the rest can all be met."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Irreducible does not mean smallest. A model can have many IISs of different sizes, and a tool returns one of them. Gurobi's reference for `computeIIS` says so: the result is not necessarily the smallest IIS. Nor is an IIS the whole story. It explains one reason the model is infeasible, and other reasons can remain after it is fixed. Both facts show up on the Budget Lock scenario."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Deletion Filter Keeps the Conflict It Tests Last"
+    },
+    {
+      "type": "para",
+      "text": "The **deletion filter** (John Chinneck's method, which Pyomo's documentation names as the source of its own tool) starts from all the rows and drops them one at a time. If the rest is still infeasible, the row was not needed and stays out. If the rest becomes feasible, the row goes back. `filters.Oracle` answers each \"is this set of rows infeasible?\" question. It works on a zero-objective copy (lesson 9.1.1) and switches a row off by removing both of its bounds:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "    def infeasible(self, active) -> bool:\n        active = set(active)\n        for name, row in self.rows.items():\n            lower, upper = self.bounds[name] if name in active else (-math.inf, math.inf)\n            row.lower_bound, row.upper_bound = lower, upper\n        self.solves += 1\n        return solve(self.work, self.solver).termination.reason in (R.INFEASIBLE, R.INFEASIBLE_OR_UNBOUNDED)"
+    },
+    {
+      "type": "para",
+      "text": "The variables keep their bounds and integrality throughout. They are what makes $`x_{i,t}`$ a yes-or-no decision, not rules a planner wrote. So the IIS this filter finds is a set of rows, read together with every bound. The filter itself:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def deletion_filter(oracle: Oracle, rules: list[str]) -> list[str]:\n    \"\"\"Drop each rule in turn; keep it out if the rest is still infeasible. One solve per rule.\"\"\"\n    kept = list(rules)\n    for name in rules:\n        trial = [n for n in kept if n != name]\n        if oracle.infeasible(trial):\n            kept = trial\n    return kept"
+    },
+    {
+      "type": "para",
+      "text": "The filter tries the rows in the order it is given them. Here it runs in the order the model builds them (`once_P001` first, `force_P032_2028` last) and in the reverse order:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "70 rows, from once_P001 to force_P032_2028\ndeletion, build order:  70 solves -> ['after_P023_2029', 'crews_transmission_2028', 'force_P023', 'force_P032_2028']\ndeletion, reversed   :  70 solves -> ['crews_transmission_2030', 'crews_transmission_2031', 'must_P017']"
+    },
+    {
+      "type": "para",
+      "text": "Two different IISs, from the same filter on the same model. Both cost 70 solves, one per row. The order chooses between them: a row is dropped whenever the rest is still infeasible without it, and early in the pass the rest still holds every other conflict. So the rows tested first are the most likely to be dropped, and the conflict that survives is the one whose rows come last. In build order the board's overrides come last, and the override conflict survives. In reverse they come first and are dropped, because P017's crew conflict still holds without them."
+    },
+    {
+      "type": "para",
+      "text": "That makes the order a tool. Test the rows you would rather not blame first, and the rows you want a planner to look at last."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Additive Filter Builds a Conflict From Nothing"
+    },
+    {
+      "type": "para",
+      "text": "The **additive filter** works the other way round. Start with an empty conflict. Add rows one at a time until the set turns infeasible: the row that tipped it belongs to the conflict. Start again from the conflict found so far, and stop when the conflict alone is infeasible:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def additive_filter(oracle: Oracle, rules: list[str]) -> list[str]:\n    \"\"\"Add rules one at a time onto the conflict found so far; the rule that tips the set into\n    infeasibility belongs to the conflict. Repeat until the conflict alone is infeasible.\"\"\"\n    conflict: list[str] = []\n    while not oracle.infeasible(conflict):\n        trial = list(conflict)\n        for name in rules:\n            if name in conflict:\n                continue\n            trial.append(name)\n            if oracle.infeasible(trial):\n                conflict.append(name)\n                break\n        else:\n            raise ValueError(\"the rules are feasible together: there is no conflict to find\")\n    return conflict"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "additive, build order: 138 solves -> ['crews_transmission_2030', 'crews_transmission_2031', 'must_P017']"
+    },
+    {
+      "type": "para",
+      "text": "In build order, the must-do rows come before the crew and override rows, so the first conflict to close as rows are added is P017's. The filter returns a third answer for the same order. It used 138 solves against the deletion filter's 70, because each of its three rounds scans the rows again from the start. An additive pass pays off when a conflict closes early in the list, since every row after that point is never tested."
+    },
+    {
+      "type": "para",
+      "text": "Each filter's answer is irreducible by construction: the deletion filter keeps a row only when removing it made the rest feasible, and the additive filter adds only rows that the set needed. The module's tests check both answers row by row: dropping any one member makes the set feasible."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Every Conflict, One at a Time"
+    },
+    {
+      "type": "para",
+      "text": "One IIS, fixed, can leave another behind. Gurobi's infeasibility tour shows the loop for this in its `workforce2` example: find an IIS, remove one of its constraints, look again, until the model is feasible. Here the row removed is one that planners or finance set:"
+    },
+    {
+      "type": "example",
+      "id": "filters_lock-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "37-infeasibility/src/filters_lock.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "37-infeasibility/src/filters_lock.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "while oracle.infeasible(active):\n    conflict = deletion_filter(oracle, active)\n    dropped = next(n for n in conflict if n.startswith((\"force_\", \"budget_\", \"crews_\")))   # a row planners set\n    print(f\"conflict {sorted(conflict)} -> switch off {dropped}\")\n    active.remove(dropped)"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "conflict ['after_P023_2029', 'crews_transmission_2028', 'force_P023', 'force_P032_2028'] -> switch off crews_transmission_2028\nconflict ['after_P023_2029', 'budget_2028', 'force_P023', 'force_P032_2028'] -> switch off budget_2028\nconflict ['crews_transmission_2030', 'crews_transmission_2031', 'must_P017'] -> switch off crews_transmission_2030\nfeasible once 3 rows are off; 211 solves in all"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The Budget Lock scenario has three conflicts, and the first two share three rows. The board's two overrides, with P023's precedence row, clash with the 2028 transmission crews *and*, separately, with the locked 2028 budget. Switching off the crew row only uncovers the budget conflict behind it. Switching off one override instead would have ended both conflicts at once. That is a choice for the planners, and the message of lesson 9.1.6 gives them what they need to make it. The third conflict is P017's crews, the one the pre-solve check of lesson 9.1.2 already named."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "computeIIS Counts Variable Bounds as Members"
+    },
+    {
+      "type": "para",
+      "text": "Now gurobipy. `convert.to_gurobi` copies the MathOpt model row for row and name for name: the same 80 variables and 70 rows, well under the size-limited license. Each copy runs in a Gurobi environment that prints nothing, so no license or machine detail reaches the output. `computeIIS` marks each member with an attribute: `IISConstr` on rows, `IISLB` and `IISUB` on variable bounds. `IISMinimal` says whether the result is irreducible:"
+    },
+    {
+      "type": "example",
+      "id": "gurobi_iis-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "37-infeasibility/src/gurobi_iis.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "37-infeasibility/src/gurobi_iis.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "    rows = sorted(c.ConstrName for c in g.getConstrs() if c.IISConstr)\n    lower = [v.VarName for v in g.getVars() if v.IISLB]\n    upper = [v.VarName for v in g.getVars() if v.IISUB]"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "MILP, computeIIS: minimal True, 6 rows, 24 lower bounds, 1 upper bounds\n   rows: ['after_P023_2029', 'budget_2028', 'crews_distribution_2030', 'force_P023', 'force_P032_2028', 'must_P039']\n   upper bounds: ['x_P022_2028'] | lower bounds, e.g.: ['x_P001_2028', 'x_P002_2028', 'x_P004_2028']"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Gurobi's IIS has six rows, two more than the filter's budget conflict: P039's must-do row and the 2030 distribution crews. It also has 25 variable bounds. The filter treats all 160 bounds as a fixed background and so can only trade rows. Gurobi treats bounds as members it may leave out, so its IIS can drop a bound and keep a row instead. Both answers are irreducible, each by its own rules. To make Gurobi choose among rows only, as the filter does, force every bound into the IIS. The **force attributes** take 1 (always in), 0 (always out) or −1 (Gurobi decides, the default):"
+    },
+    {
+      "type": "example",
+      "id": "gurobi_iis-3",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "37-infeasibility/src/gurobi_iis.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "37-infeasibility/src/gurobi_iis.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "def bounds_in(g) -> None:\n    \"\"\"Force every variable bound into the IIS, so that it chooses among rows only.\"\"\"\n    for v in g.getVars():\n        v.IISLBForce = 1\n        v.IISUBForce = 1"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "example",
+      "id": "gurobi_iis-4",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "37-infeasibility/src/gurobi_iis.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "37-infeasibility/src/gurobi_iis.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "    g.getConstrByName(name).IISConstrForce = force"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "bounds forced in: ['after_P023_2029', 'budget_2028', 'force_P023', 'force_P032_2028']\nbounds in, budget_2028 out: minimal True, ['crews_transmission_2030', 'crews_transmission_2031', 'must_P017']\nbounds in, crews_transmission_2028 in: minimal True, ['after_P023_2029', 'crews_transmission_2028', 'force_P023', 'force_P032_2028']"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "With the bounds forced in, Gurobi returns the four-row budget conflict that the filter's loop found second. Forcing `budget_2028` out sends it to P017's conflict. Forcing `crews_transmission_2028` in gives the crew conflict. Each of the three conflicts the loop found can be had from Gurobi by saying which rows to keep or exclude. Gurobi's reference warns that forcing too much out can leave a set that is not infeasible at all, and then `computeIIS` raises an error."
+    },
+    {
+      "type": "para",
+      "text": "Lesson 5.3.3 said that a binary's bounds never take part in an IIS, yet the IIS above lists 25 bounds of 0-1 variables. Both are true, because the variable *type* decides. Gurobi's attribute reference says the bounds of a `GRB.BINARY` variable are implicit in its type and never take part in an IIS. MathOpt has no binary type: a 0-1 decision is an integer variable with bounds 0 and 1, and `convert.to_gurobi` copies it as `GRB.INTEGER` with those bounds, which Gurobi treats as bounds like any other. Retyping the same variables as binary takes the bounds out of the IIS:"
+    },
+    {
+      "type": "example",
+      "id": "gurobi_iis-5",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "37-infeasibility/src/gurobi_iis.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "37-infeasibility/src/gurobi_iis.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "for v in binary.getVars():\n    v.VType = GRB.BINARY                                     # the same variables, typed binary"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "typed BINARY: 4 rows, 0 lower bounds, 0 upper bounds, ['after_P023_2029', 'budget_2028', 'force_P023', 'force_P032_2028']"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "With no bound left to trade, Gurobi returns the same four-row budget conflict as with every bound forced in. So a rule written as a bound on a binary can never be named by Gurobi's IIS, and a rule written as a bound on a 0-1 integer is named only as a variable's bound, not as the rule."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Pyomo: write_iis Asks Gurobi, the MIS Tool Solves the LP Relaxation"
+    },
+    {
+      "type": "para",
+      "text": "Pyomo has two tools, and they work differently. `write_iis(model, file, solver=\"gurobi\")` hands the model to Gurobi's persistent interface, calls `computeIIS` and writes the IIS to an `.ilp` file (CPLEX and Xpress are the other choices). `compute_infeasibility_explanation(model, solver)` is a filter of its own. First it gives every row and bound an elastic variable (lesson 9.1.4) and collects what had to bend. Then it runs a deletion filter over those rows. It takes any solver; here it gets HiGHS. Both run on `convert.to_pyomo`'s copy, where each row is `rows[<name>]`:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "    with tempfile.TemporaryDirectory() as folder, quiet():\n        path = write_iis(model, os.path.join(folder, \"lock.ilp\"), solver=\"gurobi\")"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "            compute_infeasibility_explanation(model, highs, logger=log)"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "budget-lock: write_iis (Gurobi) rows ['rows(after_P023_2029)', 'rows(budget_2028)', 'rows(crews_distribution_2030)', 'rows(force_P023)', 'rows(force_P032_2028)', 'rows(must_P039)']\nbudget-lock: MIS tool (HiGHS), 30 solves: ['constraint: rows[force_P032_2028]', 'constraint: rows[force_P023]', 'constraint: rows[after_P023_2029]', 'constraint: rows[crews_transmission_2028]'] + 7 lower bounds\ncrew-cut: write_iis (Gurobi) rows ['rows(crews_transmission_2030)', 'rows(crews_transmission_2031)', 'rows(must_P017)']\ncrew-cut: MIS tool (HiGHS), 1 solves: ['raised: Found model GridCap_small_crew-cut to be feasible!']"
+    },
+    {
+      "type": "para",
+      "text": "`write_iis` returns Gurobi's six-row IIS, the same as gurobipy's default, since it makes the same call. The MIS tool returns the four-row crew conflict, plus seven variable lower bounds, in 30 solves. Then comes the warning in the last line. \"crew-cut\" is the Budget Lock's crew cut alone, P017's conflict, which the MILP cannot meet. The MIS tool declares it **feasible**."
+    },
+    {
+      "type": "para",
+      "text": "The reason is in the tool's source (`pyomo/contrib/iis/mis.py`). Before it starts, it turns every variable bound into a row and sets every variable's domain to the reals. The tool works on the **LP relaxation**, where integrality is gone. P017's conflict exists only for integers: with $`x_{\\text{P017},2030} = x_{\\text{P017},2031} = 0.5`$, each year needs 6.5 crew-months against 12, and the relaxation is happy. gurobipy confirms the tool's other answer is an LP answer. The IIS of the relaxed model (`model.relax()`, every integer variable made continuous) matches the MIS tool's, row for row:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "LP relaxation, computeIIS: ['after_P023_2029', 'crews_transmission_2028', 'force_P023', 'force_P032_2028'] + 7 lower bounds"
+    },
+    {
+      "type": "para",
+      "text": "So for a MIP, an LP-based tool finds only the conflicts that survive relaxation, and can call a MIP feasible when it is not. Use it on an LP, or as a first pass. For a MIP, use a filter whose oracle solves the MIP, as `filters.Oracle` does, or a MIP-aware IIS like Gurobi's. Pyomo's documentation adds that the MIS tool is meant for IPOPT, logs its findings rather than returning them, and that its tolerance is whatever the solver uses."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**An IIS is one conflict: irreducible, but neither unique nor the smallest.** The Budget Lock scenario has three conflicts among its rows alone.",
+        "**The deletion filter keeps the conflict it tests last.** One solve per row (70). The order picks which conflict survives, so put the rows you want named last.",
+        "**The additive filter builds a conflict from nothing.** 138 solves here, and cheaper when a conflict closes early in the list.",
+        "**Every conflict, one at a time:** find one, switch off one of its rows, look again. Three conflicts, 211 solves.",
+        "**`computeIIS` counts variable bounds as members.** Its default IIS had six rows and 25 bounds. With every bound forced in (`IISLBForce`, `IISUBForce`), it chose among rows only, and `IISConstrForce` picked the conflict. The bounds of a variable typed `GRB.BINARY` never take part; MathOpt's 0-1 integers, copied as `GRB.INTEGER`, do.",
+        "**Pyomo's `write_iis` asks Gurobi. Its MIS tool solves the LP relaxation**, so it missed P017's integer conflict and declared that scenario feasible."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Tool (runner versions)",
+        "Call",
+        "Works on",
+        "Here"
+      ],
+      "rows": [
+        [
+          "MathOpt",
+          "`mathopt.compute_infeasible_subsystem(model, solver)`",
+          "Gurobi only",
+          "refused or not loadable (lesson 4.3.5)"
+        ],
+        [
+          "MathOpt + filter",
+          "`filters.deletion_filter`, `additive_filter`",
+          "the MIP, with any solver",
+          "rows only, bounds held fixed"
+        ],
+        [
+          "gurobipy",
+          "`m.computeIIS()`; `IISConstr`, `IISLB`, `IISUB`, `IISMinimal`",
+          "the MIP",
+          "rows and bounds (never a `GRB.BINARY` variable's bounds)"
+        ],
+        [
+          "gurobipy",
+          "`IISConstrForce`, `IISLBForce`, `IISUBForce` = 1, 0, −1",
+          "",
+          "steer which IIS"
+        ],
+        [
+          "gurobipy",
+          "`m.relax()` then `computeIIS()`",
+          "the LP relaxation",
+          ""
+        ],
+        [
+          "Pyomo",
+          "`write_iis(m, \"x.ilp\", solver=\"gurobi\")`",
+          "the MIP, via Gurobi, CPLEX or Xpress",
+          "file with the IIS"
+        ],
+        [
+          "Pyomo",
+          "`compute_infeasibility_explanation(m, solver)`",
+          "the LP relaxation",
+          "logs repairs and an MIS"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Filter",
+        "Solves",
+        "Returns"
+      ],
+      "rows": [
+        [
+          "deletion",
+          "one per row",
+          "the conflict among the rows tested last"
+        ],
+        [
+          "additive",
+          "up to one per row per member found",
+          "the conflict that closes first"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** OR-Tools, [MathOpt](https://developers.google.com/optimization/math_opt) (infeasibility analysis among the advanced features, Gurobi only) and the docstring of `compute_infeasible_subsystem` in [`solve.py`](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/solve.py). Gurobi, [`Model` reference](https://docs.gurobi.com/projects/optimizer/en/current/reference/python/model.html) (`computeIIS`, the force attributes, not necessarily the smallest IIS), [variable attributes](https://docs.gurobi.com/projects/optimizer/en/current/reference/attributes/variable.html) (`IISLB` and `IISUB`: a binary variable's bounds are implicit in its type and never in an IIS), [Parameters reference](https://docs.gurobi.com/projects/optimizer/en/current/reference/parameters.html) (`IISMethod`, including method 3, the IIS of the LP relaxation) and the [infeasibility example tour](https://docs.gurobi.com/projects/examples/en/current/overview/infeasibility.html) (`workforce1` and `workforce2`). Pyomo, [Infeasibility Diagnostics](https://pyomo.readthedocs.io/en/stable/explanation/analysis/iis.html) (`write_iis`, the MIS tool and its origin in Chinneck's CPAIOR 2007 infeasibility tutorial), and the tool's source, `pyomo/contrib/iis/mis.py` in Pyomo 6.10."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Run the deletion filter with the must-do rows moved to the end of the list. Predict which of the three conflicts it returns.",
+        "In the \"every conflict\" loop, switch off an override (`force_P023`) whenever a conflict has one. How many conflicts does the loop report now?",
+        "Set Gurobi's `IISMethod` to 3 on the MILP. Predict, from this lesson's last output, which rows it returns."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Hold the Bounds, Filter the Rules"
+    },
+    {
+      "type": "para",
+      "text": "`filters.Oracle` switches rows on and off but never touches a variable's bounds or integrality. That choice sets the vocabulary of the answer. Every member of the IIS is a row with a name a planner wrote (a budget, a crew cap, an override), never \"x_P036_2027 ≥ 0\", which no planner can act on. Gurobi's default IIS is just as correct and harder to explain: 25 of its 31 members are bounds (of 0-1 variables typed integer; typed binary, they could not be members). When the IIS will be shown to people, pick the members it may contain before you compute it, as `IISLBForce` and `IISUBForce` do in gurobipy."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**filters_lock.py.** The deletion filter in two orders, the additive filter, and the loop over every conflict (*The Deletion Filter*, *The Additive Filter*, *Every Conflict*). *Try:* Run the additive filter on the reversed order. Predict its number of solves."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [filters_lock.py](src/filters_lock.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**gurobi_iis.py.** `computeIIS` on the MILP, with every bound forced in, steered with `IISConstrForce`, with the variables typed binary, and on the LP relaxation (*computeIIS Counts Variable Bounds*, *Pyomo*). It needs the license the runner mounts. *Try:* Force `must_P039` out. Predict whether the default IIS changes."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [gurobi_iis.py](src/gurobi_iis.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**pyomo_iis.py.** `write_iis` and `compute_infeasibility_explanation` on the Budget Lock scenario and on its crew cut alone (*Pyomo*). *Try:* Run the MIS tool on the Budget Lock scenario with P032's override removed. Predict what it reports."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [pyomo_iis.py](src/pyomo_iis.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The filters, the model and the converters are libraries."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [filters.py](src/filters.py)",
+        "Library: [convert.py](src/convert.py)",
+        "Library: [lock_model.py](src/lock_model.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 13,
+    "paras": 32,
+    "code": 10,
+    "tables": 2,
+    "lists": 7,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 5
+  },
+  "content_sha256": "55442e9a972a3e422ac1d679ef6c3aa70bba36e7dc7e05946cc6e11c2120721b"
+}

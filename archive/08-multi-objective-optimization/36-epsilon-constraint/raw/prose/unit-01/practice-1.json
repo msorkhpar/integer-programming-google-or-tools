@@ -1,0 +1,136 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "08-multi-objective-optimization",
+    "36-epsilon-constraint"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "The most visitors with a habitat pledge",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A county parks district picks which trail projects to fund this year. Each project brings visitors (people per year) and protects habitat (acres), and each has a cost; the year's budget caps the total cost. The parks board has pledged to protect at least `habitat_floor` acres this year, and within that pledge it wants as many visitors as possible."
+    },
+    {
+      "type": "para",
+      "text": "Write `most_visitors(trails, budget, habitat_floor)` in `trails.py`. It returns the names of the funded trails as a sorted tuple, or `None` when no affordable choice meets the pledge. Build the model with MathOpt and solve it with HiGHS (the starter has the solve call and the reading of the answer)."
+    },
+    {
+      "type": "para",
+      "text": "Write the formulation first: the set of trails, the parameters with their units, the decision variables with their domains, the objective with its sense, and every constraint with a label. Then code it."
+    },
+    {
+      "type": "para",
+      "text": "The tests compare your answer with every affordable choice listed by hand, on their own small instances, so any correct formulation passes. About eight lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Trail:\n    name: str\n    visitors: int     # people per year\n    acres: int        # habitat protected\n    cost: int         # $k\n\n\ndef most_visitors(trails: list[Trail], budget: int, habitat_floor: int) -> tuple[str, ...] | None:\n    \"\"\"The trails to fund for the most visitors, protecting at least `habitat_floor` acres.\"\"\"\n    model = mathopt.Model(name=\"trails\")\n    fund = {t.name: model.add_binary_variable(name=f\"fund_{t.name}\") for t in trails}\n    model.add_linear_constraint(sum(t.cost * fund[t.name] for t in trails) <= budget, name=\"budget\")\n    model.add_linear_constraint(sum(t.acres * fund[t.name] for t in trails) >= habitat_floor, name=\"pledge\")\n    model.maximize(sum(t.visitors * fund[t.name] for t in trails))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    values = result.variable_values()\n    return tuple(sorted(name for name, var in fund.items() if values[var] > 0.5))\n\n\nif __name__ == \"__main__\":\n    park = [Trail(\"Ridge Loop\", 900, 10, 40), Trail(\"Marsh Boardwalk\", 400, 60, 35), Trail(\"Canyon Spur\", 700, 25, 30)]\n    print(most_visitors(park, 70, 50))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Trail:\n    name: str\n    visitors: int     # people per year\n    acres: int        # habitat protected\n    cost: int         # $k\n\n\ndef most_visitors(trails: list[Trail], budget: int, habitat_floor: int) -> tuple[str, ...] | None:\n    \"\"\"The trails to fund for the most visitors, protecting at least `habitat_floor` acres.\"\"\"\n    model = mathopt.Model(name=\"trails\")\n    fund = {t.name: model.add_binary_variable(name=f\"fund_{t.name}\") for t in trails}\n    # TODO: the budget row, the pledge row and the objective.\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    values = result.variable_values()\n    return tuple(sorted(name for name, var in fund.items() if values[var] > 0.5))\n\n\nif __name__ == \"__main__\":\n    park = [Trail(\"Ridge Loop\", 900, 10, 40), Trail(\"Marsh Boardwalk\", 400, 60, 35), Trail(\"Canyon Spur\", 700, 25, 30)]\n    print(most_visitors(park, 70, 50))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "67a71037966edb207abd23a625b38ad670e5966a6c8397a4210896b01c26deac",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Trail:\n    name: str\n    visitors: int     # people per year\n    acres: int        # habitat protected\n    cost: int         # $k\n\n\ndef most_visitors(trails: list[Trail], budget: int, habitat_floor: int) -> tuple[str, ...] | None:\n    \"\"\"The trails to fund for the most visitors, protecting at least `habitat_floor` acres.\"\"\"\n    model = mathopt.Model(name=\"trails\")\n    fund = {t.name: model.add_binary_variable(name=f\"fund_{t.name}\") for t in trails}\n    # TODO: the budget row, the pledge row and the objective.\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    values = result.variable_values()\n    return tuple(sorted(name for name, var in fund.items() if values[var] > 0.5))\n\n\nif __name__ == \"__main__\":\n    park = [Trail(\"Ridge Loop\", 900, 10, 40), Trail(\"Marsh Boardwalk\", 400, 60, 35), Trail(\"Canyon Spur\", 700, 25, 30)]\n    print(most_visitors(park, 70, 50))\n",
+  "exercise": {
+    "main_path": "practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-01/practice-1/trails.py",
+    "test_path": "practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-01/practice-1/test_trails.py",
+    "run_command": [
+      "python3",
+      "practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-01/practice-1/trails.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-01/practice-1/target/report.xml",
+      "practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-01/practice-1/test_trails.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_pledge_the_busiest_choice_already_meets_changes_nothing",
+        "kind": "main",
+        "says": "a pledge that the busiest affordable choice already meets returns that choice"
+      },
+      {
+        "id": "test_a_pledge_that_binds_trades_visitors_for_habitat",
+        "kind": "edge",
+        "says": "a pledge the busiest choice misses returns the busiest choice that meets it"
+      },
+      {
+        "id": "test_at_least_includes_exactly",
+        "kind": "edge",
+        "says": "a choice whose acres equal the pledge exactly meets it"
+      },
+      {
+        "id": "test_an_unreachable_pledge_returns_none",
+        "kind": "edge",
+        "says": "a pledge no affordable choice can meet returns None, not an empty choice"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "36-epsilon-constraint/README_8.3.1.md",
+      "section": "The Payoff Table Sets the Range of ε"
+    },
+    "concepts": [
+      "the commitment a stakeholder states becomes a floor row and the other goal stays the objective",
+      "a floor above what any plan reaches leaves the solve without a plan, which the code reports"
+    ]
+  }
+}

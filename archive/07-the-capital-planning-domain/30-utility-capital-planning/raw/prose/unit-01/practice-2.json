@@ -1,0 +1,144 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "07-the-capital-planning-domain",
+    "30-utility-capital-planning"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Which program envelopes a water utility's requests break",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A city water utility (a fictional one) collects capital requests from three programs: water mains, treatment plants and meters. Each request starts in a year and spends a profile of amounts ($k) in that year and the following ones. Finance has already set an **envelope** for some programs and years: the most that program may spend that year. Before anything is selected, the capital planning team wants to see where the requests already break an envelope."
+    },
+    {
+      "type": "para",
+      "text": "Write two functions in `envelopes.py`:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`requested_by_year(requests, programs, years)`: for every program in `programs` and every year in `years`, what the requests would spend there if all were funded as asked. Every program and year appears, with 0 where nothing is asked. Spend in a year outside `years` is left out.",
+        "`oversubscribed(requests, envelopes)`: one tuple `(program, year, requested, excess)` for every envelope that the requests exceed, with `excess` the amount above the envelope, sorted by program and then year. An envelope met exactly is not exceeded."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "A request for a program not in `programs` (or with no envelope) is left out. Before you code, take a request that starts in 2027 with the profile (500, 300, 100) and write down what it adds to 2027, 2028 and 2029. The tests use small hand-made request lists. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Request:\n    rid: str\n    program: str\n    start: int\n    profile: tuple[int, ...]          # $k spent in each year of work, from `start` on\n\n\ndef requested_by_year(requests: list[Request], programs: list[str], years: list[int]) -> dict[str, dict[int, int]]:\n    \"\"\"Program -> year -> $k the requests would spend there, with a 0 for every empty cell.\"\"\"\n    table = {g: {y: 0 for y in years} for g in programs}\n    for r in requests:\n        if r.program not in table:\n            continue\n        for k, amount in enumerate(r.profile):\n            if r.start + k in table[r.program]:\n                table[r.program][r.start + k] += amount\n    return table\n\n\ndef oversubscribed(requests: list[Request], envelopes: dict[tuple[str, int], int]) -> list[tuple[str, int, int, int]]:\n    \"\"\"(program, year, requested, excess) for every envelope the requests exceed, sorted.\"\"\"\n    programs = sorted({g for g, _ in envelopes})\n    years = sorted({y for _, y in envelopes})\n    table = requested_by_year(requests, programs, years)\n    over = []\n    for (g, y), cap in sorted(envelopes.items()):\n        if table[g][y] > cap:\n            over.append((g, y, table[g][y], table[g][y] - cap))\n    return over\n\n\nif __name__ == \"__main__\":\n    reqs = [Request(\"M1\", \"mains\", 2027, (300, 200)), Request(\"T1\", \"treatment\", 2028, (900,))]\n    print(requested_by_year(reqs, [\"mains\", \"treatment\"], [2027, 2028]))\n    print(oversubscribed(reqs, {(\"mains\", 2027): 250, (\"treatment\", 2028): 1_000}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Request:\n    rid: str\n    program: str\n    start: int\n    profile: tuple[int, ...]          # $k spent in each year of work, from `start` on\n\n\ndef requested_by_year(requests: list[Request], programs: list[str], years: list[int]) -> dict[str, dict[int, int]]:\n    \"\"\"Program -> year -> $k the requests would spend there, with a 0 for every empty cell.\"\"\"\n    # TODO: spread each request's profile over the years it is worked. The zeros are placeholders.\n    return {g: {y: 0 for y in years} for g in programs}\n\n\ndef oversubscribed(requests: list[Request], envelopes: dict[tuple[str, int], int]) -> list[tuple[str, int, int, int]]:\n    \"\"\"(program, year, requested, excess) for every envelope the requests exceed, sorted.\"\"\"\n    # TODO: compare each envelope with what is requested in its program and year.\n    return []\n\n\nif __name__ == \"__main__\":\n    reqs = [Request(\"M1\", \"mains\", 2027, (300, 200)), Request(\"T1\", \"treatment\", 2028, (900,))]\n    print(requested_by_year(reqs, [\"mains\", \"treatment\"], [2027, 2028]))\n    print(oversubscribed(reqs, {(\"mains\", 2027): 250, (\"treatment\", 2028): 1_000}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "e9208c42da6230dec5aeecd99a42cbd9f63dd4271e82c0d52cc26af8fdd16d95",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Request:\n    rid: str\n    program: str\n    start: int\n    profile: tuple[int, ...]          # $k spent in each year of work, from `start` on\n\n\ndef requested_by_year(requests: list[Request], programs: list[str], years: list[int]) -> dict[str, dict[int, int]]:\n    \"\"\"Program -> year -> $k the requests would spend there, with a 0 for every empty cell.\"\"\"\n    # TODO: spread each request's profile over the years it is worked. The zeros are placeholders.\n    return {g: {y: 0 for y in years} for g in programs}\n\n\ndef oversubscribed(requests: list[Request], envelopes: dict[tuple[str, int], int]) -> list[tuple[str, int, int, int]]:\n    \"\"\"(program, year, requested, excess) for every envelope the requests exceed, sorted.\"\"\"\n    # TODO: compare each envelope with what is requested in its program and year.\n    return []\n\n\nif __name__ == \"__main__\":\n    reqs = [Request(\"M1\", \"mains\", 2027, (300, 200)), Request(\"T1\", \"treatment\", 2028, (900,))]\n    print(requested_by_year(reqs, [\"mains\", \"treatment\"], [2027, 2028]))\n    print(oversubscribed(reqs, {(\"mains\", 2027): 250, (\"treatment\", 2028): 1_000}))\n",
+  "exercise": {
+    "main_path": "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-01/practice-2/envelopes.py",
+    "test_path": "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-01/practice-2/test_envelopes.py",
+    "run_command": [
+      "python3",
+      "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-01/practice-2/envelopes.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-01/practice-2/target/report.xml",
+      "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-01/practice-2/test_envelopes.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_single_year_requests_are_totalled",
+        "kind": "main",
+        "says": "requests are totalled by program and year, with zero for an empty cell"
+      },
+      {
+        "id": "test_oversubscribed_lists_the_excess",
+        "kind": "main",
+        "says": "every envelope the requests exceed is listed with its excess, in order"
+      },
+      {
+        "id": "test_a_multi_year_request_counts_in_each_year",
+        "kind": "edge",
+        "says": "a request worked over several years counts in each of them, not all in its first"
+      },
+      {
+        "id": "test_a_request_at_its_envelope_is_not_over",
+        "kind": "edge",
+        "says": "requests exactly equal to their envelope do not break it"
+      },
+      {
+        "id": "test_a_program_with_no_requests_still_has_every_year",
+        "kind": "edge",
+        "says": "a program nobody asked for still appears, with a zero in every year"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "30-utility-capital-planning/README_7.1.1.md",
+      "section": "A Program Is a Line of Work, and the Portfolio Is Everything Competing for the Same Money"
+    },
+    "concepts": [
+      "requests are totalled by program and year and compared with the envelopes set before selection"
+    ]
+  }
+}

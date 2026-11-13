@@ -1,0 +1,131 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "14-mathopt-advanced"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A new limit for an indicator constraint",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A district heating model has indicator constraints such as \"if boiler $`b`$ runs ($`z_b = 1`$), then $`40 \\le \\text{heat}_b \\le 120`$\". Scenario runs need to change a rule's upper limit, and MathOpt cannot edit an indicator constraint (lesson 4.3.1): it has to be deleted and added again."
+    },
+    {
+      "type": "para",
+      "text": "Write `replace_upper(model, ic, new_upper)`, which replaces the indicator constraint `ic` by one identical in every part except its upper bound, now `new_upper`, and returns the new constraint object. \"Every part\" is: the indicator variable, the value that switches it on, the lower bound, the variables and coefficients of the row, and the name. The old object must not be used afterwards, which is why the function returns the new one. About eight lines."
+    },
+    {
+      "type": "para",
+      "text": "Lesson 4.3.1 rebuilds an indicator constraint from its parts: `ic.terms()` gives the row's `(variable, coefficient)` pairs, `mathopt.fast_sum(t.coefficient * t.variable for t in ic.terms())` turns them back into an expression for `implied_expr`, and `implied_lb` and `implied_ub` take the bounds. There is no offset to carry: MathOpt moves a constant in the row into its bounds when it stores the constraint, so the stored expression's constant is 0. Read every part before you delete `ic`."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef replace_upper(model: mathopt.Model, ic, new_upper: float):\n    \"\"\"Delete `ic` and add the same indicator constraint with upper bound `new_upper`; return the new one.\"\"\"\n    indicator, on_zero, name = ic.indicator_variable, ic.activate_on_zero, ic.name\n    lower = ic.lower_bound\n    expr = mathopt.fast_sum(term.coefficient * term.variable for term in ic.terms())\n    model.delete_indicator_constraint(ic)\n    return model.add_indicator_constraint(indicator=indicator, activate_on_zero=on_zero, implied_expr=expr,\n                                          implied_lb=lower, implied_ub=new_upper, name=name)\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    z, heat = model.add_binary_variable(name=\"z\"), model.add_variable(lb=0, ub=200, name=\"heat\")\n    ic = model.add_indicator_constraint(indicator=z, implied_constraint=(40 <= heat) <= 120, name=\"boiler\")\n    print(replace_upper(model, ic, 100).upper_bound)\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef replace_upper(model: mathopt.Model, ic, new_upper: float):\n    \"\"\"Delete `ic` and add the same indicator constraint with upper bound `new_upper`; return the new one.\"\"\"\n    # TODO: read the parts, delete, add again.\n    return ic\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    z, heat = model.add_binary_variable(name=\"z\"), model.add_variable(lb=0, ub=200, name=\"heat\")\n    ic = model.add_indicator_constraint(indicator=z, implied_constraint=(40 <= heat) <= 120, name=\"boiler\")\n    print(replace_upper(model, ic, 100).upper_bound)\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "b2ca80418f359657be90c1237c7e8bdb2dfa907dcf9610c56c298695d128ddb1",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef replace_upper(model: mathopt.Model, ic, new_upper: float):\n    \"\"\"Delete `ic` and add the same indicator constraint with upper bound `new_upper`; return the new one.\"\"\"\n    # TODO: read the parts, delete, add again.\n    return ic\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    z, heat = model.add_binary_variable(name=\"z\"), model.add_variable(lb=0, ub=200, name=\"heat\")\n    ic = model.add_indicator_constraint(indicator=z, implied_constraint=(40 <= heat) <= 120, name=\"boiler\")\n    print(replace_upper(model, ic, 100).upper_bound)\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-1/relimit.py",
+    "test_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-1/test_relimit.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-1/relimit.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-1/target/report.xml",
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-1/test_relimit.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_new_constraint_has_the_new_limit_and_the_same_indicator",
+        "kind": "main",
+        "says": "the returned constraint has the new upper bound, the same indicator variable, name and coefficients"
+      },
+      {
+        "id": "test_the_old_constraint_is_gone",
+        "kind": "main",
+        "says": "the model has the same number of indicator constraints and no longer has the old one"
+      },
+      {
+        "id": "test_a_rule_switched_on_at_zero_stays_so",
+        "kind": "edge",
+        "says": "a rule switched on at zero is still switched on at zero after the change"
+      },
+      {
+        "id": "test_the_lower_bound_is_kept",
+        "kind": "edge",
+        "says": "a rule with a lower bound keeps that lower bound after its upper bound changes"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "14-mathopt-advanced/README_4.3.4.md",
+      "section": "Keep a Handle on What a Scenario Changes, and Put It Back"
+    },
+    "concepts": [
+      "changing one bound of an indicator constraint by deleting it and adding it back whole"
+    ]
+  }
+}

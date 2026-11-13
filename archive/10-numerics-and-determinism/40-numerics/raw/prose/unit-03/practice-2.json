@@ -1,0 +1,140 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "10-numerics-and-determinism",
+    "40-numerics"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Audit any solver's plan the way HiGHS's report does",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A freight company runs its depot-opening model with HiGHS some nights and SCIP others. HiGHS's report prints the largest bound, integrality and row violation of the plan it returns; SCIP's does not. The team wants the same three numbers for every plan, whichever solver produced it."
+    },
+    {
+      "type": "para",
+      "text": "Write `audit(model, values)` for a MathOpt model and a solution's values (a dict from each variable to its value, as `result.variable_values()` returns it). It returns a dict with three keys, each the largest violation of its kind, or 0.0 when there is none:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`\"bound\"`: how far a variable's value is outside its bounds, below the lower or above the upper;",
+        "`\"integrality\"`: for integer variables only, how far the value is from the nearest whole number;",
+        "`\"row\"`: how far a row's activity (the sum of its coefficients times the values) is outside its bounds, below the lower side or above the upper."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`model.variables()` and `model.linear_constraints()` yield the variables and rows; a variable has `lower_bound`, `upper_bound` and `integer`; a row has `lower_bound` and `upper_bound`, and `model.row_nonzeros(row)` with `row.get_coefficient(variable)` gives its terms. Infinite bounds never count as broken. The tests build their own models and values, with no solve. About twelve lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef audit(model: mathopt.Model, values: dict) -> dict[str, float]:\n    \"\"\"The largest bound, integrality and row violation of `values`, as HiGHS's report prints them.\"\"\"\n    worst = {\"bound\": 0.0, \"integrality\": 0.0, \"row\": 0.0}\n    for var in model.variables():\n        v = values[var]\n        worst[\"bound\"] = max(worst[\"bound\"], var.lower_bound - v, v - var.upper_bound)\n        if var.integer:\n            worst[\"integrality\"] = max(worst[\"integrality\"], abs(v - round(v)))\n    for row in model.linear_constraints():\n        activity = sum(row.get_coefficient(var) * values[var] for var in model.row_nonzeros(row))\n        worst[\"row\"] = max(worst[\"row\"], row.lower_bound - activity, activity - row.upper_bound)\n    return worst\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    depot = model.add_binary_variable(name=\"open_north\")\n    model.add_linear_constraint(depot <= 1, name=\"once\")\n    print(audit(model, {depot: 0.9999996}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef audit(model: mathopt.Model, values: dict) -> dict[str, float]:\n    \"\"\"The largest bound, integrality and row violation of `values`, as HiGHS's report prints them.\"\"\"\n    # TODO: measure each kind of violation; 0.0 when there is none.\n    return {\"bound\": -1.0, \"integrality\": -1.0, \"row\": -1.0}\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    depot = model.add_binary_variable(name=\"open_north\")\n    model.add_linear_constraint(depot <= 1, name=\"once\")\n    print(audit(model, {depot: 0.9999996}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "299f9c53b584b468b92e4f4b2cce0768f8208500143b41680bebf6953334cdd8",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef audit(model: mathopt.Model, values: dict) -> dict[str, float]:\n    \"\"\"The largest bound, integrality and row violation of `values`, as HiGHS's report prints them.\"\"\"\n    # TODO: measure each kind of violation; 0.0 when there is none.\n    return {\"bound\": -1.0, \"integrality\": -1.0, \"row\": -1.0}\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    depot = model.add_binary_variable(name=\"open_north\")\n    model.add_linear_constraint(depot <= 1, name=\"once\")\n    print(audit(model, {depot: 0.9999996}))\n",
+  "exercise": {
+    "main_path": "practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-2/audit.py",
+    "test_path": "practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-2/test_audit.py",
+    "run_command": [
+      "python3",
+      "practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-2/audit.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-2/target/report.xml",
+      "practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-2/test_audit.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_clean_plan_has_no_violations_and_a_broken_one_reports_each_kind",
+        "kind": "main",
+        "says": "a plan inside every bound, whole and within every row reports three zeros, and a plan over an upper bound, off a whole number and over a row reports the largest of each"
+      },
+      {
+        "id": "test_integrality_is_the_distance_to_the_nearest_whole_number",
+        "kind": "edge",
+        "says": "a binary just below 1 is that far from 1, not from 0"
+      },
+      {
+        "id": "test_continuous_variables_have_no_integrality",
+        "kind": "edge",
+        "says": "a continuous variable may take any value; only integer variables are checked"
+      },
+      {
+        "id": "test_lower_bounds_and_lower_sides_count_too",
+        "kind": "edge",
+        "says": "a value below its lower bound, and a row below its lower side, are violations too"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "40-numerics/README_10.1.3.md",
+      "section": "SCIP Says When Its Best Solution Breaks a Row of Your Model"
+    },
+    "concepts": [
+      "SCIP warns when its translated best solution breaks a row of the model as built, while the status still says optimal"
+    ]
+  }
+}

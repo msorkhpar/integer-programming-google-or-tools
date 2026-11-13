@@ -1,0 +1,153 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "11-performance-at-scale",
+    "57-gpu-acceleration"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Which reruns owe you the same bits?",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A grid operator keeps a record of every LP and MILP run: its `inputs` (a snapshot id), the `device`, the `solver`, the `method`, the `threads`, the `tolerance`, the `versions`, the `kind` (`\"lp\"` or `\"milp\"`), the `objective` and a `digest` of the solution's bits. When a run is repeated, the auditors want a verdict that holds a rerun to its bits only where the configuration promised them, and to a tolerance everywhere else."
+    },
+    {
+      "type": "para",
+      "text": "Bits are promised when the two runs agree on every one of inputs, device, solver, method, threads, tolerance and versions, **unless** the method is `\"concurrent\"` (a race whose winner can change) or the run is a cuOpt (`solver == \"cuopt\"`) MILP, whose plans did not repeat with any setting."
+    },
+    {
+      "type": "para",
+      "text": "Write in `repeats.py`:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`bits_promised(a, b)`: True when the rule above promises equal bits;",
+        "`verdict(a, b, tol)`: `\"not comparable\"` when the inputs differ; where bits are promised, `\"identical\"` when digest and objective are equal and `\"different\"` otherwise; else `\"within tolerance\"` when the objectives differ by at most `tol` relatively (divided by $`\\max(1, \\lvert a\\text{'s objective} \\rvert)`$), and `\"different\"` otherwise."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The tests pass run records; no solver runs. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nSAME = (\"inputs\", \"device\", \"solver\", \"method\", \"threads\", \"tolerance\", \"versions\")\n\n\ndef bits_promised(a: dict, b: dict) -> bool:\n    \"\"\"True when run b repeats run a's configuration exactly and that configuration repeats bit for bit.\"\"\"\n    if any(a[k] != b[k] for k in SAME):\n        return False\n    if a[\"method\"] == \"concurrent\":                  # a race: the winner can change between runs\n        return False\n    if a[\"solver\"] == \"cuopt\" and a[\"kind\"] == \"milp\":   # cuOpt MILP plans did not repeat with any setting\n        return False\n    return True\n\n\ndef verdict(a: dict, b: dict, tol: float) -> str:\n    \"\"\"'identical', 'within tolerance', 'different' or 'not comparable'.\"\"\"\n    if a[\"inputs\"] != b[\"inputs\"]:\n        return \"not comparable\"\n    if bits_promised(a, b):\n        return \"identical\" if (a[\"digest\"], a[\"objective\"]) == (b[\"digest\"], b[\"objective\"]) else \"different\"\n    close = abs(a[\"objective\"] - b[\"objective\"]) <= tol * max(1.0, abs(a[\"objective\"]))\n    return \"within tolerance\" if close else \"different\"\n\n\nif __name__ == \"__main__\":\n    run = {\"inputs\": \"lp-7\", \"device\": \"cpu\", \"solver\": \"highs\", \"method\": \"simplex\", \"threads\": 1, \"tolerance\": 1e-7,\n           \"versions\": \"1.14.0\", \"kind\": \"lp\", \"objective\": 10.0, \"digest\": \"ab\"}\n    print(verdict(run, dict(run), 1e-6))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nSAME = (\"inputs\", \"device\", \"solver\", \"method\", \"threads\", \"tolerance\", \"versions\")\n\n\ndef bits_promised(a: dict, b: dict) -> bool:\n    \"\"\"True when run b repeats run a's configuration exactly and that configuration repeats bit for bit.\"\"\"\n    # TODO: the same configuration, and one that repeats.\n    return False\n\n\ndef verdict(a: dict, b: dict, tol: float) -> str:\n    \"\"\"'identical', 'within tolerance', 'different' or 'not comparable'.\"\"\"\n    # TODO: inputs first, then bits where they were promised, else the tolerance.\n    return \"\"\n\n\nif __name__ == \"__main__\":\n    run = {\"inputs\": \"lp-7\", \"device\": \"cpu\", \"solver\": \"highs\", \"method\": \"simplex\", \"threads\": 1, \"tolerance\": 1e-7,\n           \"versions\": \"1.14.0\", \"kind\": \"lp\", \"objective\": 10.0, \"digest\": \"ab\"}\n    print(verdict(run, dict(run), 1e-6))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "c21cbce1dbbeea3c995da3397f4d28c9e733deb21a1fa9317df7bdf225983d7f",
+  "starting_code": "from __future__ import annotations\n\nSAME = (\"inputs\", \"device\", \"solver\", \"method\", \"threads\", \"tolerance\", \"versions\")\n\n\ndef bits_promised(a: dict, b: dict) -> bool:\n    \"\"\"True when run b repeats run a's configuration exactly and that configuration repeats bit for bit.\"\"\"\n    # TODO: the same configuration, and one that repeats.\n    return False\n\n\ndef verdict(a: dict, b: dict, tol: float) -> str:\n    \"\"\"'identical', 'within tolerance', 'different' or 'not comparable'.\"\"\"\n    # TODO: inputs first, then bits where they were promised, else the tolerance.\n    return \"\"\n\n\nif __name__ == \"__main__\":\n    run = {\"inputs\": \"lp-7\", \"device\": \"cpu\", \"solver\": \"highs\", \"method\": \"simplex\", \"threads\": 1, \"tolerance\": 1e-7,\n           \"versions\": \"1.14.0\", \"kind\": \"lp\", \"objective\": 10.0, \"digest\": \"ab\"}\n    print(verdict(run, dict(run), 1e-6))\n",
+  "exercise": {
+    "main_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-1/repeats.py",
+    "test_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-1/test_repeats.py",
+    "run_command": [
+      "python3",
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-1/repeats.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-1/target/report.xml",
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-1/test_repeats.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_repeat_of_one_configuration_is_held_to_its_bits",
+        "kind": "main",
+        "says": "a rerun of one configuration that repeats is held to its bits"
+      },
+      {
+        "id": "test_runs_on_different_devices_are_compared_within_the_tolerance",
+        "kind": "main",
+        "says": "runs on different devices are compared within the tolerance, and other inputs are not compared"
+      },
+      {
+        "id": "test_a_concurrent_run_is_not_held_to_its_bits",
+        "kind": "edge",
+        "says": "a concurrent run is not held to its bits"
+      },
+      {
+        "id": "test_a_cuopt_milp_is_not_held_to_its_bits",
+        "kind": "edge",
+        "says": "a cuOpt MILP run is not held to its bits"
+      },
+      {
+        "id": "test_a_different_thread_count_is_another_configuration",
+        "kind": "edge",
+        "says": "a different thread count is another configuration"
+      },
+      {
+        "id": "test_the_tolerance_is_relative_to_the_objective",
+        "kind": "edge",
+        "says": "the tolerance is relative to the objective"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "57-gpu-acceleration/README_11.4.4.md",
+      "section": "cuOpt's MILP Did Not Repeat, Even in Its Determinism Mode"
+    },
+    "concepts": [
+      "bits are owed only by a rerun of one configuration that repeats; races, cuOpt MILPs and other thread counts are held to a tolerance"
+    ]
+  }
+}

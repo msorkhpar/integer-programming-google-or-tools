@@ -1,0 +1,536 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "17-cpsat-tuning-and-diagnostics"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Workers, search strategies and LNS",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "4.6.1 Workers, Search Strategies and LNS"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's planners keep a multi-period capital plan: each project starts in at most one year of the plan, and the money and crew-months it needs in each year of its work must fit that year's budget and crews. They have moved that plan to CP-SAT, OR-Tools' constraint solver for integer models (lessons 4.4.1 to 4.4.4 teach its modeling API). The Model below states it in full, so this module needs nothing else; lesson 6.4.1, later in the course, treats start-year models in depth. On the small portfolio (40 projects) CP-SAT proves the best plan almost at once. On the medium portfolio (400 projects, ten years, 887 start variables) it does not: stopped after a fixed amount of work, it reports a plan and a proof that no plan is more than 4.31% better, and the planners want that gap smaller without waiting longer. This lesson covers the three settings that change how CP-SAT spends its work: how many **workers** search at once, which **search strategy** a worker follows, and **large neighborhood search** (LNS), which improves a plan by re-solving part of it."
+    },
+    {
+      "type": "para",
+      "text": "GridCap is a fictional utility's portfolio; none of its numbers are real."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "Every program in this module solves the same model, built by `cpsat_plan.build`. It has one Boolean per project and allowed start year; each project starts at most once; every year's spending must fit that year's budget; and each program (transmission, distribution, vegetation) may use at most its own crew-months in a year, a hard row with no contractor to hire. Two lessons later in the course treat these pieces in depth: lesson 6.4.1 the start-year variables and their spending rows, and lesson 6.2.1 crew rows that a hired contractor can switch off. CP-SAT works on integers only; GridCap's money is in whole $k and its crew needs in whole crew-months, so every coefficient below is already an integer."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`P`$ the projects; $`Y`$ the plan's years; $`T_i \\subseteq Y`$ the start years project $`i`$ may use; $`M \\subseteq P`$ the must-do projects; $`\\mathcal{G}`$ the alternative groups, each a set of projects; $`C \\subseteq P`$ the child projects, with parent $`p(c)`$ and lag $`L_c`$ years; $`G`$ the programs (transmission, distribution, vegetation)."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`\\text{npv}_{i,t}`$, the NPV of project $`i`$ started in year $`t`$ ($k); $`c_{i,k}`$, what project $`i`$ spends in its $`k`$-th year of work ($k); $`B_y`$, the budget of year $`y`$ ($k), multiplied by a scenario factor $`s`$ (1 unless a lesson says otherwise); $`m_i`$, the crew-months project $`i`$ needs in each year it is worked on; $`K_{g,y}`$, the crew-months program $`g`$ has in year $`y`$; $`d_i`$, the years of work of project $`i`$."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_{i,t} \\in \\{0, 1\\}`$ for every $`i \\in P`$ and $`t \\in T_i`$: project $`i`$ starts in year $`t`$. In code, `x[i, t]`, made with `model.new_bool_var`."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{i \\in P} \\sum_{t \\in T_i} \\text{npv}_{i,t}\\, x_{i,t}"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{t \\in T_i} x_{i,t} &\\le 1 && \\forall i \\in P && \\text{(once}_i) \\\\\n\\sum_{t \\in T_i} x_{i,t} &\\ge 1 && \\forall i \\in M && \\text{(must}_i) \\\\\n\\sum_{i \\in g} \\sum_{t \\in T_i} x_{i,t} &\\le 1 && \\forall g \\in \\mathcal{G} && \\text{(alt}_g) \\\\\n\\sum_{u \\in T_c,\\, u \\le t} x_{c,u} &\\le \\sum_{r \\in T_{p(c)},\\, r \\le t - L_c} x_{p(c),r} && \\forall c \\in C,\\ t \\in T_c && \\text{(after}_{c,t}) \\\\\n\\sum_{i \\in P} \\sum_{t \\in T_i,\\, t \\le y} c_{i,\\,y-t}\\, x_{i,t} &\\le \\lfloor s\\, B_y \\rfloor && \\forall y \\in Y && \\text{(budget}_y) \\\\\n\\sum_{i \\in P:\\ \\text{program}(i) = g} \\ \\sum_{t \\in T_i,\\ t \\le y < t + d_i} m_i\\, x_{i,t} &\\le K_{g,y} && \\forall g \\in G,\\ y \\in Y && \\text{(crews}_{g,y})\n\\end{aligned}"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Label",
+        "Rule name in `cpsat_plan.py`"
+      ],
+      "rows": [
+        [
+          "once$`_i`$",
+          "none: it is never switched off"
+        ],
+        [
+          "must$`_i`$",
+          "`must_P017`"
+        ],
+        [
+          "alt$`_g`$",
+          "`alt_G001`"
+        ],
+        [
+          "after$`_{c,t}`$",
+          "`after_P023_2029`"
+        ],
+        [
+          "budget$`_y`$",
+          "`budget_2030`"
+        ],
+        [
+          "crews$`_{g,y}`$",
+          "`crews_vegetation_2031`"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The rule names matter in lesson 4.6.2, which switches rules on and off by name. A crews row is only written when some project of that program could be at work in that year; otherwise its sum is empty and there is nothing to limit."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "CP-SAT Runs a Portfolio of Subsolvers, One per Worker"
+    },
+    {
+      "type": "para",
+      "text": "A **worker** is a thread: one line of computation that the operating system can run on its own processor core. `solver.parameters.num_workers` sets how many CP-SAT starts. The parameters proto (the file that documents every CP-SAT setting, `sat_parameters.proto`) gives its meaning: 0, the default, means \"use every core\", and 1 means no parallelism."
+    },
+    {
+      "type": "para",
+      "text": "What the extra workers do is the first thing to learn, because it is not what most people guess. A MIP solver that runs in parallel usually splits one search tree between its threads. CP-SAT does not split anything: it runs a **portfolio**, a set of different **subsolvers** (complete searches with different settings, plus heuristics), all working on the whole model at once and sharing what they find. Each new plan any of them finds becomes everyone's incumbent (the best plan known so far), and each better bound any of them proves becomes everyone's bound."
+    },
+    {
+      "type": "para",
+      "text": "The program below solves GridCap medium twice with the same budget of work, first with one worker and then with eight. The work budget is `max_deterministic_time`, a limit in CP-SAT's own unit of work rather than in seconds; lesson 4.6.3 explains it, and for now read \"3.0\" as \"the same amount of search effort per worker\"."
+    },
+    {
+      "type": "example",
+      "id": "workers-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "17-cpsat-tuning-and-diagnostics/src/workers.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "17-cpsat-tuning-and-diagnostics/src/workers.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "solver = cp_model.CpSolver()\nsolver.parameters.num_workers = 1\nsolver.parameters.max_deterministic_time = 3.0\nstatus = solver.solve(plan.model)"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "1 worker : FEASIBLE  plan $215,024k  bound $224,292k  gap 4.31%\n8 workers: FEASIBLE  gap below 1%: True\n  6 full problem subsolvers: [core, default_lp, max_lp, no_lp, quick_restart, reduced_costs]\n  2 first solution subsolvers: [fj, fs_random_no_lp]\n  9 interleaved subsolvers: [feasibility_pump, graph_arc_lns, graph_cst_lns, graph_dec_lns, graph_var_lns, ls, rins/rens, rnd_cst_lns, rnd_var_lns]\n  3 helper subsolvers: [neighborhood_helper, synchronization_agent, update_gap_integral]"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Read the first line with lesson 3.4.1's terms. `FEASIBLE` is the status CP-SAT gives when it has a plan but has not proved it optimal (a limit stopped it). The **bound** is a number no plan can beat: CP-SAT has proved that every plan is worth at most $224,292k. The **gap** is how far the bound sits above the plan, as a share of the plan: $`(224{,}292 - 215{,}024) / 215{,}024 = 4.31\\%`$. The true optimum lies somewhere in that range."
+    },
+    {
+      "type": "para",
+      "text": "The eight-worker run closes the gap below 1%. Its exact plan, bound and gap change from one run to the next (lesson 4.6.3 shows why), so the program prints only the test that came out the same in every run we made. The four lists under it come from CP-SAT's log (lesson 4.6.4 shows how to capture it) and they are the portfolio itself:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Full problem subsolvers** each run a complete search that can prove optimality. The proto's `subsolvers` entry describes them: `default_lp`, `no_lp` and `max_lp` differ in how much of the model they copy into an LP relaxation (linearization level 1, 0 and 2); `reduced_costs` steers the search with LP information; `quick_restart` restarts often; `core` raises the bound the way MaxSAT solvers do (the proto's `optimize_with_core`).",
+        "**First solution subsolvers** only try to find some plan fast. `fj` is a feasibility jump heuristic, which the OR-Tools troubleshooting page lists among the 8-worker portfolio.",
+        "**Interleaved subsolvers** share the remaining threads, taking turns in short slices. Most of their names end in `_lns`: they are the large neighborhood searches of the last section of this lesson.",
+        "**Helper subsolvers** do bookkeeping, such as sharing solutions between the others."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "With one worker there is room for one subsolver only. The log of a one-worker run says so: `1 full problem subsolver: [main]` (lesson 4.6.4). That is why the one-worker bound is so much weaker: `max_lp`, which builds the strongest LP relaxation, and `core` never run."
+    },
+    {
+      "type": "para",
+      "text": "How many workers to use is a measured choice. The troubleshooting page recommends at least 8 for parallel search and adds subsolvers at 16, 24 and 32 workers. More workers than cores just makes them take turns on the same cores, so a server running several solves at once should give each solve fewer workers, not all of them. And whatever you choose, set it explicitly: the default of 0 means \"every core of whatever machine this runs on\", so a laptop and a 64-core server run different portfolios."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Search Strategy Decides Which Variable to Fix Next and to Which Value"
+    },
+    {
+      "type": "para",
+      "text": "Inside one subsolver, a CP-SAT search is a sequence of **decisions**: pick a variable that is not fixed yet, give it a value, propagate what follows (for example, a project that just took the last of a year's budget forces every other start in that year to 0), and repeat. When a decision leads to a contradiction, the solver learns why and backs up. Two choices shape the search: which variable to decide next, and which value to try first. Together they are the **search strategy**."
+    },
+    {
+      "type": "para",
+      "text": "`solver.parameters.search_branching` picks the strategy family. The proto lists, among others:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Value",
+        "What it does"
+      ],
+      "rows": [
+        [
+          "`AUTOMATIC_SEARCH`",
+          "the default: the solver's own heuristics"
+        ],
+        [
+          "`FIXED_SEARCH`",
+          "follow the order you give with `add_decision_strategy`"
+        ],
+        [
+          "`LP_SEARCH`",
+          "decide using the LP relaxation's reduced costs"
+        ],
+        [
+          "`PSEUDO_COST_SEARCH`",
+          "decide by how much past decisions moved the objective bound"
+        ],
+        [
+          "`PORTFOLIO_SEARCH`",
+          "a simple portfolio, the one LNS workers use"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "You give an order with `model.add_decision_strategy(variables, variable_selection, value_selection)`. With `cp_model.CHOOSE_FIRST` the solver decides the first unfixed variable of your list; with `cp_model.SELECT_MAX_VALUE` it tries the largest value first, which for a start variable means \"start it\". The program below gives the start variables in falling NPV order, a greedy rule a planner might suggest:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "order = sorted(plan.x, key=lambda key: -medium.project(key[0]).npv[key[1]])\nplan.model.add_decision_strategy([plan.x[key] for key in order],\n                                 cp_model.CHOOSE_FIRST, cp_model.SELECT_MAX_VALUE)"
+    },
+    {
+      "type": "para",
+      "text": "Then it solves GridCap medium once per strategy, each with one worker and the same work limit of 2.0, and records the first plan found, how many improving plans followed, the final plan and the bound:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "solver = cp_model.CpSolver()\nsolver.parameters.num_workers = 1\nsolver.parameters.max_deterministic_time = 2.0\nsolver.parameters.search_branching = branching"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "AUTOMATIC_SEARCH                 first $  208,873k  plans 14  best $  214,821k  bound $  224,293k\nLP_SEARCH                        first $  217,710k  plans  8  best $  218,230k  bound $  224,291k\nPSEUDO_COST_SEARCH               first $  208,873k  plans 14  best $  214,821k  bound $  224,293k\nPORTFOLIO_SEARCH                 first $  173,917k  plans  4  best $  217,918k  bound $  224,303k\nFIXED_SEARCH + NPV order         first $  203,030k  plans 39  best $  203,721k  bound $  224,291k\nAUTOMATIC_SEARCH + NPV order     first $  208,873k  plans 14  best $  214,821k  bound $  224,293k"
+    },
+    {
+      "type": "para",
+      "text": "Four things in this table carry over to other models:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**A strategy changes the plans, hardly the bound.** The final plans range from $203,721k to $218,230k, while every bound sits between $224,291k and $224,303k. The bound comes from propagation and the LP relaxation, which every strategy shares.",
+        "**Your own order is not automatically better.** The greedy NPV order found the worst final plan: deciding the highest-NPV starts first is not the same as finding the most valuable combination of starts, and the default heuristics did better here.",
+        "**`add_decision_strategy` alone changes nothing on one worker.** The last line is the same as the first, number for number: under `AUTOMATIC_SEARCH` this run did not follow the order. `FIXED_SEARCH` is what makes the solver follow it. (With several workers, the proto says a `fixed` subsolver joins the portfolio when a strategy is given, so the order is tried alongside the others.)",
+        "**Measure before you choose.** `LP_SEARCH` was best on this model with this budget, and `PSEUDO_COST_SEARCH` behaved exactly like the default. Neither result transfers to another model without running it."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The CP-SAT Primer gives the same advice from its own experiments: a hand-written strategy mostly helps a weak model, and the defaults learn good decisions by themselves. In practice, the portfolio of the last section already runs six full searches side by side at 8 workers, `reduced_costs` (which steers with LP information) among them, which is one more reason to give CP-SAT workers before giving it a strategy. The proto also lists a `pseudo_costs` subsolver, but it is not among the six this 8-worker run printed."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "LNS Frees Part of a Good Plan and Lets CP-SAT Rebuild It"
+    },
+    {
+      "type": "para",
+      "text": "**Large neighborhood search** (LNS) improves a plan you already have. Each step:"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "**Destroy:** choose a **neighborhood**, a part of the problem to re-plan (here, the projects of two of GridCap's four regions).",
+        "**Fix the rest:** every variable outside the neighborhood keeps its value in the current plan, with a constraint $`x_{i,t} = \\bar x_{i,t}`$, where $`\\bar x`$ is the current plan.",
+        "**Repair:** solve the much smaller problem that is left, with a short work limit.",
+        "**Accept** the result if it is better than the current plan, and repeat with another neighborhood."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Because each step searches a whole sub-model instead of trying one change at a time, one step looks at a huge number of nearby plans at once. Fixing variables to constants is what makes the sub-model small: every fixed variable is one decision fewer to search. Hinting the current plan (`add_hint`, lesson 4.6.2) tells the step where to start; lesson 4.6.2 shows a hinted solve whose first plan is the hint itself."
+    },
+    {
+      "type": "para",
+      "text": "In the model, a step adds, for the neighborhood $`F \\subseteq P`$:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "x_{i,t} = \\bar x_{i,t} \\qquad \\forall i \\in P \\setminus F,\\ t \\in T_i \\qquad \\text{(keep}_{i,t})"
+    },
+    {
+      "type": "para",
+      "text": "CP-SAT already runs LNS by itself: the `_lns` and `rins/rens` names in the 8-worker portfolio above are neighborhoods it chooses without knowing anything about your problem (random variables, random constraints, variables linked in the model's graph, and neighborhoods built from the LP relaxation). The CP-SAT Primer's LNS chapter makes the case for writing your own when you know which parts of the problem belong together. For GridCap, regions are a natural first try: they cut the 400 projects into four groups of about 100, so two regions free about half the plan."
+    },
+    {
+      "type": "para",
+      "text": "The program starts from the plan one worker finds with 3 units of work, then runs ten steps. Each step frees two regions picked by a seeded random generator:"
+    },
+    {
+      "type": "example",
+      "id": "own_lns-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "17-cpsat-tuning-and-diagnostics/src/own_lns.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "17-cpsat-tuning-and-diagnostics/src/own_lns.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "for (pid, t), var in plan.x.items():\n    value = 1 if current.get(pid) == t else 0\n    plan.model.add_hint(var, value)\n    if pid not in free:\n        plan.model.add(var == value)              # outside the neighborhood: keep the current plan\nsolver = solve(plan, 0.5)\nspent += solver.deterministic_time\nif solver.objective_value > best:\n    current, best = schedule(plan, solver), solver.objective_value"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "start          plan $215,024k  work 3.15\nstep  1 Plains+Valley plan $215,605k  work 3.65\nstep  2 Coast+Valley  plan $215,750k  work 4.15\nstep  3 Coast+Valley  plan $215,871k  work 4.65\nstep  4 Coast+Ridge   plan $215,977k  work 5.15\nstep  5 Plains+Ridge  plan $216,006k  work 5.65\nstep  6 Coast+Plains  plan $216,039k  work 6.15\nstep  7 Plains+Valley plan $216,039k  work 6.65\nstep  8 Coast+Plains  plan $216,070k  work 7.15\nstep  9 Plains+Ridge  plan $216,112k  work 7.65\nstep 10 Plains+Ridge  plan $216,112k  work 8.15\none plain solve with the same work: plan $215,758k"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "`solver.objective_value` is a float (lesson 4.5.3 showed one landing just below a whole number). Every coefficient here is a whole $k, the loop only compares values with `>`, and it prints them with `:,.0f`, which rounds; to store a plan's value as an `int`, use `round(solver.objective_value)`, never `int(...)`, which would cut a value such as 215,023.99… down to 215,023."
+    },
+    {
+      "type": "para",
+      "text": "The loop adds $1,088k of NPV in ten steps. The fair comparison is the last line: one ordinary one-worker solve given the same total work (8.15) ends at $215,758k, so on this model the region neighborhoods used the work better. Steps 7 and 10 found nothing better and kept the plan, which is normal: a neighborhood that is already optimal for the rest of the plan has nothing to give."
+    },
+    {
+      "type": "para",
+      "text": "Two things decide whether an LNS loop pays off, and the program lets you test both. The neighborhood must be big enough to contain an improvement but small enough to solve in the step's limit; and it must free variables that interact, since freeing two projects that never compete for the same budget, crews or years cannot improve on keeping them both."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**CP-SAT runs a portfolio of subsolvers, one per worker.** More workers add different searches, including the ones that raise the bound; set `num_workers` explicitly.",
+        "**A search strategy decides which variable to fix next and to which value.** `add_decision_strategy` needs `search_branching = cp_model.FIXED_SEARCH` to be followed on one worker, and a strategy changes the plans found far more than the bound.",
+        "**LNS frees part of a good plan and lets CP-SAT rebuild it.** Fix everything outside the neighborhood, hint the current plan, solve briefly, keep improvements."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Setting or call",
+        "What it does"
+      ],
+      "rows": [
+        [
+          "`solver.parameters.num_workers = n`",
+          "number of worker threads; 0 (default) is every core, 1 is no parallelism"
+        ],
+        [
+          "`solver.parameters.max_deterministic_time = w`",
+          "stop after `w` units of deterministic work (lesson 4.6.3)"
+        ],
+        [
+          "`solver.parameters.search_branching = cp_model.LP_SEARCH`",
+          "choose the branching family"
+        ],
+        [
+          "`model.add_decision_strategy(vars, cp_model.CHOOSE_FIRST, cp_model.SELECT_MAX_VALUE)`",
+          "a fixed decision order, followed under `FIXED_SEARCH`"
+        ],
+        [
+          "`model.add(var == value)`",
+          "fix a variable for an LNS step"
+        ],
+        [
+          "`model.add_hint(var, value)`",
+          "suggest the current plan (lesson 4.6.2)"
+        ],
+        [
+          "`solver.objective_value`, `solver.best_objective_bound`",
+          "the plan's value and the proven bound"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Subsolver kind",
+        "Examples",
+        "Purpose"
+      ],
+      "rows": [
+        [
+          "full problem",
+          "`default_lp`, `max_lp`, `core`, `quick_restart`",
+          "complete search; can prove optimality"
+        ],
+        [
+          "first solution",
+          "`fj`, `fs_random_no_lp`",
+          "find some plan quickly"
+        ],
+        [
+          "interleaved",
+          "`graph_var_lns`, `rnd_var_lns`, `rins/rens`, `ls`",
+          "improve the incumbent in short turns"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [CP-SAT solver (OR-Tools)](https://developers.google.com/optimization/cp/cp_solver), [CP-SAT parameters proto, `sat_parameters.proto`](https://github.com/google/or-tools/blob/stable/ortools/sat/sat_parameters.proto) (`num_workers`, `subsolvers`, `search_branching`), [CP-SAT troubleshooting (OR-Tools)](https://github.com/google/or-tools/blob/stable/ortools/sat/docs/troubleshooting.md) (the portfolio at 8, 16, 24 and 32 workers), [The CP-SAT Primer: Parameters](https://d-krupke.github.io/cpsat-primer/parameters.html) (parallelization and decision strategies) and [The CP-SAT Primer: Large Neighborhood Search](https://d-krupke.github.io/cpsat-primer/lns.html)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Run `workers.py` with 16 workers. Which subsolvers join the lists?",
+        "Change `own_lns.py` to free one region per step instead of two. Predict, then measure, whether the final plan is better or worse after ten steps.",
+        "Give `FIXED_SEARCH` the start variables in falling NPV per $k of capex instead of falling NPV. Does the first plan improve?"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Why a Portfolio and Not a Split Tree"
+    },
+    {
+      "type": "para",
+      "text": "A MIP solver's tree search splits naturally: each thread takes open nodes. CP-SAT's search learns clauses (short facts like \"these three starts cannot all be 1\") from every conflict, and those facts are valid everywhere, so a single search that never splits gets stronger as it goes. Running different complete searches side by side, each learning in its own way and sharing solutions and bounds, keeps that strength while using more cores. The price is that adding workers does not divide the time by the number of workers, and that a run's result depends on which worker got there first (lesson 4.6.3)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**workers.py.** Solves GridCap medium with one worker and with eight, and prints the 8-worker portfolio from the log (*CP-SAT Runs a Portfolio of Subsolvers, One per Worker*). *Try:* Set the second run to 2 workers. Which lists does the log print now?"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [workers.py](src/workers.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**strategies.py.** The same model under five search strategies and a decision order, each with one worker (*A Search Strategy Decides Which Variable to Fix Next and to Which Value*). *Try:* Add `cp_model.RANDOMIZED_SEARCH` to the list. Predict whether its bound moves."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [strategies.py](src/strategies.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**own_lns.py.** A ten-step LNS loop over pairs of regions, compared with one plain solve of the same work (*LNS Frees Part of a Good Plan and Lets CP-SAT Rebuild It*). *Try:* Give each step 1.0 units instead of 0.5. Does the loop still beat the plain solve with the same total work?"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [own_lns.py](src/own_lns.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**cpsat_plan.py.** The CP-SAT model every program of the module builds: start variables, once, must-do, alternative, precedence, budget and crew rows, each with an optional flag (lesson 4.6.2). It runs nothing itself."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [cpsat_plan.py](src/cpsat_plan.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 10,
+    "paras": 37,
+    "code": 6,
+    "tables": 4,
+    "lists": 9,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 2
+  },
+  "content_sha256": "0abd01a8616f85c74d2c0637150a2ce9e60e5e7b798bbced84e6d8c5304cbbda"
+}

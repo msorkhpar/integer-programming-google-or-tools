@@ -1,0 +1,140 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "05-other-modeling-frameworks-and-solvers",
+    "20-pulp"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Port an inherited PuLP model to MathOpt and prove it",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility plans its smart-meter rollout with an inherited PuLP model, `legacy_build` in `meters.py`. Its planning service is moving to MathOpt, and the team lead will accept the port only with proof that it gives the legacy model's answers."
+    },
+    {
+      "type": "para",
+      "text": "Write `port_build(sites, budget, crew_weeks)` in `meters.py`: the legacy model in MathOpt, with the same variable names and the same row names. It returns the model, the site variables `x[sid]` and the extra-crews variable. `port_solve`, already written, solves it with SCIP at a gap of 0 and reads the answer. Leave `legacy_build` as it is."
+    },
+    {
+      "type": "para",
+      "text": "The legacy model, read off the PuLP code. $`S`$ is the sites, $`D`$ the districts and $`S_d`$ the sites of district $`d`$. Site $`i`$ brings a benefit $`b_i`$ ($k a year), costs $`c_i`$ ($k) and takes $`w_i`$ installer crew-weeks. The year has a budget $`B`$ and $`W`$ crew-weeks, and each extra crew hired costs $40k and adds 10 crew-weeks."
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max\\ & \\sum_{i \\in S} b_i\\, x_i - 40\\, k && && \\text{(net)} \\\\\n& \\sum_{i \\in S} c_i\\, x_i \\le B && && \\text{(budget)} \\\\\n& \\sum_{i \\in S} w_i\\, x_i \\le W + 10\\, k && && \\text{(crew)} \\\\\n& \\sum_{i \\in S_d} x_i \\ge 1 && \\forall d \\in D && \\text{(cover}_d) \\\\\n& x_i \\in \\{0, 1\\} \\ \\ \\forall i \\in S, \\qquad k \\in \\{0, 1, 2, 3\\}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Check your variables against the PuLP code, not only against this page: a bound or a type that the PuLP call states is easy to drop in a port. The solve uses SCIP rather than HiGHS because the tests import PuLP in the same process. About eight lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pulp\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Site:\n    sid: str\n    district: str\n    benefit: float        # $k a year of better readings and fewer truck rolls\n    cost: float           # $k\n    weeks: int            # installer crew-weeks\n\n\ndef legacy_build(sites, budget, crew_weeks):\n    \"\"\"The inherited PuLP model. Do not change it: the port must give its answers.\"\"\"\n    prob = pulp.LpProblem(\"meters\", pulp.LpMaximize)\n    x = pulp.LpVariable.dicts(\"x\", [s.sid for s in sites], cat=\"Binary\")\n    k = pulp.LpVariable(\"extra_crews\", 0, 3, cat=\"Integer\")\n    prob += pulp.lpSum(s.benefit * x[s.sid] for s in sites) - 40 * k, \"net\"\n    prob += pulp.lpSum(s.cost * x[s.sid] for s in sites) <= budget, \"budget\"\n    prob += pulp.lpSum(s.weeks * x[s.sid] for s in sites) <= crew_weeks + 10 * k, \"crew\"\n    for d in sorted({s.district for s in sites}):\n        prob += pulp.lpSum(x[s.sid] for s in sites if s.district == d) >= 1, \"cover_\" + d\n    return prob, x, k\n\n\ndef port_build(sites, budget, crew_weeks):\n    \"\"\"The same model in MathOpt, with the same variable and row names.\"\"\"\n    model = mathopt.Model(name=\"meters\")\n    x = {s.sid: model.add_binary_variable(name=\"x_\" + s.sid) for s in sites}\n    k = model.add_integer_variable(lb=0, ub=3, name=\"extra_crews\")\n    model.maximize(sum(s.benefit * x[s.sid] for s in sites) - 40 * k)\n    model.add_linear_constraint(sum(s.cost * x[s.sid] for s in sites) <= budget, name=\"budget\")\n    model.add_linear_constraint(sum(s.weeks * x[s.sid] for s in sites) <= crew_weeks + 10 * k, name=\"crew\")\n    for d in sorted({s.district for s in sites}):\n        model.add_linear_constraint(sum(x[s.sid] for s in sites if s.district == d) >= 1, name=\"cover_\" + d)\n    return model, x, k\n\n\ndef port_solve(sites, budget, crew_weeks):\n    \"\"\"(net benefit, sorted site ids, extra crews), solved by SCIP at a gap of 0; None with no plan.\"\"\"\n    model, x, k = port_build(sites, budget, crew_weeks)\n    result = mathopt.solve(model, mathopt.SolverType.GSCIP,\n                           params=mathopt.SolveParameters(relative_gap_tolerance=0.0))\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    values = result.variable_values()\n    return (result.objective_value(), sorted(sid for sid, v in x.items() if values[v] > 0.5),\n            round(values[k]))\n\n\nif __name__ == \"__main__\":\n    demo = [Site(\"A\", \"east\", 50, 30, 6), Site(\"B\", \"west\", 40, 30, 8)]\n    print(port_solve(demo, budget=100, crew_weeks=10))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pulp\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Site:\n    sid: str\n    district: str\n    benefit: float        # $k a year of better readings and fewer truck rolls\n    cost: float           # $k\n    weeks: int            # installer crew-weeks\n\n\ndef legacy_build(sites, budget, crew_weeks):\n    \"\"\"The inherited PuLP model. Do not change it: the port must give its answers.\"\"\"\n    prob = pulp.LpProblem(\"meters\", pulp.LpMaximize)\n    x = pulp.LpVariable.dicts(\"x\", [s.sid for s in sites], cat=\"Binary\")\n    k = pulp.LpVariable(\"extra_crews\", 0, 3, cat=\"Integer\")\n    prob += pulp.lpSum(s.benefit * x[s.sid] for s in sites) - 40 * k, \"net\"\n    prob += pulp.lpSum(s.cost * x[s.sid] for s in sites) <= budget, \"budget\"\n    prob += pulp.lpSum(s.weeks * x[s.sid] for s in sites) <= crew_weeks + 10 * k, \"crew\"\n    for d in sorted({s.district for s in sites}):\n        prob += pulp.lpSum(x[s.sid] for s in sites if s.district == d) >= 1, \"cover_\" + d\n    return prob, x, k\n\n\ndef port_build(sites, budget, crew_weeks):\n    \"\"\"The same model in MathOpt, with the same variable and row names.\"\"\"\n    model = mathopt.Model(name=\"meters\")\n    x = {s.sid: model.add_binary_variable(name=\"x_\" + s.sid) for s in sites}\n    k = model.add_variable(lb=0, ub=0, name=\"extra_crews\")\n    # TODO: give extra_crews the legacy bounds and type, then port the objective and the rows.\n    return model, x, k\n\n\ndef port_solve(sites, budget, crew_weeks):\n    \"\"\"(net benefit, sorted site ids, extra crews), solved by SCIP at a gap of 0; None with no plan.\"\"\"\n    model, x, k = port_build(sites, budget, crew_weeks)\n    result = mathopt.solve(model, mathopt.SolverType.GSCIP,\n                           params=mathopt.SolveParameters(relative_gap_tolerance=0.0))\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    values = result.variable_values()\n    return (result.objective_value(), sorted(sid for sid, v in x.items() if values[v] > 0.5),\n            round(values[k]))\n\n\nif __name__ == \"__main__\":\n    demo = [Site(\"A\", \"east\", 50, 30, 6), Site(\"B\", \"west\", 40, 30, 8)]\n    print(port_solve(demo, budget=100, crew_weeks=10))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "241ec7fb583a91cdae4962bd9ea608e1c2a19d743f7068ca86fa71e6cbe4f600",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pulp\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Site:\n    sid: str\n    district: str\n    benefit: float        # $k a year of better readings and fewer truck rolls\n    cost: float           # $k\n    weeks: int            # installer crew-weeks\n\n\ndef legacy_build(sites, budget, crew_weeks):\n    \"\"\"The inherited PuLP model. Do not change it: the port must give its answers.\"\"\"\n    prob = pulp.LpProblem(\"meters\", pulp.LpMaximize)\n    x = pulp.LpVariable.dicts(\"x\", [s.sid for s in sites], cat=\"Binary\")\n    k = pulp.LpVariable(\"extra_crews\", 0, 3, cat=\"Integer\")\n    prob += pulp.lpSum(s.benefit * x[s.sid] for s in sites) - 40 * k, \"net\"\n    prob += pulp.lpSum(s.cost * x[s.sid] for s in sites) <= budget, \"budget\"\n    prob += pulp.lpSum(s.weeks * x[s.sid] for s in sites) <= crew_weeks + 10 * k, \"crew\"\n    for d in sorted({s.district for s in sites}):\n        prob += pulp.lpSum(x[s.sid] for s in sites if s.district == d) >= 1, \"cover_\" + d\n    return prob, x, k\n\n\ndef port_build(sites, budget, crew_weeks):\n    \"\"\"The same model in MathOpt, with the same variable and row names.\"\"\"\n    model = mathopt.Model(name=\"meters\")\n    x = {s.sid: model.add_binary_variable(name=\"x_\" + s.sid) for s in sites}\n    k = model.add_variable(lb=0, ub=0, name=\"extra_crews\")\n    # TODO: give extra_crews the legacy bounds and type, then port the objective and the rows.\n    return model, x, k\n\n\ndef port_solve(sites, budget, crew_weeks):\n    \"\"\"(net benefit, sorted site ids, extra crews), solved by SCIP at a gap of 0; None with no plan.\"\"\"\n    model, x, k = port_build(sites, budget, crew_weeks)\n    result = mathopt.solve(model, mathopt.SolverType.GSCIP,\n                           params=mathopt.SolveParameters(relative_gap_tolerance=0.0))\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    values = result.variable_values()\n    return (result.objective_value(), sorted(sid for sid, v in x.items() if values[v] > 0.5),\n            round(values[k]))\n\n\nif __name__ == \"__main__\":\n    demo = [Site(\"A\", \"east\", 50, 30, 6), Site(\"B\", \"west\", 40, 30, 8)]\n    print(port_solve(demo, budget=100, crew_weeks=10))\n",
+  "exercise": {
+    "main_path": "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-02/practice-2/meters.py",
+    "test_path": "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-02/practice-2/test_meters.py",
+    "run_command": [
+      "python3",
+      "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-02/practice-2/meters.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-02/practice-2/target/report.xml",
+      "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-02/practice-2/test_meters.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_port_gives_the_legacy_answer_with_crews_to_spare",
+        "kind": "main",
+        "says": "the port reaches the legacy model's value, sites and extra crews when crews are plentiful"
+      },
+      {
+        "id": "test_the_port_has_the_legacy_rows_and_variables_by_name",
+        "kind": "main",
+        "says": "the port has every row and variable of the legacy model, under the same names"
+      },
+      {
+        "id": "test_extra_crews_are_whole_crews",
+        "kind": "edge",
+        "says": "extra crews are hired in whole crews, as in the legacy model"
+      },
+      {
+        "id": "test_at_most_three_extra_crews_are_hired",
+        "kind": "edge",
+        "says": "no more than three extra crews are hired, even when more would pay"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "20-pulp/README_5.2.2.md",
+      "section": "Migrating to MathOpt Maps Each PuLP Call, and a Test Proves the Port"
+    },
+    "concepts": [
+      "each PuLP call maps to a MathOpt call, and the port is proved by value, plan and row names at gap 0"
+    ]
+  }
+}

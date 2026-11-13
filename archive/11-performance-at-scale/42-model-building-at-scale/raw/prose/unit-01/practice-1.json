@@ -1,0 +1,145 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "11-performance-at-scale",
+    "42-model-building-at-scale"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Compare two builders side by side",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's model builds run on a shared test server, where other jobs come and go. Last week a rewrite of the budget rows was declared \"three times faster\" from one timing of the old builder on Monday and one of the new builder on Tuesday. Nobody could repeat it. The team wants a function that compares two builders fairly, on a busy machine, in one process."
+    },
+    {
+      "type": "para",
+      "text": "Write `speedup(old, new, rounds, warmup, clock)` in `compare.py`. `old` and `new` are functions that take no arguments (each builds a model); `clock` is a function that returns the current time in seconds, `time.perf_counter` by default. The function returns how many times faster `new` is than `old`, measured this way:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "first, `warmup` untimed runs of each builder, `old` then `new`, so one-time costs do not count;",
+        "then `rounds` rounds; each round times one run of `old` and then one run of `new`, each between two readings of `clock`, and computes the round's ratio, old's time divided by new's time;",
+        "the answer is the median of the round ratios (with an even number of rounds, the mean of the two middle ones)."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "A slow patch on the machine then hits both builders of the same round, and their ratio survives it. The tests pass a fake clock that moves only when a builder runs, so your function must read the clock only around each timed run; the given helper `timed(work, clock)` does exactly that for one run. Run the file to measure two toy functions on your machine. About five lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport statistics\nimport time\nfrom typing import Callable\n\n\ndef timed(work: Callable[[], object], clock: Callable[[], float]) -> float:\n    \"\"\"Seconds one run of `work` takes, read from `clock` just before and just after it.\"\"\"\n    began = clock()\n    work()\n    return clock() - began\n\n\ndef speedup(old: Callable[[], object], new: Callable[[], object], rounds: int = 5, warmup: int = 1,\n            clock: Callable[[], float] = time.perf_counter) -> float:\n    \"\"\"How many times faster `new` is than `old`: the median, over rounds, of old's time / new's time.\"\"\"\n    for _ in range(warmup):\n        old()\n        new()\n    ratios = [timed(old, clock) / timed(new, clock) for _ in range(rounds)]\n    return statistics.median(ratios)\n\n\nif __name__ == \"__main__\":\n    def slow():\n        return sum(i * i for i in range(200_000))\n\n    def fast():\n        return sum(i * i for i in range(20_000))\n\n    print(f\"fast is {speedup(slow, fast):.1f}x faster than slow on this machine, this time\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport statistics\nimport time\nfrom typing import Callable\n\n\ndef timed(work: Callable[[], object], clock: Callable[[], float]) -> float:\n    \"\"\"Seconds one run of `work` takes, read from `clock` just before and just after it.\"\"\"\n    began = clock()\n    work()\n    return clock() - began\n\n\ndef speedup(old: Callable[[], object], new: Callable[[], object], rounds: int = 5, warmup: int = 1,\n            clock: Callable[[], float] = time.perf_counter) -> float:\n    \"\"\"How many times faster `new` is than `old`: the median, over rounds, of old's time / new's time.\"\"\"\n    # TODO: warm both up, then time them round by round with `timed`.\n    return 1.0\n\n\nif __name__ == \"__main__\":\n    def slow():\n        return sum(i * i for i in range(200_000))\n\n    def fast():\n        return sum(i * i for i in range(20_000))\n\n    print(f\"fast is {speedup(slow, fast):.1f}x faster than slow on this machine, this time\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "d07d271bd1cbc3d1128f164164df53174a20e0cedb266ed5e35ceae5fa300169",
+  "starting_code": "from __future__ import annotations\n\nimport statistics\nimport time\nfrom typing import Callable\n\n\ndef timed(work: Callable[[], object], clock: Callable[[], float]) -> float:\n    \"\"\"Seconds one run of `work` takes, read from `clock` just before and just after it.\"\"\"\n    began = clock()\n    work()\n    return clock() - began\n\n\ndef speedup(old: Callable[[], object], new: Callable[[], object], rounds: int = 5, warmup: int = 1,\n            clock: Callable[[], float] = time.perf_counter) -> float:\n    \"\"\"How many times faster `new` is than `old`: the median, over rounds, of old's time / new's time.\"\"\"\n    # TODO: warm both up, then time them round by round with `timed`.\n    return 1.0\n\n\nif __name__ == \"__main__\":\n    def slow():\n        return sum(i * i for i in range(200_000))\n\n    def fast():\n        return sum(i * i for i in range(20_000))\n\n    print(f\"fast is {speedup(slow, fast):.1f}x faster than slow on this machine, this time\")\n",
+  "exercise": {
+    "main_path": "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-01/practice-1/compare.py",
+    "test_path": "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-01/practice-1/test_compare.py",
+    "run_command": [
+      "python3",
+      "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-01/practice-1/compare.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-01/practice-1/target/report.xml",
+      "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-01/practice-1/test_compare.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_speedup_is_the_median_of_the_round_ratios",
+        "kind": "main",
+        "says": "the speed-up is the median, over the timed rounds, of the old builder's time divided by the new one's"
+      },
+      {
+        "id": "test_both_builders_warm_up_untimed_before_the_first_round",
+        "kind": "edge",
+        "says": "slow warm-up runs of both builders do not count toward the speed-up"
+      },
+      {
+        "id": "test_the_builders_alternate_round_by_round",
+        "kind": "edge",
+        "says": "each round runs the old builder and then the new one, so the two alternate"
+      },
+      {
+        "id": "test_an_even_number_of_rounds_takes_the_mean_of_the_middle_two",
+        "kind": "edge",
+        "says": "with an even number of rounds the median is the mean of the two middle ratios"
+      },
+      {
+        "id": "test_each_ratio_is_taken_within_its_own_round",
+        "kind": "edge",
+        "says": "each ratio compares the two builders' times from the same round"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "42-model-building-at-scale/README_11.1.1.md",
+      "section": "One Timing Is an Anecdote: Warm Up, Repeat, and Report the Median and Range"
+    },
+    "concepts": [
+      "a timing is a set of warmed-up samples, and builders are compared by ratios taken side by side"
+    ]
+  }
+}

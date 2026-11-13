@@ -1,0 +1,137 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "45-scenario-workflow"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Overrides that narrow a window",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "Riverbend Water (invented for this practice) lets its engineers narrow when a main replacement may start. Each project has a start window, a `range` of years, and one start variable $`x_t \\in \\{0,1\\}`$ per year $`t`$ of the window, with bounds $`l_t \\le x_t \\le u_t`$. Three kinds of override exist:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`start_in`, with `years = (y,)`: the project starts in year $`y`$.",
+        "`only_between`, with `years = (a, b)`: the project may start only from $`a`$ to $`b`$, both included; it does not have to start at all.",
+        "`skip_years`, with any number of years: the project may not start in those years (a road is closed, a festival needs the street); it does not have to start at all."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Write `bounds_for(kind, years, window)` in `overrides.py`. It returns `{t: (l_t, u_t)}` for every year `t` of the window, with `(0, 1)` for a year the override leaves free. An override that would set every year of the window to `(0, 0)` would quietly take the project out of the plan, which is not what was asked: return `None` for it instead, so the service can refuse it. A `start_in` year outside the window falls under that rule too. A `kind` that is none of the three narrows nothing: every year of the window gets `(0, 1)`. About twelve lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\n\ndef bounds_for(kind: str, years: tuple[int, ...], window: range) -> dict[int, tuple[int, int]] | None:\n    \"\"\"{start year: (lower, upper)} for one override, or None when it leaves no start year at all.\"\"\"\n    bounds = {}\n    for t in window:\n        if kind == \"start_in\":\n            bounds[t] = (1, 1) if t == years[0] else (0, 0)\n        elif kind == \"only_between\":\n            bounds[t] = (0, 1) if years[0] <= t <= years[1] else (0, 0)\n        elif kind == \"skip_years\":\n            bounds[t] = (0, 0) if t in years else (0, 1)\n        else:\n            bounds[t] = (0, 1)\n    if all(b == (0, 0) for b in bounds.values()):\n        return None\n    return bounds\n\n\nif __name__ == \"__main__\":\n    print(bounds_for(\"only_between\", (2028, 2029), range(2027, 2031)))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\n\ndef bounds_for(kind: str, years: tuple[int, ...], window: range) -> dict[int, tuple[int, int]] | None:\n    \"\"\"{start year: (lower, upper)} for one override, or None when it leaves no start year at all.\"\"\"\n    bounds = {}\n    # TODO: one (lower, upper) pair per year of the window, for each kind of override.\n    return bounds\n\n\nif __name__ == \"__main__\":\n    print(bounds_for(\"only_between\", (2028, 2029), range(2027, 2031)))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 2,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "f3188b9ee5e2d7b3cccd8a00da9d80a69534708a2bbc9ecc32720dca4ec8ccf0",
+  "starting_code": "from __future__ import annotations\n\n\ndef bounds_for(kind: str, years: tuple[int, ...], window: range) -> dict[int, tuple[int, int]] | None:\n    \"\"\"{start year: (lower, upper)} for one override, or None when it leaves no start year at all.\"\"\"\n    bounds = {}\n    # TODO: one (lower, upper) pair per year of the window, for each kind of override.\n    return bounds\n\n\nif __name__ == \"__main__\":\n    print(bounds_for(\"only_between\", (2028, 2029), range(2027, 2031)))\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-02/practice-1/overrides.py",
+    "test_path": "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-02/practice-1/test_overrides.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-02/practice-1/overrides.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-02/practice-1/target/report.xml",
+      "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-02/practice-1/test_overrides.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_start_in_fixes_one_year_and_closes_the_rest",
+        "kind": "main",
+        "says": "start_in fixes its year at 1 and every other year of the window at 0"
+      },
+      {
+        "id": "test_only_between_keeps_both_end_years_open",
+        "kind": "edge",
+        "says": "only_between leaves both of its end years free"
+      },
+      {
+        "id": "test_skip_years_closes_only_the_named_years",
+        "kind": "edge",
+        "says": "skip_years closes the named years and leaves the others free, not forced"
+      },
+      {
+        "id": "test_an_override_that_leaves_no_year_is_refused",
+        "kind": "edge",
+        "says": "an override that closes every year of the window is refused with None"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "45-scenario-workflow/README_12.1.2.md",
+      "section": "An Override Is a Request, Checked Against the Data Before Any Bound Moves"
+    },
+    "concepts": [
+      "each kind of override sets the lower and upper bounds of the project's start variables",
+      "an override that would close every start year is refused before any bound moves"
+    ]
+  }
+}

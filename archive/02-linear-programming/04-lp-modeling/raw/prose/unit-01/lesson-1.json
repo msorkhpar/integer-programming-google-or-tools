@@ -1,0 +1,707 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "02-linear-programming",
+    "04-lp-modeling"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Your first LP: splitting a maintenance budget across programs",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "2.1.1 Your First LP: Splitting a Maintenance Budget Across Programs"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's 2027 maintenance budget is $8,890k, and three programs want it: transmission, distribution and vegetation management (tree trimming). Last year the split was argued in a meeting: each program director asked for more, and finance cut everyone by the same share. This year the planning director wants a split she can defend: one that earns the most value, never books more crew work than the crews can do, keeps the regulator's minimum on tree trimming, and does not hand any single program more than half of what is spent. This lesson builds that split as a **linear program** and solves it. GridCap is the course's fictional utility; every number below is invented."
+    },
+    {
+      "type": "para",
+      "text": "Lesson 1.1.3 met a linear program (LP) once: continuous variables, a linear objective, linear constraints. There, the LP was a stand-in for a yes/no model, and its fractions were a problem. Here the decisions really are amounts of money, so fractions are exactly right, and the LP is the model itself. Four rules, one per heading."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "An LP Decides Amounts, So Each Variable Is a Continuous Quantity With Bounds"
+    },
+    {
+      "type": "para",
+      "text": "Start with the data. GridCap's small portfolio has 40 candidate projects across the three programs. Averaged over a program's projects, two rates describe it: how much NPV (net present value, lesson 1.1.1: what a project is worth today, after paying for it) a $k spent on it returns (*value per $*), and how many crew-months each $1,000k of its work takes. Crews are the people who do the work, counted in **crew-months** (one crew working for one month). The portfolio says how many crew-months each program has in 2027."
+    },
+    {
+      "type": "example",
+      "id": "first_lp-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "04-lp-modeling/src/first_lp.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "04-lp-modeling/src/first_lp.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "def show_data() -> None:\n    print(f\"{'program':13} {'value/$':>8} {'crew-mo per $1M':>16} {'crews':>6} {'crews allow $k':>15}\")\n    for k in PROGRAMS:\n        crews = small.crews[k, YEAR]\n        print(f\"{k:13} {VALUE[k]:8.3f} {CREW[k]:16.2f} {crews:6} {crews * 1000 / CREW[k]:15,.1f}\")\n    print(f\"budget {small.budget[YEAR]:,}  vegetation floor {FLOOR['vegetation']}  share cap {SHARE:.0%}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "program        value/$  crew-mo per $1M  crews  crews allow $k\ntransmission     0.582             2.46     26        10,569.1\ndistribution     0.477             2.24      9         4,017.9\nvegetation       0.561             6.41      2           312.0\nbudget 8,890  vegetation floor 300  share cap 50%"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Read one row: a $k on transmission returns $0.582k of NPV, and $1,000k of transmission work takes 2.46 crew-months. With 26 crew-months, transmission crews can do at most $`26 \\times 1000 / 2.46 = 10{,}569.1`$ $k of work. Vegetation work is crew-heavy (6.41 crew-months per $1,000k), and with 2 crew-months its crews can do only $312.0k."
+    },
+    {
+      "type": "para",
+      "text": "**The decisions.** The director controls one thing: how many $k each program gets. That is one **decision variable** per program, $`s_k`$, the amount spent on program $`k`$ in 2027, in $k."
+    },
+    {
+      "type": "para",
+      "text": "**The domain.** A variable's *domain* is the set of values it may take. Money can be split to the dollar, so $`s_k`$ is **continuous**: any real number, not only whole numbers. Money spent cannot be negative, so $`s_k \\ge 0`$. That $`0`$ is the variable's **lower bound**. It has no upper bound of its own: the rules below limit it."
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "s = {k: model.add_variable(lb=0, name=f\"s_{k}\") for k in PROGRAMS}"
+    },
+    {
+      "type": "para",
+      "text": "`add_variable(lb=0)` is $`s_k \\ge 0`$: with no `ub` the upper bound is $`+\\infty`$, and with no `is_integer=True` the variable is continuous. Forget `lb=0` and the default lower bound is $`-\\infty`$ (lesson 2.1.2 prints a variable created with no bounds), which would let the model \"spend\" a negative amount on one program to free money for another. Always state the domain."
+    },
+    {
+      "type": "para",
+      "text": "**The objective.** The director wants the most value. If each $k on program $`k`$ returns $`v_k`$, the split's value is"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{k \\in K} v_k\\, s_k"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "model.maximize(sum(VALUE[k] * s[k] for k in PROGRAMS))"
+    },
+    {
+      "type": "para",
+      "text": "This line hides the main assumption of every LP. The value of program $`k`$ is **proportional** to its spend: the 4,000th $k returns as much as the first. And the programs' values simply **add up**: spending on one does not change what another returns. Those two properties, *proportionality* and *additivity*, are what \"linear\" means. Together with *divisibility* (a variable may take any fraction) and *certainty* (every number is known), they are the four assumptions an LP makes about the world. When one fails badly, as with the diminishing returns of lesson 1.1.3's square-root curve, the LP is the wrong model, or needs the piecewise trick of section 6.6."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Every Rule Is One Linear Row, and a Ratio Is Multiplied Out Before It Is Written"
+    },
+    {
+      "type": "para",
+      "text": "A **constraint**, also called a *row* (each one is a row of the model's table of coefficients, lesson 2.1.2), says which splits are allowed. In an LP, every constraint is a **linear expression** (numbers times variables, added) compared with a number by $`\\le`$, $`\\ge`$ or $`=`$. The director's four rules become four kinds of row."
+    },
+    {
+      "type": "para",
+      "text": "**Budget.** The programs together get at most $`B = 8{,}890`$: $`s_{\\text{transmission}} + s_{\\text{distribution}} + s_{\\text{vegetation}} \\le B`$. It is $`\\le`$, not $`=`$: nothing says the money must all be spent, and the solve below shows that the best split does not spend it all."
+    },
+    {
+      "type": "para",
+      "text": "**Crews.** Program $`k`$'s work needs $`m_k / 1000`$ crew-months per $k, and it has $`C_k`$ crew-months: $`(m_k / 1000)\\, s_k \\le C_k`$, one row per program."
+    },
+    {
+      "type": "para",
+      "text": "**Floor.** The regulator requires at least $300k of tree trimming: $`s_{\\text{vegetation}} \\ge 300`$."
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "rows = {\"budget\": model.add_linear_constraint(sum(s.values()) <= budget, name=\"budget\")}\nfor k in PROGRAMS:\n    rows[f\"crew_{k}\"] = model.add_linear_constraint(CREW[k] / 1000 * s[k] <= crews[k], name=f\"crew_{k}\")\nfor k, amount in floor.items():\n    rows[f\"floor_{k}\"] = model.add_linear_constraint(s[k] >= amount, name=f\"floor_{k}\")"
+    },
+    {
+      "type": "para",
+      "text": "Each row has a `name`, its label in the formulation. When a model misbehaves, you search for rows by these names."
+    },
+    {
+      "type": "para",
+      "text": "**Share.** \"No program gets more than half of what is spent\" is a ratio:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\frac{s_k}{\\sum_{j \\in K} s_j} \\le 0.5"
+    },
+    {
+      "type": "para",
+      "text": "A ratio of variables is not linear: it divides by a variable. MathOpt refuses it outright:"
+    },
+    {
+      "type": "example",
+      "id": "ratio_rule-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "04-lp-modeling/src/ratio_rule.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "04-lp-modeling/src/ratio_rule.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "try:\n    model.add_linear_constraint(s[\"transmission\"] / total <= 0.5, name=\"share_transmission\")\nexcept TypeError as error:\n    print(\"ratio refused:\", type(error).__name__)"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "ratio refused: TypeError"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The fix is algebra. The total spend is never negative, so multiplying both sides by it keeps the direction of $`\\le`$, and the row becomes linear:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "s_k \\le \\alpha \\sum_{j \\in K} s_j, \\qquad \\alpha = 0.5"
+    },
+    {
+      "type": "example",
+      "id": "ratio_rule-3",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "04-lp-modeling/src/ratio_rule.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "04-lp-modeling/src/ratio_rule.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "row = model.add_linear_constraint(s[\"transmission\"] <= 0.5 * total, name=\"share_transmission\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "stored as: -inf <= +0.5*s_transmission -0.5*s_distribution -0.5*s_vegetation <= 0.0"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The second line is how MathOpt keeps the row: it moved every variable to the left-hand side ($`s_T - 0.5 s_T - 0.5 s_D - 0.5 s_V \\le 0`$) and records the row as a lower bound ($`-\\infty`$, none) and an upper bound ($`0`$) on that expression. Lesson 2.1.2 uses this shape."
+    },
+    {
+      "type": "para",
+      "text": "One caution about multiplying out. It is safe here because the total is never negative. If the denominator could be zero, the ratio rule says nothing (there is no ratio), while the multiplied row says $`s_k \\le 0`$, which happens to agree. If the denominator could be negative, multiplying would flip $`\\le`$ to $`\\ge`$, and the row would be wrong. Check the sign of what you multiply by."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "GLOP Solves It: Read the Status, Then the Amounts, Then the Rows"
+    },
+    {
+      "type": "para",
+      "text": "GLOP is the LP solver Google wrote and ships with OR-Tools (lesson 1.1.3 used it once). The solve, and a report:"
+    },
+    {
+      "type": "example",
+      "id": "first_lp-4",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "04-lp-modeling/src/first_lp.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "04-lp-modeling/src/first_lp.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "split = build(YEAR)\nresult = mathopt.solve(split.model, mathopt.SolverType.GLOP)\nif result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n    raise SystemExit(result.termination.reason.name)\nreport(split, result)"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "example",
+      "id": "first_lp-5",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "04-lp-modeling/src/first_lp.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "04-lp-modeling/src/first_lp.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "def report(split, result) -> None:\n    print(\"status\", result.termination.reason.name)\n    for k, var in split.s.items():\n        print(f\"  s_{k:13} = {result.variable_values(var):9,.1f}\")\n    print(f\"  NPV  {result.objective_value():,.1f}\")\n    for name, row in split.rows.items():\n        lo, hi = row.lower_bound, row.upper_bound\n        bound = f\"<= {hi:,.1f}\" if hi < float(\"inf\") else f\">= {lo:,.1f}\"\n        print(f\"  {name:22} {activity(row, result):10,.1f}  {bound}\")"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The status comes first, as lesson 1.1.3 taught: `OPTIMAL` means the split returned is proven to be the best one. Then the amounts, the objective, and for each row its **activity**, the value of its left-hand side at the solution:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def activity(row: mathopt.LinearConstraint, result: mathopt.SolveResult) -> float:\n    \"\"\"The row's left-hand side, a . x, at the solution.\"\"\"\n    values = result.variable_values()\n    return sum(term.coefficient * values[term.variable] for term in row.terms())"
+    },
+    {
+      "type": "para",
+      "text": "`row.terms()` gives each variable of the row with its coefficient, so the activity is the sum of coefficient × value. Here is the answer:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "status OPTIMAL\n  s_transmission  =   4,329.9\n  s_distribution  =   4,017.9\n  s_vegetation    =     312.0\n  NPV  4,611.5\n  budget                    8,659.7  <= 8,890.0\n  crew_transmission            10.7  <= 26.0\n  crew_distribution             9.0  <= 9.0\n  crew_vegetation               2.0  <= 2.0\n  floor_vegetation            312.0  >= 300.0\n  share_transmission            0.0  <= 0.0\n  share_distribution         -312.0  <= 0.0\n  share_vegetation         -4,017.9  <= 0.0"
+    },
+    {
+      "type": "para",
+      "text": "Read the rows. Three are **full**: the activity equals the bound. Distribution and vegetation have used every crew-month, and transmission sits exactly at half of the spend ($`4{,}329.9 = 4{,}017.9 + 312.0`$, so its share row's activity is $`0`$). The other rows have room: the budget has $`8{,}890 - 8{,}659.7 = 230.3`$ $k left, transmission's crews have $`15.3`$ crew-months idle, and vegetation got $`12`$ $k above its floor."
+    },
+    {
+      "type": "para",
+      "text": "Now explain the answer from the rows, which is the skill this section is about."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Vegetation gets its crew limit, $312.0k. It returns 0.561 per $, and its crews allow no more.",
+        "Distribution gets its crew limit too, although it returns the least, 0.477. Why fund the worst program to the hilt? Because of the share rule: transmission may only match what the other two get together. Every $k given to distribution lets transmission take one more $k, so a $k to distribution really buys $`0.477 + 0.582`$ of value for $2k. The LP found that without being told.",
+        "Transmission gets exactly what the share rule allows, $`4{,}017.9 + 312.0 = 4{,}329.9`$.",
+        "So $230.3k of budget is left. No program can absorb it: two are out of crews, and the third is at its share. The best split leaves money unspent, which is why the budget row is $`\\le`$. Written as $`=`$, it would force the plan to spend money that no rule lets it spend: the model would be **infeasible**, meaning no split satisfies every row."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The amounts are fractions of a $k (4,017.9, not 4,018). For money that is fine: the model's domain says any real number. For crews, trucks or whole projects it would not be, and that is where section 3's integer variables come in."
+    },
+    {
+      "type": "para",
+      "text": "OR-Tools' own first MathOpt LP, the sample `linear_programming.py`, follows the same order: it solves with GLOP, refuses to read anything unless the status is `OPTIMAL`, and only then prints the values. Its LP has no story attached, three amounts and three limits:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& 10x_0 + 6x_1 + 4x_2 \\\\\n\\text{s.t. }& 10x_0 + 4x_1 + 5x_2 \\le 600 && \\text{(c1)} \\\\\n& 2x_0 + 2x_1 + 6x_2 \\le 300 && \\text{(c2)} \\\\\n& x_0 + x_1 + x_2 \\le 100 && \\text{(c3)} \\\\\n& x_0,\\ x_1,\\ x_2 \\ge 0\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Adapted here, with the rows read as above:"
+    },
+    {
+      "type": "example",
+      "id": "or_tools_lp-6",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "04-lp-modeling/src/or_tools_lp.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "04-lp-modeling/src/or_tools_lp.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "model = mathopt.Model(name=\"linear-programming-example\")\nx = [model.add_variable(lb=0.0, name=f\"x{j}\") for j in range(3)]\nrows = [model.add_linear_constraint(10 * x[0] + 4 * x[1] + 5 * x[2] <= 600, name=\"c1\"),\n        model.add_linear_constraint(2 * x[0] + 2 * x[1] + 6 * x[2] <= 300, name=\"c2\"),\n        model.add_linear_constraint(sum(x) <= 100, name=\"c3\")]\nmodel.maximize(10 * x[0] + 6 * x[1] + 4 * x[2])"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "example",
+      "id": "or_tools_lp-7",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "04-lp-modeling/src/or_tools_lp.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "04-lp-modeling/src/or_tools_lp.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "result = mathopt.solve(model, mathopt.SolverType.GLOP)\nif result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n    raise RuntimeError(f\"model failed to solve to optimality: {result.termination}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "status OPTIMAL  objective 733.33\n  x0 = 33.33  x1 = 66.67  x2 = 0.00\n  c1  activity 600.00  <= 600  full\n  c2  activity 200.00  <= 300  room 100.00\n  c3  activity 100.00  <= 100  full"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Two rows are full, c1 and c3, and they decide the answer: with $`x_2 = 0`$, the two equations $`10x_0 + 4x_1 = 600`$ and $`x_0 + x_1 = 100`$ give $`x_0 = 33.33`$, $`x_1 = 66.67`$. Row c2 has 100 of room, so it played no part."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Changed Number Moves the Answer Only Through the Rows That Are Full"
+    },
+    {
+      "type": "para",
+      "text": "A planner's next question is always \"what if?\". Suppose GridCap can hire 3 more crew-months of distribution work, 12 instead of 9. Re-solve, and list the full rows, the rows whose activity sits on their bound:"
+    },
+    {
+      "type": "example",
+      "id": "what_if-8",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "04-lp-modeling/src/what_if.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "04-lp-modeling/src/what_if.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "def full_rows(split, result, tol: float = 1e-6) -> list[str]:\n    \"\"\"Rows whose left-hand side sits on their bound: the rules the answer is pressed against.\"\"\"\n    names = []\n    for name, row in split.rows.items():\n        a = activity(row, result)\n        if abs(a - row.upper_bound) <= tol or abs(a - row.lower_bound) <= tol:\n            names.append(name)\n    return names"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The comparison uses a **tolerance** of $`10^{-6}`$, not `==`: a solver works in floating point, and an activity of 8,889.9999999 is on its bound for every practical purpose."
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "distribution crews  9: NPV 4,611.5  {'transmission': 4329.9, 'distribution': 4017.9, 'vegetation': 312.0}\n   full rows: crew_distribution, crew_vegetation, share_transmission\ndistribution crews 12: NPV 4,733.5  {'transmission': 4445.0, 'distribution': 4133.0, 'vegetation': 312.0}\n   full rows: budget, crew_vegetation, share_transmission"
+    },
+    {
+      "type": "para",
+      "text": "The NPV rises by $`4{,}733.5 - 4{,}611.5 = 122.0`$ $k. Distribution's crews no longer stop it, and a new row is full instead: the budget. Distribution grows only until the money runs out, at 4,133.0, with crew-months to spare. Transmission still sits at half the spend, $`8{,}890 / 2 = 4{,}445`$."
+    },
+    {
+      "type": "para",
+      "text": "This is the pattern of every LP answer. The solution is pressed against a few full rows; they decide it, and the rows with room do not. Change the number in a row with room, and nothing moves until the room is used up. Change the number in a full row, and the answer moves, until another row fills. Lesson 2.1.2 gives the room a name (slack), and lesson 2.3.1 puts a price on each full row (its *dual value*: how much the objective rises per unit of the row's bound)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`K = \\{\\text{transmission}, \\text{distribution}, \\text{vegetation}\\}`$, the programs."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`v_k`$, the NPV returned per $k spent on program $`k`$ ($k per $k); $`m_k`$, the crew-months program $`k`$'s work takes per $1,000k; $`C_k`$, the crew-months program $`k`$ has in the year; $`B`$, the year's budget ($k); $`f`$, the regulator's floor on vegetation spend ($k); $`\\alpha`$, the largest share of the spend one program may get ($`\\alpha = 0.5`$). For 2027: the table in the first section, $`B = 8{,}890`$, $`f = 300`$."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`s_k \\ge 0`$ for every $`k \\in K`$, continuous: the $k spent on program $`k`$."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{k \\in K} v_k\\, s_k"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{k \\in K} s_k &\\le B && && \\text{(budget)} \\\\\n\\frac{m_k}{1000}\\, s_k &\\le C_k && \\forall k \\in K && \\text{(crew}_k) \\\\\ns_{\\text{vegetation}} &\\ge f && && \\text{(floor\\_vegetation)} \\\\\ns_k &\\le \\alpha \\sum_{j \\in K} s_j && \\forall k \\in K && \\text{(share}_k) \\\\\ns_k &\\ge 0 && \\forall k \\in K\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The labels are the row names in the code: `budget`, `crew_transmission`, `floor_vegetation`, `share_distribution`, and so on."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**An LP decides amounts, so each variable is continuous with bounds.** State the domain every time: `lb=0` for money, or the default $`-\\infty`$ lets money flow backwards. Linear means proportional and additive; an LP also assumes divisibility and known data.",
+        "**Every rule is one linear row; a ratio is multiplied out first.** MathOpt refuses a division by a variable. Multiplying by a total that is never negative keeps the direction of the inequality.",
+        "**Read the status, then the amounts, then the rows.** A row's activity against its bound tells you which rules decided the answer, and lets you explain it in the planner's words.",
+        "**A changed number moves the answer only through full rows.** Rows with room do not matter until their room is gone."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Rule in words",
+        "Row"
+      ],
+      "rows": [
+        [
+          "at most $`B`$ in total",
+          "$`\\sum_k s_k \\le B`$"
+        ],
+        [
+          "work within the crews",
+          "$`(m_k/1000)\\, s_k \\le C_k`$"
+        ],
+        [
+          "at least $`f`$ on program $`k`$",
+          "$`s_k \\ge f`$"
+        ],
+        [
+          "no program above share $`\\alpha`$",
+          "$`s_k \\le \\alpha \\sum_j s_j`$ (multiplied out)"
+        ],
+        [
+          "money is never negative",
+          "$`s_k \\ge 0`$, `add_variable(lb=0)`"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "MathOpt",
+        "Meaning"
+      ],
+      "rows": [
+        [
+          "`add_variable(lb=0)`",
+          "continuous variable, $`0 \\le s < \\infty`$"
+        ],
+        [
+          "`add_linear_constraint(expr <= b, name=...)`",
+          "one named row"
+        ],
+        [
+          "`mathopt.solve(model, mathopt.SolverType.GLOP)`",
+          "solve an LP with GLOP"
+        ],
+        [
+          "`row.terms()`, `row.lower_bound`, `row.upper_bound`",
+          "a row's coefficients and bounds, as stored"
+        ],
+        [
+          "`result.variable_values(v)`",
+          "a variable's value in the solution"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [MathOpt sample linear_programming.py](https://github.com/google/or-tools/blob/stable/ortools/math_opt/samples/python/linear_programming.py) (the LP adapted above: variables with `lb=0.0`, named rows, GLOP, and the status checked before any value is read); [Solving an LP Problem (OR-Tools)](https://developers.google.com/optimization/lp/lp_example) (the same steps, variables, constraints, objective, solve, in OR-Tools' linear solver wrapper); [MathOpt (OR-Tools)](https://developers.google.com/optimization/math_opt) (what MathOpt is and the solvers it drives, GLOP and PDLP among them); [MO-book 2.1, BIM production planning](https://mobook.github.io/MO-book/notebooks/02/01-bim.html) (a two-product production LP, built and solved step by step); [MO-book 2.5, BIM production variants](https://mobook.github.io/MO-book/notebooks/02/05-bim-fractional.html) (a ratio in the *objective*, which unlike the share row cannot simply be multiplied out and needs a change of variables)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Finance proposes writing the budget row as an equation, \"spend it all\". Using the output above, explain what GLOP would report, and why.",
+        "The share rule changes to \"no program gets more than 40%\". Which rows would you expect to be full now? Write down your guess, then set `SHARE = 0.4` in `program_split.py` and check it.",
+        "A director says \"distribution has the worst return; cut it\". Explain to her, in two sentences and without the word \"constraint\", why the best split funds it to its crew limit."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Averages Make the Model Linear, and Hide the Projects"
+    },
+    {
+      "type": "para",
+      "text": "The value of a program is not really 0.582 per $: its projects differ, and funding half of a transmission line returns nothing. The split model trades that detail for a model that is small, fast and easy to explain, which is the right trade for a budget-level question (\"how much per program?\"). The project-level question (\"which projects?\") needs yes/no variables and is section 3's model. Many utilities run both: the split sets each program's envelope, and the project model fills it."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**first_lp.py.** Prints the program data, builds the split for 2027, solves it with GLOP and reports the amounts and every row's activity (*An LP Decides Amounts* and *GLOP Solves It*). *Try:* Lower the vegetation floor to 0 in `program_split.py`. Predict whether any amount changes before you run it."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [first_lp.py](src/first_lp.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**ratio_rule.py.** Shows MathOpt refusing a ratio of variables and storing the multiplied-out share row (*Every Rule Is One Linear Row*). *Try:* Change `0.5` to `0.4` in the multiplied-out row, and predict the stored coefficients before you run it."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [ratio_rule.py](src/ratio_rule.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**what_if.py.** Re-solves with more distribution crews and lists the full rows (*A Changed Number Moves the Answer*). *Try:* Give distribution 20 crew-months. Predict the NPV before you run it."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [what_if.py](src/what_if.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**or_tools_lp.py.** Adapted from the OR-Tools MathOpt sample `linear_programming.py`: its LP solved with GLOP, the status checked first, then the values and each row's activity (*GLOP Solves It*). *Try:* Raise c2's limit from 300 to 400. Predict whether any value moves before you run it."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [or_tools_lp.py](src/or_tools_lp.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**program_split.py.** The data and the `build` function the other programs of this module import."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [program_split.py](src/program_split.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 11,
+    "paras": 46,
+    "code": 12,
+    "tables": 2,
+    "lists": 8,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 8
+  },
+  "content_sha256": "374173497a85118f4e3955ab8e875f4fa89a26ae171ec5dabc184f7945d9d16f"
+}

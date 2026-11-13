@@ -1,0 +1,157 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "48-optimization-api"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Build the trim result from a finished job",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A trim job has finished. The worker knows how it ended (`status`, `message`), the plan's value (outage-minutes avoided per year, or `None` when there is no plan), the solver's best bound, and the circuits chosen. The scheduling tool wants a `TrimResult` (the schema is in the file) it can draw as-is."
+    },
+    {
+      "type": "para",
+      "text": "Write `build_result(status, message, value, bound, chosen, work, capacity)` in `trim_builder.py`:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`circuits`: the chosen circuit ids, sorted.",
+        "`hours_by_month`: one row for every month in `capacity`, in increasing month order, with the crew hours the chosen circuits need that month (`work[circuit] = (month, crew_hours)`), 0 for a month with no work, and that month's capacity. A result with no plan has no rows.",
+        "`bound`: the solver's bound, except that an infinite bound (what a solve with no plan reports) becomes `None`. JSON has no infinity, and the result must read back from its own JSON.",
+        "`gap`: `(bound - value) / |value|`, with 1 as the smallest divisor so a plan worth 0 still has a gap; `None` when there is no value or no finite bound. The job maximizes, so a bound below the value means the plan is proven: clamp that gap to 0, never report it negative (the schema's `ge=0` refuses a negative gap)."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The tests call `build_result` with small hand-made jobs. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport math\nfrom typing import Literal\n\nfrom pydantic import BaseModel, Field\n\n\nclass MonthHours(BaseModel):\n    month: int = Field(ge=1, le=12)\n    crew_hours: int = Field(ge=0)\n    capacity: int = Field(ge=0)\n\n\nclass TrimResult(BaseModel):\n    status: Literal[\"optimal\", \"time_limit\", \"infeasible\", \"failed\"]\n    message: str\n    value: float | None\n    bound: float | None\n    gap: float | None = Field(ge=0)\n    circuits: list[str]\n    hours_by_month: list[MonthHours]\n\n\ndef build_result(status: str, message: str, value: float | None, bound: float, chosen: list[str],\n                 work: dict[str, tuple[int, int]], capacity: dict[int, int]) -> TrimResult:\n    \"\"\"The result of a finished trim job.\n\n    `value` is the plan's value, or None when the job has no plan; `bound` is the solver's best bound,\n    which may be infinite; `chosen` the circuits trimmed; `work[circuit] = (month, crew_hours)`;\n    `capacity[month]` the crew hours available that month.\n    \"\"\"\n    finite = bound if bound is not None and math.isfinite(bound) else None\n    gap = None\n    if value is not None and finite is not None:\n        gap = max(0.0, finite - value) / max(abs(value), 1.0)\n    hours = {m: 0 for m in capacity}\n    for circuit in chosen:\n        month, crew_hours = work[circuit]\n        hours[month] += crew_hours\n    rows = [MonthHours(month=m, crew_hours=hours[m], capacity=capacity[m]) for m in sorted(capacity)]\n    return TrimResult(status=status, message=message, value=value, bound=finite, gap=gap,\n                      circuits=sorted(chosen), hours_by_month=rows if value is not None else [])\n\n\nif __name__ == \"__main__\":\n    print(build_result(\"time_limit\", \"No plan found within the 30 s limit.\", None, math.inf, [], {}, {3: 160})\n          .model_dump_json())\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport math  # noqa: F401\nfrom typing import Literal\n\nfrom pydantic import BaseModel, Field\n\n\nclass MonthHours(BaseModel):\n    month: int = Field(ge=1, le=12)\n    crew_hours: int = Field(ge=0)\n    capacity: int = Field(ge=0)\n\n\nclass TrimResult(BaseModel):\n    status: Literal[\"optimal\", \"time_limit\", \"infeasible\", \"failed\"]\n    message: str\n    value: float | None\n    bound: float | None\n    gap: float | None = Field(ge=0)\n    circuits: list[str]\n    hours_by_month: list[MonthHours]\n\n\ndef build_result(status: str, message: str, value: float | None, bound: float, chosen: list[str],\n                 work: dict[str, tuple[int, int]], capacity: dict[int, int]) -> TrimResult:\n    \"\"\"The result of a finished trim job.\n\n    `value` is the plan's value, or None when the job has no plan; `bound` is the solver's best bound,\n    which may be infinite; `chosen` the circuits trimmed; `work[circuit] = (month, crew_hours)`;\n    `capacity[month]` the crew hours available that month.\n    \"\"\"\n    # TODO: the gap, a JSON-safe bound, one row per month of capacity, and the sorted circuits.\n    return TrimResult(status=status, message=message, value=value, bound=None, gap=None,\n                      circuits=[], hours_by_month=[])\n\nif __name__ == \"__main__\":\n    print(build_result(\"time_limit\", \"No plan found within the 30 s limit.\", None, math.inf, [], {}, {3: 160})\n          .model_dump_json())\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "0ed2967950beef7bc28ed4aa5e48f0846e17f38caa6c94dd59b61f196d8c630c",
+  "starting_code": "from __future__ import annotations\n\nimport math  # noqa: F401\nfrom typing import Literal\n\nfrom pydantic import BaseModel, Field\n\n\nclass MonthHours(BaseModel):\n    month: int = Field(ge=1, le=12)\n    crew_hours: int = Field(ge=0)\n    capacity: int = Field(ge=0)\n\n\nclass TrimResult(BaseModel):\n    status: Literal[\"optimal\", \"time_limit\", \"infeasible\", \"failed\"]\n    message: str\n    value: float | None\n    bound: float | None\n    gap: float | None = Field(ge=0)\n    circuits: list[str]\n    hours_by_month: list[MonthHours]\n\n\ndef build_result(status: str, message: str, value: float | None, bound: float, chosen: list[str],\n                 work: dict[str, tuple[int, int]], capacity: dict[int, int]) -> TrimResult:\n    \"\"\"The result of a finished trim job.\n\n    `value` is the plan's value, or None when the job has no plan; `bound` is the solver's best bound,\n    which may be infinite; `chosen` the circuits trimmed; `work[circuit] = (month, crew_hours)`;\n    `capacity[month]` the crew hours available that month.\n    \"\"\"\n    # TODO: the gap, a JSON-safe bound, one row per month of capacity, and the sorted circuits.\n    return TrimResult(status=status, message=message, value=value, bound=None, gap=None,\n                      circuits=[], hours_by_month=[])\n\nif __name__ == \"__main__\":\n    print(build_result(\"time_limit\", \"No plan found within the 30 s limit.\", None, math.inf, [], {}, {3: 160})\n          .model_dump_json())\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-03/practice-2/trim_builder.py",
+    "test_path": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-03/practice-2/test_trim_builder.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-03/practice-2/trim_builder.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-03/practice-2/target/report.xml",
+      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-03/practice-2/test_trim_builder.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_an_optimal_result_has_hours_by_month_and_no_gap",
+        "kind": "main",
+        "says": "an optimal job's result lists its circuits sorted, its hours per month against capacity, and a zero gap"
+      },
+      {
+        "id": "test_a_month_with_no_work_still_has_its_row",
+        "kind": "edge",
+        "says": "a month with capacity but no chosen work still has a row, with 0 hours"
+      },
+      {
+        "id": "test_months_come_in_order",
+        "kind": "edge",
+        "says": "the month rows are in increasing month order whatever the order of the capacity dict"
+      },
+      {
+        "id": "test_the_gap_is_measured_against_the_plan_value",
+        "kind": "edge",
+        "says": "the gap divides the distance to the bound by the plan's value, not by the bound"
+      },
+      {
+        "id": "test_an_infinite_bound_becomes_null_and_reads_back",
+        "kind": "edge",
+        "says": "an infinite bound with no plan becomes null, with no gap, and the JSON reads back into an equal result"
+      },
+      {
+        "id": "test_a_plan_worth_zero_has_a_gap",
+        "kind": "edge",
+        "says": "a plan worth 0 with a bound of 3 has a gap of 3, not a division by zero"
+      },
+      {
+        "id": "test_a_bound_just_below_the_value_gives_a_gap_of_zero",
+        "kind": "edge",
+        "says": "a bound a hair below the value gives a gap of 0, not a negative gap the schema refuses"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-03/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "48-optimization-api/README_12.4.3.md",
+      "section": "No Plan Means null, Never Infinity"
+    },
+    "concepts": [
+      "a missing number is sent as null, because JSON has no infinity",
+      "a result carries plan, money by year, value, gap, status and message as data"
+    ]
+  }
+}

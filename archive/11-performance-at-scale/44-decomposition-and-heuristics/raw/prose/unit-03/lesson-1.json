@@ -1,0 +1,491 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "11-performance-at-scale",
+    "44-decomposition-and-heuristics"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Logic-based Benders",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "11.3.3 Logic-Based Benders"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's planners have one more rule to respect. A transmission or distribution project takes its equipment out of service while it is worked on, and the network can spare equipment only in certain seasons. The utility has one specialist outage crew for the whole network, so in any year the outage jobs of the projects starting that year must fit, one after another, each inside its season. That is a **scheduling** question (which week each job begins), and the natural tool for it is CP-SAT with interval variables (lessons 4.5.1 and 4.5.2), not an LP. Benders as lesson 11.3.2 built it needs the subproblem's duals, and a scheduling model has none. **Logic-based Benders decomposition** (LBBD), due to Hooker, keeps the loop and replaces the duals with the subproblem's *reasoning*: if a year's jobs cannot be scheduled, find which jobs cause it, and tell the master never to put those jobs in that year together again. This lesson builds that loop with a MILP master and a CP-SAT subproblem, measures how much a smaller conflict and a relaxation in the master save, and checks the answer against one CP-SAT model of the whole problem."
+    },
+    {
+      "type": "para",
+      "text": "The outage layer (job lengths, seasons, one crew) is invented for this lesson; GridCap is a fictional utility's portfolio."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** The plan model's sets (lesson 11.3.1), and $`J \\subseteq P`$, the projects with an outage job: every transmission and distribution project."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** The plan model's parameters, and for each $`j \\in J`$: $`p_j`$, the job's length in weeks (3 plus the project's crew-months); $`[r_j, e_j)`$, the weeks it may occupy: spring $`[10, 20)`$, autumn $`[34, 44)`$ or the whole year $`[0, 52)`$, depending on the project (a job longer than its season may run at any time)."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_{i,t} \\in \\{0,1\\}`$ as before. For every $`j \\in J`$ and $`t \\in T_j`$, an integer start week $`S_{j,t} \\in [r_j,\\, e_j - p_j]`$, used only if $`x_{j,t} = 1`$."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.** As in lesson 11.3.1: $`\\max \\sum_{i,t} \\text{npv}_{i,t}\\, x_{i,t}`$."
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.** The once, must, alt, after and budget rows of lesson 11.3.1, and:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\text{the jobs } \\{\\, [S_{j,y},\\, S_{j,y} + p_j) : j \\in J,\\ x_{j,y} = 1 \\,\\} \\text{ do not overlap} \\qquad \\forall y \\in Y \\qquad \\text{(outages}_y)"
+    },
+    {
+      "type": "para",
+      "text": "The outage rule is not a linear row: it is CP-SAT's `add_no_overlap` over optional intervals. A MILP can state it too (with a variable per job and week, or with big-M ordering rows), but every such form is large or weak. That is the situation LBBD is for: a master that a MILP solver handles well, and a subproblem that another kind of solver handles well."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Subproblem Solved by Any Method Can Still Return a Cut"
+    },
+    {
+      "type": "para",
+      "text": "Fix the plan $`\\hat x`$. What is left is one independent question per year: can this year's chosen jobs be scheduled? `outages.schedulable` asks CP-SAT, with each job an interval that must lie in its season and all of them under one `add_no_overlap` (the pattern of the OR-Tools job shop example):"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "for j in chosen:\n    start = model.new_int_var(j.release, j.deadline - j.weeks, f\"start_{j.project_id}\")\n    intervals.append(model.new_fixed_size_interval_var(start, j.weeks, f\"outage_{j.project_id}\"))\nmodel.add_no_overlap(intervals)"
+    },
+    {
+      "type": "para",
+      "text": "The answer is yes or no, with no prices. Hooker's observation is that a Benders cut never needed prices as such: it needs a **proof** that the subproblem fails (or costs at least so much), stated so that it also says something about other plans. LP duals are one kind of proof, the kind classical Benders uses (lesson 11.3.2). For a scheduling check the simplest proof is the set of jobs itself: \"these jobs cannot all be done in one year\". It holds for every plan that puts them in the same year, whatever else the plan does. So the cut for a failed year $`y`$ with chosen jobs $`S`$ is a **no-good cut**:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_{j \\in S} x_{j,y} \\;\\le\\; |S| - 1 \\qquad \\text{(nogood}_{y,k})"
+    },
+    {
+      "type": "para",
+      "text": "\"at least one of these projects starts in another year, or not at all\". The master is the plan model plus every no-good found so far. The loop needs no lower bound of its own here: the subproblem only says yes or no, so the first master plan whose every year schedules is optimal (the master is a relaxation of the whole problem, and this plan is feasible for it)."
+    },
+    {
+      "type": "example",
+      "id": "lbbd-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "44-decomposition-and-heuristics/src/lbbd.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "44-decomposition-and-heuristics/src/lbbd.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "for y in portfolio.years:\n    chosen = [outage[pid] for pid, t in sorted(plan.items()) if t == y and pid in outage]\n    if chosen and not schedulable(chosen):\n        core = minimal_conflict(chosen) if strengthen else chosen\n        new.append((y, [j.project_id for j in core], len(chosen)))"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "example",
+      "id": "lbbd-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "44-decomposition-and-heuristics/src/lbbd.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "44-decomposition-and-heuristics/src/lbbd.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "for y, ids, _ in new:\n    # Not all of these outages in year y: at least one of them must start another year or not at all.\n    cap.model.add_linear_constraint(sum(cap.x[pid, y] for pid in ids) <= len(ids) - 1,\n                                    name=f\"nogood_{y}_{cuts}\")"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Smaller Conflict Makes a Stronger Cut"
+    },
+    {
+      "type": "para",
+      "text": "A no-good on all of a year's six jobs forbids only plans that contain all six. Usually two or three of them are the real clash. Find those and the cut forbids every plan containing *them*, however the other jobs are arranged. `outages.minimal_conflict` is a **deletion filter**, the same idea as lesson 4.6.2's: drop each job in turn, and keep it dropped if the rest still cannot be scheduled. What remains still fails, and dropping any one more job makes it schedulable. Such a set is a **minimal** (irreducible) conflict: no job can be taken out of it. That is not the same as the *smallest* conflict, the one with the fewest jobs: the filter keeps whichever minimal set its order of deletions leads to, and a year can hold another, smaller one. Finding the smallest would mean searching over subsets; a minimal one costs one check per job."
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "core = list(chosen)\nfor j in list(chosen):\n    rest = [k for k in core if k is not j]\n    if not schedulable(rest):\n        core = rest\nreturn core"
+    },
+    {
+      "type": "para",
+      "text": "`outage_jobs.py` shows one such conflict. Three long autumn jobs cannot share an autumn, and the filter shrinks them to two:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "28 outage jobs; seasons (first week, week after the last): {'spring': (10, 20), 'autumn': (34, 44), 'any': (0, 52)}\nP022: 9 weeks, between week 34 and week 44\nP034: 8 weeks, between week 34 and week 44\nP031: 7 weeks, between week 34 and week 44\nP022+P031+P034 in one year: schedulable False\nminimal conflict: ['P031', 'P034']\nP031+P034 alone: schedulable False"
+    },
+    {
+      "type": "para",
+      "text": "Autumn has 10 weeks, and any two of these jobs need 15 or more. The loop with the filter, and with a 52-week limit per year in the master (next section), prints the core of every conflict it finds:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "iter  1  master  24,260.0  cuts 2  2027: P022+P034 (of 3); 2028: P025+P031 (of 6)\niter  2  master  24,107.0  cuts 3  2027: P031+P034 (of 3); 2028: P001+P019 (of 5); 2029: P022+P025 (of 3)\niter  3  master  23,727.0  cuts 2  2027: P025+P034 (of 5); 2028: P019+P031 (of 3)\niter  4  master  23,629.0  cuts 1  2028: P019+P025 (of 5)\niter  5  master  23,482.0  cuts 2  2027: P025+P031 (of 5); 2028: P021+P039 (of 5)\niter  6  master  23,431.0  cuts 1  2027: P022+P031 (of 4)\niter  7  master  23,152.0  cuts 1  2027: P022+P025 (of 5)\niter  8  master  22,932.0  cuts 1  2028: P019+P040 (of 5)\niter  9  master  22,917.0  cuts 1  2028: P021+P024 (of 6)\niter 10  master  22,901.0  cuts 1  2028: P019+P022 (of 3)\niter 11  master  22,817.0  cuts 0  every year schedules\noptimum 22,817: NPV of the plan 22,817, 11 master solves, 15 cuts"
+    },
+    {
+      "type": "para",
+      "text": "Every conflict on this data is a pair; the master's value falls from 24,260 to 22,817 in 11 master solves, and the 11th plan schedules in every year, so it is optimal. The cost of the outage rule is $1,443k of NPV. Each core costs one extra CP-SAT solve per job of the year, on a model of a few jobs. The table in the next section shows what the filter buys: 84 master solves without it, 11 with it."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Relaxation of the Subproblem in the Master Saves Iterations"
+    },
+    {
+      "type": "para",
+      "text": "The master starts out knowing nothing about outages, so its first plans crowd them. Hooker's second tool is to put a **relaxation of the subproblem** into the master: linear rows in $`x`$ that every schedulable year satisfies. They never cut off a good plan, and they refuse many bad ones before CP-SAT is ever asked. Two such relaxations, from weakest to strongest:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Weeks per year:** a year's jobs cannot need more than 52 weeks, $`\\sum_{j \\in J} p_j\\, x_{j,y} \\le 52`$ (`weeks_y`).",
+        "**Weeks per season:** the jobs that must happen inside a season cannot need more weeks than the season has, $`\\sum_{j:\\ [r_j, e_j) \\subseteq [a, b)} p_j\\, x_{j,y} \\le b - a`$ for spring and autumn (`weeks_y_spring`, `weeks_y_autumn`). A job allowed the whole year is not counted in a season's row, since it may run outside the season."
+      ]
+    },
+    {
+      "type": "example",
+      "id": "lbbd-3",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 1,
+          "code": "44-decomposition-and-heuristics/src/lbbd.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "44-decomposition-and-heuristics/src/lbbd.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "inside = [(pid, j) for pid, j in here if first <= j.release and j.deadline <= last]\nif inside and s != \"any\":\n    cap.model.add_linear_constraint(\n        sum(j.weeks * cap.x[pid, y] for pid, j in inside) <= last - first,\n        name=f\"weeks_{y}_{s}\")"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Hooker's paper writes the general form as an **energy** bound for every interval between a release and a deadline; the season rows are that bound for the two intervals this data has. All five variants reach the same optimum:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "relaxation in master   cut from          master solves  cuts\nnone                   whole year                   84   105   optimum 22,817\nnone                   minimal conflict             11    15   optimum 22,817\n52 weeks a year        minimal conflict             11    15   optimum 22,817\nweeks per season       whole year                    1     0   optimum 22,817\nweeks per season       minimal conflict              1     0   optimum 22,817"
+    },
+    {
+      "type": "para",
+      "text": "Read it row by row. Plain no-goods need 84 master solves and 105 cuts: each one forbids only the exact set of jobs it names, so the master keeps finding new sets with the same clash. The minimal conflict brings that to 11 and 15. The 52-week row changes nothing: no year's chosen jobs come near 52 weeks; the clashes are inside seasons. The season rows remove the loop altogether: the first master plan already schedules. On this data that is because every conflict is a pair of jobs that overflow their season, which is exactly what the season row states. With jobs allowed at any time filling the gaps between seasons, conflicts would exist that no season row sees, and the CP-SAT check would still be needed; it always runs, and here it confirms the plan in one pass."
+    },
+    {
+      "type": "para",
+      "text": "The lesson for practice: the **cut** decides how much one failure teaches the master, and the **relaxation** decides how many failures happen at all. On this data the relaxation did more."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "One CP-SAT Model of the Whole Problem Checks the Answer"
+    },
+    {
+      "type": "para",
+      "text": "On GridCap small the whole problem fits in one CP-SAT model: the start variables as Booleans, the plan rows, and for every year an optional interval per job, present only if the project starts that year (`new_optional_fixed_size_interval_var`, with `x[j, y]` as the presence literal), under one `add_no_overlap`:"
+    },
+    {
+      "type": "example",
+      "id": "outage_check-4",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "44-decomposition-and-heuristics/src/outage_check.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "44-decomposition-and-heuristics/src/outage_check.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "start = model.new_int_var(j.release, j.deadline - j.weeks, f\"s_{pid}_{y}\")\nyear_outages.append(model.new_optional_fixed_size_interval_var(start, j.weeks, x[pid, y], f\"o_{pid}_{y}\"))"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "one CP-SAT model:        OPTIMAL 22,817\nlogic-based Benders:     22,817  (1 master solve, 0 cuts)"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The two agree, and they have to: an instance has one optimal value, however many plans reach it. If the one model ever found a schedulable plan worth more than the loop's answer, the loop would be the one in the wrong, because its master is a relaxation that only a wrong cut or row can make refuse a schedulable plan. On an instance this small the one model is the simpler tool. LBBD earns its place when the whole model is too big for one solver: many years, many crews, a long horizon in weeks, where the master stays a MILP of the size of lesson 11.3.1's plan and each year's schedule is a separate small CP-SAT model, as in Hooker's planning and scheduling problems, and in the time-slot problem of the arXiv paper in Further reading, whose master chooses delivery slots and whose subproblems are vehicle routing problems."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The LBBD master after $`k`$ iterations, whole. New are the relaxation rows and the no-good cuts; the scheduling lives only in the yearly CP-SAT subproblems."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** The plan model's sets; $`J`$ the projects with outage jobs; $`\\Sigma`$ the seasons spring $`[10, 20)`$ and autumn $`[34, 44)`$, and $`J_\\sigma \\subseteq J`$ the jobs whose window lies inside season $`\\sigma`$; $`\\mathcal{N}_y`$ the conflicts found so far in year $`y`$, each a set of jobs."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** The plan model's parameters; $`p_j`$ (weeks), and each season's length $`|\\sigma|`$ (10 weeks)."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_{i,t} \\in \\{0,1\\}`$ for every $`i \\in P`$, $`t \\in T_i`$."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.** $`\\max \\sum_{i \\in P} \\sum_{t \\in T_i} \\text{npv}_{i,t}\\, x_{i,t}`$."
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.** The once, must, alt, after and budget rows of lesson 11.3.1, and:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{j \\in J,\\ y \\in T_j} p_j\\, x_{j,y} &\\le 52 && \\forall y \\in Y && \\text{(weeks}_y) \\quad \\leftarrow \\text{this lesson} \\\\\n\\sum_{j \\in J_\\sigma,\\ y \\in T_j} p_j\\, x_{j,y} &\\le |\\sigma| && \\forall y \\in Y,\\ \\sigma \\in \\Sigma && \\text{(weeks}_{y,\\sigma}) \\quad \\leftarrow \\text{this lesson} \\\\\n\\sum_{j \\in S} x_{j,y} &\\le |S| - 1 && \\forall y \\in Y,\\ S \\in \\mathcal{N}_y && \\text{(nogood}_{y,k}) \\quad \\leftarrow \\text{this lesson}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The **subproblem** of year $`y`$ at plan $`\\hat x`$: is there a start week $`S_j \\in [r_j, e_j - p_j]`$ for every job with $`\\hat x_{j,y} = 1`$ such that no two of the intervals $`[S_j, S_j + p_j)`$ overlap? If not, its minimal conflict $`S`$ joins $`\\mathcal{N}_y`$."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**A subproblem solved by any method can still return a cut.** The cut is a proof of failure stated for every plan; for a scheduling check, the no-good $`\\sum_{j \\in S} x_{j,y} \\le |S| - 1`$. The first master plan that passes every check is optimal.",
+        "**A smaller conflict makes a stronger cut.** A deletion filter shrank every conflict to a pair: 11 master solves instead of 84.",
+        "**A relaxation of the subproblem in the master saves iterations.** The 52-week row did nothing here; the season rows, which state the real clash, left nothing for the loop to do.",
+        "**One CP-SAT model of the whole problem checks the answer.** Both give 22,817 on GridCap small."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Term",
+        "Meaning"
+      ],
+      "rows": [
+        [
+          "logic-based Benders (LBBD)",
+          "Benders with any subproblem solver; cuts come from a proof of the subproblem's result"
+        ],
+        [
+          "inference dual",
+          "the subproblem's proof of its bound or of its infeasibility; for an LP, the LP dual"
+        ],
+        [
+          "no-good cut",
+          "$`\\sum_{j \\in S} x_{j,y} \\le \\lvert S \\rvert - 1`$: not all of $`S`$ together again"
+        ],
+        [
+          "deletion filter",
+          "drop each element in turn, keep it dropped if the rest still fails"
+        ],
+        [
+          "subproblem relaxation",
+          "rows in master variables that every feasible subproblem satisfies (energy bounds)"
+        ],
+        [
+          "branch and check",
+          "the same cuts added inside one master search (Hooker's section 4)"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "CP-SAT call",
+        "Use here"
+      ],
+      "rows": [
+        [
+          "`new_fixed_size_interval_var(start, size, name)`",
+          "one outage job in the yearly check"
+        ],
+        [
+          "`new_optional_fixed_size_interval_var(start, size, present, name)`",
+          "a job present only if its project starts that year"
+        ],
+        [
+          "`add_no_overlap(intervals)`",
+          "one crew: no two jobs at once"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [The Job Shop Problem (OR-Tools)](https://developers.google.com/optimization/scheduling/job_shop) (interval variables built from a start and a fixed duration, and `add_no_overlap` for one machine, the pattern of each yearly check); [MathOpt (OR-Tools)](https://developers.google.com/optimization/math_opt) (the master's MILP); [Hooker, *Logic-based Benders decomposition for large-scale optimization* (arXiv 1910.11944)](https://ar5iv.labs.arxiv.org/html/1910.11944) (section 2, cuts from the subproblem's inference dual; section 5, the job assignment and scheduling example with a no-good per facility and its strengthening by removing jobs one at a time; section 6, energy relaxations of a scheduling subproblem added to the master); [Abdolhamidi, Juvin and Lurkin, *Logic-Based Benders Decomposition for Time Slot Management with Mixed Logit Demand* (arXiv 2407.02339)](https://arxiv.org/html/2407.02339v3) (an LBBD whose master picks delivery slots and prices and whose subproblems are vehicle routing MILPs, with problem-specific cuts stronger than no-goods, and a finding that the value of each strengthening depends on how strong the master already is); [The CP-SAT Primer (Krupke)](https://d-krupke.github.io/cpsat-primer/) (its advanced modeling chapter on intervals and no-overlap)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Give the outage crew a second team, so two jobs may run at once. Which CP-SAT constraint replaces `add_no_overlap`, and how do the season rows change?",
+        "A no-good on a pair $`\\{a, b\\}`$ in year $`y`$ says nothing about $`a`$ in $`y`$ and $`b`$ in $`y+1`$. Is that right for this outage rule? When would it be wrong?",
+        "Allow every job to run at any time of year. Predict the table's last two rows.",
+        "The deletion filter's result depends on the order it tries the jobs. Could two orders give cores of different sizes? What does that mean for the cut?"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Keep the Subproblem a Pure Check"
+    },
+    {
+      "type": "para",
+      "text": "`schedulable` takes a list of jobs and answers yes or no. It knows nothing of the master, the plan, the years or the cuts. That is what lets the deletion filter call it on any subset, the tests call it on hand-made cases, and a different scheduler replace CP-SAT without touching the loop. A subproblem that reaches into the master's state is much harder to check on its own, and a wrong cut in a Benders loop removes good plans silently."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**outages.py.** The invented outage layer, the CP-SAT check of one year, and the deletion filter (*the first two sections*). It prints nothing."
+    },
+    {
+      "type": "para",
+      "text": "**outage_jobs.py.** The jobs and one conflict, shrunk by the filter (*A Smaller Conflict Makes a Stronger Cut*). *Try:* Shorten autumn to `(36, 44)`. Predict whether P031 alone can still be scheduled."
+    },
+    {
+      "type": "para",
+      "text": "**lbbd.py.** The loop, its trace, and the table of relaxations and cuts (*the second and third sections*). *Try:* Make the job length `2 + p.crew_months` in `outages.py`. Predict whether the plain no-goods need more or fewer master solves."
+    },
+    {
+      "type": "para",
+      "text": "**outage_check.py.** The whole problem as one CP-SAT model, against the loop (*One CP-SAT Model of the Whole Problem Checks the Answer*). *Try:* Set `num_workers` to 1. Predict whether the objective changes."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [outages.py](src/outages.py)",
+        "Program: [outage_jobs.py](src/outage_jobs.py)",
+        "Program: [lbbd.py](src/lbbd.py)",
+        "Program: [outage_check.py](src/outage_check.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 12,
+    "paras": 35,
+    "code": 8,
+    "tables": 2,
+    "lists": 4,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0,
+    "examples": 4
+  },
+  "content_sha256": "7e03b140082968bb701a5e8e6b0c52793d353f9d92d8a34f78f101f60b477007"
+}

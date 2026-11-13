@@ -1,0 +1,442 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "14-growing-real-projects",
+    "56-project-transformer-renewal"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Choose this year's replacements with a 0-1 model",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The asset team sent the first request:"
+    },
+    {
+      "type": "quote",
+      "blocks": [
+        {
+          "type": "para",
+          "text": "**Request 1.** We have $10,000k for transformer replacements in 2027. Replace the worst transformers we can afford. The list must be repeatable, so put it in code, with tests."
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "text": "You start from the skeleton: it generates a fleet and ranks it worst condition first, stopping at the first unit that does not fit. Keep the ranking as a baseline, and make `plan` choose with a model instead. Each transformer is replaced this year or not, the replaced units together cost no more than the budget, and the plan removes the most risk, where a unit's risk is its probability of failure this year times its consequence of failure (`fleet.risk`). Build the model with MathOpt and solve it with HiGHS. Then write `feasible`, which pins one whole list and asks the solver whether the model allows it, so a test can show a list at the budget allowed and one just over it refused."
+    },
+    {
+      "type": "para",
+      "text": "The starting code is the skeleton, plus the files this step adds as the reference has them, with the blueprint's methods stubbed. `renewal/model.py` has its imports and `Built`, and the `build` stub. `renewal/solve.py` is whole: the lesson's `FOUND`, `solve_quietly`, `is_feasible` and `read_plan`, ready for `plan.py` to call. `renewal/risk.py` is the next step's stub; nothing in this step imports it, so leave it as it is."
+    },
+    {
+      "type": "para",
+      "text": "Run executes `main.py`, which plans a tiny fleet: 25 transformers of GridCap, a fictional utility, drawn by `renewal/fleet.py` from seed 56, with a $2,000k budget, by the ranking and by the model, and prints what each list costs and removes; `expected/report.txt` is the report it should print. Its three lines are, with money in $k, a comma between thousands and no decimals:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "fleet: 25 fictional transformers, seed 56; budget $2,000k in 2027\nworst first: <units> units, $<cost>k, risk removed $<risk>k\nmodel      : <units> units, $<cost>k, risk removed $<risk>k (<status>)"
+    },
+    {
+      "type": "para",
+      "text": "where `<cost>` is what the list's units cost, `<risk>` the sum of `fleet.risk` over them, and `<status>` the `Plan`'s status, the termination reason's name. Submit runs every test in `tests/`, the skeleton's own included, and compares Run's report with the expected one."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "text": "Blueprint"
+    },
+    {
+      "type": "para",
+      "text": "Write each method below. The tests check each one by itself and the whole program end to end, so you may change any other part of the code as you see fit."
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`plan` in `renewal/plan.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def plan(fleet: list[Transformer], request: Request) -> Plan"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** Builds the model, solves it with HiGHS through MathOpt, and returns a Plan: each transformer whose variable is 1 mapped to FIRST_YEAR, the objective value, the dual bound, and the name of the termination reason as the status. With no plan found, a Plan with no replacements and the status alone. Nothing the solver prints may reach standard output, since Run's report is compared line by line.",
+        "**Modeling idea.** Read the termination first, then the variable values; a binary is 1 when its value is above 0.5.",
+        "**Taught in** [4.2.2 Reading `SolveResult`: Termination, Primal and Dual Solutions, Statistics](../../../../04-google-or-tools-in-depth/13-mathopt-core/units/unit-02/4.2.2-reading-solveresult-termination-primal-and-dual-solutions-statistics.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`build` in `renewal/model.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def build(fleet: list[Transformer], request: Request) -> Built"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** A new module. Returns a Built, a dataclass holding the MathOpt model, the variables `x` keyed by transformer id, and the budget row: one binary variable per transformer named `x_<tid>`, one row named `budget` keeping the summed cost of the replaced units within request.budget, and the summed risk of the replaced units as the objective to maximize.",
+        "**Modeling idea.** A yes-or-no choice per unit under one budget is a 0-1 knapsack: the best list is a combination, which no ranking finds in general.",
+        "**Taught in** [6.3.1 0-1 and Multi-Dimensional Knapsack](../../../../06-formulation-craft/25-knapsack-and-assignment/units/unit-01/6.3.1-0-1-and-multi-dimensional-knapsack.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`feasible` in `renewal/plan.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def feasible(fleet: list[Transformer], request: Request, replace: dict[str, int]) -> bool"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** Builds the same model, fixes the variable of every listed unit to 1 and of every other unit to 0, solves, and answers whether the solver found a plan.",
+        "**Modeling idea.** To test a rule, pin a whole plan with variable bounds and ask whether it is feasible; a pair of plans on either side of a limit shows the row is there and in the right place.",
+        "**Taught in** [12.3.1 Unit-Testing One Constraint at a Time](../../../../12-engineering-the-optimization-service/47-testing-optimization-code/units/unit-01/12.3.1-unit-testing-one-constraint-at-a-time.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"The planner's entry point: a request in, a plan out.\"\"\"\n\nfrom __future__ import annotations\n\nfrom .fleet import Transformer\nfrom .model import build\nfrom .request import Plan, Request\nfrom .solve import is_feasible, read_plan, solve_quietly\n\n\ndef plan(fleet: list[Transformer], request: Request) -> Plan:\n    \"\"\"The replacements that remove the most risk within the request's rules.\"\"\"\n    built = build(fleet, request)\n    return read_plan(built, solve_quietly(built.model))\n\n\ndef feasible(fleet: list[Transformer], request: Request, replace: dict[str, int]) -> bool:\n    \"\"\"Does the model allow exactly these replacements? Every other unit is held at 'keep'.\"\"\"\n    built = build(fleet, request)\n    for tid, var in built.x.items():\n        var.lower_bound = var.upper_bound = 1 if tid in replace else 0\n    return is_feasible(solve_quietly(built.model))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: main.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run: this year's replacement list for a tiny fleet, by the ranking and by the model.\n\nThe fleet is GridCap's and invented: 25 transformers drawn by renewal/fleet.py from seed 56, with\na budget scaled down to its size. Nothing is read from the working directory, so the report is the\nsame wherever Run starts.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom renewal.fleet import generate_fleet\nfrom renewal.plan import plan\nfrom renewal.rank import worst_first\nfrom renewal.report import summarize\nfrom renewal.request import Request\n\nUNITS, SEED, BUDGET = 25, 56, 2_000      # $k this year\n\n\ndef main() -> None:\n    fleet = generate_fleet(UNITS, seed=SEED)\n    print(f\"fleet: {UNITS} fictional transformers, seed {SEED}; budget ${BUDGET:,}k in 2027\")\n    s = summarize(fleet, worst_first(fleet, BUDGET))\n    print(f\"worst first: {s.units} units, ${s.spend:,}k, risk removed ${s.risk_removed:,.0f}k\")\n    got = plan(fleet, Request(BUDGET))\n    s = summarize(fleet, list(got.replace))\n    print(f\"model      : {s.units} units, ${s.spend:,}k, risk removed ${s.risk_removed:,.0f}k ({got.status})\")\n\n\nif __name__ == \"__main__\":\n    main()\n"
+        },
+        {
+          "type": "para",
+          "text": "File: renewal/__init__.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Transformer fleet renewal: which units to replace, and when.\"\"\"\n"
+        },
+        {
+          "type": "para",
+          "text": "File: renewal/__main__.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"python -m renewal: this year's replacement list for a fictional 500-unit fleet.\"\"\"\n\nfrom .fleet import generate_fleet\nfrom .plan import plan\nfrom .rank import worst_first\nfrom .report import summarize\nfrom .request import Request\n\nBUDGET = 10_000   # $k this year\n\nif __name__ == \"__main__\":\n    fleet = generate_fleet(500)\n    for name, chosen in ((\"worst first\", worst_first(fleet, BUDGET)),\n                         (\"model\", list(plan(fleet, Request(BUDGET)).replace))):\n        s = summarize(fleet, chosen)\n        print(f\"{name:11}: {s.units} units, ${s.spend:,}k of ${BUDGET:,}k, risk removed ${s.risk_removed:,.0f}k\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: renewal/fleet.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"The transformer fleet: one record per unit, and a seeded generator of fictional fleets.\n\nThe fleets are invented. They belong to GridCap, the course's fictional utility, and no number in\nthem comes from a real utility.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport math\nimport random\nfrom dataclasses import dataclass\n\nFIRST_YEAR = 2027\nREGIONS = (\"north\", \"south\", \"east\", \"west\")\n\n\n@dataclass(frozen=True)\nclass Kind:\n    share: float                 # share of the fleet\n    cost: tuple[int, int]        # replacement cost range, $k\n    beta: float                  # Weibull shape of the kind's failure curve\n    eta: float                   # Weibull scale, years\n    crew_weeks: int              # crew-weeks one replacement takes\n    lead_years: int              # years from order to delivery of a new unit\n\n\nKINDS = {\n    \"small\": Kind(0.6, (250, 450), 3.2, 55.0, 2, 0),\n    \"medium\": Kind(0.3, (700, 1300), 3.6, 60.0, 4, 1),\n    \"large\": Kind(0.1, (2200, 3800), 4.0, 65.0, 8, 3),\n}\n\n\n@dataclass(frozen=True)\nclass Transformer:\n    tid: str            # \"T00042\"\n    substation: str     # \"S007\"\n    region: str         # one of REGIONS\n    kind: str           # a key of KINDS\n    age: int            # years, in FIRST_YEAR\n    cost: int           # $k to replace it\n    cof: int            # $k, the cost of one failure\n    condition: int      # 0-100 condition score from inspections; higher is worse\n    pof: float          # probability it fails in FIRST_YEAR, from the asset-health team\n\n\ndef _pof(age: float, beta: float, eta: float) -> float:\n    \"\"\"Weibull probability of failing within a year, given working at `age` (lesson 7.3.1).\"\"\"\n    return 1 - math.exp((age / eta) ** beta - ((age + 1) / eta) ** beta)\n\n\ndef generate_fleet(n: int, seed: int = 2027) -> list[Transformer]:\n    \"\"\"`n` fictional transformers in substations of 3 to 14 units; the same seed, the same fleet.\"\"\"\n    rng = random.Random(seed)\n    fleet: list[Transformer] = []\n    substation = 0\n    while len(fleet) < n:\n        substation += 1\n        region = REGIONS[rng.randrange(len(REGIONS))]\n        for _ in range(min(rng.randint(3, 14), n - len(fleet))):\n            kind = rng.choices(list(KINDS), weights=[k.share for k in KINDS.values()])[0]\n            k = KINDS[kind]\n            age = rng.randint(3, 68)\n            cost = 10 * round(rng.uniform(*k.cost) / 10)\n            customers = rng.randint(200, 6000)\n            fleet.append(Transformer(\n                tid=f\"T{len(fleet) + 1:05d}\", substation=f\"S{substation:04d}\", region=region, kind=kind,\n                age=age, cost=cost, cof=10 * round((1.5 * cost + 1.2 * customers) / 10),\n                condition=max(0, min(100, round(100 * age / 70 + rng.gauss(0, 12)))),\n                pof=round(_pof(age, k.beta, k.eta), 5)))\n    return fleet\n\n\ndef risk(t: Transformer) -> float:\n    \"\"\"This year's expected failure cost, $k: PoF times CoF (lesson 7.3.3).\"\"\"\n    return t.pof * t.cof\n"
+        },
+        {
+          "type": "para",
+          "text": "File: renewal/model.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"The MathOpt model: one yes-or-no decision per transformer, one budget row.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nfrom .fleet import Transformer, risk\nfrom .request import Request\n\n\n@dataclass\nclass Built:\n    model: mathopt.Model\n    x: dict[str, mathopt.Variable]          # x[i] = 1: replace transformer i this year\n    budget: mathopt.LinearConstraint\n\n\ndef build(fleet: list[Transformer], request: Request) -> Built:\n    model = mathopt.Model(name=\"renewal\")\n    x = {t.tid: model.add_binary_variable(name=f\"x_{t.tid}\") for t in fleet}\n    budget = model.add_linear_constraint(\n        sum(t.cost * x[t.tid] for t in fleet) <= request.budget, name=\"budget\")\n    model.maximize(sum(risk(t) * x[t.tid] for t in fleet))\n    return Built(model, x, budget)\n"
+        },
+        {
+          "type": "para",
+          "text": "File: renewal/rank.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"The replacement list as the asset team builds it today: worst condition first.\"\"\"\n\nfrom __future__ import annotations\n\nfrom .fleet import Transformer\n\n\ndef worst_first(fleet: list[Transformer], budget: int) -> list[str]:\n    \"\"\"Walk down the condition ranking and take units until the next one does not fit the budget.\"\"\"\n    chosen, spent = [], 0\n    for t in sorted(fleet, key=lambda t: (-t.condition, t.tid)):\n        if spent + t.cost > budget:\n            break\n        chosen.append(t.tid)\n        spent += t.cost\n    return chosen\n"
+        },
+        {
+          "type": "para",
+          "text": "File: renewal/report.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"What a list of replacements costs and what it removes.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom .fleet import Transformer, risk\n\n\n@dataclass(frozen=True)\nclass Summary:\n    units: int\n    spend: int              # $k\n    risk_removed: float     # $k of expected failure cost this year\n\n\ndef summarize(fleet: list[Transformer], chosen: list[str]) -> Summary:\n    by_id = {t.tid: t for t in fleet}\n    units = [by_id[tid] for tid in chosen]\n    return Summary(len(units), sum(t.cost for t in units), sum(risk(t) for t in units))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: renewal/request.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"What the planner asks for, and what the model answers.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Request:\n    budget: int                 # $k for the year\n    # Stubs: the next lesson gives these fields their meaning; this model ignores them.\n    years: int = 1\n    window: int | None = None\n    rate: float = 0.07\n    min_age: int = 0\n    gap: float = 0.0\n\n\n@dataclass(frozen=True)\nclass Plan:\n    replace: dict[str, int]     # transformer id -> year of replacement\n    value: float                # risk removed, $k: the objective\n    bound: float                # no plan is worth more than this\n    status: str                 # the solver's termination reason\n"
+        },
+        {
+          "type": "para",
+          "text": "File: renewal/risk.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Failure risk from each kind's Weibull curve, and the risk a replacement removes.\n\nStub: the next lesson writes both functions. Until then they return 0.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom .fleet import Transformer\nfrom .request import Request\n\n\ndef pof_next(age: float, kind: str) -> float:\n    \"\"\"The probability that a unit of this kind, working at `age`, fails within the year.\"\"\"\n    return 0.0\n\n\ndef risk_removed(t: Transformer, start: int, request: Request) -> float:\n    \"\"\"The coefficient of x[i, start]: failure cost avoided over the risk window, discounted, $k.\"\"\"\n    return 0.0\n"
+        },
+        {
+          "type": "para",
+          "text": "File: renewal/solve.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Solve with HiGHS and read the plan back.\"\"\"\n\nfrom __future__ import annotations\n\nimport ctypes\nimport os\nimport sys\n\nfrom ortools.math_opt.python import mathopt\n\nfrom .fleet import FIRST_YEAR\nfrom .request import Plan\n\nFOUND = (mathopt.TerminationReason.OPTIMAL, mathopt.TerminationReason.FEASIBLE)\n\n\ndef solve_quietly(model: mathopt.Model, params: mathopt.SolveParameters | None = None) -> mathopt.SolveResult:\n    \"\"\"Solve with HiGHS, with the process's standard output pointed at /dev/null for the solve.\n\n    The HiGHS bundled in OR-Tools 9.15 can print a stray debug line on a MIP solve with no log asked\n    for; it is buffered C output, so it is flushed before the output is restored.\n    \"\"\"\n    sys.stdout.flush()\n    saved, sink = os.dup(1), os.open(os.devnull, os.O_WRONLY)\n    os.dup2(sink, 1)\n    try:\n        return mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    finally:\n        ctypes.CDLL(None).fflush(None)\n        os.dup2(saved, 1)\n        os.close(saved)\n        os.close(sink)\n\n\ndef is_feasible(result: mathopt.SolveResult) -> bool:\n    return result.termination.reason in FOUND\n\n\ndef read_plan(built, result: mathopt.SolveResult) -> Plan:\n    if not is_feasible(result):\n        return Plan({}, 0.0, 0.0, result.termination.reason.name)\n    replace = {tid: FIRST_YEAR for tid, var in built.x.items() if result.variable_values(var) > 0.5}\n    return Plan(replace, result.objective_value(), result.termination.objective_bounds.dual_bound,\n                result.termination.reason.name)\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"The planner's entry point: a request in, a plan out.\n\nStub: the next lesson replaces the ranking below with a model. Until then `plan` returns the\nasset team's worst-first list, and `feasible` checks nothing.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom .fleet import FIRST_YEAR, Transformer, risk\nfrom .rank import worst_first\nfrom .request import Plan, Request\n\n\ndef plan(fleet: list[Transformer], request: Request) -> Plan:\n    \"\"\"The replacements that remove the most risk within the request's rules.\"\"\"\n    chosen = worst_first(fleet, request.budget)\n    by_id = {t.tid: t for t in fleet}\n    return Plan({tid: FIRST_YEAR for tid in chosen}, sum(risk(by_id[tid]) for tid in chosen), 0.0, \"NOT_SOLVED\")\n\n\ndef feasible(fleet: list[Transformer], request: Request, replace: dict[str, int]) -> bool:\n    \"\"\"Does the model allow exactly these replacements? Every other unit is held at 'keep'.\"\"\"\n    return True\n"
+    },
+    {
+      "type": "para",
+      "text": "File: main.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run: this year's replacement list for a tiny fleet, and what it removes.\n\nThe fleet is GridCap's and invented: 25 transformers drawn by renewal/fleet.py from seed 56, with\na budget scaled down to its size. Nothing is read from the working directory, so the report is the\nsame wherever Run starts.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom renewal.fleet import generate_fleet\nfrom renewal.rank import worst_first\nfrom renewal.report import summarize\n\nUNITS, SEED, BUDGET = 25, 56, 2_000      # $k this year\n\n\ndef main() -> None:\n    fleet = generate_fleet(UNITS, seed=SEED)\n    print(f\"fleet: {UNITS} fictional transformers, seed {SEED}; budget ${BUDGET:,}k in 2027\")\n    s = summarize(fleet, worst_first(fleet, BUDGET))\n    print(f\"worst first: {s.units} units, ${s.spend:,}k, risk removed ${s.risk_removed:,.0f}k\")\n\n\nif __name__ == \"__main__\":\n    main()\n"
+    },
+    {
+      "type": "para",
+      "text": "File: renewal/__init__.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Transformer fleet renewal: which units to replace, and when.\"\"\"\n"
+    },
+    {
+      "type": "para",
+      "text": "File: renewal/__main__.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"python -m renewal: this year's replacement list for a fictional 500-unit fleet.\"\"\"\n\nfrom .fleet import generate_fleet\nfrom .rank import worst_first\nfrom .report import summarize\n\nBUDGET = 10_000   # $k this year\n\nif __name__ == \"__main__\":\n    fleet = generate_fleet(500)\n    s = summarize(fleet, worst_first(fleet, BUDGET))\n    print(f\"worst first: {s.units} units, ${s.spend:,}k of ${BUDGET:,}k, risk removed ${s.risk_removed:,.0f}k\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: renewal/fleet.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"The transformer fleet: one record per unit, and a seeded generator of fictional fleets.\n\nThe fleets are invented. They belong to GridCap, the course's fictional utility, and no number in\nthem comes from a real utility.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport math\nimport random\nfrom dataclasses import dataclass\n\nFIRST_YEAR = 2027\nREGIONS = (\"north\", \"south\", \"east\", \"west\")\n\n\n@dataclass(frozen=True)\nclass Kind:\n    share: float                 # share of the fleet\n    cost: tuple[int, int]        # replacement cost range, $k\n    beta: float                  # Weibull shape of the kind's failure curve\n    eta: float                   # Weibull scale, years\n    crew_weeks: int              # crew-weeks one replacement takes\n    lead_years: int              # years from order to delivery of a new unit\n\n\nKINDS = {\n    \"small\": Kind(0.6, (250, 450), 3.2, 55.0, 2, 0),\n    \"medium\": Kind(0.3, (700, 1300), 3.6, 60.0, 4, 1),\n    \"large\": Kind(0.1, (2200, 3800), 4.0, 65.0, 8, 3),\n}\n\n\n@dataclass(frozen=True)\nclass Transformer:\n    tid: str            # \"T00042\"\n    substation: str     # \"S007\"\n    region: str         # one of REGIONS\n    kind: str           # a key of KINDS\n    age: int            # years, in FIRST_YEAR\n    cost: int           # $k to replace it\n    cof: int            # $k, the cost of one failure\n    condition: int      # 0-100 condition score from inspections; higher is worse\n    pof: float          # probability it fails in FIRST_YEAR, from the asset-health team\n\n\ndef _pof(age: float, beta: float, eta: float) -> float:\n    \"\"\"Weibull probability of failing within a year, given working at `age` (lesson 7.3.1).\"\"\"\n    return 1 - math.exp((age / eta) ** beta - ((age + 1) / eta) ** beta)\n\n\ndef generate_fleet(n: int, seed: int = 2027) -> list[Transformer]:\n    \"\"\"`n` fictional transformers in substations of 3 to 14 units; the same seed, the same fleet.\"\"\"\n    rng = random.Random(seed)\n    fleet: list[Transformer] = []\n    substation = 0\n    while len(fleet) < n:\n        substation += 1\n        region = REGIONS[rng.randrange(len(REGIONS))]\n        for _ in range(min(rng.randint(3, 14), n - len(fleet))):\n            kind = rng.choices(list(KINDS), weights=[k.share for k in KINDS.values()])[0]\n            k = KINDS[kind]\n            age = rng.randint(3, 68)\n            cost = 10 * round(rng.uniform(*k.cost) / 10)\n            customers = rng.randint(200, 6000)\n            fleet.append(Transformer(\n                tid=f\"T{len(fleet) + 1:05d}\", substation=f\"S{substation:04d}\", region=region, kind=kind,\n                age=age, cost=cost, cof=10 * round((1.5 * cost + 1.2 * customers) / 10),\n                condition=max(0, min(100, round(100 * age / 70 + rng.gauss(0, 12)))),\n                pof=round(_pof(age, k.beta, k.eta), 5)))\n    return fleet\n\n\ndef risk(t: Transformer) -> float:\n    \"\"\"This year's expected failure cost, $k: PoF times CoF (lesson 7.3.3).\"\"\"\n    return t.pof * t.cof\n"
+    },
+    {
+      "type": "para",
+      "text": "File: renewal/model.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"The MathOpt model: one yes-or-no decision per transformer, one budget row.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nfrom .fleet import Transformer, risk\nfrom .request import Request\n\n\n@dataclass\nclass Built:\n    model: mathopt.Model\n    x: dict[str, mathopt.Variable]          # x[i] = 1: replace transformer i this year\n    budget: mathopt.LinearConstraint\n\n\ndef build(fleet: list[Transformer], request: Request) -> Built:\n    \"\"\"A new module. Returns a Built, a dataclass holding the MathOpt model, the variables `x` keyed by transformer id, and the budget row: one binary variable per transformer named `x_<tid>`, one row named `budget` keeping the summed cost of the replaced units within request.budget, and the summed risk of the replaced units as the objective to maximize.\"\"\"\n    return None\n"
+    },
+    {
+      "type": "para",
+      "text": "File: renewal/rank.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"The replacement list as the asset team builds it today: worst condition first.\"\"\"\n\nfrom __future__ import annotations\n\nfrom .fleet import Transformer\n\n\ndef worst_first(fleet: list[Transformer], budget: int) -> list[str]:\n    \"\"\"Walk down the condition ranking and take units until the next one does not fit the budget.\"\"\"\n    chosen, spent = [], 0\n    for t in sorted(fleet, key=lambda t: (-t.condition, t.tid)):\n        if spent + t.cost > budget:\n            break\n        chosen.append(t.tid)\n        spent += t.cost\n    return chosen\n"
+    },
+    {
+      "type": "para",
+      "text": "File: renewal/report.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"What a list of replacements costs and what it removes.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom .fleet import Transformer, risk\n\n\n@dataclass(frozen=True)\nclass Summary:\n    units: int\n    spend: int              # $k\n    risk_removed: float     # $k of expected failure cost this year\n\n\ndef summarize(fleet: list[Transformer], chosen: list[str]) -> Summary:\n    by_id = {t.tid: t for t in fleet}\n    units = [by_id[tid] for tid in chosen]\n    return Summary(len(units), sum(t.cost for t in units), sum(risk(t) for t in units))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: renewal/request.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"What the planner asks for, and what the model answers.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Request:\n    budget: int                 # $k for the year\n\n\n@dataclass(frozen=True)\nclass Plan:\n    replace: dict[str, int]     # transformer id -> year of replacement\n    value: float                # risk removed, $k: the objective\n    bound: float                # no plan is worth more than this\n    status: str                 # the solver's termination reason\n"
+    },
+    {
+      "type": "para",
+      "text": "File: renewal/risk.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Failure risk from each kind's Weibull curve, and the risk a replacement removes.\n\nStub: the next lesson writes both functions. Until then they return 0.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom .fleet import Transformer\nfrom .request import Request\n\n\ndef pof_next(age: float, kind: str) -> float:\n    \"\"\"The probability that a unit of this kind, working at `age`, fails within the year.\"\"\"\n    return 0.0\n\n\ndef risk_removed(t: Transformer, start: int, request: Request) -> float:\n    \"\"\"The coefficient of x[i, start]: failure cost avoided over the risk window, discounted, $k.\"\"\"\n    return 0.0\n"
+    },
+    {
+      "type": "para",
+      "text": "File: renewal/solve.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Solve with HiGHS and read the plan back.\"\"\"\n\nfrom __future__ import annotations\n\nimport ctypes\nimport os\nimport sys\n\nfrom ortools.math_opt.python import mathopt\n\nfrom .fleet import FIRST_YEAR\nfrom .request import Plan\n\nFOUND = (mathopt.TerminationReason.OPTIMAL, mathopt.TerminationReason.FEASIBLE)\n\n\ndef solve_quietly(model: mathopt.Model, params: mathopt.SolveParameters | None = None) -> mathopt.SolveResult:\n    \"\"\"Solve with HiGHS, with the process's standard output pointed at /dev/null for the solve.\n\n    The HiGHS bundled in OR-Tools 9.15 can print a stray debug line on a MIP solve with no log asked\n    for; it is buffered C output, so it is flushed before the output is restored.\n    \"\"\"\n    sys.stdout.flush()\n    saved, sink = os.dup(1), os.open(os.devnull, os.O_WRONLY)\n    os.dup2(sink, 1)\n    try:\n        return mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    finally:\n        ctypes.CDLL(None).fflush(None)\n        os.dup2(saved, 1)\n        os.close(saved)\n        os.close(sink)\n\n\ndef is_feasible(result: mathopt.SolveResult) -> bool:\n    return result.termination.reason in FOUND\n\n\ndef read_plan(built, result: mathopt.SolveResult) -> Plan:\n    if not is_feasible(result):\n        return Plan({}, 0.0, 0.0, result.termination.reason.name)\n    replace = {tid: FIRST_YEAR for tid, var in built.x.items() if result.variable_values(var) > 0.5}\n    return Plan(replace, result.objective_value(), result.termination.objective_bounds.dual_bound,\n                result.termination.reason.name)\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 7,
+    "paras": 16,
+    "code": 15,
+    "tables": 0,
+    "lists": 3,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 1,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "07f48a944a22ca0a5389689ea22bbbc76d94c651b7b4ea152309cd3640b71e96",
+  "starting_code": "\"\"\"The planner's entry point: a request in, a plan out.\n\nStub: the next lesson replaces the ranking below with a model. Until then `plan` returns the\nasset team's worst-first list, and `feasible` checks nothing.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom .fleet import FIRST_YEAR, Transformer, risk\nfrom .rank import worst_first\nfrom .request import Plan, Request\n\n\ndef plan(fleet: list[Transformer], request: Request) -> Plan:\n    \"\"\"The replacements that remove the most risk within the request's rules.\"\"\"\n    chosen = worst_first(fleet, request.budget)\n    by_id = {t.tid: t for t in fleet}\n    return Plan({tid: FIRST_YEAR for tid in chosen}, sum(risk(by_id[tid]) for tid in chosen), 0.0, \"NOT_SOLVED\")\n\n\ndef feasible(fleet: list[Transformer], request: Request, replace: dict[str, int]) -> bool:\n    \"\"\"Does the model allow exactly these replacements? Every other unit is held at 'keep'.\"\"\"\n    return True\n",
+  "exercise": {
+    "main_path": "practice/14-growing-real-projects/56-project-transformer-renewal/prose/unit-01/practice-1/renewal/plan.py",
+    "test_path": "practice/14-growing-real-projects/56-project-transformer-renewal/prose/unit-01/practice-1/tests/test_expected_output.py",
+    "run_command": [
+      "python3",
+      "practice/14-growing-real-projects/56-project-transformer-renewal/prose/unit-01/practice-1/main.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/14-growing-real-projects/56-project-transformer-renewal/prose/unit-01/practice-1/target/report.xml",
+      "practice/14-growing-real-projects/56-project-transformer-renewal/prose/unit-01/practice-1/tests"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "tests/test_plan.py::test_the_plan_takes_the_riskiest_units_not_the_worst_scored",
+        "kind": "main",
+        "says": "the plan takes the units with the most risk, not the worst condition scores"
+      },
+      {
+        "id": "tests/test_plan.py::test_the_plan_uses_money_a_ranking_leaves_on_the_table",
+        "kind": "main",
+        "says": "the plan uses money a ranking leaves unspent when it stops at a unit that does not fit"
+      },
+      {
+        "id": "tests/test_plan.py::test_the_plan_is_the_best_subset_within_the_budget",
+        "kind": "main",
+        "says": "the plan removes as much risk as the best subset within the budget"
+      },
+      {
+        "id": "tests/test_plan.py::test_the_budget_allows_a_plan_at_the_limit_and_refuses_one_above_it",
+        "kind": "edge",
+        "says": "the model allows a list that spends exactly the budget and refuses one just over it"
+      },
+      {
+        "id": "tests/test_fleet.py::test_the_same_seed_gives_the_same_fleet",
+        "kind": "kept",
+        "says": "the same seed gives the same fleet"
+      },
+      {
+        "id": "tests/test_fleet.py::test_every_unit_has_values_in_range",
+        "kind": "kept",
+        "says": "every unit has values in range"
+      },
+      {
+        "id": "tests/test_fleet.py::test_a_substation_sits_in_one_region",
+        "kind": "kept",
+        "says": "a substation sits in one region"
+      },
+      {
+        "id": "tests/test_rank.py::test_worst_first_takes_the_worst_units_until_one_does_not_fit",
+        "kind": "kept",
+        "says": "worst first takes the worst units until one does not fit"
+      },
+      {
+        "id": "tests/test_expected_output.py::test_the_report_matches_the_expected_output",
+        "kind": "main",
+        "says": "Run's report for the tiny fleet matches the expected report"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/14-growing-real-projects/56-project-transformer-renewal/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": "56-project-transformer-renewal/README_14.3.1.md",
+    "concepts": [
+      "the choice under one budget is a 0-1 knapsack solved with a bound",
+      "small hand-checked fleets pin each mistake, with an allowed and a refused list at the budget's edge",
+      "the starting list sorts by condition and stops at the first unit that does not fit"
+    ],
+    "files": [
+      "practice/14-growing-real-projects/56-project-transformer-renewal/prose/unit-01/practice-1/main.py",
+      "practice/14-growing-real-projects/56-project-transformer-renewal/prose/unit-01/practice-1/renewal/__init__.py",
+      "practice/14-growing-real-projects/56-project-transformer-renewal/prose/unit-01/practice-1/renewal/__main__.py",
+      "practice/14-growing-real-projects/56-project-transformer-renewal/prose/unit-01/practice-1/renewal/fleet.py",
+      "practice/14-growing-real-projects/56-project-transformer-renewal/prose/unit-01/practice-1/renewal/model.py",
+      "practice/14-growing-real-projects/56-project-transformer-renewal/prose/unit-01/practice-1/renewal/rank.py",
+      "practice/14-growing-real-projects/56-project-transformer-renewal/prose/unit-01/practice-1/renewal/report.py",
+      "practice/14-growing-real-projects/56-project-transformer-renewal/prose/unit-01/practice-1/renewal/request.py",
+      "practice/14-growing-real-projects/56-project-transformer-renewal/prose/unit-01/practice-1/renewal/risk.py",
+      "practice/14-growing-real-projects/56-project-transformer-renewal/prose/unit-01/practice-1/renewal/solve.py"
+    ],
+    "read_only": [
+      "practice/14-growing-real-projects/56-project-transformer-renewal/prose/unit-01/practice-1/tests/test_fleet.py",
+      "practice/14-growing-real-projects/56-project-transformer-renewal/prose/unit-01/practice-1/tests/test_plan.py",
+      "practice/14-growing-real-projects/56-project-transformer-renewal/prose/unit-01/practice-1/tests/test_rank.py",
+      "practice/14-growing-real-projects/56-project-transformer-renewal/prose/unit-01/practice-1/expected/report.txt",
+      "practice/14-growing-real-projects/56-project-transformer-renewal/prose/unit-01/practice-1/pytest.ini"
+    ]
+  }
+}

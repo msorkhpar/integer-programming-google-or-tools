@@ -1,0 +1,163 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "26-multi-period-timing"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Crews and coordinated outages",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A rural electric cooperative is scheduling its feeder upgrades year by year, and the model in `outages.py` already has a start variable `x[(pid, year)]` for each project and each year in its window, a row saying each project starts at most once, and a row saying each must-do project starts exactly once. Two rules from the operations team are missing:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Crews.** Each year only a few line crews can be mobilized: at most `max_starts[year]` projects may start in that year, must-do projects included. A year in which no project may start has nothing to cap, so it gets no row. In Python an empty `sum` is the number 0, and MathOpt refuses a row built from it (a `TypeError` about a `bool`): skip the row, or start the sum from `mathopt.LinearExpression()`, as the lesson shows.",
+        "**Coordinated outages.** Some pairs of upgrades sit on the same feeder and need one shared outage. For each pair in `coordinated`, either neither project is funded, or both are and they start in the same year."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Write `add_outage_rules(model, x, projects, max_starts, coordinated)` so the model allows exactly the schedules that keep both rules."
+    },
+    {
+      "type": "para",
+      "text": "The model so far, with $`P`$ the projects, $`T_i`$ the years project $`i`$ may start in, $`M \\subseteq P`$ the must-do projects, $`Y`$ the years with a crew cap $`K_y`$, and $`D`$ the coordinated pairs:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& x_{i,t} \\in \\{0, 1\\} && \\forall i \\in P,\\ t \\in T_i && \\text{(start } i \\text{ in year } t\\text{)} \\\\\n& \\sum_{t \\in T_i} x_{i,t} \\le 1 && \\forall i \\in P \\setminus M && \\text{(once}_i\\text{, given)} \\\\\n& \\sum_{t \\in T_i} x_{i,t} = 1 && \\forall i \\in M && \\text{(must}_i\\text{, given)} \\\\\n& \\text{?} && && \\text{(your rows)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Write your rows in this notation first, each with its quantifier and a label, then code them. Mind the pairs whose windows do not line up: there is no variable for a year outside a project's window."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix a schedule by setting the variables' bounds and ask the solver whether it is allowed, so any correct formulation passes. About ten lines in total."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]          # the years it may start in\n    must_do: bool = False\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project]) -> dict:\n    \"\"\"x[(pid, year)] = 1 when the project starts in that year; only years in its window exist.\"\"\"\n    return {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n\n\ndef add_start_rules(model: mathopt.Model, x: dict, projects: list[Project]) -> None:\n    \"\"\"Given: each project starts at most once, and each must-do exactly once.\"\"\"\n    for p in projects:\n        started = sum(x[p.pid, t] for t in p.starts)\n        if p.must_do:\n            model.add_linear_constraint(started == 1, name=f\"must_{p.pid}\")\n        else:\n            model.add_linear_constraint(started <= 1, name=f\"once_{p.pid}\")\n\n\ndef add_outage_rules(model: mathopt.Model, x: dict, projects: list[Project],\n                     max_starts: dict[int, int], coordinated: list[tuple[str, str]]) -> None:\n    \"\"\"At most max_starts[year] starts per year; each coordinated pair together, in one year, or not at all.\"\"\"\n    for year, cap in max_starts.items():\n        starting = [x[p.pid, year] for p in projects if (p.pid, year) in x]\n        if starting:\n            model.add_linear_constraint(sum(starting) <= cap, name=f\"crews_{year}\")\n\n    def at(pid: str, year: int):\n        return x[pid, year] if (pid, year) in x else 0\n\n    by_id = {p.pid: p for p in projects}\n    for a, b in coordinated:\n        years = sorted(set(by_id[a].starts) | set(by_id[b].starts))\n        for t in years:\n            model.add_linear_constraint(at(a, t) - at(b, t) == 0, name=f\"together_{a}_{b}_{t}\")\n\n\ndef build(projects: list[Project], max_starts: dict[int, int],\n          coordinated: list[tuple[str, str]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"feeder-upgrades\")\n    x = start_variables(model, projects)\n    add_start_rules(model, x, projects)\n    add_outage_rules(model, x, projects, max_starts, coordinated)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    feeders = [Project(\"F1\", (2027, 2028), must_do=True), Project(\"F2\", (2027, 2028)), Project(\"F3\", (2028,))]\n    model, x = build(feeders, {2027: 1, 2028: 2}, [(\"F2\", \"F3\")])\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]          # the years it may start in\n    must_do: bool = False\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project]) -> dict:\n    \"\"\"x[(pid, year)] = 1 when the project starts in that year; only years in its window exist.\"\"\"\n    return {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n\n\ndef add_start_rules(model: mathopt.Model, x: dict, projects: list[Project]) -> None:\n    \"\"\"Given: each project starts at most once, and each must-do exactly once.\"\"\"\n    for p in projects:\n        started = sum(x[p.pid, t] for t in p.starts)\n        if p.must_do:\n            model.add_linear_constraint(started == 1, name=f\"must_{p.pid}\")\n        else:\n            model.add_linear_constraint(started <= 1, name=f\"once_{p.pid}\")\n\n\ndef add_outage_rules(model: mathopt.Model, x: dict, projects: list[Project],\n                     max_starts: dict[int, int], coordinated: list[tuple[str, str]]) -> None:\n    \"\"\"At most max_starts[year] starts per year; each coordinated pair together, in one year, or not at all.\"\"\"\n    # TODO: one crew row per capped year, and the rows that tie each coordinated pair together.\n    return None\n\n\ndef build(projects: list[Project], max_starts: dict[int, int],\n          coordinated: list[tuple[str, str]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"feeder-upgrades\")\n    x = start_variables(model, projects)\n    add_start_rules(model, x, projects)\n    add_outage_rules(model, x, projects, max_starts, coordinated)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    feeders = [Project(\"F1\", (2027, 2028), must_do=True), Project(\"F2\", (2027, 2028)), Project(\"F3\", (2028,))]\n    model, x = build(feeders, {2027: 1, 2028: 2}, [(\"F2\", \"F3\")])\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "9531e83b1f7a436a65a120938667b37344b2f4e8ace8c6f0c7425feb6e44c5a8",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]          # the years it may start in\n    must_do: bool = False\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project]) -> dict:\n    \"\"\"x[(pid, year)] = 1 when the project starts in that year; only years in its window exist.\"\"\"\n    return {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n\n\ndef add_start_rules(model: mathopt.Model, x: dict, projects: list[Project]) -> None:\n    \"\"\"Given: each project starts at most once, and each must-do exactly once.\"\"\"\n    for p in projects:\n        started = sum(x[p.pid, t] for t in p.starts)\n        if p.must_do:\n            model.add_linear_constraint(started == 1, name=f\"must_{p.pid}\")\n        else:\n            model.add_linear_constraint(started <= 1, name=f\"once_{p.pid}\")\n\n\ndef add_outage_rules(model: mathopt.Model, x: dict, projects: list[Project],\n                     max_starts: dict[int, int], coordinated: list[tuple[str, str]]) -> None:\n    \"\"\"At most max_starts[year] starts per year; each coordinated pair together, in one year, or not at all.\"\"\"\n    # TODO: one crew row per capped year, and the rows that tie each coordinated pair together.\n    return None\n\n\ndef build(projects: list[Project], max_starts: dict[int, int],\n          coordinated: list[tuple[str, str]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"feeder-upgrades\")\n    x = start_variables(model, projects)\n    add_start_rules(model, x, projects)\n    add_outage_rules(model, x, projects, max_starts, coordinated)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    feeders = [Project(\"F1\", (2027, 2028), must_do=True), Project(\"F2\", (2027, 2028)), Project(\"F3\", (2028,))]\n    model, x = build(feeders, {2027: 1, 2028: 2}, [(\"F2\", \"F3\")])\n    print(len(list(model.linear_constraints())), \"rows\")\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-1/outages.py",
+    "test_path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-1/test_outages.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-1/outages.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-1/target/report.xml",
+      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-1/test_outages.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_schedule_within_the_crew_caps_is_allowed_and_one_over_a_cap_refused",
+        "kind": "main",
+        "says": "a schedule within every year's crew cap is allowed, and one that starts too many projects in a year is refused"
+      },
+      {
+        "id": "test_a_coordinated_pair_is_funded_together_or_not_at_all",
+        "kind": "main",
+        "says": "a coordinated pair started together is allowed, and one member funded alone is refused"
+      },
+      {
+        "id": "test_a_coordinated_pair_starts_in_the_same_year",
+        "kind": "edge",
+        "says": "a coordinated pair funded in two different years is refused"
+      },
+      {
+        "id": "test_a_pair_with_no_common_year_is_never_funded",
+        "kind": "edge",
+        "says": "a coordinated pair whose windows share no year may not have either member funded"
+      },
+      {
+        "id": "test_a_year_may_start_fewer_projects_than_its_cap",
+        "kind": "edge",
+        "says": "a year that starts fewer projects than its crew cap is allowed"
+      },
+      {
+        "id": "test_a_must_do_counts_against_its_years_cap",
+        "kind": "edge",
+        "says": "a must-do project uses one of its start year's crews"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "26-multi-period-timing/README_6.4.1.md",
+      "section": "A Timing Window Is Enforced by the Variables You Never Create"
+    },
+    "concepts": [
+      "one binary per project and allowed start year makes every start-dependent quantity linear",
+      "a timing window is enforced by creating start variables only for the window's years"
+    ]
+  }
+}

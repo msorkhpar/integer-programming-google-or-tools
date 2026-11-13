@@ -1,0 +1,126 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "09-diagnostics-and-explainability",
+    "37-infeasibility"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Refuse as few berthing requests as possible",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A port's harbour master builds next week's berth schedule. Each vessel must berth on exactly one day inside its window (`first` to `last`, days numbered from 1), and each day has a number of free berths. Each shipping line has also asked for one day (`wanted`). Those requests are the soft rules: the harbour master may refuse one, and the vessel then berths on another day of its window, but a vessel is never sent away. Refusals annoy customers, so the plan must refuse as few requests as possible. Every refusal counts the same."
+    },
+    {
+      "type": "para",
+      "text": "Write the formulation first: a 0/1 variable per vessel and day of its window (days in `berths` only), a 0/1 \"refused\" variable per vessel, the rows that make every vessel berth once and keep each day within its berths, an elastic request row per vessel that the refusal variable relaxes, and an objective that counts refusals. Then write `fewest_refusals(vessels, berths)` to build it with MathOpt and solve it with HiGHS at a relative gap of 0 (`mathopt.SolveParameters(relative_gap_tolerance=0.0)`), so the number of refusals is a proven least, as in the lesson's own solves."
+    },
+    {
+      "type": "para",
+      "text": "`vessels` maps a name to `(first, last, wanted)`; `berths` maps a day to its free berths. Return `(refused, schedule)`: the sorted names of the refused vessels, and a dict giving the day each vessel berths. When several answers refuse equally few, any of them is right: the tests check the number of refusals and that the schedule keeps every rule. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef fewest_refusals(vessels: dict, berths: dict) -> tuple[list[str], dict[str, int]]:\n    \"\"\"Refuse as few berthing requests as possible; every vessel still berths once, inside its window.\"\"\"\n    model = mathopt.Model(name=\"port\")\n    at = {(v, d): model.add_binary_variable(name=f\"at_{v}_{d}\")\n          for v, (first, last, _) in vessels.items() for d in range(first, last + 1) if d in berths}\n    refuse = {v: model.add_binary_variable(name=f\"refuse_{v}\") for v in vessels}\n    for v, (first, last, wanted) in vessels.items():\n        model.add_linear_constraint(mathopt.fast_sum(x for (w, _), x in at.items() if w == v) == 1, name=f\"berth_{v}\")\n        model.add_linear_constraint(at.get((v, wanted), 0) + refuse[v] >= 1, name=f\"request_{v}\")\n    for d, count in berths.items():\n        model.add_linear_constraint(mathopt.fast_sum(x for (_, e), x in at.items() if e == d) <= count, name=f\"berths_{d}\")\n    model.minimize(mathopt.fast_sum(refuse.values()))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS,\n                            params=mathopt.SolveParameters(relative_gap_tolerance=0.0))\n    values = result.variable_values()\n    refused = sorted(v for v, r in refuse.items() if values[r] > 0.5)\n    schedule = {v: d for (v, d), x in at.items() if values[x] > 0.5}\n    return refused, schedule\n\n\nif __name__ == \"__main__\":\n    print(fewest_refusals({\"Aurora\": (1, 2, 1), \"Borealis\": (1, 2, 1)}, {1: 1, 2: 1}))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef fewest_refusals(vessels: dict, berths: dict) -> tuple[list[str], dict[str, int]]:\n    \"\"\"Refuse as few berthing requests as possible; every vessel still berths once, inside its window.\"\"\"\n    # TODO: write the formulation first, then build and solve it with HiGHS.\n    # Return the refused vessels (sorted) and the day each vessel berths.\n    return [], {v: wanted for v, (_, _, wanted) in vessels.items()}\n\n\nif __name__ == \"__main__\":\n    print(fewest_refusals({\"Aurora\": (1, 2, 1), \"Borealis\": (1, 2, 1)}, {1: 1, 2: 1}))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "e26d2ba66c15c31fd0625aa9d0573f98298b6b492484e20716fe391ae28a34f5",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef fewest_refusals(vessels: dict, berths: dict) -> tuple[list[str], dict[str, int]]:\n    \"\"\"Refuse as few berthing requests as possible; every vessel still berths once, inside its window.\"\"\"\n    # TODO: write the formulation first, then build and solve it with HiGHS.\n    # Return the refused vessels (sorted) and the day each vessel berths.\n    return [], {v: wanted for v, (_, _, wanted) in vessels.items()}\n\n\nif __name__ == \"__main__\":\n    print(fewest_refusals({\"Aurora\": (1, 2, 1), \"Borealis\": (1, 2, 1)}, {1: 1, 2: 1}))\n",
+  "exercise": {
+    "main_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-04/practice-2/port.py",
+    "test_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-04/practice-2/test_port.py",
+    "run_command": [
+      "python3",
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-04/practice-2/port.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-04/practice-2/target/report.xml",
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-04/practice-2/test_port.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_requests_that_fit_are_all_granted_and_a_clash_costs_one_refusal",
+        "kind": "main",
+        "says": "requests that fit are all granted, and two vessels asking for one berth cost exactly one refusal"
+      },
+      {
+        "id": "test_a_refused_vessel_is_still_berthed_on_another_day",
+        "kind": "edge",
+        "says": "refusing a request moves the vessel; it does not send it away"
+      },
+      {
+        "id": "test_a_moved_vessel_stays_inside_its_window",
+        "kind": "edge",
+        "says": "a vessel whose request is refused can only move to a day inside its window"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-04/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "37-infeasibility/README_9.1.4.md",
+      "section": "Counting Rows Asks \"How Few Rules Must Give?\""
+    },
+    "concepts": [
+      "a 0/1 variable per soft rule, linked to its elastic, and an objective that counts them"
+    ]
+  }
+}

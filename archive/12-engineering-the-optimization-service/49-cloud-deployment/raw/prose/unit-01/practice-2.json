@@ -1,0 +1,177 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "49-cloud-deployment"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Review a Dockerfile before it ships",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The roster team builds its own images, and the platform team wants a check in CI that refuses a Dockerfile breaking the four rules every image on the cluster must follow. Write it."
+    },
+    {
+      "type": "para",
+      "text": "In `dockerfile_review.py`, write `review(dockerfile)`. It takes a Dockerfile's text and returns the sorted list of findings, each at most once:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Finding",
+        "When"
+      ],
+      "rows": [
+        [
+          "`base-not-pinned`",
+          "a `FROM` image has no tag, or the tag `latest`, and no `@sha256:` digest. A `FROM` that names an earlier stage (`FROM build`, after `FROM ... AS build`) is not a base image. The colon of a registry port (`host:5000/python`) is not a tag. `FROM scratch` (in any case) names Docker's reserved empty image, which has no tag to pin, so it is never flagged."
+        ],
+        [
+          "`runs-as-root`",
+          "the **final** stage has no `USER`, or its last `USER` is `root` or `0` (a `user:group` form counts by its user part). Every stage starts as root: a `USER` in an earlier stage does not carry over."
+        ],
+        [
+          "`secret-in-env`",
+          "an `ENV` or `ARG` sets a variable whose name, in upper case, contains `KEY`, `SECRET`, `TOKEN` or `PASSWORD`. An `ENV` line may set several `NAME=value` pairs."
+        ],
+        [
+          "`shell-form-cmd`",
+          "a `CMD` or `ENTRYPOINT` is not in exec form (does not start with `[`)."
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Instruction words may be written in any case. `instructions(dockerfile)` is given: it drops comments and blank lines and returns `(WORD, rest)` pairs with the word in upper case. You may assume one instruction per line. About 25 lines remain."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nSECRET_WORDS = (\"KEY\", \"SECRET\", \"TOKEN\", \"PASSWORD\")\n\n\ndef instructions(dockerfile: str) -> list[tuple[str, str]]:\n    \"\"\"(INSTRUCTION, rest) for every instruction line; comments and blank lines dropped.\"\"\"\n    out = []\n    for line in dockerfile.splitlines():\n        line = line.strip()\n        if line and not line.startswith(\"#\"):\n            word, _, rest = line.partition(\" \")\n            out.append((word.upper(), rest.strip()))\n    return out\n\n\ndef review(dockerfile: str) -> list[str]:\n    \"\"\"The findings for a Dockerfile, sorted, each at most once.\"\"\"\n    findings: set[str] = set()\n    stages: set[str] = set()\n    user = None\n    for word, rest in instructions(dockerfile):\n        if word == \"FROM\":\n            parts = rest.split()\n            image = parts[0]\n            if len(parts) >= 3 and parts[1].upper() == \"AS\":\n                stages.add(parts[2])\n            user = None                                   # each stage starts as root\n            if image in stages or image.lower() == \"scratch\":   # an earlier stage, or the empty image\n                continue\n            name = image.split(\"@\")[0]\n            tag = name.rsplit(\":\", 1)[1] if \":\" in name.rsplit(\"/\", 1)[-1] else None\n            if \"@sha256:\" not in image and tag in (None, \"latest\"):\n                findings.add(\"base-not-pinned\")\n        elif word == \"USER\":\n            user = rest.split(\":\")[0]\n        elif word in (\"ENV\", \"ARG\"):\n            for pair in rest.split():\n                key = pair.split(\"=\", 1)[0].upper()\n                if any(w in key for w in SECRET_WORDS):\n                    findings.add(\"secret-in-env\")\n        elif word in (\"CMD\", \"ENTRYPOINT\") and not rest.startswith(\"[\"):\n            findings.add(\"shell-form-cmd\")\n    if user in (None, \"root\", \"0\"):\n        findings.add(\"runs-as-root\")\n    return sorted(findings)\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nSECRET_WORDS = (\"KEY\", \"SECRET\", \"TOKEN\", \"PASSWORD\")\n\n\ndef instructions(dockerfile: str) -> list[tuple[str, str]]:\n    \"\"\"(INSTRUCTION, rest) for every instruction line; comments and blank lines dropped.\"\"\"\n    out = []\n    for line in dockerfile.splitlines():\n        line = line.strip()\n        if line and not line.startswith(\"#\"):\n            word, _, rest = line.partition(\" \")\n            out.append((word.upper(), rest.strip()))\n    return out\n\n\ndef review(dockerfile: str) -> list[str]:\n    \"\"\"The findings for a Dockerfile, sorted, each at most once.\"\"\"\n    findings: set[str] = set()\n    # TODO: walk instructions(dockerfile) and add base-not-pinned, runs-as-root, secret-in-env, shell-form-cmd.\n    return sorted(findings)\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 1,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "7274f436bf2533ddc6a36c5730ae70174d715209a1ba060c30813a1970cf62d1",
+  "starting_code": "from __future__ import annotations\n\nSECRET_WORDS = (\"KEY\", \"SECRET\", \"TOKEN\", \"PASSWORD\")\n\n\ndef instructions(dockerfile: str) -> list[tuple[str, str]]:\n    \"\"\"(INSTRUCTION, rest) for every instruction line; comments and blank lines dropped.\"\"\"\n    out = []\n    for line in dockerfile.splitlines():\n        line = line.strip()\n        if line and not line.startswith(\"#\"):\n            word, _, rest = line.partition(\" \")\n            out.append((word.upper(), rest.strip()))\n    return out\n\n\ndef review(dockerfile: str) -> list[str]:\n    \"\"\"The findings for a Dockerfile, sorted, each at most once.\"\"\"\n    findings: set[str] = set()\n    # TODO: walk instructions(dockerfile) and add base-not-pinned, runs-as-root, secret-in-env, shell-form-cmd.\n    return sorted(findings)\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-2/dockerfile_review.py",
+    "test_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-2/test_dockerfile_review.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-2/dockerfile_review.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-2/target/report.xml",
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-2/test_dockerfile_review.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_clean_file_has_no_findings_and_a_bad_one_has_all_four",
+        "kind": "main",
+        "says": "a clean two-stage file has no findings, and a file breaking all four rules has all four"
+      },
+      {
+        "id": "test_latest_is_not_a_pin_but_a_digest_is",
+        "kind": "edge",
+        "says": "a base tagged latest is not pinned; a base pinned by sha256 digest is"
+      },
+      {
+        "id": "test_a_registry_port_is_not_a_tag",
+        "kind": "edge",
+        "says": "the port in a registry host name is not mistaken for a tag"
+      },
+      {
+        "id": "test_scratch_is_the_empty_image_not_an_unpinned_base",
+        "kind": "edge",
+        "says": "FROM scratch names Docker's empty image, which has no tag to pin, so it is not flagged"
+      },
+      {
+        "id": "test_a_user_in_an_earlier_stage_does_not_carry_over",
+        "kind": "edge",
+        "says": "a USER in the build stage does not make the final stage non-root"
+      },
+      {
+        "id": "test_user_root_or_0_still_runs_as_root",
+        "kind": "edge",
+        "says": "USER 0 and USER root:root still run as root"
+      },
+      {
+        "id": "test_a_secret_hidden_among_other_variables_is_found",
+        "kind": "edge",
+        "says": "a password among several ENV pairs, in lower case, is found"
+      },
+      {
+        "id": "test_lowercase_instructions_and_entrypoint_count",
+        "kind": "edge",
+        "says": "a lower-case shell-form entrypoint is a shell-form command"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "49-cloud-deployment/README_12.5.1.md",
+      "section": "The Image Runs as a Non-Root User and Holds No Credentials"
+    },
+    "concepts": [
+      "a non-root user, a build context filter and no credentials baked in",
+      "one image serves the API and the solve worker under two commands in exec form"
+    ]
+  }
+}

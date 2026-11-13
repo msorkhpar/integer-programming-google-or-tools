@@ -1,0 +1,414 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "14-growing-real-projects",
+    "55-project-cipt-planner"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Fund the most value within one budget",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The planning lead's first request:"
+    },
+    {
+      "type": "quote",
+      "blocks": [
+        {
+          "type": "para",
+          "text": "We have $38.39M of capital for the next five years and 40 candidate projects on GridCap small. Tell us which to fund to get the most value. Use the NPV finance quoted for each project. We'll worry about years later."
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The project you start from is the skeleton: it reads the export and prints a report, but its model is empty and `solve` funds nothing. Make the planner decide. Each project is a yes-or-no choice, the funded projects together may cost no more than the capital budget, and the plan has the most total value. Solve the model with HiGHS through MathOpt, keep anything HiGHS prints out of the report, and read the answer back as a `Plan` in which each funded project starts in its earliest year."
+    },
+    {
+      "type": "para",
+      "text": "The command line, `python -m cipt EXPORT.json`, plans the export file it is given."
+    },
+    {
+      "type": "para",
+      "text": "`cipt/solve.py` already imports MathOpt and holds stubs for `run_highs` and `read_plan`; write their bodies and make `solve` use them. `cipt/report.py` needs no change. It prints the report in this format, every amount in whole $k with thousands commas:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`<request name>: <status>`;",
+        "`funded <n> of <all> projects, capex $<capex>k of $<capital budget>k, value $<value>k`, where capex and value are the totals of the funded projects;",
+        "one line per funded project, in id order: two spaces, the id, two spaces, `start <year>`, two spaces, `capex` and a space and the capex right-aligned in 6 characters, two spaces, `value` and a space and the value right-aligned in 6 characters, two spaces, the project's name."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Run executes `main.py`, which plans the demo export in `data/demo.json` (GridCap tiny, a fictional utility) and prints the report; `expected/report.txt` is the report it should print. Submit runs every test in `tests/`, the skeleton's own included, and compares Run's report with the expected one."
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "text": "Blueprint"
+    },
+    {
+      "type": "para",
+      "text": "Write each method below. The tests check each one by itself and the whole program end to end, so you may change any other part of the code as you see fit."
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`build` in `cipt/model.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def build(request: Request) -> Built"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** Takes a Request. Returns a Built holding a MathOpt model with one binary variable per project (named `x_<id>`), one row named budget that keeps the summed capex of the funded projects within capital_budget, and the summed value of the funded projects as the objective to maximize.",
+        "**Modeling idea.** A yes-or-no choice per project under one budget is a 0-1 knapsack: the best fill is a combination, which no sort by value per dollar finds in general.",
+        "**Taught in** [6.3.1 0-1 and Multi-Dimensional Knapsack](../../../../06-formulation-craft/25-knapsack-and-assignment/units/unit-01/6.3.1-0-1-and-multi-dimensional-knapsack.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`run_highs` in `cipt/solve.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def run_highs(model: mathopt.Model) -> mathopt.SolveResult"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** Solves the model with HiGHS through MathOpt, on one thread, and returns the SolveResult. Nothing HiGHS prints may reach the program's standard output.",
+        "**Modeling idea.** The solver is a call with parameters; its log is not the planner's report.",
+        "**Taught in** [4.2.1 Model, Variables, Constraints, Objective](../../../../04-google-or-tools-in-depth/13-mathopt-core/units/unit-01/4.2.1-model-variables-constraints-objective.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`read_plan` in `cipt/solve.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def read_plan(built: Built, result: mathopt.SolveResult) -> Plan"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** Turns a SolveResult into a Plan: the status in lower case, each project whose variable is 1 mapped to its earliest start year, and the objective value. With no feasible solution, a Plan with the status alone.",
+        "**Modeling idea.** Read the termination first, then the variable values; a binary is 1 when its value is above 0.5.",
+        "**Taught in** [4.2.2 Reading `SolveResult`: Termination, Primal and Dual Solutions, Statistics](../../../../04-google-or-tools-in-depth/13-mathopt-core/units/unit-02/4.2.2-reading-solveresult-termination-primal-and-dual-solutions-statistics.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "text": "`solve` in `cipt/solve.py`"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def solve(request: Request) -> Plan"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Contract.** Builds the model for a Request, solves it and returns the Plan.",
+        "**Modeling idea.** Keep building, solving and reading back in separate functions, so each can be tested and changed alone.",
+        "**Taught in** [14.2.1 The First Request: Fund Projects Within One Budget](../../../../14-growing-real-projects/55-project-cipt-planner/units/unit-01/14.2.1-the-first-request-fund-projects-within-one-budget.unit.html)."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"The model: one yes-or-no decision per project, one budget row.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nfrom .data import Request\n\n\n@dataclass\nclass Built:\n    \"\"\"A built model and the handles the rest of the planner needs to read it.\"\"\"\n\n    request: Request\n    model: mathopt.Model\n    x: dict[str, mathopt.Variable]\n    rows: dict[str, mathopt.LinearConstraint]\n\n\ndef build(request: Request) -> Built:\n    \"\"\"max sum value_i x_i  subject to  sum capex_i x_i <= B, with x_i binary.\"\"\"\n    model = mathopt.Model(name=request.name)\n    x = {p.project_id: model.add_binary_variable(name=f\"x_{p.project_id}\") for p in request.projects}\n    spend = mathopt.fast_sum(p.capex * x[p.project_id] for p in request.projects)\n    rows = {\"budget\": model.add_linear_constraint(spend <= request.capital_budget, name=\"budget\")}\n    model.maximize(mathopt.fast_sum(p.value * x[p.project_id] for p in request.projects))\n    return Built(request, model, x, rows)\n"
+        },
+        {
+          "type": "para",
+          "text": "File: cipt/__init__.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"CIPT planner: which capital projects to fund, grown one planner request at a time.\n\nThe data it ships with (data/demo.json) is GridCap, a fictional utility invented for this course.\n\"\"\"\n"
+        },
+        {
+          "type": "para",
+          "text": "File: cipt/__main__.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"python -m cipt EXPORT.json: plan the export and print the report.\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\n\nfrom .data import read_request\nfrom .report import render\nfrom .solve import solve\n\n\ndef main(argv: list[str] | None = None) -> int:\n    parser = argparse.ArgumentParser(prog=\"cipt\", description=\"Plan a capital portfolio.\")\n    parser.add_argument(\"export\", help=\"the planning export, a JSON file\")\n    args = parser.parse_args(argv)\n    request = read_request(args.export)\n    print(render(request, solve(request)))\n    return 0\n\n\nif __name__ == \"__main__\":\n    raise SystemExit(main())\n"
+        },
+        {
+          "type": "para",
+          "text": "File: cipt/data.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"The planning export, read into typed records.\n\nThe planners' export carries every column the planning system keeps (cost profiles, windows,\nrules, NPV by start year, asset health). This version reads only the columns it uses and ignores\nthe rest, so the same export file serves every version of the planner.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom dataclasses import dataclass\nfrom pathlib import Path\n\n\n@dataclass(frozen=True)\nclass Project:\n    \"\"\"One candidate project, as this version of the planner sees it.\"\"\"\n\n    project_id: str\n    name: str\n    capex: int            # $k, the whole cost over the project's life\n    value: int            # $k, the NPV finance quotes for a start in the earliest year\n    earliest_start: int\n\n\n@dataclass(frozen=True)\nclass Request:\n    \"\"\"What the planners ask for: the projects, and the money to fund them with.\"\"\"\n\n    name: str\n    capital_budget: int   # $k, one envelope for the whole plan\n    projects: tuple[Project, ...]\n\n    def project(self, project_id: str) -> Project:\n        for p in self.projects:\n            if p.project_id == project_id:\n                return p\n        raise KeyError(project_id)\n\n    def starts(self, project: Project) -> range:\n        \"\"\"The years the project may start in. Stub: lesson 14.2.2 writes the window; until then,\n        the earliest year alone, the year this version assumes.\"\"\"\n        return range(project.earliest_start, project.earliest_start + 1)\n\n\ndef load_request(raw: dict) -> Request:\n    \"\"\"Build a Request from the export's dictionary form, refusing duplicate project ids.\"\"\"\n    projects = tuple(\n        Project(\n            project_id=row[\"id\"],\n            name=row[\"name\"],\n            capex=sum(row[\"cost_profile\"]),\n            value=row[\"npv\"][str(row[\"earliest_start\"])],\n            earliest_start=row[\"earliest_start\"],\n        )\n        for row in raw[\"projects\"]\n    )\n    ids = [p.project_id for p in projects]\n    if len(set(ids)) != len(ids):\n        raise ValueError(\"duplicate project ids in the export\")\n    return Request(name=raw[\"name\"], capital_budget=raw[\"capital_budget\"], projects=projects)\n\n\ndef read_request(path: str | Path) -> Request:\n    \"\"\"Read an export file (JSON) into a Request.\"\"\"\n    return load_request(json.loads(Path(path).read_text(encoding=\"utf-8\")))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: cipt/plan.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"A plan: what the solve decided, in the planners' terms.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\n\n@dataclass(frozen=True)\nclass Plan:\n    \"\"\"The answer to a request.\n\n    `status` is \"optimal\", \"infeasible\" or another solver outcome in lower case; `starts` maps each\n    funded project to the year its work starts; `objective` is what the model maximized.\n    \"\"\"\n\n    status: str\n    starts: dict[str, int] = field(default_factory=dict)\n    objective: float = 0.0\n\n    @property\n    def funded(self) -> tuple[str, ...]:\n        return tuple(sorted(self.starts))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: cipt/report.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"The plan as the planners read it.\"\"\"\n\nfrom __future__ import annotations\n\nfrom .data import Request\nfrom .plan import Plan\n\n\ndef render(request: Request, plan: Plan) -> str:\n    lines = [f\"{request.name}: {plan.status}\"]\n    funded = [request.project(pid) for pid in plan.funded]\n    capex = sum(p.capex for p in funded)\n    value = sum(p.value for p in funded)\n    lines.append(f\"funded {len(funded)} of {len(request.projects)} projects, \"\n                 f\"capex ${capex:,}k of ${request.capital_budget:,}k, value ${value:,}k\")\n    for p in funded:\n        lines.append(f\"  {p.project_id}  start {plan.starts[p.project_id]}  \"\n                     f\"capex {p.capex:>6,}  value {p.value:>6,}  {p.name}\")\n    return \"\\n\".join(lines)\n"
+        },
+        {
+          "type": "para",
+          "text": "File: cipt/solve.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Solve a request with HiGHS and read the answer back as a Plan.\"\"\"\n\nfrom __future__ import annotations\n\nimport ctypes\nimport os\nimport sys\n\nfrom ortools.math_opt.python import mathopt\nfrom ortools.math_opt.solvers import highs_pb2\n\nfrom .data import Request\nfrom .model import Built, build\nfrom .plan import Plan\n\n#: One thread, set in HiGHS's own options; the first HiGHS solve of a process fixes the count.\nPARAMS = mathopt.SolveParameters(highs=highs_pb2.HighsOptionsProto(int_options={\"threads\": 1}))\n\n\ndef run_highs(model: mathopt.Model) -> mathopt.SolveResult:\n    \"\"\"Solve with stdout pointed at /dev/null, so HiGHS's stray C output stays out of reports.\"\"\"\n    sys.stdout.flush()\n    saved, sink = os.dup(1), os.open(os.devnull, os.O_WRONLY)\n    os.dup2(sink, 1)\n    try:\n        return mathopt.solve(model, mathopt.SolverType.HIGHS, params=PARAMS)\n    finally:\n        ctypes.CDLL(None).fflush(None)\n        os.dup2(saved, 1)\n        os.close(saved)\n        os.close(sink)\n\n\ndef read_plan(built: Built, result: mathopt.SolveResult) -> Plan:\n    \"\"\"Turn a solver result into a Plan; a funded project starts in its earliest year.\"\"\"\n    status = result.termination.reason.name.lower()\n    if not result.has_primal_feasible_solution():\n        return Plan(status=status)\n    values = result.variable_values()\n    starts = {pid: built.request.project(pid).earliest_start\n              for pid, var in built.x.items() if values[var] > 0.5}\n    return Plan(status=status, starts=starts, objective=result.objective_value())\n\n\ndef solve(request: Request) -> Plan:\n    built = build(request)\n    return read_plan(built, run_highs(built.model))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: main.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run: plan the demo export and print the planners' report.\n\ndata/demo.json is GridCap tiny, a fictional utility's portfolio. Its path is taken from this\nfile's folder, never from the working directory, so the report is the same wherever Run starts.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom pathlib import Path\n\nfrom cipt.__main__ import main\n\nDEMO = Path(__file__).resolve().parent / \"data\" / \"demo.json\"\n\nif __name__ == \"__main__\":\n    raise SystemExit(main([str(DEMO)]))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"The model: one yes-or-no decision per project, one budget row.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nfrom .data import Request\n\n\n@dataclass\nclass Built:\n    \"\"\"A built model and the handles the rest of the planner needs to read it.\"\"\"\n\n    request: Request\n    model: mathopt.Model\n    x: dict[str, mathopt.Variable]\n    rows: dict[str, mathopt.LinearConstraint]\n\n\ndef build(request: Request) -> Built:\n    \"\"\"Stub: lesson 14.2.1 writes the model. Until then, an empty one.\"\"\"\n    return Built(request, mathopt.Model(name=request.name), {}, {})\n"
+    },
+    {
+      "type": "para",
+      "text": "File: cipt/__init__.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"CIPT planner: which capital projects to fund, grown one planner request at a time.\n\nThe data it ships with (data/demo.json) is GridCap, a fictional utility invented for this course.\n\"\"\"\n"
+    },
+    {
+      "type": "para",
+      "text": "File: cipt/__main__.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"python -m cipt EXPORT.json: plan the export and print the report.\"\"\"\n\nfrom __future__ import annotations\n\nimport argparse\n\nfrom .data import read_request\nfrom .report import render\nfrom .solve import solve\n\n\ndef main(argv: list[str] | None = None) -> int:\n    parser = argparse.ArgumentParser(prog=\"cipt\", description=\"Plan a capital portfolio.\")\n    parser.add_argument(\"export\", help=\"the planning export, a JSON file\")\n    args = parser.parse_args(argv)\n    request = read_request(args.export)\n    print(render(request, solve(request)))\n    return 0\n\n\nif __name__ == \"__main__\":\n    raise SystemExit(main())\n"
+    },
+    {
+      "type": "para",
+      "text": "File: cipt/data.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"The planning export, read into typed records.\n\nThe planners' export carries every column the planning system keeps (cost profiles, windows,\nrules, NPV by start year, asset health). This version reads only the columns it uses and ignores\nthe rest, so the same export file serves every version of the planner.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nfrom dataclasses import dataclass\nfrom pathlib import Path\n\n\n@dataclass(frozen=True)\nclass Project:\n    \"\"\"One candidate project, as this version of the planner sees it.\"\"\"\n\n    project_id: str\n    name: str\n    capex: int            # $k, the whole cost over the project's life\n    value: int            # $k, the NPV finance quotes for a start in the earliest year\n    earliest_start: int\n\n\n@dataclass(frozen=True)\nclass Request:\n    \"\"\"What the planners ask for: the projects, and the money to fund them with.\"\"\"\n\n    name: str\n    capital_budget: int   # $k, one envelope for the whole plan\n    projects: tuple[Project, ...]\n\n    def project(self, project_id: str) -> Project:\n        for p in self.projects:\n            if p.project_id == project_id:\n                return p\n        raise KeyError(project_id)\n\n\ndef load_request(raw: dict) -> Request:\n    \"\"\"Build a Request from the export's dictionary form, refusing duplicate project ids.\"\"\"\n    projects = tuple(\n        Project(\n            project_id=row[\"id\"],\n            name=row[\"name\"],\n            capex=sum(row[\"cost_profile\"]),\n            value=row[\"npv\"][str(row[\"earliest_start\"])],\n            earliest_start=row[\"earliest_start\"],\n        )\n        for row in raw[\"projects\"]\n    )\n    ids = [p.project_id for p in projects]\n    if len(set(ids)) != len(ids):\n        raise ValueError(\"duplicate project ids in the export\")\n    return Request(name=raw[\"name\"], capital_budget=raw[\"capital_budget\"], projects=projects)\n\n\ndef read_request(path: str | Path) -> Request:\n    \"\"\"Read an export file (JSON) into a Request.\"\"\"\n    return load_request(json.loads(Path(path).read_text(encoding=\"utf-8\")))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: cipt/plan.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"A plan: what the solve decided, in the planners' terms.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\n\n@dataclass(frozen=True)\nclass Plan:\n    \"\"\"The answer to a request.\n\n    `status` is \"optimal\", \"infeasible\" or another solver outcome in lower case; `starts` maps each\n    funded project to the year its work starts; `objective` is what the model maximized.\n    \"\"\"\n\n    status: str\n    starts: dict[str, int] = field(default_factory=dict)\n    objective: float = 0.0\n\n    @property\n    def funded(self) -> tuple[str, ...]:\n        return tuple(sorted(self.starts))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: cipt/report.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"The plan as the planners read it.\"\"\"\n\nfrom __future__ import annotations\n\nfrom .data import Request\nfrom .plan import Plan\n\n\ndef render(request: Request, plan: Plan) -> str:\n    lines = [f\"{request.name}: {plan.status}\"]\n    funded = [request.project(pid) for pid in plan.funded]\n    capex = sum(p.capex for p in funded)\n    value = sum(p.value for p in funded)\n    lines.append(f\"funded {len(funded)} of {len(request.projects)} projects, \"\n                 f\"capex ${capex:,}k of ${request.capital_budget:,}k, value ${value:,}k\")\n    for p in funded:\n        lines.append(f\"  {p.project_id}  start {plan.starts[p.project_id]}  \"\n                     f\"capex {p.capex:>6,}  value {p.value:>6,}  {p.name}\")\n    return \"\\n\".join(lines)\n"
+    },
+    {
+      "type": "para",
+      "text": "File: cipt/solve.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Solve a request and read the answer back as a Plan.\"\"\"\n\nfrom __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nfrom .data import Request\nfrom .model import Built\nfrom .plan import Plan\n\n\ndef run_highs(model: mathopt.Model) -> mathopt.SolveResult:\n    \"\"\"Stub: lesson 14.2.1 solves the model with HiGHS. Until then, nothing is solved.\"\"\"\n    return None\n\n\ndef read_plan(built: Built, result: mathopt.SolveResult) -> Plan:\n    \"\"\"Stub: lesson 14.2.1 reads the solver's answer back. Until then, nothing is funded.\"\"\"\n    return Plan(status=\"not solved\")\n\n\ndef solve(request: Request) -> Plan:\n    \"\"\"Stub: lesson 14.2.1 solves the model. Until then, nothing is funded.\"\"\"\n    return Plan(status=\"not solved\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: main.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run: plan the demo export and print the planners' report.\n\ndata/demo.json is GridCap tiny, a fictional utility's portfolio. Its path is taken from this\nfile's folder, never from the working directory, so the report is the same wherever Run starts.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom pathlib import Path\n\nfrom cipt.__main__ import main\n\nDEMO = Path(__file__).resolve().parent / \"data\" / \"demo.json\"\n\nif __name__ == \"__main__\":\n    raise SystemExit(main([str(DEMO)]))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 8,
+    "paras": 13,
+    "code": 12,
+    "tables": 0,
+    "lists": 5,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 1,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "62a83a7da520327c66e361f2edd629af04e9e0452a48756a02c5638be3cb6bd9",
+  "starting_code": "\"\"\"The model: one yes-or-no decision per project, one budget row.\"\"\"\n\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nfrom .data import Request\n\n\n@dataclass\nclass Built:\n    \"\"\"A built model and the handles the rest of the planner needs to read it.\"\"\"\n\n    request: Request\n    model: mathopt.Model\n    x: dict[str, mathopt.Variable]\n    rows: dict[str, mathopt.LinearConstraint]\n\n\ndef build(request: Request) -> Built:\n    \"\"\"Stub: lesson 14.2.1 writes the model. Until then, an empty one.\"\"\"\n    return Built(request, mathopt.Model(name=request.name), {}, {})\n",
+  "exercise": {
+    "main_path": "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-01/practice-1/cipt/model.py",
+    "test_path": "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-01/practice-1/tests/test_expected_output.py",
+    "run_command": [
+      "python3",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-01/practice-1/main.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-01/practice-1/target/report.xml",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-01/practice-1/tests"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "tests/test_select.py::test_plan_respects_the_budget",
+        "kind": "main",
+        "says": "the funded projects cost no more than the budget"
+      },
+      {
+        "id": "tests/test_select.py::test_best_combination_beats_best_ratio",
+        "kind": "main",
+        "says": "the plan is the best combination, not the best value per dollar taken in order"
+      },
+      {
+        "id": "tests/test_select.py::test_funds_everything_when_the_budget_allows",
+        "kind": "main",
+        "says": "every project is funded when the budget holds them all"
+      },
+      {
+        "id": "tests/test_select.py::test_report_names_the_funded_projects",
+        "kind": "main",
+        "says": "the report counts the funded projects and totals their capex and value"
+      },
+      {
+        "id": "tests/test_select.py::test_command_line_prints_the_report",
+        "kind": "edge",
+        "says": "the command line plans the export file it is given"
+      },
+      {
+        "id": "tests/test_data.py::test_reads_the_columns_it_uses",
+        "kind": "kept",
+        "says": "reads the columns it uses"
+      },
+      {
+        "id": "tests/test_data.py::test_ignores_columns_it_does_not_use",
+        "kind": "kept",
+        "says": "ignores columns it does not use"
+      },
+      {
+        "id": "tests/test_data.py::test_refuses_duplicate_ids",
+        "kind": "kept",
+        "says": "refuses duplicate ids"
+      },
+      {
+        "id": "tests/test_data.py::test_report_lists_a_given_plan",
+        "kind": "kept",
+        "says": "report lists a given plan"
+      },
+      {
+        "id": "tests/test_expected_output.py::test_the_report_matches_the_expected_output",
+        "kind": "main",
+        "says": "Run's report for the demo export matches the expected report"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-01/practice-1/target/report.xml"
+    },
+    "origin": "55-project-cipt-planner/README_14.2.1.md",
+    "concepts": [
+      "the model is built in one file and solved and read back in another",
+      "one envelope and yes-or-no choices make a 0-1 knapsack with one named row",
+      "the skeleton reads the export and its stubs return wrong answers instead of raising"
+    ],
+    "files": [
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-01/practice-1/cipt/__init__.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-01/practice-1/cipt/__main__.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-01/practice-1/cipt/data.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-01/practice-1/cipt/plan.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-01/practice-1/cipt/report.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-01/practice-1/cipt/solve.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-01/practice-1/main.py"
+    ],
+    "read_only": [
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-01/practice-1/tests/test_data.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-01/practice-1/tests/test_select.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-01/practice-1/data/demo.json",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-01/practice-1/expected/report.txt",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-01/practice-1/tests/conftest.py",
+      "practice/14-growing-real-projects/55-project-cipt-planner/prose/unit-01/practice-1/pytest.ini"
+    ]
+  }
+}

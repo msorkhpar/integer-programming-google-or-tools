@@ -1,0 +1,132 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "15-cpsat-core"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 3,
+  "ingested": "2026-11-13",
+  "title": "A loyalty tier that tells the truth",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A retailer's promotion model (not GridCap) has an integer `spend`, a customer's spend in whole dollars, and a Boolean `gold`. Several parts of the model read `gold`: some reward it, some charge for it, and a report prints it. So `gold` must be true exactly when the spend reaches the threshold:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\text{gold} \\iff \\text{spend} \\ge \\text{threshold} \\qquad \\text{(tier)}"
+    },
+    {
+      "type": "para",
+      "text": "($`\\iff`$ is \"if and only if\": each side implies the other.) Write `add_tier_flag(model, spend, gold, threshold)` in `tier.py` with `only_enforce_if`. Spend is a whole number, so \"below the threshold\" is a row with a whole-number bound too. The tests fix the spend and the flag and ask CP-SAT whether your rows allow the pair. Two lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef add_tier_flag(model: cp_model.CpModel, spend, gold, threshold: int) -> None:\n    \"\"\"gold is true exactly when spend reaches the threshold.\"\"\"\n    model.add(spend >= threshold).only_enforce_if(gold)\n    model.add(spend <= threshold - 1).only_enforce_if(~gold)\n\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    spend = model.new_int_var(0, 1_000, \"spend\")\n    gold = model.new_bool_var(\"gold\")\n    add_tier_flag(model, spend, gold, 500)\n    model.add(spend == 650)\n    solver = cp_model.CpSolver()\n    solver.solve(model)\n    print(\"gold:\", solver.boolean_value(gold))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef add_tier_flag(model: cp_model.CpModel, spend, gold, threshold: int) -> None:\n    \"\"\"gold is true exactly when spend reaches the threshold.\"\"\"\n    # TODO: tie the flag to the spend, in both directions.\n    return None\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    spend = model.new_int_var(0, 1_000, \"spend\")\n    gold = model.new_bool_var(\"gold\")\n    add_tier_flag(model, spend, gold, 500)\n    model.add(spend == 650)\n    solver = cp_model.CpSolver()\n    solver.solve(model)\n    print(\"gold:\", solver.boolean_value(gold))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 2,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "52ca8d6a2e66dccedd4123c4964c8c90992ec7424bda71dbb2fb499b9e156d04",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef add_tier_flag(model: cp_model.CpModel, spend, gold, threshold: int) -> None:\n    \"\"\"gold is true exactly when spend reaches the threshold.\"\"\"\n    # TODO: tie the flag to the spend, in both directions.\n    return None\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    spend = model.new_int_var(0, 1_000, \"spend\")\n    gold = model.new_bool_var(\"gold\")\n    add_tier_flag(model, spend, gold, 500)\n    model.add(spend == 650)\n    solver = cp_model.CpSolver()\n    solver.solve(model)\n    print(\"gold:\", solver.boolean_value(gold))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-3/tier.py",
+    "test_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-3/test_tier.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-3/tier.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-3/target/report.xml",
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-3/test_tier.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_big_spender_is_gold",
+        "kind": "main",
+        "says": "spend above the threshold makes the flag true, and false is refused"
+      },
+      {
+        "id": "test_a_small_spender_is_not_gold",
+        "kind": "main",
+        "says": "spend below the threshold makes the flag false, and true is refused"
+      },
+      {
+        "id": "test_spending_exactly_the_threshold_is_gold",
+        "kind": "edge",
+        "says": "spend equal to the threshold counts as reaching it"
+      },
+      {
+        "id": "test_the_flag_follows_the_threshold_it_is_given",
+        "kind": "edge",
+        "says": "the flag uses the threshold passed in, not a fixed number"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-3/target/report.xml"
+    },
+    "origin": {
+      "path": "15-cpsat-core/README_4.4.2.md",
+      "section": "Write the Side the Objective Would Exploit, or Both"
+    },
+    "concepts": [
+      "a flag that must equal a condition needs one enforced row for each direction"
+    ]
+  }
+}

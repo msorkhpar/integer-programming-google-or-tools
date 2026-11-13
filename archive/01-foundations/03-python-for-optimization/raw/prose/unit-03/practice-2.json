@@ -1,0 +1,173 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "01-foundations",
+    "03-python-for-optimization"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Write the table of bad requests",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The outage team's validator, `check_request`, is finished: it returns the name of every rule an outage request breaks. Their test suite runs one parametrized test per row of a table, `CASES`, and the table is empty. Fill it."
+    },
+    {
+      "type": "para",
+      "text": "`cases.py` holds the validator, its six rule names in `RULES`, and `BASE`, a valid request (every value is text, as it arrives from the form). Write `CASES`: a list of six `(row, rule)` pairs, one for each rule in `RULES`, where `row` is a request that breaks that rule. The rules:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "rule",
+        "a request breaks it when"
+      ],
+      "rows": [
+        [
+          "`hours-not-a-number`",
+          "`hours` does not read as a number"
+        ],
+        [
+          "`negative-hours`",
+          "`hours` is below zero"
+        ],
+        [
+          "`unknown-crew`",
+          "`crew` is not one of `CREWS`"
+        ],
+        [
+          "`week-out-of-range`",
+          "`start_week` or `end_week` is outside 1 to 52"
+        ],
+        [
+          "`end-before-start`",
+          "`end_week` is before `start_week`"
+        ],
+        [
+          "`priority-out-of-range`",
+          "`priority` is not 1 to 5"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "A case is only useful if a broken check makes its test fail, so each row must break its own rule and no other. Keep weeks whole numbers, since the validator reads them with `int`. Don't change the validator or `BASE`."
+    },
+    {
+      "type": "para",
+      "text": "About eight lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\n# The outage team's validator. It is finished and tested; do not change it.\nCREWS = {\"line-1\", \"line-2\", \"veg-1\"}\nRULES = (\"hours-not-a-number\", \"negative-hours\", \"unknown-crew\", \"week-out-of-range\", \"end-before-start\",\n         \"priority-out-of-range\")\n\n\ndef check_request(row: dict[str, str]) -> list[str]:\n    \"\"\"Every rule an outage request breaks, by name (an empty list for a valid request).\"\"\"\n    problems = []\n    try:\n        hours = float(row[\"hours\"])\n    except ValueError:\n        problems.append(\"hours-not-a-number\")\n    else:\n        if hours < 0:\n            problems.append(\"negative-hours\")\n    if row[\"crew\"] not in CREWS:\n        problems.append(\"unknown-crew\")\n    start, end = int(row[\"start_week\"]), int(row[\"end_week\"])\n    if not (1 <= start <= 52 and 1 <= end <= 52):\n        problems.append(\"week-out-of-range\")\n    if end < start:\n        problems.append(\"end-before-start\")\n    if row[\"priority\"] not in {\"1\", \"2\", \"3\", \"4\", \"5\"}:\n        problems.append(\"priority-out-of-range\")\n    return problems\n\n\n#: A valid request. Build each case from a copy of it.\nBASE = {\"feeder\": \"F-12\", \"crew\": \"line-1\", \"start_week\": \"10\", \"end_week\": \"12\", \"hours\": \"36\", \"priority\": \"2\"}\n\n\ndef changed(field: str, value: str) -> dict[str, str]:\n    row = dict(BASE)\n    row[field] = value\n    return row\n\n\n# Your table: six (row, rule) pairs, one per rule in RULES.\nCASES: list[tuple[dict[str, str], str]] = [\n    (changed(\"hours\", \"8,5\"), \"hours-not-a-number\"),\n    (changed(\"hours\", \"-4\"), \"negative-hours\"),\n    (changed(\"crew\", \"line-9\"), \"unknown-crew\"),\n    (changed(\"end_week\", \"53\"), \"week-out-of-range\"),\n    (changed(\"end_week\", \"9\"), \"end-before-start\"),\n    (changed(\"priority\", \"7\"), \"priority-out-of-range\"),\n]\n\n\nif __name__ == \"__main__\":\n    for row, rule in CASES:\n        print(rule, \"->\", check_request(row))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\n# The outage team's validator. It is finished and tested; do not change it.\nCREWS = {\"line-1\", \"line-2\", \"veg-1\"}\nRULES = (\"hours-not-a-number\", \"negative-hours\", \"unknown-crew\", \"week-out-of-range\", \"end-before-start\",\n         \"priority-out-of-range\")\n\n\ndef check_request(row: dict[str, str]) -> list[str]:\n    \"\"\"Every rule an outage request breaks, by name (an empty list for a valid request).\"\"\"\n    problems = []\n    try:\n        hours = float(row[\"hours\"])\n    except ValueError:\n        problems.append(\"hours-not-a-number\")\n    else:\n        if hours < 0:\n            problems.append(\"negative-hours\")\n    if row[\"crew\"] not in CREWS:\n        problems.append(\"unknown-crew\")\n    start, end = int(row[\"start_week\"]), int(row[\"end_week\"])\n    if not (1 <= start <= 52 and 1 <= end <= 52):\n        problems.append(\"week-out-of-range\")\n    if end < start:\n        problems.append(\"end-before-start\")\n    if row[\"priority\"] not in {\"1\", \"2\", \"3\", \"4\", \"5\"}:\n        problems.append(\"priority-out-of-range\")\n    return problems\n\n\n#: A valid request. Build each case from a copy of it.\nBASE = {\"feeder\": \"F-12\", \"crew\": \"line-1\", \"start_week\": \"10\", \"end_week\": \"12\", \"hours\": \"36\", \"priority\": \"2\"}\n\n\n# Your table: six (row, rule) pairs, one per rule in RULES.\nCASES: list[tuple[dict[str, str], str]] = [\n    # TODO: (a request that breaks this rule and no other, \"the-rule's-name\"), one per rule\n]\n\nif __name__ == \"__main__\":\n    for row, rule in CASES:\n        print(rule, \"->\", check_request(row))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 1,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "f2854bee431751d51beb83fe5ef1182ca392645df6a29b37b062362bbf015af7",
+  "starting_code": "from __future__ import annotations\n\n# The outage team's validator. It is finished and tested; do not change it.\nCREWS = {\"line-1\", \"line-2\", \"veg-1\"}\nRULES = (\"hours-not-a-number\", \"negative-hours\", \"unknown-crew\", \"week-out-of-range\", \"end-before-start\",\n         \"priority-out-of-range\")\n\n\ndef check_request(row: dict[str, str]) -> list[str]:\n    \"\"\"Every rule an outage request breaks, by name (an empty list for a valid request).\"\"\"\n    problems = []\n    try:\n        hours = float(row[\"hours\"])\n    except ValueError:\n        problems.append(\"hours-not-a-number\")\n    else:\n        if hours < 0:\n            problems.append(\"negative-hours\")\n    if row[\"crew\"] not in CREWS:\n        problems.append(\"unknown-crew\")\n    start, end = int(row[\"start_week\"]), int(row[\"end_week\"])\n    if not (1 <= start <= 52 and 1 <= end <= 52):\n        problems.append(\"week-out-of-range\")\n    if end < start:\n        problems.append(\"end-before-start\")\n    if row[\"priority\"] not in {\"1\", \"2\", \"3\", \"4\", \"5\"}:\n        problems.append(\"priority-out-of-range\")\n    return problems\n\n\n#: A valid request. Build each case from a copy of it.\nBASE = {\"feeder\": \"F-12\", \"crew\": \"line-1\", \"start_week\": \"10\", \"end_week\": \"12\", \"hours\": \"36\", \"priority\": \"2\"}\n\n\n# Your table: six (row, rule) pairs, one per rule in RULES.\nCASES: list[tuple[dict[str, str], str]] = [\n    # TODO: (a request that breaks this rule and no other, \"the-rule's-name\"), one per rule\n]\n\nif __name__ == \"__main__\":\n    for row, rule in CASES:\n        print(rule, \"->\", check_request(row))\n",
+  "exercise": {
+    "main_path": "practice/01-foundations/03-python-for-optimization/prose/unit-03/practice-2/cases.py",
+    "test_path": "practice/01-foundations/03-python-for-optimization/prose/unit-03/practice-2/test_cases.py",
+    "run_command": [
+      "python3",
+      "practice/01-foundations/03-python-for-optimization/prose/unit-03/practice-2/cases.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/01-foundations/03-python-for-optimization/prose/unit-03/practice-2/target/report.xml",
+      "practice/01-foundations/03-python-for-optimization/prose/unit-03/practice-2/test_cases.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_table_has_six_requests_each_naming_a_rule",
+        "kind": "main",
+        "says": "the table holds six requests shaped like the base request, each naming one of the rules"
+      },
+      {
+        "id": "test_each_case_is_rejected_for_the_rule_it_names",
+        "kind": "edge",
+        "says": "each case is rejected for the rule it names"
+      },
+      {
+        "id": "test_each_case_breaks_only_its_rule",
+        "kind": "edge",
+        "says": "each case breaks its own rule and no other"
+      },
+      {
+        "id": "test_the_cases_cover_all_six_rules",
+        "kind": "edge",
+        "says": "the six cases name six different rules"
+      },
+      {
+        "id": "test_the_base_request_is_untouched",
+        "kind": "edge",
+        "says": "building the cases leaves the base request unchanged"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/01-foundations/03-python-for-optimization/prose/unit-03/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "03-python-for-optimization/README_1.3.3.md",
+      "section": "Parametrize Turns a Table of Cases Into One Test per Row, and Each Case Breaks One Rule"
+    },
+    "concepts": [
+      "each case of a parametrized table breaks exactly one rule, so a broken check makes its test fail"
+    ]
+  }
+}

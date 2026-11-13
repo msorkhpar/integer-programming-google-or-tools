@@ -1,0 +1,455 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "14-growing-real-projects",
+    "56-project-transformer-renewal"
+  ],
+  "variant": "prose",
+  "unit": 6,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Too slow: a stronger formulation and a rolling horizon",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "14.3.6 Too Slow: a Stronger Formulation and a Rolling Horizon"
+    },
+    {
+      "type": "para",
+      "text": "The whole-fleet plan reached finance, and finance found the tolerance before anyone else did:"
+    },
+    {
+      "type": "quote",
+      "blocks": [
+        {
+          "type": "para",
+          "text": "**Request 6.** Your plan is \"within 2%\" of the best. On 5,000 units that is about $100,000k of risk, more than the differences between the scenarios we want to compare next. We need plans within 0.1% of the bound, and the analysts need each one within fifteen minutes."
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The code before this lesson is snapshot `steps/05`; after it, `steps/06`. The 5,000-unit fleet is invented (GridCap is fictional)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "At 0.1% the Model Stops Being Fast, and the Gap Says Why"
+    },
+    {
+      "type": "para",
+      "text": "At 2%, the last lesson's 5,000-unit run finished in about 18 seconds. At 0.1% it is another model to solve. The run below (one run, on the machine described in the last lesson; your times will differ) gave HiGHS fifteen minutes:"
+    },
+    {
+      "type": "html",
+      "text": "<!-- unverified -->"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "aggregated gap 0.1%, limit 900 s:  900.6 s, FEASIBLE, plan $5,220,725k, bound $5,226,747k, gap 0.115%, nodes 1513"
+    },
+    {
+      "type": "para",
+      "text": "After fifteen minutes the search stopped on its time limit (status `FEASIBLE`: a plan, not a proof of the target) at a gap of 0.115%, a little short of 0.1%. Nothing is wrong with the model's correctness; the question is why the solver needs so long to *prove* a plan good, and the first place to look is the LP relaxation, the bound the search starts from (lesson 6.7.1). `stronger.py` solves it for both fleet sizes:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "500 units:\n  aggregated:   2650 variables,    843 rows, LP bound $496,456k"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "5000 units:\n  aggregated:  27650 variables,   7978 rows, LP bound $5,518,227k"
+    },
+    {
+      "type": "para",
+      "text": "The best plan the fifteen-minute search found removes $5,220,725k, and the search itself proved no plan removes more than $5,226,747k. The LP bound claims up to $5,518,227k is possible, 5.7% above that plan. Every point of that 5.7% is space the search must close by branching and cuts before it can stop at 0.1%."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Aggregated Outage Row Lets the LP Buy a Fraction of an Outage"
+    },
+    {
+      "type": "para",
+      "text": "The outage lesson chose the aggregated link, one row per substation and year, and left a note: the per-unit form allows the same 0-1 plans and may have a tighter LP relaxation. Here is why it does. Take a substation with $`n_s = 10`$ candidates and replace one of them. The aggregated row reads"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "x_{1,t} + \\dots + x_{10,t} \\;\\le\\; 10\\, o_{s,t}"
+    },
+    {
+      "type": "para",
+      "text": "and with $`x_{1,t} = 1`$ and the rest 0 the LP is satisfied by $`o_{s,t} = 0.1`$, and by nothing less: one tenth of an outage, at one tenth of its $300k. The LP relaxation can replace one unit at a substation and pay $30k for the outage. The per-unit form writes one row for each unit,"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "x_{i,t} \\;\\le\\; o_{s,t} \\qquad \\forall i \\in I_s"
+    },
+    {
+      "type": "para",
+      "text": "and with $`x_{1,t} = 1`$ the LP must set $`o_{s,t} = 1`$ and pay the whole $300k. Each aggregated row is the sum of the ten per-unit rows, so every LP point the per-unit rows allow, the aggregated row allows too: the per-unit relaxation is contained in the aggregated one, and its bound can only be lower or equal (lesson 6.7.1). In integers they agree, because $`o_{s,t}`$ is 0 or 1 either way. The same comparison is in the big-M lessons: $`n_s`$ is the aggregated row's $`M`$, and the per-unit row is the same link with $`M = 1`$, the smallest $`M`$ a 0-1 variable allows (lesson 6.2.2)."
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "500 units:\n  aggregated:   2650 variables,    843 rows, LP bound $496,456k\n  per-unit  :   2650 variables,   2413 rows, LP bound $470,794k\n  the per-unit LP bound is 5.17% lower\n5000 units:\n  aggregated:  27650 variables,   7978 rows, LP bound $5,518,227k\n  per-unit  :  27650 variables,  24248 rows, LP bound $5,226,769k\n  the per-unit LP bound is 5.28% lower"
+    },
+    {
+      "type": "para",
+      "text": "Three times as many rows, the same variables, and an LP bound 5.3% lower at 5,000 units. The per-unit LP bound, $5,226,769k, is $22k above the bound of $5,226,747k that the aggregated search proved after fifteen minutes: the per-unit LP starts where the aggregated search ended."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Design Decision: Strengthen the Formulation First, Then Decompose If Still Needed"
+    },
+    {
+      "type": "para",
+      "text": "Three levers were on the table, cheapest first:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Lever",
+        "What it changes",
+        "Risk"
+      ],
+      "rows": [
+        [
+          "per-unit outage rows",
+          "the formulation: a tighter LP bound, same 0-1 plans",
+          "three times the rows"
+        ],
+        [
+          "a rolling horizon (lesson 11.3.5)",
+          "the method: solve a few years at a time, keep the first",
+          "a plan with no proof; end effects"
+        ],
+        [
+          "more solver time or settings",
+          "nothing in the model",
+          "hides the cause"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "A stronger formulation is the cheapest and safest lever: it changes no plan, only how fast the solver can prove one. The project makes it the default (`link=\"per-unit\"`) and keeps the aggregated form as an option, because the reference builder and the tests of the scale lesson are written in it. The rolling horizon is built too, as the fallback if the strong form is still too slow, and measured against the same bound."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The model of the scale lesson with the outage link replaced; everything else is unchanged."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`I`$ the candidates; $`Y`$ the plan years; $`W`$ the risk window; $`S`$ the substations with candidates, and $`I_s`$ their candidates; $`G`$ the regions, with $`S_g`$ and $`I_g`$; $`K`$ the kinds, with $`I_k`$ and $`E_k`$."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`\\text{rr}_{i,t}`$, $`c_i`$, $`B`$, $`F`$, $`O`$, $`w_k`$, $`C`$, $`\\sigma_k`$, as in the crews lesson, scaled with the fleet."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_{i,t} \\in \\{0,1\\}`$ for $`i \\in I`$, $`t \\in Y`$; $`o_{s,t} \\in \\{0,1\\}`$ for $`s \\in S`$, $`t \\in Y`$."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{i \\in I} \\sum_{t \\in Y} \\text{rr}_{i,t} \\, x_{i,t}"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{t \\in Y} x_{i,t} &\\le 1 && \\forall i \\in I && \\text{(once}_i) \\\\\nx_{i,t} &\\le o_{s,t} && \\forall s \\in S,\\ i \\in I_s,\\ t \\in Y && \\text{(outage}_{i,t}) \\quad \\leftarrow \\text{this lesson} \\\\\n\\sum_{s \\in S_g} o_{s,t} &\\le O && \\forall g \\in G,\\ t \\in Y && \\text{(coord}_{g,t}) \\\\\n\\sum_{i \\in I_g} w_{k(i)} \\, x_{i,t} &\\le C && \\forall g \\in G,\\ t \\in Y && \\text{(crews}_{g,t}) \\\\\n\\sum_{i \\in I_k} \\sum_{t \\in E_k} x_{i,t} &\\le \\sigma_k && \\forall k \\in K,\\ E_k \\ne \\varnothing && \\text{(spares}_k) \\\\\n\\sum_{i \\in I} c_i \\, x_{i,t} + F \\sum_{s \\in S} o_{s,t} &\\le B && \\forall t \\in Y && \\text{(budget}_t)\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The row $`\\text{outage}_{i,t}`$ replaces $`\\text{outage}_{s,t}`$; in the code it is named `outage_T00042_2029`, by unit, where the aggregated row was `outage_S0007_2029`, by substation."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Change, File by File"
+    },
+    {
+      "type": "para",
+      "text": "**`model.py`: the link chooses its form.** `relax` turns every variable continuous, for the LP bound:"
+    },
+    {
+      "type": "code",
+      "lang": "diff",
+      "text": "--- 05/renewal/model.py\n+++ 06/renewal/model.py\n@@\n+def relax(built: Built) -> Built:\n+    \"\"\"The LP relaxation, in place: every variable continuous within its bounds.\"\"\"\n+    for v in built.model.variables():\n+        v.integer = False\n+    return built"
+    },
+    {
+      "type": "para",
+      "text": "and the outage block writes either form, chosen by the request's `link`. That block is yours to write in the practice. It stays inside the loops over `by_substation` and the plan years, and the outage variables, the region limit and the budget row are untouched:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**`link == \"aggregated\"`:** the row of the scale lesson, $`\\text{outage}_{s,t}`$ with $`n_s`$, named `outage_<s>_<year>`, unchanged, so the old model can still be built and measured.",
+        "**Otherwise, the default `\"per-unit\"`:** the row $`\\text{outage}_{i,t}`$ of the model above, one per candidate of the substation and plan year, $`x_{i,t} \\le o_{s,t}`$, named `outage_<tid>_<year>`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Each aggregated row is the sum of the per-unit rows of its substation and year (lesson 6.7.1), so the two allow the same 0-1 plans, and the per-unit rows allow less in the LP relaxation."
+    },
+    {
+      "type": "para",
+      "text": "**`request.py`: the default becomes the strong form.** The stub field of the last snapshot becomes real, with the new default; two stubs belong to the next lesson."
+    },
+    {
+      "type": "code",
+      "lang": "diff",
+      "text": "--- 05/renewal/request.py\n+++ 06/renewal/request.py\n@@\n-    link: str = \"aggregated\"    # Stub: the next lesson adds the per-unit form; this model ignores it.\n+    link: str = \"per-unit\"      # outage rows: \"per-unit\" (x[i,t] <= out[s,t]) or \"aggregated\" (one per s, t)"
+    },
+    {
+      "type": "para",
+      "text": "**`plan.py`: the LP bound as a function.** Tests and programs ask for it by name:"
+    },
+    {
+      "type": "code",
+      "lang": "diff",
+      "text": "--- 05/renewal/plan.py\n+++ 06/renewal/plan.py\n@@\n def lp_bound(fleet: list[Transformer], request: Request) -> float:\n-    \"\"\"Stub: the next lesson solves the LP relaxation here. Until then, 0.\"\"\"\n-    return 0.0\n+    \"\"\"The LP relaxation's optimum: an upper bound on every plan's risk removed (lesson 6.7.1).\"\"\"\n+    built = relax(build(fleet, request))\n+    return solve_quietly(built.model).objective_value()"
+    },
+    {
+      "type": "para",
+      "text": "**`rolling.py`: a rolling horizon.** It follows lesson 11.3.5, and its body is yours to write in the practice. `rolling(fleet, request, window=3, keep=1)` builds the whole model once, then walks the plan years from the first, `keep` years at a time:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Each window** covers the years $`[a, a + \\text{window})`$, cut at the last plan year. Before its solve, set the bounds of every replacement and outage variable (both are keyed by a pair whose second item is the year): a variable an earlier window decided is fixed to its kept value, one after the window's last year is fixed to 0, and the rest are free between 0 and 1.",
+        "**Solve** with the request's gap, as `plan` does. If the solve finds no plan, return that result's `Plan` at once.",
+        "**Keep** the values of the first `keep` years of the window, rounded to 0 or 1, as decided. The window that reaches the last plan year keeps all its years and ends the walk, and its `Plan` is what `rolling` returns."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Budget, crew and spares rows stay in for every year, so what a window decides is counted against all of them."
+    },
+    {
+      "type": "para",
+      "text": "A rolling plan's value is exact, but the bound it returns is only the last window's, which says nothing about the whole plan. It is judged against the best bound known from a full solve."
+    },
+    {
+      "type": "para",
+      "text": "**`check.py`: every rule, checked apart from the model.** A heuristic plan is not proved by a solver, so it gets checked by code that does not share the model's rows: `violations` recomputes budgets, outages, crews and spares from the plan in plain Python and returns one line per broken rule (the section 12 lesson *Property-Based Tests With Hypothesis* checks plans the same way)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Measured: the Strong Form Meets the Target; the Rolling Horizon Is Fast and Misses It"
+    },
+    {
+      "type": "para",
+      "text": "`stronger_timing.py --full` ran each method once on the 5,000-unit fleet, with a 0.1% gap, a fifteen-minute limit for the full solves, and a 0.1% gap in each rolling window. The times are from one run on the machine of the last lesson and change from run to run; the plan values and bounds are the solver's:"
+    },
+    {
+      "type": "html",
+      "text": "<!-- unverified -->"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "aggregated gap 0.1%, limit 900 s:  900.6 s, FEASIBLE, plan $5,220,725k, bound $5,226,747k, gap 0.115%, nodes 1513\nper-unit   gap 0.1%, limit 900 s:  537.8 s, OPTIMAL, plan $5,222,473k, bound $5,226,747k, gap 0.082%, nodes 1029\nrolling window 3 keep 1:   25.4 s, plan $5,192,922k, 0.647% below the best bound, rules broken 0\nrolling window 5 keep 2:   33.2 s, plan $5,208,140k, 0.356% below the best bound, rules broken 0\nbest bound known $5,226,747k"
+    },
+    {
+      "type": "para",
+      "text": "The per-unit form reaches the 0.1% target, status `OPTIMAL` at a gap of 0.082%, in about nine minutes, inside finance's fifteen; the aggregated form had not reached it when its fifteen minutes ran out. Both runs end at the same best bound, $5,226,747k: the per-unit LP relaxation starts there, the aggregated search has to work its way down to it. The plans differ by $1,748k, less than the gap of either, so the two forms' plans are equally good as far as these runs can tell; what differs is that one of them is proved within the target."
+    },
+    {
+      "type": "para",
+      "text": "The rolling horizons are another kind of answer. They finish in 25 and 33 seconds, about 16 to 21 times faster, every plan keeps every rule (`violations` found none), and they land 0.65% and 0.36% below the best bound. Longer windows do better, as lesson 11.3.5 found: each window ends its view of the future at its last year, and a longer window sees more. Neither meets finance's 0.1%, so for this request the rolling horizon is not the answer. It stays in the project as the tool for what it is good at: a first plan in half a minute while the full solve runs, or a horizon too long to solve at once."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Tests Pin the Bound, the Same Optimum, and the Rolling Plan's Rules"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**per-unit outage rows tighten the LP bound and keep the optimum:** on four units at two substations, the per-unit LP bound is lower than the aggregated one, and both forms' exact plans have the same value.",
+        "**a rolling plan keeps every rule and most of the value:** on a 30-unit fleet with every rule, a rolling plan with two-year windows breaks no rule according to `violations`, and keeps at least 90% of the full model's value.",
+        "**one window over the whole plan is the full model:** with a window as long as the plan, the rolling horizon solves once and its value equals the full model's.",
+        "**the checker names each broken rule and passes a good plan:** a hand-made plan over budget in 2027, over the north's crews in 2028 and using a large spare that does not exist gets exactly those three lines; a good plan gets none."
+      ]
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "step 06 tests on the code of step 05 (before): 25 passed, 4 failed\n  FAILED test_check.py::test_the_checker_names_each_broken_rule_and_passes_a_good_plan (AssertionError)\n         assert [] == ['budget 2027...spares large']\n  FAILED test_rolling.py::test_a_rolling_plan_keeps_every_rule_and_most_of_the_value (AssertionError)\n         assert ({})\n  FAILED test_rolling.py::test_one_window_over_the_whole_plan_is_the_full_model (AssertionError)\n         assert 21186.291737181327 < 1e-06\n  FAILED test_strong.py::test_per_unit_outage_rows_tighten_the_lp_bound_and_keep_the_optimum (AssertionError)\n         assert 0.0 < (0.0 - 1)\nstep 06 tests on the code of step 06 (after): 29 passed, 0 failed\ntests step 06 adds or changes: 4"
+    },
+    {
+      "type": "para",
+      "text": "The scale lesson's reference-model test still passes: its request pins `link=\"aggregated\"`, the form the reference builder writes, so the default's change does not touch it."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "What the Step Did to the Code"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "05       13    337         27     25         177  reference.build_reference (23)\n06       13    415         29     29         216  reference.build_reference (23)"
+    },
+    {
+      "type": "para",
+      "text": "78 code lines, most of them `check.py` and `rolling.py`, and one `if` in `build`. The formulation change itself is four lines; its effect is the largest of any step in the module. That ratio is typical of formulation work, and it is why the project measured the LP bound before writing a heuristic."
+    },
+    {
+      "type": "para",
+      "text": "**Practice.** This lesson's project practice starts from the code before this step, the whole package (snapshot `steps/05`). It is graded by the tests in the practice's `tests/` folder and by a check that `main.py` prints the practice's `expected/report.txt`; the practice's statement gives the request `main.py` makes and the format of every line it prints. This step's `main.py` plans a tiny fleet of 25 units, drawn from seed 56, and also prints the LP bound under both outage forms, the checker's verdict on the plan, and a rolling-horizon plan."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**A solve that is slow to prove is first a question about the LP bound.** The aggregated outage row let the LP buy a tenth of an outage, and its bound sat more than 5% above every plan.",
+        "**The per-unit link allows the same 0-1 plans and a smaller LP region**, so its bound is lower; at 5,000 units it starts where the aggregated search ended after fifteen minutes.",
+        "**A rolling horizon is a fallback with no proof.** Judge it against the best bound known, and check its plan with code that does not share the model's rows."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Piece",
+        "Where"
+      ],
+      "rows": [
+        [
+          "aggregated link",
+          "$`\\sum_{i \\in I_s} x_{i,t} \\le n_s o_{s,t}`$, `link=\"aggregated\"`"
+        ],
+        [
+          "per-unit link (default)",
+          "$`x_{i,t} \\le o_{s,t}`$, `link=\"per-unit\"`"
+        ],
+        [
+          "LP bound",
+          "`plan.lp_bound`, via `model.relax` (`Variable.integer = False`)"
+        ],
+        [
+          "rolling horizon",
+          "`rolling.rolling(fleet, request, window, keep)`"
+        ],
+        [
+          "rules checked apart from the model",
+          "`check.violations`"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [MathOpt `variables.py` (OR-Tools source, v9.15)](https://github.com/google/or-tools/blob/v9.15/ortools/math_opt/python/variables.py) (the `integer` property with its setter, which `relax` uses, and variable bounds set between solves, as the rolling horizon does); [MathOpt `result.py` (OR-Tools source, v9.15)](https://github.com/google/or-tools/blob/v9.15/ortools/math_opt/python/result.py) (`dual_bound`: for a MIP solver, a bound from some relaxation of the search, which a time-limited run still reports). Both were read from the copy installed in the course's runner image. Lessons 6.7.1 (comparing formulations by their LP bound), 6.2.2 (what a loose M does to the LP bound) and 11.3.5 (rolling horizons) are the course's background for this step."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Between the two forms sits a third: the aggregated row plus the per-unit rows only for the three costliest units of each substation. Predict its LP bound against the two above.",
+        "Write the property test that would have caught a rolling horizon that forgot to fix earlier windows' outage variables.",
+        "Finance relaxes the target to 0.5%. Which of the two forms would you expect to finish first, and what would you measure to be sure?"
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Strengthen Before You Decompose"
+    },
+    {
+      "type": "para",
+      "text": "A decomposition or heuristic changes what the answer means: a plan without a proof, judged against a bound from elsewhere. A stronger formulation changes nothing about the answer and only makes the proof cheaper. So the order is fixed: measure the LP bound against the best plan, strengthen the rows that leave the gap, and decompose only if the strong model is still too slow. Here the first step was enough, and the rolling horizon stays in the code, tested, for the next request that needs it."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**stronger.py.** Builds both outage forms at 500 and 5,000 units and solves their LP relaxations, and runs the step's tests before and after the change (*The Aggregated Outage Row Lets the LP Buy a Fraction of an Outage*, *The Tests Pin the Bound, the Same Optimum, and the Rolling Plan's Rules*). *Try:* Raise the outage cost to $600k. Predict whether the gap between the two LP bounds grows."
+    },
+    {
+      "type": "para",
+      "text": "**stronger_timing.py.** Solves the 5,000-unit fleet to 0.1% with each form and with two rolling horizons, and checks the rolling plans' rules (*At 0.1% the Model Stops Being Fast*, *Measured*). It runs only with `--full`, because it takes about half an hour. *Try:* A window of 10 years and keep 10 is the full model. Predict its time against the per-unit line."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [stronger.py](src/stronger.py)",
+        "Program: [stronger_timing.py](src/stronger_timing.py)",
+        "Program: [growth.py](src/growth.py)",
+        "Library: [steps.py](src/steps.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 14,
+    "paras": 38,
+    "code": 14,
+    "tables": 2,
+    "lists": 6,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 1,
+    "html": 3,
+    "disclosures": 0
+  },
+  "content_sha256": "ab966c3177c589d3418b919871b47865aa82a6119abbdb52cbe4b1cfa148265e"
+}

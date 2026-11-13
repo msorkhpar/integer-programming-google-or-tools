@@ -1,0 +1,427 @@
+# 12.2.1 Schemas for Model Inputs
+
+Every planning cycle, GridCap's planning database exports one JSON document for the optimization
+service: the years, the budgets, the crews, the regional floors and the 40 candidate projects. The
+service builds the model from it, solves, and stores the result with the scenario
+(lesson 12.1.4). Last cycle the export team renamed one column. Nothing crashed, and one
+child project quietly lost its one-year lag behind its parent. This lesson puts a schema at the door
+of the service, so that a document like that is refused, with the reason, before any model is
+built. GridCap is a fictional utility; its numbers describe no real company.
+
+Lesson 1.3.2 introduced pydantic on one CSV row at
+a time: `BaseModel`, field types and bounds, field and model validators, and `ValidationError`.
+This lesson uses the same tools on a different unit: the whole snapshot, as it crosses the boundary
+between two programs. A **snapshot** is one complete set of model inputs, frozen at one moment;
+lesson 7.1.3 gave each scenario a snapshot id, and lesson 12.2.3 shows how
+that id is computed. A **schema** is the written rule for what a valid snapshot looks like: which
+keys, which types, which bounds, and which references must resolve.
+
+The course's runner has pydantic 2.14.1 and no other schema library (pandera, for one, is not
+installed), and FastAPI, which lesson 12.4.1 uses for the service, builds on
+pydantic. So the schema is a set of pydantic models.
+
+## The Schema Is the Model's Sets and Parameters, Written as Types
+
+A schema for model inputs is not designed from the file. It is read off the model: every set and
+every parameter the model uses becomes a field, and every assumption the model makes about them
+becomes a type, a bound or a rule. Here is the planning model the service solves (section 6's
+multi-period model; lesson 12.2.2 restates it, and its program is `plan_model.py`).
+
+**Sets.** $`Y`$ the plan's years, in order; $`P`$ the candidate projects; $`T_i`$ the start years
+of project $`i`$: the years $`t`$ with $`e_i \le t \le l_i`$ whose work ends inside the plan,
+$`t + d_i - 1 \le \max Y`$; $`M \subseteq P`$ the must-do projects; $`\mathcal{G}`$ the
+alternative groups, each a set of projects; $`C \subseteq P`$ the child projects, each with parent
+$`p(c)`$ and lag $`L_c`$ years; $`Q`$ the programs (transmission, distribution, vegetation), with
+$`q(i)`$ the program of project $`i`$; $`R`$ the regions, with $`r(i)`$ the region of project $`i`$.
+
+**Parameters.** $`e_i, l_i`$, project $`i`$'s earliest and latest start year;
+$`c_{i,k}`$, what project $`i`$ spends in its $`k`$-th year of work, $`k = 0, \dots, d_i - 1`$,
+where $`d_i`$ is its number of years of work ($k);
+$`\text{capex}_i = \sum_k c_{i,k}`$ ($k); $`\text{npv}_{i,t}`$, its NPV if it starts in year $`t`$
+($k); $`m_i`$, the crew-months it needs in each year of work; $`B_y`$, the budget of year $`y`$
+($k); $`K_{q,y}`$, the crew-months program $`q`$ has in year $`y`$; $`\text{floor}_r`$, the least
+region $`r`$ must receive over the plan ($k).
+
+**Variables.** $`x_{i,t} \in \{0, 1\}`$ for every $`i \in P`$ and $`t \in T_i`$: project $`i`$
+starts in year $`t`$.
+
+**Objective.**
+
+```math
+\max \; \sum_{i \in P} \sum_{t \in T_i} \text{npv}_{i,t}\, x_{i,t}
+```
+
+**Constraints.**
+
+```math
+\begin{aligned}
+\sum_{t \in T_i} x_{i,t} &\le 1 && \forall i \in P \setminus M && \text{(once}_i) \\
+\sum_{t \in T_i} x_{i,t} &= 1 && \forall i \in M && \text{(must}_i) \\
+\sum_{i \in g} \sum_{t \in T_i} x_{i,t} &\le 1 && \forall g \in \mathcal{G} && \text{(alt}_g) \\
+\sum_{u \in T_c,\, u \le t} x_{c,u} &\le \sum_{s \in T_{p(c)},\, s \le t - L_c} x_{p(c),s} && \forall c \in C,\ t \in T_c && \text{(after}_{c,t}) \\
+\sum_{i \in P} \sum_{t \in T_i,\, 0 \le y - t < d_i} c_{i,\,y-t}\, x_{i,t} &\le B_y && \forall y \in Y && \text{(budget}_y) \\
+\sum_{i:\, q(i) = q} \ \sum_{t \in T_i,\, 0 \le y - t < d_i} m_i\, x_{i,t} &\le K_{q,y} && \forall q \in Q,\ y \in Y && \text{(crews}_{q,y}) \\
+\sum_{i:\, r(i) = r} \ \sum_{t \in T_i} \text{capex}_i\, x_{i,t} &\ge \text{floor}_r && \forall r \in R && \text{(floor}_r)
+\end{aligned}
+```
+
+Each line of the model asks something of the data, and the schema writes it down:
+
+| The model needs | Schema field and rule |
+| --- | --- |
+| $`Y`$, at least one year | `Snapshot.years: tuple[int, ...] = Field(min_length=1)` |
+| $`c_{i,k} \ge 0`$ in whole $k, at least one year of work | `ProjectIn.cost_profile: tuple[NonNegativeInt, ...] = Field(min_length=1)` |
+| $`e_i \le l_i`$, so the window holds a year | `ProjectIn.window_and_npv_agree` |
+| $`\text{npv}_{i,t}`$ for every $`t`$ from $`e_i`$ to $`l_i`$ | `ProjectIn.npv`, one value per start year (`window_and_npv_agree`) |
+| $`i \in M`$ only on a real yes | `ProjectIn.must_do: bool` |
+| $`L_c \ge 0`$ whole years | `ProjectIn.parent_lag: NonNegativeInt = 0` |
+| $`p(c) \in P`$, one variable family per project | `Snapshot.references_resolve`: ids unique, parents known |
+| $`q(i) \in Q`$, $`r(i) \in R`$ | `Program`, `Region`: `Literal[...]` types |
+| $`B_y`$ for every $`y \in Y`$, exactly once | `Snapshot.references_resolve` |
+| $`K_{q,y}`$ for every $`q \in Q`$, $`y \in Y`$, exactly once | `Snapshot.references_resolve` |
+
+The discount rate is in the snapshot too ($`0 < \text{rate} < 1`$), although this model reads the
+NPVs directly: the reports of section 7 use it, and a snapshot holds every input of the run.
+
+The project record is the row model of lesson 1.3.2 grown to everything the model reads, and the
+snapshot nests it with the year, crew and floor records:
+
+```python
+class ProjectIn(Contract):
+    project_id: str = Field(pattern=r"^P\d{3}$")
+    program: Program
+    region: Region
+    cost_profile: tuple[NonNegativeInt, ...] = Field(min_length=1)    # $k per year of work
+    earliest_start: int
+    latest_start: int
+    must_do: bool
+    parent: str | None = None
+    parent_lag: NonNegativeInt = 0                                     # years after the parent starts
+    alt_group: str | None = None
+    crew_months: NonNegativeInt                                        # per year of work
+    npv: tuple[int, ...]                                               # $k, one per start year in the window
+```
+
+```python
+class Snapshot(Contract):
+    schema_version: Literal[1]
+    name: str
+    years: tuple[int, ...] = Field(min_length=1)
+    discount_rate: float = Field(gt=0, lt=1)
+    budget: tuple[YearAmount, ...]
+    crews: tuple[CrewLimit, ...]
+    region_floor: tuple[RegionFloor, ...]
+    projects: tuple[ProjectIn, ...]
+```
+
+A field whose type is another model, such as `budget: tuple[YearAmount, ...]`, is a **nested
+model**: pydantic validates each record of the list as a `YearAmount`. `YearAmount` has two fields,
+`year: int` and `amount: NonNegativeInt`; `CrewLimit` and `RegionFloor` are built the same way.
+Budgets, crews and floors are lists of records rather than dicts keyed by year, because JSON keys are
+always strings: a record keeps the year an integer and gives each value a name. `Contract` is the
+base class every part shares; the third section shows what it sets.
+
+The export of GridCap small, sent as JSON text and validated in one call, `load(text)`, which is
+`Snapshot.model_validate_json(text)`:
+
+```text
+11,362 bytes -> Snapshot: 40 projects, 5 years, 5 budgets, 15 crew limits, 4 floors
+P039: (1170, 880) True (546, 386, 252)
+```
+
+What comes back is one frozen object whose every part has the type the model needs: P039's cost
+profile is a tuple of integers, its must-do flag a boolean, and its NPVs one per start year from
+2027 to 2029.
+
+## One Schema Validates the Whole Snapshot and Reports Every Problem in One Pass
+
+`schema_whole.py` plants errors in a copy of the export. First, five at once:
+
+```python
+bad = copy.deepcopy(doc)
+project(bad, "P007")["cost_profile"] = [2140, -720]          # a credit typed as a cost
+project(bad, "P012")["region"] = "Coastal"                   # a region the model has no floor for
+project(bad, "P030")["npv"] = [4374]                         # one NPV for a two-year window
+bad["budget"][1]["amount"] = None                             # a blank cell
+project(bad, "P016")["parent"] = "P099"                       # a parent that is not in the snapshot
+```
+
+```text
+4 problems in one pass:
+   budget.1.amount | Input should be a valid integer
+   projects.6.cost_profile.1 | Input should be greater than or equal to 0
+   projects.11.region | Input should be 'Ridge', 'Valley', 'Coast' or 'Plains'
+   projects.29 | Value error, npv needs one value per start year of the window
+P016's unknown parent reported: False
+```
+
+Pydantic does not stop at the first bad field: it validates every field of every record and returns
+all the failures in one `ValidationError`, each with its location. `budget.1.amount` is the amount of
+the second budget record; `projects.6.cost_profile.1` is the second year of work of the seventh
+project, P007. A sender fixes all four in one round instead of four.
+
+Four, not five. The unknown parent P099 is a rule across records, written as a model validator on
+`Snapshot` (below), and an after-validator runs only on a model whose fields all passed. So the
+problems come in two layers: field problems first, and reference problems once the fields are clean.
+P030's problem is reported because it is a model validator of `ProjectIn`, whose own fields were
+all valid.
+
+The references are the rules no single record can break. Each says that something the model will
+look up exists, exactly once:
+
+```python
+    @model_validator(mode="after")
+    def references_resolve(self):
+        """Every id and key the model will look up exists, exactly once. All problems at once."""
+        problems = []
+        ids = Counter(p.project_id for p in self.projects)
+        problems += [f"project {pid} appears {n} times" for pid, n in sorted(ids.items()) if n > 1]
+        problems += [f"{p.project_id}: parent {p.parent} is not a project"
+                     for p in self.projects if p.parent and p.parent not in ids]
+        years = Counter(b.year for b in self.budget)
+        problems += [f"year {y}: {years[y]} budget rows" for y in self.years if years[y] != 1]
+        crews = Counter((c.program, c.year) for c in self.crews)
+        problems += [f"{q} {y}: {crews[q, y]} crew rows" for q in Program.__args__ for y in self.years
+                     if crews[q, y] != 1]
+        if problems:
+            raise ValueError("; ".join(problems))
+        return self
+```
+
+`Counter` (from `collections`) counts how often each key occurs, and gives 0 for a key it never saw,
+so "missing" and "twice" are the same test: a count other than 1. `Program.__args__` is the tuple of
+names in the `Literal` type. The validator collects every problem before it raises, for the same
+reason pydantic collects field errors. Four reference errors, planted together:
+
+```text
+1 error at loc ():
+   project P001 appears 2 times
+   P016: parent P099 is not a project
+   year 2031: 0 budget rows
+   vegetation 2030: 0 crew rows
+```
+
+The location `()` is the empty tuple: the error belongs to the whole snapshot, not to a field.
+
+Each of these would otherwise fail later, and worse. `plan_model.py` keeps the projects in a dict
+by id, so of a project exported twice, whichever copy comes last silently wins, even when the two
+copies disagree on its cost. It reads the budget as `budget[y]`, so a missing
+2031 raises a `KeyError` deep inside the model build, with no word about the export. A builder
+written with `budget.get(y, 0)` would be worse still: it would set $`B_{2031} = 0`$ and solve a
+model in which nothing can be spent in 2031.
+
+The schema's job ends here: if a snapshot passes, the model can be built from it, every set and
+parameter present and well typed. Whether the model then has a plan, and whether the numbers are
+believable, is the job of lesson 12.2.2.
+
+<!-- practice 1 -->
+
+## At a Machine Boundary, Forbid Unknown Keys and Turn Off Guessing
+
+Lesson 1.3.2 used pydantic's defaults, which suit a person's spreadsheet: unknown columns are ignored,
+and a string that clearly means a number is converted (**lax** mode). The service's sender is a
+program, and every surprise in its output is a bug in that program. Two settings make the schema say
+so. Both sit on the base class that every part of the snapshot inherits:
+
+```python
+class Contract(BaseModel):
+    """Every part of a snapshot: no unknown keys, no guessed conversions, no edits after loading."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+```
+
+`extra="forbid"` refuses a key the model does not declare (the default, `"ignore"`, drops it).
+`strict=True` turns off conversion: a value must already have its field's JSON type. Both can be
+overridden for one call (`model_validate_json(text, extra="ignore")`, `strict=False`), which
+`schema_boundary.py` uses to put the two policies side by side. First, last cycle's export, in which
+P023's `parent_lag` column arrived renamed to `lag`:
+
+```text
+P023 sends 'lag' instead of 'parent_lag'
+  extra='ignore'  accepted, P023 parent_lag=0, P001 must_do=False, 2027 budget=8890
+  extra='forbid'  refused: projects.22.lag: Extra inputs are not permitted
+```
+
+With `"ignore"` the document is accepted. `lag` is dropped as unknown, `parent_lag` is missing, and
+its default fills the gap: P023's lag becomes 0. In the model, that changes the rows
+$`\text{after}_{\text{P023},t}`$: P023 may now start in the same year as its parent P022, not a year
+later. No error, no warning, a different plan. A default on a field is convenient for a person
+typing a document and dangerous for a program sending one, because a renamed key turns into the
+default without a sound. With `"forbid"`, the same document is refused and the message names the
+key.
+
+Next, four ways an exporter can send a number or a flag in the wrong JSON type:
+
+```text
+budget 8890 sent as "8890"
+  strict=False    accepted, P023 parent_lag=1, P001 must_do=False, 2027 budget=8890
+  strict=True     refused: budget.0.amount: Input should be a valid integer
+budget 8890 sent as 8890.0
+  strict=False    accepted, P023 parent_lag=1, P001 must_do=False, 2027 budget=8890
+  strict=True     refused: budget.0.amount: Input should be a valid integer
+budget 8890 sent as 8890.5
+  strict=False    refused: budget.0.amount: Input should be a valid integer, got a number with a fractional part
+  strict=True     refused: budget.0.amount: Input should be a valid integer
+P001 must_do sent as "no"
+  strict=False    accepted, P023 parent_lag=1, P001 must_do=False, 2027 budget=8890
+  strict=True     refused: projects.0.must_do: Input should be a valid boolean
+```
+
+Lax mode converts every one it can read without losing information, and here each conversion
+happens to give the right value. That is the problem: an exporter that writes budgets as strings,
+or flags as `"no"`, has a bug that will one day write something lax mode reads differently from
+what was meant. Lesson 1.3.2's lax rules are right for a planner's CSV, where every cell is text.
+Between two programs that both speak JSON, a string where a number belongs is never right, and
+strict mode says so the first time it happens.
+
+Strict mode checks values against **JSON** types when it validates JSON text. A JSON array is the
+JSON form of a tuple, so `years: [2027, ...]` passes. The export's Python dict, validated as Python
+data with `model_validate`, is refused, because there a Python `list` is not a `tuple`:
+
+```text
+the export's Python dict, strict: years | Input should be a valid tuple
+```
+
+So the service validates what it receives, the JSON text, with `model_validate_json`, and never a
+dict that some other code built from it.
+
+## The Schema Is a Versioned Contract, Published as JSON Schema
+
+A schema the sender cannot read is a rule they find out about by being refused. Pydantic writes
+each model out as a **JSON Schema**, a standard JSON document describing which keys, types and
+bounds an object may have, that any language can check against. `schema_contract.py` prints a few
+parts of `Snapshot.model_json_schema()`:
+
+```text
+required: ['schema_version', 'name', 'years', 'discount_rate', 'budget', 'crews', 'region_floor', 'projects']
+additionalProperties: False
+schema_version: {'const': 1, 'title': 'Schema Version', 'type': 'integer'}
+$defs: ['CrewLimit', 'ProjectIn', 'RegionFloor', 'YearAmount']
+ProjectIn.parent_lag: {'default': 0, 'minimum': 0, 'title': 'Parent Lag', 'type': 'integer'}
+ProjectIn.project_id: {'pattern': '^P\\d{3}$', 'title': 'Project Id', 'type': 'string'}
+published schema: 3,076 bytes of JSON
+```
+
+Every rule written as a type is in it: `extra="forbid"` became `additionalProperties: False`,
+`NonNegativeInt` became `minimum: 0`, the id pattern is there, and the nested models sit under
+`$defs`. The rules written as Python code, the two model validators, are not: JSON Schema cannot say
+"every parent is a project", so the published document describes the structure and the service
+still runs the validators. FastAPI publishes the JSON Schema of every request model in its API
+description automatically, which is how lesson 12.4.1's service will hand this contract to the export
+team.
+
+A contract changes. When the model gains a parameter, or a field is renamed, old exports must not be
+read as if they were new ones. That is what `schema_version: Literal[1]` is for: the field must be
+present and must be 1, so a document from before versions, or from a newer exporter, is refused:
+
+```text
+no schema_version  refused: schema_version: Field required
+schema_version 2   refused: schema_version: Input should be 1
+```
+
+An old document is not ignored or guessed at. It is brought up to date by an explicit step, one per
+version, before validation. Before versions existed, the export called the lag column `lag`:
+
+```python
+def upgrade(raw: dict) -> dict:
+    """Bring an older export up to the current version, one explicit step per version."""
+    if "schema_version" not in raw:                              # version 0: the column was called "lag"
+        projects = [{("parent_lag" if k == "lag" else k): v for k, v in p.items()} for p in raw["projects"]]
+        raw = {**raw, "projects": projects, "schema_version": 1}
+    return raw
+```
+
+```text
+version-0 export after upgrade(): accepted, P023 parent_lag = 1
+```
+
+Compare this with the `extra="ignore"` run above. The same renamed column, handled by a rule that
+knows what `lag` meant, keeps P023's lag of 1. The upgrade is code with a test, written once, and the
+schema stays strict.
+
+<!-- practice 2 -->
+
+## Summary
+
+- **The schema is the model's sets and parameters, written as types.** Read it off the formulation:
+  each parameter a field, each assumption a type, bound or rule.
+- **One schema validates the whole snapshot and reports every problem in one pass.** Field problems
+  come first; references across records (unique ids, known parents, a budget and crews for every
+  year) come from a model validator once the fields are clean. A snapshot that passes can be built
+  into a model.
+- **At a machine boundary, forbid unknown keys and turn off guessing.** `extra="forbid"` stops a
+  renamed key from becoming a default; `strict=True` refuses a value in the wrong JSON type.
+  Validate the JSON text, not a dict built from it.
+- **The schema is a versioned contract, published as JSON Schema.** `model_json_schema()` gives the
+  sender the structural rules; `schema_version` refuses documents of another version, and an
+  explicit upgrade step brings old ones forward.
+
+## Reference
+
+| Need | Pydantic |
+| --- | --- |
+| A record inside a record | a field typed as another `BaseModel`, or `tuple[Model, ...]` |
+| Validate JSON text | `Model.model_validate_json(text)` |
+| Refuse unknown keys | `ConfigDict(extra="forbid")` (default `"ignore"`; `"allow"` keeps them) |
+| Refuse conversions | `ConfigDict(strict=True)`; one field: `Field(strict=True)` |
+| Override for one call | `model_validate_json(text, strict=False, extra="ignore")` |
+| A rule across records | `@model_validator(mode="after")`, which runs only when every field passed |
+| A version field | `schema_version: Literal[1]` |
+| Publish the contract | `Model.model_json_schema()`: JSON Schema, nested models under `$defs` |
+
+| Term | Meaning |
+| --- | --- |
+| snapshot | one complete set of model inputs, frozen at one moment |
+| schema | the written rule for what a valid snapshot is: keys, types, bounds, references |
+| lax / strict | convert values that can be read without loss / accept only the right JSON type |
+| JSON Schema | a standard, language-neutral description of a JSON document's structure |
+
+**Further reading:** [Pydantic: models](https://pydantic.dev/docs/validation/latest/concepts/models/) (nested models, `model_validate_json`, and the `extra` setting with its `ignore` default and its per-call override); [Pydantic: strict mode](https://pydantic.dev/docs/validation/latest/concepts/strict_mode/) (strict on the config, on one field, or for one validation call); [Pydantic: JSON Schema](https://pydantic.dev/docs/validation/latest/concepts/json_schema/) (`model_json_schema()`, Draft 2020-12 and OpenAPI, nested models under `$defs`); [Pydantic: validators](https://pydantic.dev/docs/validation/latest/concepts/validators/) (after model validators run on the validated instance and return it); [FastAPI: request body](https://fastapi.tiangolo.com/tutorial/body/) (a pydantic model as a request body is validated, and its JSON Schema appears in the API's OpenAPI description); [MathOpt (OR-Tools)](https://developers.google.com/optimization/math_opt) (the model API the validated snapshot is built into).
+
+## Challenges
+
+1. A new exporter sends `"must_do": 1`. Predict what strict and lax mode each do, then check one of
+   them with `schema_boundary.py`.
+2. Version 2 of the contract adds a required field `crew_program` to each project. Write the upgrade
+   step from version 1, and say what default it may safely use, if any.
+3. The schema checks that every year in `years` has one budget row. Should it also refuse a budget
+   row for a year outside `years`? What would the model do with one?
+
+## Design Note: The Schema Lives With the Model, Not With the Export
+
+It is tempting to let the export team own the schema, since they produce the document. But every rule
+in it comes from the model: which parameters exist, which may be zero, which ids must resolve. When
+the model changes, the schema must change in the same commit, and the version with it. So the schema
+sits beside `plan_model.py`, and the export team receives it as JSON Schema, generated from that
+code, never retyped.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson
+shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy
+of the code, so the course's own files never change.
+
+**schema_whole.py.** Validates GridCap small's export, then plants five field errors and four
+reference errors (*The Schema Is the Model's Sets and Parameters* and *One Schema Validates the Whole
+Snapshot*). *Try:* Remove the cost and region plants. Predict whether P016's unknown parent is
+reported then.
+
+- Program: [schema_whole.py](src/schema_whole.py)
+
+**schema_boundary.py.** The same documents under `extra="ignore"` and `"forbid"`, and under lax and
+strict mode (*At a Machine Boundary*). *Try:* Send the 2027 budget as `-8890`. Predict whether lax
+mode accepts it.
+
+- Program: [schema_boundary.py](src/schema_boundary.py)
+
+**schema_contract.py.** Prints parts of the published JSON Schema, refuses documents of other
+versions, and upgrades a version-0 export (*The Schema Is a Versioned Contract*). *Try:* Make
+`parent_lag` a required field (remove its default). Predict how `required` changes in the
+`ProjectIn` part of the schema.
+
+- Program: [schema_contract.py](src/schema_contract.py)
+
+The schema itself and the export are in `snapshot.py`, and the model in `plan_model.py`.
+
+- Library: [snapshot.py](src/snapshot.py)
+- Library: [plan_model.py](src/plan_model.py)

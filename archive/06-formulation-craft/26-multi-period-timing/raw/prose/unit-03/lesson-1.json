@@ -1,0 +1,328 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "26-multi-period-timing"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Aggregated vs. cumulative (disaggregated) forms",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "6.4.3 Aggregated vs. Cumulative (Disaggregated) Forms"
+    },
+    {
+      "type": "para",
+      "text": "A rate case freezes GridCap's 2027 and 2028 capital budgets. In the small portfolio, P023 (a breaker bay) may only start a year after its parent P022 (the tower set it sits on). Two analysts write that rule two ways. Both models return the same optimal plan, and one of them tells the solver much less about where the optimum is. This lesson compares the two forms by the one number that decides how hard a MILP is to solve, its LP bound, in four rules."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Same Rule Can Be Written as One Aggregated Row or as One Row per Year"
+    },
+    {
+      "type": "para",
+      "text": "\"P023 starts at least $`L`$ years after P022, and only if P022 is funded.\" The first analyst works with start years as numbers. $`\\sum_t t\\,x_{i,t}`$ is project $`i`$'s start year when it is funded, so the rule becomes one funding row and one timing row, with a big-M term that switches the timing row off when the child is not funded:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_t t\\,x_{c,t} \\;\\ge\\; \\sum_s (s + L)\\,x_{p,s} - M\\Big(1 - \\sum_t x_{c,t}\\Big)"
+    },
+    {
+      "type": "para",
+      "text": "The second analyst writes, for every year $`t`$ in the child's window, \"the child can have started by $`t`$ only if the parent had started by $`t - L`$\":"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\sum_{u \\le t} x_{c,u} \\;\\le\\; \\sum_{s \\le t - L} x_{p,s} \\qquad \\text{for each } t"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "for t in child.starts():\n    model.add_linear_constraint(\n        sum(x[child.project_id, u] for u in child.starts() if u <= t)\n        <= sum(x[parent.project_id, s] for s in parent.starts() if s <= t - lag),\n        name=f\"after_{child.project_id}_{t}\")"
+    },
+    {
+      "type": "para",
+      "text": "The first is called **aggregated** because it folds every year into one row: it compares the two projects' start years, $`\\sum_t t\\,x_{c,t}`$ against $`\\sum_s (s+L)\\,x_{p,s}`$, which for a funded project is exactly its start year. The second is **disaggregated**, or **cumulative**, because it checks the running totals year by year. With binary $`x`$ the two allow exactly the same plans."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Two Forms That Allow the Same Plans Can Have Different LP Bounds"
+    },
+    {
+      "type": "para",
+      "text": "Solve both, as MILPs and as LPs, on the frozen-budget scenario:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "P023 needs P022 with lag 1; P023 may start [2029], P022 may start [2027, 2028, 2029]\naggregated precedence rows 4  LP bound 14,472.2  MILP 12,511.0\n           P022 {2027: 0.0, 2028: 0.0, 2029: 0.191}  P023 {2029: 0.191}\ncumulative precedence rows 2  LP bound 14,449.0  MILP 12,511.0\n           P022 {2027: 0.0, 2028: 0.0, 2029: 0.279}  P023 {2029: 0.0}"
+    },
+    {
+      "type": "para",
+      "text": "Same MILP optimum, $12,511k. Different LP bounds. Look at what the aggregated LP did: it starts 19.1% of P022 in 2029 and 19.1% of P023 in 2029, the same year, although the lag is one year. In the aggregated row the child is only 19.1% funded, so the big-M term $`M(1 - 0.191)`$ is large enough to excuse any timing at all. The funding row holds (parent and child are both at 19.1%), and the objective only explains why the LP wants the early start; the row that allows it is the big-M timing row. The cumulative row for 2029 says $`x_{P023,2029} \\le x_{P022,2027} + x_{P022,2028}`$, both 0, so P023 gets nothing."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Tighter LP Bound Means a Smaller Search"
+    },
+    {
+      "type": "para",
+      "text": "Why care about the LP when the MILP answers agree? Section 3 shows that a MILP solver works by solving LPs and branching on fractions. Every node of its search whose LP bound is below the best plan found so far can be discarded. A bound of $14,449.0k is closer to the true $12,511k than $14,472.2k is, so more nodes fall below the line sooner."
+    },
+    {
+      "type": "para",
+      "text": "On one parent-child pair the difference is $23k, small next to the remaining gap. The size of the effect grows with the number of precedence rules and with how tight the budgets are, which is why section 6.7 compares whole formulations by their bounds on the medium portfolio. The direction is what matters, and it holds well beyond this one scenario. Across 40 seeds of the small portfolio, each with three budget freezes:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "96 feasible scenarios: cumulative tighter in 9, looser in 0"
+    },
+    {
+      "type": "para",
+      "text": "The reason is that the cumulative rows say more: they bound the child's running total in every year, and the aggregated row only compares one weighted sum of the years, with a big-M discount on top. With fractional values that sum is no longer a start year, so the row can be met by plans no schedule matches. Where the bounds are equal, the extra rows cost nothing; where they differ, they always help. The first practice asks you to write a different timing rule, a deadline, year by year, and to check that its bound beats a colleague's single-row version; the second applies the same idea to a parent with several children."
+    },
+    {
+      "type": "para",
+      "text": "The same contrast, at a larger scale, is the reason the OR-Tools MathOpt sample `time_indexed_scheduling.py` uses one binary per job and start time. The other way to schedule jobs on one machine is the aggregated one: one start-time variable per job, and for every pair of jobs two big-M rows, \"this one first or that one first\" (lesson 6.2.4). `time_indexed.py` solves the LP relaxation of both on the sample's test data and on eight random jobs:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "LP bounds, time-indexed against start times with big-M (lesson 6.4.3):\n  the example's test data  time-indexed    25.50  start-time big-M    17.00  MILP 26\n  8 random jobs, seed 3    time-indexed   528.25  start-time big-M   462.00  MILP 530"
+    },
+    {
+      "type": "para",
+      "text": "The problem is a minimization, so a bound is below the optimum and a higher one is tighter. The start-time LP returns 17 on the test data, which is every job finishing at its release time plus its own length, as if the machine could run all three at once: the big-M rows excuse every overlap once the order binaries are fractional. The time-indexed LP, whose machine rows count running jobs period by period, gets within half a period of the optimum, 25.50 against 26. It pays for it in size: 1,062 variables on eight jobs against 8 start times and 28 order binaries."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Disaggregated Is Stronger, Not Always Bigger"
+    },
+    {
+      "type": "para",
+      "text": "The usual objection to disaggregation is size: one row per year instead of one row. Count them here. The small portfolio has two children, P023 and P016 (which needs P015 with no lag), so the aggregated form used 4 rows (two per child) and the cumulative form used 2, because each child has a one-year window. In general the cumulative form has one row per year of the child's window, so a ten-year window costs ten rows where the aggregated form needs two. On a large portfolio that is real growth, and section 11 measures when it starts to cost build time."
+    },
+    {
+      "type": "para",
+      "text": "Before choosing the smaller form, check what it costs in bound. A model that is a little bigger and solves in a tenth of the nodes is the better model."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Model"
+    },
+    {
+      "type": "para",
+      "text": "The model with the precedence row in its aggregated form, marked, as the first analyst wrote it ($`M_c = \\max T_{p(c)} + L_c`$, the parent's latest start plus the lag: the smallest value that never refuses a plan in which the child is unfunded and the parent starts as late as it may). The cumulative form is the one in the model of lesson 6.4.1; everything else is unchanged."
+    },
+    {
+      "type": "para",
+      "text": "**Sets.** $`P`$ the projects; $`Y`$ the plan's years; $`T_i \\subseteq Y`$ the start years project $`i`$ may use (its window, cut so the work ends inside $`Y`$); $`M \\subseteq P`$ the must-do projects; $`\\mathcal{G}`$ the alternative groups, each a set of projects; $`C \\subseteq P`$ the child projects, with parent $`p(c)`$ and lag $`L_c`$ years."
+    },
+    {
+      "type": "para",
+      "text": "**Parameters.** $`\\text{npv}_{i,t}`$, the NPV of project $`i`$ started in year $`t`$ ($k); $`c_{i,k}`$, what project $`i`$ spends in its $`k`$-th year of work, $`k = 0, 1, \\dots`$ ($k); $`B_y`$, the budget of year $`y`$ ($k)."
+    },
+    {
+      "type": "para",
+      "text": "**Variables.** $`x_{i,t} \\in \\{0, 1\\}`$ for every $`i \\in P`$ and $`t \\in T_i`$: project $`i`$ starts in year $`t`$. No other variable exists, so no other start is possible."
+    },
+    {
+      "type": "para",
+      "text": "**Objective.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\max \\; \\sum_{i \\in P} \\sum_{t \\in T_i} \\text{npv}_{i,t}\\, x_{i,t}"
+    },
+    {
+      "type": "para",
+      "text": "**Constraints.**"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\sum_{t \\in T_i} x_{i,t} &\\le 1 && \\forall i \\in P \\setminus M && \\text{(once}_i) \\\\\n\\sum_{t \\in T_i} x_{i,t} &= 1 && \\forall i \\in M && \\text{(must}_i) \\\\\n\\sum_{i \\in g} \\sum_{t \\in T_i} x_{i,t} &\\le 1 && \\forall g \\in \\mathcal{G} && \\text{(alt}_g) \\\\\n\\sum_{t \\in T_c} x_{c,t} &\\le \\sum_{s \\in T_{p(c)}} x_{p(c),s} && \\forall c \\in C && \\text{(needs}_c) \\quad \\leftarrow \\text{this lesson} \\\\\n\\sum_{t \\in T_c} t\\, x_{c,t} &\\ge \\sum_{s \\in T_{p(c)}} (s + L_c)\\, x_{p(c),s} - M_c \\Big(1 - \\sum_{t \\in T_c} x_{c,t}\\Big) && \\forall c \\in C && \\text{(after}_c) \\quad \\leftarrow \\text{this lesson} \\\\\n\\sum_{i \\in P} \\sum_{t \\in T_i,\\, t \\le y} c_{i,\\,y-t}\\, x_{i,t} &\\le B_y && \\forall y \\in Y && \\text{(budget}_y)\n\\end{aligned}"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**The same rule can be written as one aggregated row or as one row per year.** With binaries both allow exactly the same plans.",
+        "**Two forms that allow the same plans can have different LP bounds.** The aggregated LP let a fractional child start in its parent's year, because the big-M term excused it.",
+        "**A tighter LP bound means a smaller search.** In 96 GridCap scenarios the cumulative bound was never weaker, and tighter in 9.",
+        "**Disaggregated is stronger, not always bigger.** Its size grows with window length; weigh that against the bound."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Form",
+        "Rows per child",
+        "Rule"
+      ],
+      "rows": [
+        [
+          "aggregated",
+          "2",
+          "$`\\text{started}(c) \\le \\text{started}(p)`$ and $`\\sum_t t\\,x_{c,t} \\ge \\sum_s (s+L)\\,x_{p,s} - M(1-\\text{started}(c))`$"
+        ],
+        [
+          "cumulative",
+          "one per year $`t`$ of the child's window",
+          "$`\\sum_{u \\le t} x_{c,u} \\le \\sum_{s \\le t-L} x_{p,s}`$"
+        ]
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Term",
+        "Meaning"
+      ],
+      "rows": [
+        [
+          "LP bound",
+          "the optimal value of the LP relaxation; for a maximization, an upper bound on the MILP"
+        ],
+        [
+          "stronger formulation",
+          "one whose LP relaxation allows fewer fractional points"
+        ],
+        [
+          "big-M",
+          "a constant that switches a row off; lesson 6.2.1 derives the smallest valid one"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [MathOpt sample time_indexed_scheduling.py (OR-Tools)](https://github.com/google/or-tools/blob/stable/ortools/math_opt/samples/python/time_indexed_scheduling.py) (the time-indexed model of `time_indexed.py`, whose \"no two jobs overlap\" rows are one row per time over the starts that would be running then, the per-period form of this lesson); [Vielma, Mixed Integer Linear Programming Formulation Techniques](https://juan-pablo-vielma.github.io/publications/Mixed-Integer-Linear-Programming-Formulation-Techniques.pdf) (section 2.2: formulations of the same set can have LP relaxations of different strength, and a larger one can be the better one; section 6.1: big-M formulations and why they can be weak); [Integer Programming, Chapter 9 of Applied Mathematical Programming (MIT 15.053)](https://web.mit.edu/15.053/www/AMP-Chapter-09.pdf) (section 9.2: a conditional row switched off by a binary and a large constant, the shape of the aggregated precedence row)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "Show that the cumulative rows imply \"the child is funded only if the parent is\", so the separate funding row is not needed.",
+        "Find a GridCap scenario where the two LP bounds differ by more than 1%. What did you change?",
+        "$`M`$ here is a calendar year, about 2030, because $`t`$ is. Rewrite the aggregated row with years counted from the plan's first year ($`t - 2027`$) and its smallest valid $`M`$. Predict whether the LP bound moves, then measure it."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Why the Course Builds the Cumulative Form by Default"
+    },
+    {
+      "type": "para",
+      "text": "`build(..., precedence=\"cumulative\")` is the default in `timing_model.py`. Its rows read as plain English (\"started by 2029 only if the parent started by 2028\"), they need no big-M to derive or defend, and they are never weaker. The price is a row per window year. The aggregated form stays in the code because inherited models are full of it, and recognizing its weakness is the skill."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**precedence_forms.py.** Solves the frozen-budget scenario with both precedence forms, as LP and as MILP (*Two Forms That Allow the Same Plans Can Have Different LP Bounds*). *Try:* Freeze only the first year's budget instead of two. Predict whether the two LP bounds move apart or together."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [precedence_forms.py](src/precedence_forms.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**bound_survey.py.** Compares the two forms' LP bounds over 96 scenarios (*Two Forms That Allow the Same Plans*). *Try:* Add 0.25 to the budget cuts. Do you expect more scenarios where the cumulative form is tighter?"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [bound_survey.py](src/bound_survey.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**time_indexed.py.** The LP bound of OR-Tools' time-indexed scheduling sample against a start-time model with big-M order rows (*A Tighter LP Bound Means a Smaller Search*). *Try:* Halve the big-M constant `horizon` in `start_time`. Predict whether the LP bound moves, and whether the model is still correct."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [time_indexed.py](src/time_indexed.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**timing_model.py.** The model builder, where `add_precedence` writes both forms."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [timing_model.py](src/timing_model.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 11,
+    "paras": 26,
+    "code": 8,
+    "tables": 2,
+    "lists": 6,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 2,
+    "disclosures": 0
+  },
+  "content_sha256": "d3f7571f538052ce6585bd9825f974fd6b4c978b9201049d2e6cd98fa26ad26b"
+}

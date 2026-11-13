@@ -1,0 +1,143 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "04-google-or-tools-in-depth",
+    "15-cpsat-core"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "One park plan, two solvers",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A city's parks department (not GridCap) picks improvements for one park within a budget. Some improvements need another one (`requires`: `(a, b)`, a needs b) and some pairs exclude each other (`excludes`: `(a, b)`). The department's analyst wants the model in both CP-SAT and MathOpt, to check one against the other before choosing a solver."
+    },
+    {
+      "type": "para",
+      "text": "Write two functions in `twins.py`, each returning the best total value as an `int`:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`best_with_cpsat(value, cost, budget, requires, excludes)`: the model in CP-SAT, with the two rules written as logic constraints;",
+        "`best_with_highs(value, cost, budget, requires, excludes)`: the same model in MathOpt, with the rules as linear rows, solved with HiGHS."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The model, with $`I`$ the improvements and $`x_i \\in \\{0, 1\\}`$ \"improvement $`i`$ is built\":"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& \\sum_{i \\in I} v_i\\, x_i \\\\\n\\text{s.t. }& \\sum_{i \\in I} c_i\\, x_i \\le \\text{budget} && \\text{(budget)} \\\\\n& x_a \\Rightarrow x_b && \\forall (a, b) \\in \\text{requires} \\\\\n& \\lnot x_a \\lor \\lnot x_b && \\forall (a, b) \\in \\text{excludes}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The tests compare each function with a brute-force search. About twenty lines in all."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\nfrom ortools.sat.python import cp_model\n\n\ndef best_with_cpsat(value: dict[str, int], cost: dict[str, int], budget: int,\n                    requires: list[tuple[str, str]], excludes: list[tuple[str, str]]) -> int:\n    \"\"\"The best total value, from CP-SAT with its own logic constraints.\"\"\"\n    model = cp_model.CpModel()\n    x = {i: model.new_bool_var(i) for i in value}\n    model.add(sum(cost[i] * x[i] for i in value) <= budget)\n    for a, b in requires:\n        model.add_implication(x[a], x[b])\n    for a, b in excludes:\n        model.add_bool_or(~x[a], ~x[b])\n    model.maximize(sum(value[i] * x[i] for i in value))\n    solver = cp_model.CpSolver()\n    solver.solve(model)\n    return round(solver.objective_value)\n\n\ndef best_with_highs(value: dict[str, int], cost: dict[str, int], budget: int,\n                    requires: list[tuple[str, str]], excludes: list[tuple[str, str]]) -> int:\n    \"\"\"The best total value, from HiGHS through MathOpt with linear rows.\"\"\"\n    model = mathopt.Model()\n    x = {i: model.add_binary_variable(name=i) for i in value}\n    model.add_linear_constraint(sum(cost[i] * x[i] for i in value) <= budget)\n    for a, b in requires:\n        model.add_linear_constraint(x[a] <= x[b])\n    for a, b in excludes:\n        model.add_linear_constraint(x[a] + x[b] <= 1)\n    model.maximize(sum(value[i] * x[i] for i in value))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    return round(result.objective_value())\n\n\nif __name__ == \"__main__\":\n    value, cost = {\"a\": 5, \"b\": 4, \"c\": 3}, {\"a\": 4, \"b\": 3, \"c\": 2}\n    print(best_with_cpsat(value, cost, 6, [(\"c\", \"b\")], []), best_with_highs(value, cost, 6, [(\"c\", \"b\")], []))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\nfrom ortools.sat.python import cp_model\n\n\ndef best_with_cpsat(value: dict[str, int], cost: dict[str, int], budget: int,\n                    requires: list[tuple[str, str]], excludes: list[tuple[str, str]]) -> int:\n    \"\"\"The best total value, from CP-SAT with its own logic constraints.\"\"\"\n    # TODO: the model in CP-SAT, solved.\n    return 0\n\ndef best_with_highs(value: dict[str, int], cost: dict[str, int], budget: int,\n                    requires: list[tuple[str, str]], excludes: list[tuple[str, str]]) -> int:\n    \"\"\"The best total value, from HiGHS through MathOpt with linear rows.\"\"\"\n    # TODO: the same model in MathOpt, solved with HiGHS.\n    return 0\n\nif __name__ == \"__main__\":\n    value, cost = {\"a\": 5, \"b\": 4, \"c\": 3}, {\"a\": 4, \"b\": 3, \"c\": 2}\n    print(best_with_cpsat(value, cost, 6, [(\"c\", \"b\")], []), best_with_highs(value, cost, 6, [(\"c\", \"b\")], []))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "fc942fd68f0525af58e547b830413b7237a70cb8397a650a9d6de57b72ecce15",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\nfrom ortools.sat.python import cp_model\n\n\ndef best_with_cpsat(value: dict[str, int], cost: dict[str, int], budget: int,\n                    requires: list[tuple[str, str]], excludes: list[tuple[str, str]]) -> int:\n    \"\"\"The best total value, from CP-SAT with its own logic constraints.\"\"\"\n    # TODO: the model in CP-SAT, solved.\n    return 0\n\ndef best_with_highs(value: dict[str, int], cost: dict[str, int], budget: int,\n                    requires: list[tuple[str, str]], excludes: list[tuple[str, str]]) -> int:\n    \"\"\"The best total value, from HiGHS through MathOpt with linear rows.\"\"\"\n    # TODO: the same model in MathOpt, solved with HiGHS.\n    return 0\n\nif __name__ == \"__main__\":\n    value, cost = {\"a\": 5, \"b\": 4, \"c\": 3}, {\"a\": 4, \"b\": 3, \"c\": 2}\n    print(best_with_cpsat(value, cost, 6, [(\"c\", \"b\")], []), best_with_highs(value, cost, 6, [(\"c\", \"b\")], []))\n",
+  "exercise": {
+    "main_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-1/twins.py",
+    "test_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-1/test_twins.py",
+    "run_command": [
+      "python3",
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-1/twins.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-1/target/report.xml",
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-1/test_twins.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_budget_alone",
+        "kind": "main",
+        "says": "with only the budget, both solvers give the best value brute force finds"
+      },
+      {
+        "id": "test_a_requirement",
+        "kind": "main",
+        "says": "with requirements, both solvers give the best value brute force finds"
+      },
+      {
+        "id": "test_two_improvements_that_exclude_each_other",
+        "kind": "edge",
+        "says": "with exclusions, both solvers give the best value brute force finds"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "15-cpsat-core/README_4.4.4.md",
+      "section": "On a Plain Selection Both Prove the Same Optimum"
+    },
+    "concepts": [
+      "on a plain selection model both solvers prove the same optimum, so the choice is about modeling style"
+    ]
+  }
+}

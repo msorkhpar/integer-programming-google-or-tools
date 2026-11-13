@@ -1,0 +1,137 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "15-mock-interviews",
+    "53-mock-interviews"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Leak repairs, NPV against safety",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "This is the mock's whiteboard, coded. A gas utility's leak repairs each have a `cost`, an `npv` and the safety `risk` they remove, all in $k. Repairs that name the same `main` are alternatives for that main; a repair with `main=None` belongs to no group. The planners' question: **the most NPV within the budget, among the plans that remove at least `risk_floor` of risk**, with at most one repair per main."
+    },
+    {
+      "type": "para",
+      "text": "`repairs.py` already creates one binary per repair. Write `add_epsilon_model(model, x, repairs, budget, risk_floor)`: the objective and every row. Write the formulation first (sets, parameters, variables with domains, objective with its sense, labelled rows), then code it."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix plans in and out and ask HiGHS whether the model accepts them, then solve the model and check the best plan, so any correct formulation passes. About ten lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Repair:\n    rid: str\n    cost: int            # $k\n    npv: int             # $k\n    risk: int            # safety risk removed, $k a year\n    main: str | None = None   # repairs on the same main are alternatives\n\n\ndef select_variables(model: mathopt.Model, repairs: list[Repair]) -> dict[str, mathopt.Variable]:\n    \"\"\"Given: x[rid] = 1 when the repair is funded.\"\"\"\n    return {r.rid: model.add_binary_variable(name=f\"x_{r.rid}\") for r in repairs}\n\n\ndef add_epsilon_model(model: mathopt.Model, x: dict, repairs: list[Repair], budget: int, risk_floor: int) -> None:\n    \"\"\"The most NPV within the budget, among plans removing at least risk_floor, one repair per main.\"\"\"\n    model.add_linear_constraint(sum(r.cost * x[r.rid] for r in repairs) <= budget, name=\"budget\")\n    model.add_linear_constraint(sum(r.risk * x[r.rid] for r in repairs) >= risk_floor, name=\"risk_floor\")\n    mains: dict[str, list[Repair]] = {}\n    for r in repairs:\n        if r.main is not None:\n            mains.setdefault(r.main, []).append(r)\n    for m, group in mains.items():\n        model.add_linear_constraint(sum(x[r.rid] for r in group) <= 1, name=f\"alt_{m}\")\n    model.maximize(sum(r.npv * x[r.rid] for r in repairs))\n\n\ndef build(repairs: list[Repair], budget: int, risk_floor: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"leak-repairs\")\n    x = select_variables(model, repairs)\n    add_epsilon_model(model, x, repairs, budget, risk_floor)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Repair(\"L1\", 40, 30, 10), Repair(\"L2\", 30, 25, 12)], 60, 10)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    print(result.termination.reason.name, {k: round(result.variable_values(v)) for k, v in x.items()})\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Repair:\n    rid: str\n    cost: int            # $k\n    npv: int             # $k\n    risk: int            # safety risk removed, $k a year\n    main: str | None = None   # repairs on the same main are alternatives\n\n\ndef select_variables(model: mathopt.Model, repairs: list[Repair]) -> dict[str, mathopt.Variable]:\n    \"\"\"Given: x[rid] = 1 when the repair is funded.\"\"\"\n    return {r.rid: model.add_binary_variable(name=f\"x_{r.rid}\") for r in repairs}\n\n\ndef add_epsilon_model(model: mathopt.Model, x: dict, repairs: list[Repair], budget: int, risk_floor: int) -> None:\n    \"\"\"The most NPV within the budget, among plans removing at least risk_floor, one repair per main.\"\"\"\n    # TODO: the objective and the rows of your formulation.\n    return None\n\n\ndef build(repairs: list[Repair], budget: int, risk_floor: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"leak-repairs\")\n    x = select_variables(model, repairs)\n    add_epsilon_model(model, x, repairs, budget, risk_floor)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Repair(\"L1\", 40, 30, 10), Repair(\"L2\", 30, 25, 12)], 60, 10)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    print(result.termination.reason.name, {k: round(result.variable_values(v)) for k, v in x.items()})\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "e69f419f44f348942101ca750f08d87494453b05869df4daa1eebe199de4f964",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Repair:\n    rid: str\n    cost: int            # $k\n    npv: int             # $k\n    risk: int            # safety risk removed, $k a year\n    main: str | None = None   # repairs on the same main are alternatives\n\n\ndef select_variables(model: mathopt.Model, repairs: list[Repair]) -> dict[str, mathopt.Variable]:\n    \"\"\"Given: x[rid] = 1 when the repair is funded.\"\"\"\n    return {r.rid: model.add_binary_variable(name=f\"x_{r.rid}\") for r in repairs}\n\n\ndef add_epsilon_model(model: mathopt.Model, x: dict, repairs: list[Repair], budget: int, risk_floor: int) -> None:\n    \"\"\"The most NPV within the budget, among plans removing at least risk_floor, one repair per main.\"\"\"\n    # TODO: the objective and the rows of your formulation.\n    return None\n\n\ndef build(repairs: list[Repair], budget: int, risk_floor: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"leak-repairs\")\n    x = select_variables(model, repairs)\n    add_epsilon_model(model, x, repairs, budget, risk_floor)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Repair(\"L1\", 40, 30, 10), Repair(\"L2\", 30, 25, 12)], 60, 10)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    print(result.termination.reason.name, {k: round(result.variable_values(v)) for k, v in x.items()})\n",
+  "exercise": {
+    "main_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-03/practice-2/repairs.py",
+    "test_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-03/practice-2/test_repairs.py",
+    "run_command": [
+      "python3",
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-03/practice-2/repairs.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/15-mock-interviews/53-mock-interviews/prose/unit-03/practice-2/target/report.xml",
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-03/practice-2/test_repairs.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_plan_over_budget_is_refused",
+        "kind": "main",
+        "says": "a plan within the budget is allowed, and one over it refused"
+      },
+      {
+        "id": "test_a_plan_below_the_risk_floor_is_refused",
+        "kind": "main",
+        "says": "a plan that removes too little risk is refused"
+      },
+      {
+        "id": "test_at_most_one_repair_per_main",
+        "kind": "main",
+        "says": "two repairs on one main are refused"
+      },
+      {
+        "id": "test_repairs_on_no_main_are_independent",
+        "kind": "edge",
+        "says": "repairs that belong to no main may be funded together"
+      },
+      {
+        "id": "test_the_best_plan_has_the_most_npv_above_the_floor",
+        "kind": "edge",
+        "says": "the solve returns the plan with the most NPV among those above the floor"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-03/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "53-mock-interviews/README_15.1.3.md",
+      "section": "Whiteboard: Leak Repairs, NPV Against Safety"
+    },
+    "concepts": [
+      "maximize NPV within a budget while removing at least a floor of risk",
+      "write the objective and every row, at most one repair per main, formulation first"
+    ]
+  }
+}

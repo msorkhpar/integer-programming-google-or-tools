@@ -1,0 +1,180 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "13-capstone",
+    "51-capstone-cipt-lite"
+  ],
+  "variant": "prose",
+  "unit": 5,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Properties on 200 drawn portfolios",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "The planning team's model passed its unit tests and its golden record. Before it goes into service, the team wants evidence that its rules hold on portfolios nobody wrote by hand. Your milestone draws practice portfolios (invented test data for a fictional utility) with Hypothesis and checks properties of every plan the model returns."
+    },
+    {
+      "type": "para",
+      "text": "`drawn_properties.py` gives you milestone 2's model with a reduced rule set (must-do, at-most-once, alternative, precedence-with-lag and yearly budget rows), `solve`, `plan_of`, `value` and the rule checker `check(snapshot, plan)`, which reads only the data. `build(snapshot, skip)` can plant a bug for testing your tests: `skip` may hold `\"must\"`, `\"alt\"`, `\"budget\"` (those rows left out), `\"lag\"` (every lag read as 0) or `\"value\"` (a stray 1 added to the objective). A drawn portfolio uses the years 2027 to 2029 and the milestones' project fields: `cost`, `earliest`, `latest`, `must`, `parent`, `lag`, `group`, `npv`."
+    },
+    {
+      "type": "para",
+      "text": "Write:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "function",
+        "contract",
+        "lesson"
+      ],
+      "rows": [
+        [
+          "`portfolios()`",
+          "a Hypothesis strategy (`st.composite`) that returns `(snapshot, witness)`: one to six projects, and a witness plan that breaks no rule. Draw the witness while you draw the projects (a project can join it only when its parent is in it early enough, lag included, and its group is still free; only a project the witness funds can be a must-do), then set each year's budget to the witness's spend there plus a tight slack ($0k to $40k, in steps of $10k) or a loose one ($1,000k). Draw parents, lags of 0 or 1, groups and must-dos, and an NPV that falls $5k per year of delay",
+          "12.3.2"
+        ],
+        [
+          "`holds(snapshot, witness, skip)`",
+          "solve `build(snapshot, skip)` and fail an `assert` unless: the status is OPTIMAL; the plan breaks no rule (`check`); the reported objective equals the plan's value; the plan is worth at least the witness; and $10k more in every year never lowers the optimum",
+          "12.3.2, 12.3.3"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The reference draws its portfolios this way; other choices pass as long as every planted bug is still caught:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Costs and windows.** A cost profile of one or two years, each amount a multiple of $10k from $10k to $90k. The window lies inside 2027 to 2029 and leaves room for the whole profile: the latest start is at most 2029 minus the profile's length plus one.",
+        "**Links.** A parent is drawn from the projects already drawn, or none; the lag is 0 or 1 when there is a parent; the group is none (two chances in three) or `\"G1\"`.",
+        "**The witness.** One start year is drawn in the window. The project may join the witness only if its parent is in it and started at least the lag earlier, and no project of its group is in it; if it may, a coin decides.",
+        "**Must-dos.** Only a project the witness funds can be a must-do, and a second coin decides whether it is one. A project outside the witness is never a must-do, so the witness keeps every must-do row.",
+        "**NPV.** A base value from −$10k to $100k at the earliest start, $5k less for each year the start is later."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The tests run your strategy on 200 portfolios (`max_examples=200`, `derandomize=True`, no database, no deadline), expect every property to hold for the correct model, and expect each planted bug to be caught by some drawn portfolio. A bug that no drawn case can show is a hole in the strategy, not in the model. About forty lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Milestone 5: properties every plan must keep, checked on practice portfolios drawn around a witness.\n\nA practice portfolio is a dict in the milestones' shape, reduced here to years, budget and projects:\n    {\"years\": [...], \"budget\": {year: $k}, \"projects\": {id: {\"cost\": [...], \"earliest\", \"latest\",\n     \"must\", \"parent\", \"lag\", \"group\", \"npv\": {start year: $k}}}}\nA plan is {project id: start year}. The portfolios are invented test data for a fictional utility.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom hypothesis import strategies as st\n\n# ---- given: milestone 2's model and rule checker, with a reduced rule set ----------------------------\n\nimport contextlib\nimport ctypes\nimport os\nimport sys\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef starts(job: dict) -> range:\n    return range(job[\"earliest\"], job[\"latest\"] + 1)\n\n\ndef spend(job: dict, start: int) -> dict[int, int]:\n    \"\"\"What a project started in `start` spends in each year of work.\"\"\"\n    return {start + k: c for k, c in enumerate(job[\"cost\"])}\n\n\ndef build(snapshot: dict, skip: frozenset = frozenset()):\n    \"\"\"Milestone 2's model, with must_, once_, alt_, after_ and budget_ rows only.\n\n    `skip` plants a bug, for testing the tests: \"must\", \"alt\" or \"budget\" leaves those rows out,\n    \"lag\" reads every lag as 0, \"value\" adds a stray 1 to the objective.\n    \"\"\"\n    jobs = snapshot[\"projects\"]\n    model = mathopt.Model(name=\"practice plan\")\n    x = {(j, t): model.add_binary_variable(name=f\"x_{j}_{t}\") for j in sorted(jobs) for t in starts(jobs[j])}\n\n    def started(j):\n        return mathopt.LinearExpression() + mathopt.fast_sum(x[j, t] for t in starts(jobs[j]))\n\n    for j in sorted(jobs):\n        if jobs[j][\"must\"] and \"must\" not in skip:\n            model.add_linear_constraint(started(j) == 1, name=f\"must_{j}\")\n        else:\n            model.add_linear_constraint(started(j) <= 1, name=f\"once_{j}\")\n    groups: dict[str, list[str]] = {}\n    for j in sorted(jobs):\n        if jobs[j][\"group\"]:\n            groups.setdefault(jobs[j][\"group\"], []).append(j)\n    for g, members in sorted(groups.items()):\n        if \"alt\" not in skip:\n            model.add_linear_constraint(mathopt.fast_sum(started(m) for m in members) <= 1, name=f\"alt_{g}\")\n    for c in sorted(jobs):\n        p, lag = jobs[c][\"parent\"], 0 if \"lag\" in skip else jobs[c][\"lag\"]\n        if p:\n            for t in starts(jobs[c]):\n                model.add_linear_constraint(\n                    mathopt.LinearExpression() + mathopt.fast_sum(x[c, u] for u in starts(jobs[c]) if u <= t)\n                    - mathopt.fast_sum(x[p, s] for s in starts(jobs[p]) if s <= t - lag) <= 0, name=f\"after_{c}_{t}\")\n    for y in snapshot[\"years\"]:\n        if \"budget\" not in skip:\n            model.add_linear_constraint(\n                mathopt.LinearExpression() + mathopt.fast_sum(\n                    spend(jobs[j], t).get(y, 0) * v for (j, t), v in x.items()) <= snapshot[\"budget\"][y],\n                name=f\"budget_{y}\")\n    model.maximize(mathopt.fast_sum(jobs[j][\"npv\"][t] * v for (j, t), v in x.items()) + (1 if \"value\" in skip else 0))\n    return model, x\n\n\n@contextlib.contextmanager\ndef _quiet():\n    \"\"\"Keep the bundled HiGHS's stray C output off the screen.\"\"\"\n    sys.stdout.flush()\n    saved, sink = os.dup(1), os.open(os.devnull, os.O_WRONLY)\n    os.dup2(sink, 1)\n    try:\n        yield\n    finally:\n        ctypes.CDLL(None).fflush(None)\n        os.dup2(saved, 1)\n        os.close(saved)\n        os.close(sink)\n\n\ndef solve(model, model_params=None) -> mathopt.SolveResult:\n    \"\"\"HiGHS to a zero gap.\"\"\"\n    with _quiet():\n        return mathopt.solve(model, mathopt.SolverType.HIGHS,\n                             params=mathopt.SolveParameters(relative_gap_tolerance=0.0), model_params=model_params)\n\n\ndef plan_of(x, result) -> dict[str, int]:\n    values = result.variable_values()\n    return {j: t for (j, t), v in x.items() if values[v] > 0.5}\n\n\ndef value(snapshot: dict, plan: dict[str, int]) -> int:\n    return sum(snapshot[\"projects\"][j][\"npv\"][t] for j, t in plan.items())\n\n\ndef check(snapshot: dict, plan: dict[str, int]) -> list[str]:\n    \"\"\"Every rule the plan breaks, by row name, from the data alone.\"\"\"\n    jobs, broken = snapshot[\"projects\"], []\n    broken += [f\"window_{j}\" for j, t in sorted(plan.items()) if t not in starts(jobs[j])]\n    broken += [f\"must_{j}\" for j in sorted(jobs) if jobs[j][\"must\"] and j not in plan]\n    groups: dict[str, int] = {}\n    for j in plan:\n        if jobs[j][\"group\"]:\n            groups[jobs[j][\"group\"]] = groups.get(jobs[j][\"group\"], 0) + 1\n    broken += [f\"alt_{g}\" for g, n in sorted(groups.items()) if n > 1]\n    for c, t in sorted(plan.items()):\n        p = jobs[c][\"parent\"]\n        if p and (p not in plan or plan[p] + jobs[c][\"lag\"] > t):\n            broken.append(f\"after_{c}_{t}\")\n    for y in snapshot[\"years\"]:\n        if sum(spend(jobs[j], t).get(y, 0) for j, t in plan.items()) > snapshot[\"budget\"][y]:\n            broken.append(f\"budget_{y}\")\n    return broken\n\n\n# ---- yours -----------------------------------------------------------------------------------------\n\nYEARS = [2027, 2028, 2029]\n\n\n@st.composite\ndef portfolios(draw, max_projects: int = 6):\n    \"\"\"(snapshot, witness): a drawn portfolio and a plan that breaks none of its rules.\"\"\"\n    jobs: dict[str, dict] = {}\n    witness: dict[str, int] = {}\n    groups_used: set[str] = set()\n    for k in range(draw(st.integers(1, max_projects))):\n        j = f\"J{k + 1}\"\n        cost = draw(st.lists(st.integers(1, 9).map(lambda c: 10 * c), min_size=1, max_size=2))\n        latest_possible = YEARS[-1] - len(cost) + 1\n        earliest = draw(st.integers(YEARS[0], latest_possible))\n        latest = draw(st.integers(earliest, latest_possible))\n        parent = draw(st.sampled_from([None] + sorted(jobs))) if jobs else None\n        lag = draw(st.integers(0, 1)) if parent else 0\n        group = draw(st.sampled_from([None, None, \"G1\"]))\n        start = draw(st.integers(earliest, latest))\n        can = (parent is None or (parent in witness and witness[parent] + lag <= start)) and group not in groups_used\n        chosen = can and draw(st.booleans())\n        if chosen:\n            witness[j] = start\n            if group:\n                groups_used.add(group)\n        first_npv = draw(st.integers(-10, 100))\n        jobs[j] = {\"cost\": cost, \"earliest\": earliest, \"latest\": latest, \"must\": chosen and draw(st.booleans()),\n                   \"parent\": parent, \"lag\": lag, \"group\": group,\n                   \"npv\": {t: first_npv - 5 * (t - earliest) for t in range(earliest, latest + 1)}}\n    used = {y: sum(spend(jobs[j], t).get(y, 0) for j, t in witness.items()) for y in YEARS}\n    tight_or_loose = st.one_of(st.integers(0, 4).map(lambda s: 10 * s), st.just(1_000))\n    snapshot = {\"years\": YEARS, \"budget\": {y: used[y] + draw(tight_or_loose) for y in YEARS}, \"projects\": jobs}\n    return snapshot, witness\n\n\ndef holds(snapshot: dict, witness: dict[str, int], skip: frozenset = frozenset()) -> None:\n    \"\"\"Solve `build(snapshot, skip)` and fail an assert if any property does not hold.\"\"\"\n    model, x = build(snapshot, skip)\n    result = solve(model)\n    assert result.termination.reason == mathopt.TerminationReason.OPTIMAL, \"no plan for a feasible portfolio\"\n    plan = plan_of(x, result)\n    assert check(snapshot, plan) == [], f\"{plan} breaks {check(snapshot, plan)}\"\n    assert abs(result.objective_value() - value(snapshot, plan)) < 1e-6, \"the reported value is not the plan's\"\n    assert value(snapshot, plan) >= value(snapshot, witness), \"worse than the witness\"\n    richer = {**snapshot, \"budget\": {y: b + 10 for y, b in snapshot[\"budget\"].items()}}\n    more = solve(build(richer, skip)[0])\n    assert more.objective_value() >= result.objective_value() - 1e-6, \"more budget lowered the value\"\n\n\nif __name__ == \"__main__\":\n    example = {\"years\": YEARS, \"budget\": {2027: 100, 2028: 100, 2029: 100},\n               \"projects\": {\"J1\": {\"cost\": [80], \"earliest\": 2027, \"latest\": 2028, \"must\": True, \"parent\": None,\n                                   \"lag\": 0, \"group\": None, \"npv\": {2027: 50, 2028: 45}}}}\n    holds(example, {\"J1\": 2027})\n    print(\"every property holds on the example\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Milestone 5: properties every plan must keep, checked on practice portfolios drawn around a witness.\n\nA practice portfolio is a dict in the milestones' shape, reduced here to years, budget and projects:\n    {\"years\": [...], \"budget\": {year: $k}, \"projects\": {id: {\"cost\": [...], \"earliest\", \"latest\",\n     \"must\", \"parent\", \"lag\", \"group\", \"npv\": {start year: $k}}}}\nA plan is {project id: start year}. The portfolios are invented test data for a fictional utility.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom hypothesis import strategies as st\n\n# ---- given: milestone 2's model and rule checker, with a reduced rule set ----------------------------\n\nimport contextlib\nimport ctypes\nimport os\nimport sys\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef starts(job: dict) -> range:\n    return range(job[\"earliest\"], job[\"latest\"] + 1)\n\n\ndef spend(job: dict, start: int) -> dict[int, int]:\n    \"\"\"What a project started in `start` spends in each year of work.\"\"\"\n    return {start + k: c for k, c in enumerate(job[\"cost\"])}\n\n\ndef build(snapshot: dict, skip: frozenset = frozenset()):\n    \"\"\"Milestone 2's model, with must_, once_, alt_, after_ and budget_ rows only.\n\n    `skip` plants a bug, for testing the tests: \"must\", \"alt\" or \"budget\" leaves those rows out,\n    \"lag\" reads every lag as 0, \"value\" adds a stray 1 to the objective.\n    \"\"\"\n    jobs = snapshot[\"projects\"]\n    model = mathopt.Model(name=\"practice plan\")\n    x = {(j, t): model.add_binary_variable(name=f\"x_{j}_{t}\") for j in sorted(jobs) for t in starts(jobs[j])}\n\n    def started(j):\n        return mathopt.LinearExpression() + mathopt.fast_sum(x[j, t] for t in starts(jobs[j]))\n\n    for j in sorted(jobs):\n        if jobs[j][\"must\"] and \"must\" not in skip:\n            model.add_linear_constraint(started(j) == 1, name=f\"must_{j}\")\n        else:\n            model.add_linear_constraint(started(j) <= 1, name=f\"once_{j}\")\n    groups: dict[str, list[str]] = {}\n    for j in sorted(jobs):\n        if jobs[j][\"group\"]:\n            groups.setdefault(jobs[j][\"group\"], []).append(j)\n    for g, members in sorted(groups.items()):\n        if \"alt\" not in skip:\n            model.add_linear_constraint(mathopt.fast_sum(started(m) for m in members) <= 1, name=f\"alt_{g}\")\n    for c in sorted(jobs):\n        p, lag = jobs[c][\"parent\"], 0 if \"lag\" in skip else jobs[c][\"lag\"]\n        if p:\n            for t in starts(jobs[c]):\n                model.add_linear_constraint(\n                    mathopt.LinearExpression() + mathopt.fast_sum(x[c, u] for u in starts(jobs[c]) if u <= t)\n                    - mathopt.fast_sum(x[p, s] for s in starts(jobs[p]) if s <= t - lag) <= 0, name=f\"after_{c}_{t}\")\n    for y in snapshot[\"years\"]:\n        if \"budget\" not in skip:\n            model.add_linear_constraint(\n                mathopt.LinearExpression() + mathopt.fast_sum(\n                    spend(jobs[j], t).get(y, 0) * v for (j, t), v in x.items()) <= snapshot[\"budget\"][y],\n                name=f\"budget_{y}\")\n    model.maximize(mathopt.fast_sum(jobs[j][\"npv\"][t] * v for (j, t), v in x.items()) + (1 if \"value\" in skip else 0))\n    return model, x\n\n\n@contextlib.contextmanager\ndef _quiet():\n    \"\"\"Keep the bundled HiGHS's stray C output off the screen.\"\"\"\n    sys.stdout.flush()\n    saved, sink = os.dup(1), os.open(os.devnull, os.O_WRONLY)\n    os.dup2(sink, 1)\n    try:\n        yield\n    finally:\n        ctypes.CDLL(None).fflush(None)\n        os.dup2(saved, 1)\n        os.close(saved)\n        os.close(sink)\n\n\ndef solve(model, model_params=None) -> mathopt.SolveResult:\n    \"\"\"HiGHS to a zero gap.\"\"\"\n    with _quiet():\n        return mathopt.solve(model, mathopt.SolverType.HIGHS,\n                             params=mathopt.SolveParameters(relative_gap_tolerance=0.0), model_params=model_params)\n\n\ndef plan_of(x, result) -> dict[str, int]:\n    values = result.variable_values()\n    return {j: t for (j, t), v in x.items() if values[v] > 0.5}\n\n\ndef value(snapshot: dict, plan: dict[str, int]) -> int:\n    return sum(snapshot[\"projects\"][j][\"npv\"][t] for j, t in plan.items())\n\n\ndef check(snapshot: dict, plan: dict[str, int]) -> list[str]:\n    \"\"\"Every rule the plan breaks, by row name, from the data alone.\"\"\"\n    jobs, broken = snapshot[\"projects\"], []\n    broken += [f\"window_{j}\" for j, t in sorted(plan.items()) if t not in starts(jobs[j])]\n    broken += [f\"must_{j}\" for j in sorted(jobs) if jobs[j][\"must\"] and j not in plan]\n    groups: dict[str, int] = {}\n    for j in plan:\n        if jobs[j][\"group\"]:\n            groups[jobs[j][\"group\"]] = groups.get(jobs[j][\"group\"], 0) + 1\n    broken += [f\"alt_{g}\" for g, n in sorted(groups.items()) if n > 1]\n    for c, t in sorted(plan.items()):\n        p = jobs[c][\"parent\"]\n        if p and (p not in plan or plan[p] + jobs[c][\"lag\"] > t):\n            broken.append(f\"after_{c}_{t}\")\n    for y in snapshot[\"years\"]:\n        if sum(spend(jobs[j], t).get(y, 0) for j, t in plan.items()) > snapshot[\"budget\"][y]:\n            broken.append(f\"budget_{y}\")\n    return broken\n\n\n# ---- yours -----------------------------------------------------------------------------------------\n\nYEARS = [2027, 2028, 2029]\n\n\n@st.composite\ndef portfolios(draw, max_projects: int = 6):\n    \"\"\"(snapshot, witness): a drawn portfolio and a plan that breaks none of its rules.\"\"\"\n    # TODO: draw the projects and a witness plan first, then budgets around the witness.\n    return {\"years\": YEARS, \"budget\": {y: 0 for y in YEARS}, \"projects\": {}}, {}\n\n\ndef holds(snapshot: dict, witness: dict[str, int], skip: frozenset = frozenset()) -> None:\n    \"\"\"Solve `build(snapshot, skip)` and fail an assert if any property does not hold.\"\"\"\n    # TODO\n\n\nif __name__ == \"__main__\":\n    example = {\"years\": YEARS, \"budget\": {2027: 100, 2028: 100, 2029: 100},\n               \"projects\": {\"J1\": {\"cost\": [80], \"earliest\": 2027, \"latest\": 2028, \"must\": True, \"parent\": None,\n                                   \"lag\": 0, \"group\": None, \"npv\": {2027: 50, 2028: 45}}}}\n    holds(example, {\"J1\": 2027})\n    print(\"every property holds on the example\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 1,
+    "tables": 1,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "b8d316740df490e076bc59e9a77eb5d6ad8aca19bd926022ea286ce957381b6e",
+  "starting_code": "\"\"\"Milestone 5: properties every plan must keep, checked on practice portfolios drawn around a witness.\n\nA practice portfolio is a dict in the milestones' shape, reduced here to years, budget and projects:\n    {\"years\": [...], \"budget\": {year: $k}, \"projects\": {id: {\"cost\": [...], \"earliest\", \"latest\",\n     \"must\", \"parent\", \"lag\", \"group\", \"npv\": {start year: $k}}}}\nA plan is {project id: start year}. The portfolios are invented test data for a fictional utility.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom hypothesis import strategies as st\n\n# ---- given: milestone 2's model and rule checker, with a reduced rule set ----------------------------\n\nimport contextlib\nimport ctypes\nimport os\nimport sys\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef starts(job: dict) -> range:\n    return range(job[\"earliest\"], job[\"latest\"] + 1)\n\n\ndef spend(job: dict, start: int) -> dict[int, int]:\n    \"\"\"What a project started in `start` spends in each year of work.\"\"\"\n    return {start + k: c for k, c in enumerate(job[\"cost\"])}\n\n\ndef build(snapshot: dict, skip: frozenset = frozenset()):\n    \"\"\"Milestone 2's model, with must_, once_, alt_, after_ and budget_ rows only.\n\n    `skip` plants a bug, for testing the tests: \"must\", \"alt\" or \"budget\" leaves those rows out,\n    \"lag\" reads every lag as 0, \"value\" adds a stray 1 to the objective.\n    \"\"\"\n    jobs = snapshot[\"projects\"]\n    model = mathopt.Model(name=\"practice plan\")\n    x = {(j, t): model.add_binary_variable(name=f\"x_{j}_{t}\") for j in sorted(jobs) for t in starts(jobs[j])}\n\n    def started(j):\n        return mathopt.LinearExpression() + mathopt.fast_sum(x[j, t] for t in starts(jobs[j]))\n\n    for j in sorted(jobs):\n        if jobs[j][\"must\"] and \"must\" not in skip:\n            model.add_linear_constraint(started(j) == 1, name=f\"must_{j}\")\n        else:\n            model.add_linear_constraint(started(j) <= 1, name=f\"once_{j}\")\n    groups: dict[str, list[str]] = {}\n    for j in sorted(jobs):\n        if jobs[j][\"group\"]:\n            groups.setdefault(jobs[j][\"group\"], []).append(j)\n    for g, members in sorted(groups.items()):\n        if \"alt\" not in skip:\n            model.add_linear_constraint(mathopt.fast_sum(started(m) for m in members) <= 1, name=f\"alt_{g}\")\n    for c in sorted(jobs):\n        p, lag = jobs[c][\"parent\"], 0 if \"lag\" in skip else jobs[c][\"lag\"]\n        if p:\n            for t in starts(jobs[c]):\n                model.add_linear_constraint(\n                    mathopt.LinearExpression() + mathopt.fast_sum(x[c, u] for u in starts(jobs[c]) if u <= t)\n                    - mathopt.fast_sum(x[p, s] for s in starts(jobs[p]) if s <= t - lag) <= 0, name=f\"after_{c}_{t}\")\n    for y in snapshot[\"years\"]:\n        if \"budget\" not in skip:\n            model.add_linear_constraint(\n                mathopt.LinearExpression() + mathopt.fast_sum(\n                    spend(jobs[j], t).get(y, 0) * v for (j, t), v in x.items()) <= snapshot[\"budget\"][y],\n                name=f\"budget_{y}\")\n    model.maximize(mathopt.fast_sum(jobs[j][\"npv\"][t] * v for (j, t), v in x.items()) + (1 if \"value\" in skip else 0))\n    return model, x\n\n\n@contextlib.contextmanager\ndef _quiet():\n    \"\"\"Keep the bundled HiGHS's stray C output off the screen.\"\"\"\n    sys.stdout.flush()\n    saved, sink = os.dup(1), os.open(os.devnull, os.O_WRONLY)\n    os.dup2(sink, 1)\n    try:\n        yield\n    finally:\n        ctypes.CDLL(None).fflush(None)\n        os.dup2(saved, 1)\n        os.close(saved)\n        os.close(sink)\n\n\ndef solve(model, model_params=None) -> mathopt.SolveResult:\n    \"\"\"HiGHS to a zero gap.\"\"\"\n    with _quiet():\n        return mathopt.solve(model, mathopt.SolverType.HIGHS,\n                             params=mathopt.SolveParameters(relative_gap_tolerance=0.0), model_params=model_params)\n\n\ndef plan_of(x, result) -> dict[str, int]:\n    values = result.variable_values()\n    return {j: t for (j, t), v in x.items() if values[v] > 0.5}\n\n\ndef value(snapshot: dict, plan: dict[str, int]) -> int:\n    return sum(snapshot[\"projects\"][j][\"npv\"][t] for j, t in plan.items())\n\n\ndef check(snapshot: dict, plan: dict[str, int]) -> list[str]:\n    \"\"\"Every rule the plan breaks, by row name, from the data alone.\"\"\"\n    jobs, broken = snapshot[\"projects\"], []\n    broken += [f\"window_{j}\" for j, t in sorted(plan.items()) if t not in starts(jobs[j])]\n    broken += [f\"must_{j}\" for j in sorted(jobs) if jobs[j][\"must\"] and j not in plan]\n    groups: dict[str, int] = {}\n    for j in plan:\n        if jobs[j][\"group\"]:\n            groups[jobs[j][\"group\"]] = groups.get(jobs[j][\"group\"], 0) + 1\n    broken += [f\"alt_{g}\" for g, n in sorted(groups.items()) if n > 1]\n    for c, t in sorted(plan.items()):\n        p = jobs[c][\"parent\"]\n        if p and (p not in plan or plan[p] + jobs[c][\"lag\"] > t):\n            broken.append(f\"after_{c}_{t}\")\n    for y in snapshot[\"years\"]:\n        if sum(spend(jobs[j], t).get(y, 0) for j, t in plan.items()) > snapshot[\"budget\"][y]:\n            broken.append(f\"budget_{y}\")\n    return broken\n\n\n# ---- yours -----------------------------------------------------------------------------------------\n\nYEARS = [2027, 2028, 2029]\n\n\n@st.composite\ndef portfolios(draw, max_projects: int = 6):\n    \"\"\"(snapshot, witness): a drawn portfolio and a plan that breaks none of its rules.\"\"\"\n    # TODO: draw the projects and a witness plan first, then budgets around the witness.\n    return {\"years\": YEARS, \"budget\": {y: 0 for y in YEARS}, \"projects\": {}}, {}\n\n\ndef holds(snapshot: dict, witness: dict[str, int], skip: frozenset = frozenset()) -> None:\n    \"\"\"Solve `build(snapshot, skip)` and fail an assert if any property does not hold.\"\"\"\n    # TODO\n\n\nif __name__ == \"__main__\":\n    example = {\"years\": YEARS, \"budget\": {2027: 100, 2028: 100, 2029: 100},\n               \"projects\": {\"J1\": {\"cost\": [80], \"earliest\": 2027, \"latest\": 2028, \"must\": True, \"parent\": None,\n                                   \"lag\": 0, \"group\": None, \"npv\": {2027: 50, 2028: 45}}}}\n    holds(example, {\"J1\": 2027})\n    print(\"every property holds on the example\")\n",
+  "exercise": {
+    "main_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-05/practice-2/drawn_properties.py",
+    "test_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-05/practice-2/test_drawn_properties.py",
+    "run_command": [
+      "python3",
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-05/practice-2/drawn_properties.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/13-capstone/51-capstone-cipt-lite/prose/unit-05/practice-2/target/report.xml",
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-05/practice-2/test_drawn_properties.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_every_property_holds_on_200_drawn_portfolios_and_a_model_without_budgets_fails",
+        "kind": "main",
+        "says": "every property holds on 200 drawn portfolios for the correct model, and some drawn portfolio catches a model with no budget rows"
+      },
+      {
+        "id": "test_every_witness_breaks_no_rule",
+        "kind": "main",
+        "says": "every drawn portfolio comes with a witness plan that breaks none of its rules, and most witnesses fund something"
+      },
+      {
+        "id": "test_a_model_without_alternative_rows_is_caught",
+        "kind": "edge",
+        "says": "the drawn portfolios include alternatives, so a model that funds two of a group is caught"
+      },
+      {
+        "id": "test_a_model_that_reads_every_lag_as_zero_is_caught",
+        "kind": "edge",
+        "says": "the drawn portfolios include lags, so a model that lets a child start in its parent's year is caught"
+      },
+      {
+        "id": "test_a_model_without_must_do_rows_is_caught",
+        "kind": "edge",
+        "says": "the drawn portfolios include must-dos, so a model that may drop one is caught"
+      },
+      {
+        "id": "test_a_model_that_reports_a_value_its_plan_does_not_have_is_caught",
+        "kind": "edge",
+        "says": "the value the solver reports is compared with the value of the plan it returns"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-05/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "51-capstone-cipt-lite/README_13.1.5.md",
+      "section": "Properties Must Hold on Every Drawn Portfolio"
+    },
+    "concepts": [
+      "a strategy that draws portfolios around a witness plan, and properties every plan must keep"
+    ]
+  }
+}

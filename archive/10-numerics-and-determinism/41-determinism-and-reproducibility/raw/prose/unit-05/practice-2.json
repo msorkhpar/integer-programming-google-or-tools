@@ -1,0 +1,131 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "10-numerics-and-determinism",
+    "41-determinism-and-reproducibility"
+  ],
+  "variant": "prose",
+  "unit": 5,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "A determinism check for HiGHS and CP-SAT",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A pipeline-inspection company schedules its inspection robots with a small MILP and wants a test that fails the build when a run stops repeating. A run is a function of no arguments that solves the model and returns its manifest, a dict such as `{\"status\": \"OPTIMAL\", \"objective\": 17.0, \"plan\": [[\"R1\", \"seg-4\"], ...]}`."
+    },
+    {
+      "type": "para",
+      "text": "Write `assert_deterministic(run, runs)`. It calls `run` exactly `runs` times and compares every manifest with the first, in the canonical form `canonical(manifest)` that the starter gives you. If they all match, it returns the sha256 hex digest of that canonical form. If any differs, it raises `AssertionError` with a message that names the first run that differs (for example \"run 3\") and the top-level fields that differ, using `changed_fields(a, b)` from the starter."
+    },
+    {
+      "type": "para",
+      "text": "The tests run it on a HiGHS model and on a CP-SAT model, and on runs made to change. About ten lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport hashlib\nimport json\n\n\ndef canonical(manifest: dict) -> bytes:\n    return json.dumps(manifest, sort_keys=True, separators=(\",\", \":\")).encode(\"utf-8\")\n\n\ndef changed_fields(a: dict, b: dict) -> list[str]:\n    \"\"\"Top-level keys whose values differ, or that only one manifest has.\"\"\"\n    return sorted(k for k in set(a) | set(b) if a.get(k) != b.get(k))\n\n\ndef assert_deterministic(run, runs: int = 5) -> str:\n    \"\"\"Call run() `runs` times; return the manifest digest, or raise AssertionError naming the change.\"\"\"\n    seen = [canonical(run()) for _ in range(runs)]\n    odd = next((k for k, m in enumerate(seen) if m != seen[0]), None)\n    if odd is not None:\n        fields = changed_fields(json.loads(seen[0]), json.loads(seen[odd]))\n        raise AssertionError(f\"run {odd + 1} of {runs} differs from run 1 in: {', '.join(fields)}\")\n    return hashlib.sha256(seen[0]).hexdigest()\n\n\nif __name__ == \"__main__\":\n    print(assert_deterministic(lambda: {\"status\": \"OPTIMAL\", \"objective\": 17.0}, 3))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport hashlib\nimport json\n\n\ndef canonical(manifest: dict) -> bytes:\n    return json.dumps(manifest, sort_keys=True, separators=(\",\", \":\")).encode(\"utf-8\")\n\n\ndef changed_fields(a: dict, b: dict) -> list[str]:\n    \"\"\"Top-level keys whose values differ, or that only one manifest has.\"\"\"\n    return sorted(k for k in set(a) | set(b) if a.get(k) != b.get(k))\n\n\ndef assert_deterministic(run, runs: int = 5) -> str:\n    \"\"\"Call run() `runs` times; return the manifest digest, or raise AssertionError naming the change.\"\"\"\n    # TODO: write it.\n    return \"\"\n\n\nif __name__ == \"__main__\":\n    print(assert_deterministic(lambda: {\"status\": \"OPTIMAL\", \"objective\": 17.0}, 3))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "3dd8f76edf904d05be5d2d11be8e5973cb1a2cd81b465abbc76ffa728706e390",
+  "starting_code": "from __future__ import annotations\n\nimport hashlib\nimport json\n\n\ndef canonical(manifest: dict) -> bytes:\n    return json.dumps(manifest, sort_keys=True, separators=(\",\", \":\")).encode(\"utf-8\")\n\n\ndef changed_fields(a: dict, b: dict) -> list[str]:\n    \"\"\"Top-level keys whose values differ, or that only one manifest has.\"\"\"\n    return sorted(k for k in set(a) | set(b) if a.get(k) != b.get(k))\n\n\ndef assert_deterministic(run, runs: int = 5) -> str:\n    \"\"\"Call run() `runs` times; return the manifest digest, or raise AssertionError naming the change.\"\"\"\n    # TODO: write it.\n    return \"\"\n\n\nif __name__ == \"__main__\":\n    print(assert_deterministic(lambda: {\"status\": \"OPTIMAL\", \"objective\": 17.0}, 3))\n",
+  "exercise": {
+    "main_path": "practice/10-numerics-and-determinism/41-determinism-and-reproducibility/prose/unit-05/practice-2/determinism.py",
+    "test_path": "practice/10-numerics-and-determinism/41-determinism-and-reproducibility/prose/unit-05/practice-2/test_determinism.py",
+    "run_command": [
+      "python3",
+      "practice/10-numerics-and-determinism/41-determinism-and-reproducibility/prose/unit-05/practice-2/determinism.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/10-numerics-and-determinism/41-determinism-and-reproducibility/prose/unit-05/practice-2/target/report.xml",
+      "practice/10-numerics-and-determinism/41-determinism-and-reproducibility/prose/unit-05/practice-2/test_determinism.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_repeatable_runs_pass_on_highs_and_cpsat_and_a_changing_run_fails",
+        "kind": "main",
+        "says": "a HiGHS run and a CP-SAT run pass and return their digest; a run whose objective changes fails"
+      },
+      {
+        "id": "test_a_difference_in_a_later_run_is_caught",
+        "kind": "edge",
+        "says": "every run is compared with the first, not only the second"
+      },
+      {
+        "id": "test_an_equally_good_other_plan_is_caught",
+        "kind": "edge",
+        "says": "the whole manifest is compared, so a tie with another plan fails"
+      },
+      {
+        "id": "test_the_failure_names_the_fields_that_changed",
+        "kind": "edge",
+        "says": "the error message names the run and the fields that differ"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/10-numerics-and-determinism/41-determinism-and-reproducibility/prose/unit-05/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "41-determinism-and-reproducibility/README_10.2.5.md",
+      "section": "A Determinism Test Belongs in the Test Suite"
+    },
+    "concepts": [
+      "every run is compared with the first as canonical bytes, and a difference fails with the changed fields named"
+    ]
+  }
+}

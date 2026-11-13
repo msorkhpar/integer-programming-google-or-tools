@@ -1,0 +1,120 @@
+{
+  "quiz_api": 1,
+  "address": [
+    "12-engineering-the-optimization-service",
+    "49-cloud-deployment"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "ordinal": 3,
+  "title": "Testing AWS code against moto",
+  "exercise": {
+    "provenance": "generated",
+    "trust": "advisory",
+    "kind": "quiz",
+    "questions": [
+      {
+        "id": "q-fake-keys",
+        "stem": "A team's conftest.py sets AWS_ACCESS_KEY_ID and the other variables to testing before any client exists. Why, by the lesson?",
+        "options": [
+          {
+            "id": "a",
+            "text": "So moto can find the developer's real account and copy its buckets into memory",
+            "correct": false,
+            "says": "Inside the mock the bucket exists only in moto's memory, and the account is moto's placeholder 123456789012."
+          },
+          {
+            "id": "b",
+            "text": "So boto3 skips signing requests, which is what lets moto answer with no network",
+            "correct": false,
+            "says": "boto3 signs with whatever credentials it finds; with none, it refuses to sign (NoCredentialsError)."
+          },
+          {
+            "id": "c",
+            "text": "So the tests reach the team's AWS test account, whose key moto reads from them",
+            "correct": false,
+            "says": "No account is used: moto answers from memory, and testing belongs to no one."
+          },
+          {
+            "id": "d",
+            "text": "So a request that escaped the mock signs with a key no one owns, and AWS refuses it",
+            "correct": true,
+            "says": "Right: a request that escaped the mock would be signed with the key testing, which belongs to no one."
+          }
+        ],
+        "origin": {
+          "path": "49-cloud-deployment/README_12.5.4.md",
+          "section": "Fake Credentials Come First, So No Test Can Sign as Anyone"
+        }
+      },
+      {
+        "id": "q-pages",
+        "stem": "A function lists a bucket's results with a single list_objects_v2 call. Its moto test stores 1,500 result objects first. What does the call return under moto?",
+        "options": [
+          {
+            "id": "a",
+            "text": "All 1,500 keys, because moto returns every key and only real S3 stops at 1,000",
+            "correct": false,
+            "says": "moto stops at 1,000 too: the output shows 'one list call: 1000 keys, IsTruncated True'."
+          },
+          {
+            "id": "b",
+            "text": "1,000 keys with no sign that more exist, so only a run against real S3 shows the bug",
+            "correct": false,
+            "says": "The response sets IsTruncated, as the output shows; the moto test catches it."
+          },
+          {
+            "id": "c",
+            "text": "1,000 keys with IsTruncated set, as S3 does, so this test catches the missing pages",
+            "correct": true,
+            "says": "Right: moto pages like S3; the paginator found all 1,005 where one call found 1,000."
+          },
+          {
+            "id": "d",
+            "text": "An error that asks for a paginator, so the bug shows up as an exception in the test",
+            "correct": false,
+            "says": "No error: the single call returned 1,000 keys and IsTruncated True."
+          }
+        ],
+        "origin": {
+          "path": "49-cloud-deployment/README_12.5.4.md",
+          "section": "moto Returns AWS's Errors and Pages, So Test Them"
+        }
+      },
+      {
+        "id": "q-green",
+        "stem": "A moto test submits a Batch job named \"run 0042!\" with a 30-second timeout, then asserts the job ends SUCCEEDED. The test passes. What does that show?",
+        "options": [
+          {
+            "id": "a",
+            "text": "Little: moto accepted a request AWS refuses, and it marks every job done without running it",
+            "correct": true,
+            "says": "Right: the output shows both accepted, and with use_docker off moto assumes every job succeeds."
+          },
+          {
+            "id": "b",
+            "text": "That AWS will accept the request as well, because moto checks each request against AWS's rules",
+            "correct": false,
+            "says": "moto accepted a job name AWS forbids and a timeout under AWS's 60-second minimum."
+          },
+          {
+            "id": "c",
+            "text": "That the solve ran and wrote its result, because moto runs each job's container to the end",
+            "correct": false,
+            "says": "With use_docker off, moto's documentation says job scripts are not executed and are assumed to succeed."
+          },
+          {
+            "id": "d",
+            "text": "That the job role has the permissions it needs, because moto checks IAM on every call",
+            "correct": false,
+            "says": "moto's IAM page: by default it does not authenticate or authorize anything."
+          }
+        ],
+        "origin": {
+          "path": "49-cloud-deployment/README_12.5.4.md",
+          "section": "moto Accepts What AWS Would Refuse, So Validate Before You Call"
+        }
+      }
+    ]
+  }
+}

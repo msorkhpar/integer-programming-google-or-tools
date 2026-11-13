@@ -1,0 +1,146 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "05-other-modeling-frameworks-and-solvers",
+    "22-choosing-a-solver"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Which Xpress license will the container use?",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A team runs FICO Xpress from Python (`pip install xpress`) inside a container. The package's own page says how it finds a license: with no setting, it recognizes the free community license by itself; for a full license, you put the `xpauth.xpr` file in a folder and set the environment variable `XPRESS` to that **folder's** path, not the file's. The team wants its service to log, at start-up, which license it will get, so that a forgotten mount shows up in the first line of the log instead of as a size-limit error hours later."
+    },
+    {
+      "type": "para",
+      "text": "Write `xpress_license(env, files)` in `xproute.py`. `env` is the container's environment, and `files` the set of file paths present in the container. Return:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`\"community license\"` when `XPRESS` is missing or empty;",
+        "`\"XPRESS names the file; set it to the folder that holds xpauth.xpr\"` when its value ends with `xpauth.xpr`;",
+        "`\"license file <path>\"` when `<folder>/xpauth.xpr` is in `files`, with the path joined by `posixpath.join`, so a trailing slash on the folder does no harm;",
+        "`\"no xpauth.xpr in <folder>\"` otherwise, with the folder as given."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "About eight lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nimport posixpath\n\n\ndef xpress_license(env: dict[str, str], files: set[str]) -> str:\n    \"\"\"The license route an Xpress Python program in this container will take, from XPRESS and the files present.\"\"\"\n    folder = env.get(\"XPRESS\", \"\")\n    if not folder:\n        return \"community license\"\n    if folder.endswith(\"xpauth.xpr\"):\n        return \"XPRESS names the file; set it to the folder that holds xpauth.xpr\"\n    path = posixpath.join(folder, \"xpauth.xpr\")\n    if path in files:\n        return f\"license file {path}\"\n    return f\"no xpauth.xpr in {folder}\"\n\n\nif __name__ == \"__main__\":\n    print(xpress_license({\"XPRESS\": \"/licenses/xpress\"}, {\"/licenses/xpress/xpauth.xpr\"}))\n    print(xpress_license({}, set()))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nimport posixpath\n\n\ndef xpress_license(env: dict[str, str], files: set[str]) -> str:\n    \"\"\"The license route an Xpress Python program in this container will take, from XPRESS and the files present.\"\"\"\n    # TODO: unset or empty, the file named instead of its folder, the file found, or the file missing.\n    return \"\"\n\n\nif __name__ == \"__main__\":\n    print(xpress_license({\"XPRESS\": \"/licenses/xpress\"}, {\"/licenses/xpress/xpauth.xpr\"}))\n    print(xpress_license({}, set()))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "1b4524a979a4aa6e69f40a17da13273c6af68e3c6fa267e8f8c5be1df39beca5",
+  "starting_code": "from __future__ import annotations\n\nimport posixpath\n\n\ndef xpress_license(env: dict[str, str], files: set[str]) -> str:\n    \"\"\"The license route an Xpress Python program in this container will take, from XPRESS and the files present.\"\"\"\n    # TODO: unset or empty, the file named instead of its folder, the file found, or the file missing.\n    return \"\"\n\n\nif __name__ == \"__main__\":\n    print(xpress_license({\"XPRESS\": \"/licenses/xpress\"}, {\"/licenses/xpress/xpauth.xpr\"}))\n    print(xpress_license({}, set()))\n",
+  "exercise": {
+    "main_path": "practice/05-other-modeling-frameworks-and-solvers/22-choosing-a-solver/prose/unit-03/practice-2/xproute.py",
+    "test_path": "practice/05-other-modeling-frameworks-and-solvers/22-choosing-a-solver/prose/unit-03/practice-2/test_xproute.py",
+    "run_command": [
+      "python3",
+      "practice/05-other-modeling-frameworks-and-solvers/22-choosing-a-solver/prose/unit-03/practice-2/xproute.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/05-other-modeling-frameworks-and-solvers/22-choosing-a-solver/prose/unit-03/practice-2/target/report.xml",
+      "practice/05-other-modeling-frameworks-and-solvers/22-choosing-a-solver/prose/unit-03/practice-2/test_xproute.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_mounted_license_file_is_found_and_none_means_community",
+        "kind": "main",
+        "says": "a folder holding xpauth.xpr gives that license file, and no XPRESS setting gives the community license"
+      },
+      {
+        "id": "test_xpress_naming_the_file_itself_is_caught",
+        "kind": "edge",
+        "says": "XPRESS set to the license file instead of its folder is reported as that mistake"
+      },
+      {
+        "id": "test_a_folder_without_the_file_is_reported",
+        "kind": "edge",
+        "says": "a folder that holds no xpauth.xpr is reported, not trusted"
+      },
+      {
+        "id": "test_a_trailing_slash_on_the_folder_still_finds_the_file",
+        "kind": "edge",
+        "says": "a folder written with a trailing slash still finds the file inside it"
+      },
+      {
+        "id": "test_an_empty_setting_counts_as_unset",
+        "kind": "edge",
+        "says": "XPRESS set to an empty string is the same as not set"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/05-other-modeling-frameworks-and-solvers/22-choosing-a-solver/prose/unit-03/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "22-choosing-a-solver/README_5.4.3.md",
+      "section": "In a Container, a Commercial License Needs a Route Out"
+    },
+    "concepts": [
+      "a containerized commercial solver needs a license route, logged at start-up without credentials"
+    ]
+  }
+}

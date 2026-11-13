@@ -1,0 +1,153 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "25-knapsack-and-assignment"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Load tomorrow's material orders onto trucks",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A utility's central warehouse (not GridCap) is loading tomorrow's trucks to the field depots. Each material order $`o`$ has a priority $`v_o`$, a weight $`w_o`$ (kg) and a volume $`u_o`$ (m³). Each truck $`t`$ can carry at most $`W_t`$ kg and $`U_t`$ m³. The dispatcher's rules:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "An order travels on **one truck at most**; an order left off every truck waits for the next day.",
+        "Every truck must stay within **both** its weight and its volume limit.",
+        "Orders for the same **job site** (the same `site` value, when it is not `None`) are unloaded by one crew, so they travel **on the same truck, or all wait**."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The model in `loading.py` has a binary `x[oid, tid]` for every order and truck (1 if the order travels on that truck) and maximizes the priority shipped. Write `add_loading_rules(model, x, orders, trucks)` so that the model allows exactly the loadings the dispatcher's rules allow."
+    },
+    {
+      "type": "para",
+      "text": "With $`O`$ the orders and $`T`$ the trucks, the model so far is"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "x_{o,t} \\in \\{0, 1\\} \\quad \\forall o \\in O,\\ t \\in T \\qquad \\text{(order } o \\text{ travels on truck } t\\text{)}"
+    },
+    {
+      "type": "para",
+      "text": "Write your rows first, each with its quantifier and a label; name the sets you need for the job sites. Then code them."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix which order rides on which truck and ask the solver whether the rules allow it, so any correct formulation passes. About twelve lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Order:\n    oid: str\n    priority: int\n    kg: int\n    m3: float\n    site: str | None = None      # orders for the same job site travel together\n\n\n@dataclass(frozen=True)\nclass Truck:\n    tid: str\n    max_kg: int\n    max_m3: float\n\n\ndef add_loading_rules(model: mathopt.Model, x: dict, orders: list[Order], trucks: list[Truck]) -> None:\n    \"\"\"Each order on at most one truck, every truck within weight and volume, a site's orders together.\"\"\"\n    for o in orders:\n        model.add_linear_constraint(sum(x[o.oid, t.tid] for t in trucks) <= 1, name=f\"once_{o.oid}\")\n    for t in trucks:\n        model.add_linear_constraint(sum(o.kg * x[o.oid, t.tid] for o in orders) <= t.max_kg, name=f\"kg_{t.tid}\")\n        model.add_linear_constraint(sum(o.m3 * x[o.oid, t.tid] for o in orders) <= t.max_m3, name=f\"m3_{t.tid}\")\n    sites: dict[str, list[Order]] = {}\n    for o in orders:\n        if o.site:\n            sites.setdefault(o.site, []).append(o)\n    for site, members in sites.items():\n        first = members[0]\n        for o in members[1:]:\n            for t in trucks:\n                model.add_linear_constraint(x[o.oid, t.tid] == x[first.oid, t.tid], name=f\"with_{o.oid}_{t.tid}\")\n\n\ndef build(orders: list[Order], trucks: list[Truck]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"truck-loading\")\n    x = {(o.oid, t.tid): model.add_binary_variable(name=f\"x_{o.oid}_{t.tid}\") for o in orders for t in trucks}\n    add_loading_rules(model, x, orders, trucks)\n    model.maximize(sum(o.priority * x[o.oid, t.tid] for o in orders for t in trucks))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Order(\"O1\", 3, 400, 2.0), Order(\"O2\", 5, 900, 1.0, \"S1\")], [Truck(\"T1\", 1000, 3.0)])\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Order:\n    oid: str\n    priority: int\n    kg: int\n    m3: float\n    site: str | None = None      # orders for the same job site travel together\n\n\n@dataclass(frozen=True)\nclass Truck:\n    tid: str\n    max_kg: int\n    max_m3: float\n\n\ndef add_loading_rules(model: mathopt.Model, x: dict, orders: list[Order], trucks: list[Truck]) -> None:\n    \"\"\"Each order on at most one truck, every truck within weight and volume, a site's orders together.\"\"\"\n    # TODO: the rows of the four loading rules.\n    return None\n\ndef build(orders: list[Order], trucks: list[Truck]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"truck-loading\")\n    x = {(o.oid, t.tid): model.add_binary_variable(name=f\"x_{o.oid}_{t.tid}\") for o in orders for t in trucks}\n    add_loading_rules(model, x, orders, trucks)\n    model.maximize(sum(o.priority * x[o.oid, t.tid] for o in orders for t in trucks))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Order(\"O1\", 3, 400, 2.0), Order(\"O2\", 5, 900, 1.0, \"S1\")], [Truck(\"T1\", 1000, 3.0)])\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "d086b94be341361b182d18b2a232b695e6c55496837259e910bfb6bf46bc3eb8",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Order:\n    oid: str\n    priority: int\n    kg: int\n    m3: float\n    site: str | None = None      # orders for the same job site travel together\n\n\n@dataclass(frozen=True)\nclass Truck:\n    tid: str\n    max_kg: int\n    max_m3: float\n\n\ndef add_loading_rules(model: mathopt.Model, x: dict, orders: list[Order], trucks: list[Truck]) -> None:\n    \"\"\"Each order on at most one truck, every truck within weight and volume, a site's orders together.\"\"\"\n    # TODO: the rows of the four loading rules.\n    return None\n\ndef build(orders: list[Order], trucks: list[Truck]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"truck-loading\")\n    x = {(o.oid, t.tid): model.add_binary_variable(name=f\"x_{o.oid}_{t.tid}\") for o in orders for t in trucks}\n    add_loading_rules(model, x, orders, trucks)\n    model.maximize(sum(o.priority * x[o.oid, t.tid] for o in orders for t in trucks))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Order(\"O1\", 3, 400, 2.0), Order(\"O2\", 5, 900, 1.0, \"S1\")], [Truck(\"T1\", 1000, 3.0)])\n    print(len(list(model.linear_constraints())), \"rows\")\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-1/loading.py",
+    "test_path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-1/test_loading.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-1/loading.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-1/target/report.xml",
+      "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-1/test_loading.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_each_truck_keeps_its_weight_and_its_volume",
+        "kind": "main",
+        "says": "a loading within every truck's weight and volume is allowed, and one over a truck's volume or over its weight is refused"
+      },
+      {
+        "id": "test_an_order_travels_on_one_truck_at_most",
+        "kind": "main",
+        "says": "an order put on two trucks at once is refused"
+      },
+      {
+        "id": "test_a_sites_orders_ride_the_same_truck",
+        "kind": "edge",
+        "says": "two orders for the same job site on two different trucks are refused, although each of them ships"
+      },
+      {
+        "id": "test_a_sites_orders_wait_together",
+        "kind": "edge",
+        "says": "one order of a job site shipping while another waits is refused, whichever of the two ships"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "25-knapsack-and-assignment/README_6.3.2.md",
+      "section": "Several Knapsacks Share the Items: One Binary per Item and Knapsack"
+    },
+    "concepts": [
+      "several knapsacks need one binary per item and knapsack, an at-most-once row per item and a capacity row per knapsack"
+    ]
+  }
+}

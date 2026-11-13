@@ -1,0 +1,267 @@
+# 6.7.4 Case Study: Reformulating GridCap Medium
+
+GridCap's planning team inherits a model of the medium portfolio (400 projects over ten years) from
+an analyst who has moved on. It is correct: it allows exactly the plans the business rules allow.
+It also uses two forms section 6 has called weak, the aggregated work-front row of lesson 6.7.1 and
+the aggregated, big-M precedence row of lesson 6.4.3. HiGHS needs 3,856 nodes to solve it to its
+default gap. The team's lead asks the question every inherited model raises:
+"Can we make this solve faster by writing it better?"
+
+This lesson answers it the way a careful engineer would, in five rules: measure first, let the LP
+point show the weak rows, try each lever of this module and record what it finds, then measure the
+solver again, and only then decide what to keep. The answer turns out to be more interesting than
+"yes".
+
+GridCap is a fictional utility's portfolio, generated for this course. The work fronts and their
+fees are lesson 6.7.1's own addition.
+
+## The Model
+
+The model of lesson 6.7.1 on GridCap medium: 400 projects, 10 years, 12 work fronts, 39 must-do
+projects, 18 parent-child pairs and 18 alternative groups. Its two inherited rows, marked, are the
+weak forms; the reformulated model replaces them with the forms below them.
+
+**Sets.** $`P`$, $`Y`$, $`T_i`$, $`M`$, $`\mathcal{G}`$, $`C`$ with $`p(c)`$ and $`L_c`$, $`F`$ and
+$`P_f`$, as in lesson 6.7.1.
+
+**Parameters.** $`\text{npv}_{i,t}`$, $`c_{i,k}`$, $`B_y`$ and the fees $`\phi_f`$ ($k), as in
+lesson 6.7.1.
+
+**Variables.** $`x_{i,t} \in \{0, 1\}`$ for $`i \in P`$, $`t \in T_i`$ (887 of them);
+$`y_f \in \{0, 1\}`$ for $`f \in F`$ (12). With $`s_i = \sum_{t \in T_i} x_{i,t}`$.
+
+**Objective.**
+
+```math
+\max \; \sum_{i \in P} \sum_{t \in T_i} \text{npv}_{i,t}\, x_{i,t} \;-\; \sum_{f \in F} \phi_f\, y_f
+```
+
+**Constraints.**
+
+```math
+\begin{aligned}
+s_i &\le 1 \quad \forall i \in P \setminus M, \qquad s_i = 1 \quad \forall i \in M && && \text{(once}_i, \text{must}_i) \\
+\textstyle\sum_{i \in g} s_i &\le 1 && \forall g \in \mathcal{G} && \text{(alt}_g) \\
+\textstyle\sum_{i \in P} \sum_{t \in T_i,\, t \le y} c_{i,\,y-t}\, x_{i,t} &\le B_y && \forall y \in Y && \text{(budget}_y) \\
+s_c &\le s_{p(c)}, \quad \textstyle\sum_{t} t\, x_{c,t} \ge \sum_{s} (s + L_c)\, x_{p(c),s} - M_c (1 - s_c) && \forall c \in C && \text{(needs}_c, \text{after}_c\text{: inherited)} \\
+\textstyle\sum_{i \in P_f} s_i &\le |P_f|\, y_f && \forall f \in F && \text{(front}_f\text{: inherited)} \\
+\textstyle\sum_{u \in T_c,\, u \le t} x_{c,u} &\le \textstyle\sum_{s \in T_{p(c)},\, s \le t - L_c} x_{p(c),s} && \forall c \in C,\ t \in T_c && \text{(after}_{c,t}\text{: reformulated)} \\
+s_i &\le y_f && \forall f \in F,\ i \in P_f && \text{(front}_{f,i}\text{: reformulated)}
+\end{aligned}
+```
+
+with $`M_c = \max T_{p(c)} + L_c`$, the smallest valid constant (lesson 6.4.3).
+
+## Measure Before You Reformulate: Size, LP Bound and Root Bound
+
+A reformulation is a change made to improve a number, so the numbers come first. Lesson 6.7.1 named
+three that a formulation decides or strongly influences, and the audit records all three for the
+model as inherited and after each change, one change at a time:
+
+- **size:** variables and rows;
+- **LP bound:** the formulation's own bound, solved with GLOP;
+- **root bound:** HiGHS's bound after presolve and its root cuts, read with `node_limit=1`.
+
+```python
+for label, fronts, precedence in steps:
+    lp = lp_bound(build(medium, integer=False, fronts=fronts, precedence=precedence).model).objective_value()
+    milp = build(medium, fronts=fronts, precedence=precedence).model
+    variables, rows = size(milp)
+    print(f"{label:22}  {variables:9}  {rows:4}  {lp:10,.2f}  {root_bound(milp):,.0f}")
+```
+
+```text
+step                    variables  rows  LP bound    HiGHS root bound
+inherited                     899   476  190,640.68  159,535
+fronts disaggregated          899   864  159,597.31  159,536
+precedence cumulative         899   869  159,597.31  159,535
+```
+
+The fourth number, the solver's search, is the expensive one, and it comes last (the fourth rule).
+The order is deliberate: each line costs seconds, and it already tells you where the formulation
+differs from what the solver works with.
+
+## The LP Point Shows Where a Formulation Is Weak
+
+The inherited LP bound, $190,640.68k, is far above every other number in the table. Where does the
+excess come from? The LP's optimal point says so: look for variables that should be 0 or 1 and are
+not.
+
+```text
+inherited LP: fronts strictly between 0 and 1: 12 of 12 (from 0.38 to 0.64); starts: 13 of 887
+```
+
+All twelve fronts sit between 0.38 and 0.64, while only 13 of the 887 start variables are fractional.
+The fractions come from the rows, not the costs: the objective only picks which allowed point is best,
+and only the rows decide which fractional points are allowed. That is the signature lesson 6.7.1 explained: with the aggregated row, a front mobilized at 0.5 can
+run up to half its projects in full while paying half its fee. The remedy is the disaggregated row,
+one per project, and the second line of the table shows its effect: the LP bound falls by $31,043k,
+to $159,597.31k.
+
+The precedence rows are the other inherited weakness. Lesson 6.4.3 found the cumulative form never
+weaker, and tighter in some scenarios. On GridCap medium it changes nothing: the third line's LP
+bound is the second's to the cent. With five more rows. A change that does not move the bound here
+can still be worth keeping (its rows need no big-M, and they read as plain English), but it is not a
+speed-up, and the audit says so.
+
+How much of the inherited gap did the reformulation close? The best plan is worth about $159,435k
+(the fourth rule's solve), so by lesson 6.7.1's measure
+$`(190{,}640.68 - 159{,}597.31) / (190{,}640.68 - 159{,}435) \approx 99.5\%`$. Almost the whole
+distance from the inherited LP bound to the best plan was the front rows.
+
+<!-- practice 1 -->
+
+## Try Each Lever, and Record What It Finds, Even Nothing
+
+A case study is also a checklist. The other levers of this module have nothing to do with the front
+rows, so each is run on the medium model as it is, and its finding is recorded:
+
+- **Bound tightening (lesson 6.7.2):** starts that no plan can use, from the budget rows and the
+  must-dos' floors.
+- **Valid inequalities (lesson 6.7.2):** pairs of starts that no plan can use together and that no
+  row already says, the raw material of clique rows.
+- **Symmetry (lesson 6.7.3):** projects identical in every number the model reads, which would make
+  plans appear several times.
+
+```text
+starts fixable from the budget rows: 0; conflicts not already a row: 0
+groups of identical projects: 0
+```
+
+Nothing, three times. That is a real finding, not a failed step. GridCap medium's yearly budgets are
+$34,000k to $43,000k against projects of at most a few thousand, so no single start and no pair of
+starts can overflow a year (the room argument of lesson 6.7.2 needs a project that is large next to
+the row); and no two of medium's projects are identical. On GridCap small with hard crew
+rows (lesson 6.7.2), the same code found eight fixings and 70 new conflicts, because crew limits of
+2 to 34 crew-months are small next to the projects. The levers depend on the data's shape, which is
+why the audit runs them rather than assuming.
+
+## The Solver's Own Work Decides Whether a Reformulation Solves Faster
+
+Now the measurement that answers the lead's question: solve both models with HiGHS, as the team
+would in production, to HiGHS's default relative gap of $`10^{-4}`$ (0.01%):
+
+```python
+    result = solve_highs(sm.model)          # HiGHS's default relative gap: 1e-4
+```
+
+```text
+model          plan value  proven bound  gap      nodes
+inherited         159,434       159,449  0.0094%  3,856  OPTIMAL
+reformulated      159,435       159,450  0.0094%  7,823  OPTIMAL
+same plan: False; starts that differ: 14
+```
+
+The reformulated model did **not** solve faster. It took 7,823 nodes against the inherited model's
+3,856. The audit table had already given the reason it could not be much faster: the root bounds were
+equal, $159,535k and $159,536k. Whatever the inherited front rows lost, HiGHS's presolve and root cuts
+had recovered before the first branch, exactly as lesson 6.7.1 measured on GridCap small. From there
+the two searches start level and go different ways, and the inherited one happened to be shorter.
+The counts are not noise: HiGHS's node counts repeat from run to run on the same model (the module's
+tests solve twice and compare), so one measurement of each is enough here.
+
+The two plans differ in 14 starts and by $1k in value. Both runs stopped as soon as their plan was
+proved within 0.01% of the best possible, which is what `OPTIMAL` means under a gap tolerance (lesson
+3.4.3); a gap of $15k on a portfolio of $159,000k is inside it. Since both models allow exactly the same
+plans, either plan is valid in either model.
+
+<!-- practice 2 -->
+
+## Keep the Strong Form for What It Is Worth, and Say What It Is Not
+
+So what does the team keep? The audit gives an answer with its reasons, which is what a lead can act
+on:
+
+- **Keep the disaggregated fronts.** The model's own LP bound moves from $31,206k above the best plan
+  to $162k above it. That bound is the number the team can report without trusting a solver's
+  internal cuts; it holds for any solver or version; and any method of section 11 that works with
+  the LP relaxation directly (decomposition, rounding heuristics, the LP bounds of a rolling horizon)
+  inherits it. It costs 388 rows.
+- **Keep the cumulative precedence**, for its readability and its lack of a big-M, and record that on
+  this data it changes no bound.
+- **Do not claim a speed-up.** On this model and this solver it did not happen. A reformulation's
+  effect on run time is measured, per solver, on the data that matters, and HiGHS's own presolve and
+  cuts are part of what is being measured.
+- **Look elsewhere for speed.** The root bound sits about $100k above the best plan, and the levers of
+  this module found nothing more to cut there: no fixings, no conflicts, no symmetry. Section 11 takes
+  it from there, with warm starts, parameter tuning and decomposition.
+
+The lesson for the next inherited model is the order of the work: measure size, LP bound and root
+bound; let the LP point point at weak rows; run every lever and record what it finds; measure the
+solve; and report the result you got, including when it is not the one you expected.
+
+## Summary
+
+- **Measure before you reformulate: size, LP bound and root bound.** Each costs seconds and is
+  recorded for every step.
+- **The LP point shows where a formulation is weak.** All twelve fronts fractional pointed at the
+  front rows; disaggregating them closed about 99.5% of the inherited LP gap.
+- **Try each lever, and record what it finds, even nothing.** No fixings, no conflicts and no
+  identical projects on GridCap medium, because its budgets are large next to its projects.
+- **The solver's own work decides whether a reformulation solves faster.** Equal root bounds; 3,856
+  nodes inherited against 7,823 reformulated.
+- **Keep the strong form for what it is worth, and say what it is not.** A bound that does not
+  depend on the solver, at a cost of 388 rows; not a speed-up here.
+
+## Reference
+
+| GridCap medium | Rows | LP bound | Root bound | Nodes to 0.01% |
+| --- | --- | --- | --- | --- |
+| inherited | 476 | 190,640.68 | 159,535 | 3,856 |
+| reformulated | 869 | 159,597.31 | 159,535 | 7,823 |
+
+| Audit step | Measures | Tool |
+| --- | --- | --- |
+| size | variables, rows | `size(model)` |
+| LP bound | the formulation alone | `lp_bound` (GLOP) |
+| root bound | after presolve and root cuts | `root_bound` (`node_limit=1`) |
+| fractional LP values | where the formulation is weak | the LP's `variable_values` |
+| levers | fixings, conflicts, identical items | `fixable`, `conflicts`, a grouping by data |
+| solve | nodes and gap at the tolerance used in production | `solve_highs` |
+
+**Further reading:** [MathOpt `SolveParameters`](https://github.com/google/or-tools/blob/stable/ortools/math_opt/python/parameters.py)
+(OR-Tools source): `node_limit`, `presolve`, `cuts` and the gap tolerances an audit sets ·
+[Mixed-Integer Programming](https://developers.google.com/optimization/mip) (OR-Tools guide) ·
+[Vielma, Mixed Integer Linear Programming Formulation Techniques](https://juan-pablo-vielma.github.io/publications/Mixed-Integer-Linear-Programming-Formulation-Techniques.pdf),
+introduction and section 2.2: why the effect of a formulation on a state-of-the-art solver is hard
+to predict, and why a quick computational test of several formulations is the practical answer.
+
+## Challenges
+
+1. Run the audit on GridCap small with hard crew rows (`crews=True`). Predict which levers find
+   something, then check against lesson 6.7.2's outputs.
+2. Solve both medium models with `presolve=mathopt.Emphasis.OFF`. Predict whether their root bounds
+   move apart, and whether the reformulated model's node count falls below the inherited one's.
+3. Generate GridCap medium with two other seeds and repeat `case_solve.py`. Before running, decide
+   what result would change the advice in the last rule.
+
+## Design Note: Write the Audit as a Program
+
+Every number in this lesson came from two short programs that build each variant of the model from
+one builder with switches (`fronts=`, `precedence=`). That makes the audit repeatable: when the data
+change, or the solver is upgraded, the same programs say whether the advice still holds. An audit
+that lives in a slide deck says what was true once.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson
+shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy
+of the code, so the course's own files never change.
+
+**case_audit.py.** Size, LP bound and root bound for each step, the inherited LP's fractional values,
+and the three levers (*Measure Before You Reformulate*, *The LP Point Shows Where a Formulation Is
+Weak*, *Try Each Lever*). *Try:* Set `FEE_SHARE` to 0.01 in `strong_model.py`. Predict how far the
+inherited LP bound falls.
+
+- Program: [case_audit.py](src/case_audit.py)
+
+**case_solve.py.** Both models solved by HiGHS to its default gap (*The Solver's Own Work Decides*).
+It solves two full MILPs, so it is the one program here worth starting and leaving. *Try:* Pass `relative_gap_tolerance=1e-3`. Predict which model needs fewer
+nodes then.
+
+- Program: [case_solve.py](src/case_solve.py)
+
+**derived_rows.py**, **strong_model.py.** The levers of lesson 6.7.2 and the model builder.
+
+- Library: [derived_rows.py](src/derived_rows.py)
+- Library: [strong_model.py](src/strong_model.py)

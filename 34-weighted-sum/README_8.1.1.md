@@ -1,0 +1,390 @@
+# 8.1.1 Weighted Sums and What the Weights Really Mean
+
+Lesson 7.3.4 left the GridCap board with two
+plans for the small portfolio. The NPV plan earns $24,260k of NPV and removes $10,577k of discounted
+failure risk. The risk plan removes $16,086k of risk and earns $18,886k. The board wants one plan,
+and someone proposes the most common way to get it: "count both, 50/50". This lesson builds that
+plan, then asks what "50/50" actually told the solver. The answer is less than it sounds: the
+weights set one number, a price between the two objectives, and the plan only changes when that
+price crosses one of a few break-even values. Five rules, one per heading.
+
+GridCap is a fictional utility generated for this course; its projects, assets and budgets describe
+no real company.
+
+## A Weighted Sum Folds Two Objectives Into One
+
+A model has one objective. To optimize two at once, the simplest move is to add them up, each
+multiplied by a **weight**, a nonnegative number saying how much it counts. That is a **weighted
+sum** (also called linear scalarization: "scalar" because two numbers become one). Everything else
+in the model stays as it was.
+
+### The Model
+
+The start-year model of lesson 6.4.2, whole, with the objective
+replaced by the weighted sum of lesson 7.2.4's NPV and lesson 7.3.4's risk removed.
+
+**Sets.** $`P`$ the projects; $`Y`$ the plan's years; $`T_i \subseteq Y`$ the start years project
+$`i`$ may use; $`M \subseteq P`$ the must-do projects; $`\mathcal{G}`$ the alternative groups;
+$`C \subseteq P`$ the child projects, with parent $`p(c)`$ and lag $`L_c`$ years.
+
+**Parameters.** $`\text{npv}_{i,t}`$, the NPV of project $`i`$ started in year $`t`$ ($k, from
+lesson 7.2.4); $`\text{rr}_{i,t}`$, the discounted risk it removes over the ten-year window ($k,
+from lesson 7.3.4); $`c_{i,k}`$, what project $`i`$ spends in its $`k`$-th year of work ($k);
+$`B_y`$, the budget of year $`y`$ ($k); $`w_N \ge 0`$ and $`w_R \ge 0`$, the weights on NPV and on
+risk removed, not both zero.
+
+**Variables.** $`x_{i,t} \in \{0, 1\}`$ for every $`i \in P`$ and $`t \in T_i`$: project $`i`$
+starts in year $`t`$.
+
+**Objective.** With $`N(x) = \sum_{i,t} \text{npv}_{i,t}\, x_{i,t}`$ the plan's NPV and
+$`R(x) = \sum_{i,t} \text{rr}_{i,t}\, x_{i,t}`$ the risk it removes:
+
+```math
+\max \; w_N\, N(x) + w_R\, R(x) \;=\; \sum_{i \in P} \sum_{t \in T_i} \big(w_N\, \text{npv}_{i,t} + w_R\, \text{rr}_{i,t}\big)\, x_{i,t} \quad \leftarrow \text{this lesson}
+```
+
+**Constraints.**
+
+```math
+\begin{aligned}
+\sum_{t \in T_i} x_{i,t} &\le 1 && \forall i \in P \setminus M && \text{(once}_i) \\
+\sum_{t \in T_i} x_{i,t} &= 1 && \forall i \in M && \text{(must}_i) \\
+\sum_{i \in g} \sum_{t \in T_i} x_{i,t} &\le 1 && \forall g \in \mathcal{G} && \text{(alt}_g) \\
+\sum_{u \in T_c,\, u \le t} x_{c,u} &\le \sum_{s \in T_{p(c)},\, s \le t - L_c} x_{p(c),s} && \forall c \in C,\ t \in T_c && \text{(after}_{c,t}) \\
+\sum_{i \in P} \sum_{t \in T_i,\, t \le y} c_{i,\,y-t}\, x_{i,t} &\le B_y && \forall y \in Y && \text{(budget}_y)
+\end{aligned}
+```
+
+The right-hand form of the objective is the one to remember: a weighted sum of two linear
+objectives is one linear objective, whose coefficient on $`x_{i,t}`$ is the weighted sum of the two
+coefficients. The model stays a MILP of the same size.
+
+### In MathOpt
+
+The module's library builds the model of lesson 6.4.2 with no objective and keeps the two objective
+expressions. MathOpt's `maximize` takes any linear expression (as in the MathOpt basic example), so
+the weighted sum is one line, and each call replaces the previous objective:
+
+```python
+    def npv_of(self) -> mathopt.LinearExpression:
+        return mathopt.LinearExpression() + sum(self.npv[k] * v for k, v in self.x.items())
+
+    def risk_of(self) -> mathopt.LinearExpression:
+        return mathopt.LinearExpression() + sum(self.rr[k] * v for k, v in self.x.items())
+```
+
+```python
+def weighted(sm: StartModel, w_npv: float, w_risk: float) -> dict[str, int]:
+    """The plan that maximizes w_npv * NPV + w_risk * risk removed."""
+    sm.model.maximize(w_npv * sm.npv_of() + w_risk * sm.risk_of())
+    result = solve_highs(sm.model)
+    assert result.termination.reason == mathopt.TerminationReason.OPTIMAL, result.termination
+    return plan_of(sm, result)
+```
+
+MathOpt's own word for several objectives is something else. `add_auxiliary_objective` (lesson
+4.3.2) stores objectives with **priorities**, solved one after another,
+not added up; lessons 8.2.1 and 8.2.2 (*Lexicographic objectives*) build on it. A weighted sum needs no special
+API at all. Gurobi does offer one, a "blended" objective whose parts carry weights (`ObjNWeight`),
+and it is the same sum computed by the solver.
+
+Weights (1, 0) and (0, 1) give back lesson 7.3.4's two plans; the board's 50/50 gives a third:
+
+```python
+for name, w_npv, w_risk in (("max NPV", 1, 0), ("max risk removed", 0, 1), ("50/50 weighted sum", 0.5, 0.5)):
+    plan = weighted(sm, w_npv, w_risk)
+    npv, risk = score(sm, plan)
+    print(f"{name:18} w=({w_npv}, {w_risk}): {len(plan)} projects, NPV ${npv:,}k, risk removed ${risk:,.0f}k")
+```
+
+```text
+max NPV            w=(1, 0): 27 projects, NPV $24,260k, risk removed $10,577k
+max risk removed   w=(0, 1): 31 projects, NPV $18,886k, risk removed $16,086k
+50/50 weighted sum w=(0.5, 0.5): 30 projects, NPV $22,870k, risk removed $15,554k
+50/50 plan: 94.3% of the best NPV, 96.7% of the most risk removed
+```
+
+The 50/50 plan is not "halfway" between the two: it keeps 94.3% of the best NPV and 96.7% of the
+most risk removed. The weights said nothing about halves of anything. The next rules say what they
+did say.
+
+## Only the Ratio of the Weights Matters
+
+Multiply both weights by the same positive number $`c`$ and every plan's weighted score is
+multiplied by $`c`$, so the order of the plans, and the best one, does not change. A weighting is
+therefore one number, not two. Two equivalent ways to state it:
+
+- the **share** on NPV, $`s = w_N / (w_N + w_R)`$, with $`1 - s`$ on risk (50/50 is $`s = 0.5`$);
+- the **price** $`p = w_N / w_R`$, in $k of risk removed per $1k of NPV: the objective counts $1k
+  of NPV as worth $`p`$ $k of risk removed. 50/50 is $`p = 1`$, and $`p = s / (1 - s)`$.
+
+```python
+for w_npv, w_risk in ((0.5, 0.5), (1, 1), (3, 3), (0.2, 0.8), (2, 8)):
+    npv, risk = score(sm, weighted(sm, w_npv, w_risk))
+    print(f"  ({w_npv}, {w_risk}): price {w_npv / w_risk:.2f}, NPV ${npv:,}k, risk removed ${risk:,.0f}k")
+```
+
+```text
+weights (w_npv, w_risk) -> plan
+  (0.5, 0.5): price 1.00, NPV $22,870k, risk removed $15,554k
+  (1, 1): price 1.00, NPV $22,870k, risk removed $15,554k
+  (3, 3): price 1.00, NPV $22,870k, risk removed $15,554k
+  (0.2, 0.8): price 0.25, NPV $22,870k, risk removed $15,554k
+  (2, 8): price 0.25, NPV $22,870k, risk removed $15,554k
+```
+
+The first three rows are the same price, so they must give the same plan. The last two are a
+different price, 0.25, and give the same plan too. That is not the scaling rule; it is the fourth
+rule of this lesson at work, and it is worth noticing now: a board member who fought for "80% on
+risk" instead of 50% would have changed nothing.
+
+## The Ratio Is a Price, So It Depends on the Units
+
+Because a weight multiplies a quantity, its meaning depends on the unit of that quantity. Lesson
+7.4.3 showed this for a value function: a weight
+is an exchange rate between units. In GridCap's two objectives the units happen to match, both
+are discounted $k, so 50/50 means "a dollar of expected failure cost avoided is worth a dollar of
+NPV", a statement a board can argue about.
+
+Now state the same objectives differently and apply "50/50" again. Dividing an objective by a scale
+before weighting it is the same as dividing its weight by that scale, so each line below is a
+weighted sum on the $k objectives with the price the restatement implies:
+
+```python
+scales = {                                 # what each objective is divided by before 50/50 is applied
+    "both in $k":              (1, 1),
+    "risk in $M, NPV in $k":   (1, 1000),
+    "each / its range":        (npv_hi - npv_lo, risk_hi - risk_lo),
+    "each / its best value":   (npv_hi, risk_hi),
+}
+print("50/50 on objectives stated differently -> price of $1k NPV in $k of risk removed, plan")
+for name, (s_npv, s_risk) in scales.items():
+    w_npv, w_risk = 0.5 / s_npv, 0.5 / s_risk          # the weights on the $k objectives
+    npv, risk = score(sm, weighted(sm, w_npv, w_risk))
+    print(f"  {name:22}: price {w_npv / w_risk:8.3f}, NPV ${npv:,}k, risk removed ${risk:,.0f}k")
+```
+
+```text
+50/50 on objectives stated differently -> price of $1k NPV in $k of risk removed, plan
+  both in $k            : price    1.000, NPV $22,870k, risk removed $15,554k
+  risk in $M, NPV in $k : price 1000.000, NPV $24,260k, risk removed $10,577k
+  each / its range      : price    1.025, NPV $22,870k, risk removed $15,554k
+  each / its best value : price    0.663, NPV $22,870k, risk removed $15,554k
+```
+
+The "range" is an objective's best value minus its value in the other objective's best plan
+(24,260 − 18,886 for NPV, 16,086 − 10,577 for risk), and the "best value" is its maximum alone.
+Both are common ways to make objectives comparable before weighting them.
+
+Read the second row. A team that stores risk in $M and NPV in $k, and weights them 50/50, has told
+the solver that $1k of NPV is worth $1,000k of risk removed. The solver obeys and returns the NPV
+plan, giving up $5,509k of risk removed (16,086 − 10,577) that the board believed it was buying. Nothing in the
+output warns about it. The two normalized rows imply prices of 1.025 and 0.663, close enough to 1
+that on this data they give the same plan; on another portfolio they would not have to.
+
+So "50/50" is not yet a statement about the plan. "We would give up $1k of NPV for $1k of expected
+failure cost avoided" is. Weights are often described as arbitrary scaling factors. They are not
+arbitrary, they are prices, and a weight that was set without saying in which units is a price
+nobody chose.
+
+<!-- practice 1 -->
+
+## The Plan Moves in Jumps as the Weights Change
+
+Sweep the share on NPV from 0 to 1 in steps of 0.01, 101 solves, and record which plan each weighting
+returns:
+
+```python
+found = {}                                    # (NPV, risk) -> (shares that picked it, plan)
+for k in range(101):
+    share = k / 100                           # weight on NPV; risk gets the rest
+    plan = weighted(sm, share, 1 - share)
+    npv, risk = score(sm, plan)
+    found.setdefault((npv, round(risk, 6)), ([], plan))[0].append(share)
+```
+
+```text
+101 weightings, 8 different plans
+NPV share  |   NPV $k | risk removed $k | projects
+0.00-0.11  |   18,886 |          16,086 | 31
+0.12-0.19  |   22,675 |          15,601 | 29
+0.20-0.60  |   22,870 |          15,554 | 30
+0.61-0.62  |   23,573 |          14,496 | 29
+0.63-0.80  |   23,591 |          14,466 | 29
+0.81-0.83  |   24,019 |          12,751 | 27
+0.84-0.91  |   24,098 |          12,348 | 27
+0.92-1.00  |   24,260 |          10,577 | 27
+```
+
+A hundred and one weightings produce eight plans. Each plan holds over a range of shares and then
+gives way, all at once, to the next. The 50/50 plan holds from a share of 0.20 to 0.60, which is why
+the board's "80% on risk" ($`s = 0.2`$) changed nothing. A move from 0.60 to 0.61 changes a lot:
+
+```text
+22,870 -> 23,573: 18 projects kept, 8 moved to another year, dropped ['P014', 'P033', 'P038', 'P040'], added ['P009', 'P012', 'P032']
+```
+
+Why jumps? The model can only return one of finitely many plans, and each plan's weighted score
+$`s\,N + (1 - s)\,R`$ is a straight line in $`s`$. The weighted sum returns whichever line is on top
+at the chosen $`s`$, and the top changes only where two lines cross.
+
+**The crossing is a break-even price.** Take two plans, $`A`$ with less NPV and more risk removed and
+$`B`$ with more NPV and less risk removed. $`B`$ scores at least as high as $`A`$ when
+
+```math
+w_N\,(N_B - N_A) \;\ge\; w_R\,(R_A - R_B) \iff p = \frac{w_N}{w_R} \;\ge\; \frac{R_A - R_B}{N_B - N_A}
+```
+
+The right side is the risk given up per $1k of NPV gained by moving from $`A`$ to $`B`$ ($k of risk
+per $1k of NPV, the units of $`p`$): the price at which the move is a fair trade. Below it, the weighted sum stays at $`A`$; above it, it moves to
+$`B`$. For the sweep's neighbours:
+
+```python
+for (n1, r1), (n2, r2) in zip(points, points[1:]):
+    price = (r1 - r2) / (n2 - n1)
+```
+
+```text
+break-even between neighbours: price = risk given up / NPV gained, share = price / (1 + price)
+  18,886 -> 22,675: gain $3,789k NPV for $485k risk, price 0.128, share 0.1136
+  22,675 -> 22,870: gain $195k NPV for $47k risk, price 0.239, share 0.1927
+  22,870 -> 23,573: gain $703k NPV for $1,058k risk, price 1.505, share 0.6008
+  23,573 -> 23,591: gain $18k NPV for $30k risk, price 1.663, share 0.6244
+  23,591 -> 24,019: gain $428k NPV for $1,716k risk, price 4.009, share 0.8004
+  24,019 -> 24,098: gain $79k NPV for $403k risk, price 5.097, share 0.8360
+  24,098 -> 24,260: gain $162k NPV for $1,771k risk, price 10.933, share 0.9162
+```
+
+Each computed share falls between the last grid share of one plan and the first of the next (0.6008
+between 0.60 and 0.61, for instance). The 50/50 plan is the answer for every price from 0.239 to
+1.505: anyone who values $1k of NPV at between $239 and $1,505 of risk removed gets that plan, and
+no finer agreement about the weights is needed. The first row is the cheap trade a board should
+see: the last $485k of risk removed costs $3,789k of NPV, so only a price below 0.128 keeps the
+pure risk plan.
+
+Lesson 8.3.3 quotes the same steps the other way up, as NPV given up per $1 of risk removed, because
+that is how a planner asks ("what does the next dollar of risk cost?"). Its prices are the
+reciprocals of these: the step between the pure risk plan and its neighbour (NPV $18,886k and
+$22,675k) is 0.128 $k of risk per $1k of NPV here, and 1/0.128 = 7.81 dollars of NPV per dollar of
+risk there. Check the units before comparing a price
+from one lesson with a price from the other.
+
+This is the useful way to present a weighted sum to planners: not "we used 50/50", but "this plan is
+best for any price between these two; above 1.505 we switch to the next plan, which gains $703k of
+NPV and gives up $1,058k of risk removed".
+
+<!-- practice 2 -->
+
+## Positive Weights Give a Pareto-Optimal Plan
+
+Some vocabulary first, because the next lesson rests on it. Plan $`y`$ **dominates** plan $`x`$ when
+$`y`$ is at least as good in every objective and strictly better in at least one; here
+$`N(y) \ge N(x)`$ and $`R(y) \ge R(x)`$, with one of them strict. A plan no feasible plan dominates
+is **Pareto optimal** (also called efficient, or nondominated), and the set of their objective
+values is the **Pareto front** (or frontier). A plan is **weakly Pareto optimal** when no plan is
+strictly better in *every* objective; that is a weaker promise, because a weakly optimal plan can
+still be beaten in one objective at no cost in the other.
+
+**Rule.** If both weights are positive, every optimal plan of the weighted sum is Pareto optimal.
+The argument takes one line: if $`y`$ dominated the weighted optimum $`x`$, then
+$`w_N N(y) + w_R R(y) > w_N N(x) + w_R R(x)`$ (one difference is positive, the other is not
+negative, and both are multiplied by a positive weight), so $`x`$ was not optimal.
+
+With a zero weight the promise weakens. Weights (1, 0) ask only for the most NPV. If two plans tie
+on NPV and differ in risk removed, both are optimal, and the solver may return the one that removes
+less risk: a plan that is only weakly Pareto optimal. Lesson 7.3.4's NPV plan, the share-1.00 row
+above, happens to be Pareto optimal (the next lesson lists it on the front), but a zero weight does
+not promise it. Two fixes: give the other objective a small positive weight, small enough never to
+outweigh a real difference in the first, or solve lexicographically (lessons 8.2.1 and 8.2.2, *Lexicographic
+objectives*), which is what "first NPV, then risk among the ties" means. Lesson 8.3.2 (*The
+epsilon-constraint method*) meets the same problem from another side.
+
+So the weighted sum is a safe tool in one direction: every plan it returns with positive weights is
+a plan no other plan beats on both counts. The next lesson, 8.1.2, asks the opposite question: does every Pareto-optimal plan come out of some
+weighting? On GridCap small, the eight plans above are all the weighted sum can ever return.
+
+<!-- practice 3 -->
+
+## Summary
+
+- **A weighted sum folds two objectives into one.** $`\max\, w_N N(x) + w_R R(x)`$ is a linear
+  objective with coefficient $`w_N \text{npv}_{i,t} + w_R \text{rr}_{i,t}`$; in MathOpt it is one
+  `maximize` call. On GridCap small, 50/50 gives 30 projects, $22,870k of NPV and $15,554k of risk
+  removed.
+- **Only the ratio of the weights matters.** Scaling both weights changes nothing; a weighting is one
+  number, the share $`s`$ or the price $`p = w_N / w_R`$.
+- **The ratio is a price, so it depends on the units.** Stating risk in $M instead of $k turns
+  50/50 into a price of 1,000 and returns the NPV plan.
+- **The plan moves in jumps as the weights change.** 101 weightings gave 8 plans; the plan changes
+  where the price crosses a break-even value, the risk given up per $1k of NPV gained between
+  neighbours.
+- **Positive weights give a Pareto-optimal plan.** A zero weight only promises a weakly
+  Pareto-optimal one.
+
+## Reference
+
+| Symbol or term | Meaning |
+| --- | --- |
+| $`N(x)`$, $`R(x)`$ | the plan's NPV and discounted risk removed, both $k |
+| $`w_N`$, $`w_R`$ | the weights, $`\ge 0`$ and not both 0 |
+| share $`s`$ | $`w_N / (w_N + w_R)`$, the part of the weight on NPV |
+| price $`p`$ | $`w_N / w_R = s / (1 - s)`$: $k of risk removed that $1k of NPV counts as (lesson 8.3.3 quotes the reciprocal, NPV per $1 of risk) |
+| break-even price of $`A \to B`$ | $`(R_A - R_B) / (N_B - N_A)`$, $k of risk per $1k of NPV; above it the weighted sum prefers $`B`$ |
+| dominates | at least as good in every objective, strictly better in one |
+| Pareto optimal (efficient, nondominated) | no feasible plan dominates it |
+| weakly Pareto optimal | no feasible plan is strictly better in every objective |
+| Pareto front | the objective values of the Pareto-optimal plans |
+| `weighted(sm, w_npv, w_risk)` | solves the weighted sum on the module's model, in `two_objectives.py` |
+
+**Further reading:** [OR-Tools, MathOpt basic example](https://developers.google.com/optimization/math_opt/basic_example)
+(`maximize` with a linear expression, `solve`, reading the result); [OR-Tools, MathOpt](https://developers.google.com/optimization/math_opt)
+(its feature list names hierarchical objectives, not weighted ones); [Gurobi, Multiple Objectives](https://docs.gurobi.com/projects/optimizer/en/current/features/multiobjective.html)
+(blended objectives with `ObjNWeight`, and its advice to avoid very large and very small weights);
+[Wikipedia, Multi-objective optimization](https://en.wikipedia.org/wiki/Multi-objective_optimization)
+(dominance, Pareto optimality and linear scalarization); [Könen and Stiglmayr, On Supportedness in
+Multi-Objective Combinatorial Optimization (arXiv 2501.13842)](https://arxiv.org/html/2501.13842v2)
+(section 1: precise definitions of efficient, weakly efficient and properly efficient solutions,
+and what positive and nonnegative weights guarantee).
+
+## Challenges
+
+1. A board member wants NPV in $M "so the numbers are readable". Which weights keep the 50/50 plan?
+2. Between which two prices does the plan with $23,591k of NPV hold? Compute it from the break-even
+   table before looking at the sweep.
+3. A third objective, tonnes of CO2e avoided, joins the sum. How many numbers now define a
+   weighting, and what does each one mean as a price?
+
+## Design Note: Report the Price Range, Not the Weights
+
+The weights a model was solved with are a poor record of the decision. They depend on units, they
+can be scaled freely, and most nearby weightings give the same plan. The break-even prices around
+the chosen plan are what a reviewer needs: they say how far the board's view would have to move
+before the plan changes, in units the board uses. Keep the weights in the run's record for
+reproducibility, and put the price range in the report.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change.
+
+**fifty_fifty.py.** Solves GridCap small for the most NPV, the most risk removed and the 50/50
+weighted sum (*A Weighted Sum Folds Two Objectives Into One*). *Try:* Use weights (0.7, 0.3).
+Predict, from the sweep table, which plan comes back.
+
+- Program: [fifty_fifty.py](src/fifty_fifty.py)
+
+**only_the_ratio.py.** Scales the weights, then restates the objectives in other units and
+normalizations and applies 50/50 to each (*Only the Ratio of the Weights Matters*, *The Ratio Is a
+Price*). *Try:* Add a line for NPV in $M and risk in $k. Predict the price and the plan.
+
+- Program: [only_the_ratio.py](src/only_the_ratio.py)
+
+**weight_sweep.py.** Sweeps the share on NPV from 0 to 1, lists the plans found and the break-even
+prices between neighbours (*The Plan Moves in Jumps as the Weights Change*). *Try:* Sweep in steps
+of 0.05 instead of 0.01. Predict which plans the coarser sweep misses.
+
+- Program: [weight_sweep.py](src/weight_sweep.py)
+
+**two_objectives.py.** The module's library: the risk coefficients and model builder copied from
+lesson 7.3.4, the two objective expressions and `weighted`.
+
+- Library: [two_objectives.py](src/two_objectives.py)

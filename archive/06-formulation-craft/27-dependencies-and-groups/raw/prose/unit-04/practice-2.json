@@ -1,0 +1,162 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "27-dependencies-and-groups"
+  ],
+  "variant": "prose",
+  "unit": 4,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Protection testing after a substation build",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A transmission company builds substations and must test each new station's protection relays. The model in `testing.py` has a binary `x[pid, t]` for each project and each year `t` in its `starts`; the plan's years are `years`, and each project starts at most once (given). `testing` maps each testing project to a pair `(station, k)`, and the regulator's rule is:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Testing may not start before its station starts (the same year is fine).",
+        "Testing has a deadline: if the station starts in year `s`, its testing must have started by year `s + k`. This holds whether or not the planners like it: building the station commits the testing.",
+        "The plan only covers `years`. If a station's deadline `s + k` falls after the plan's last year, its testing is not required inside this plan (the next plan will take it up), though it may still be done."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Write `add_testing_rules(model, x, projects, years, testing)` so that the model allows exactly the plans that keep the rules."
+    },
+    {
+      "type": "para",
+      "text": "The model so far, with $`P`$ the projects, $`Y`$ the plan's years and $`T_i`$ project $`i`$'s start years:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& x_{i,t} \\in \\{0, 1\\} && \\forall i \\in P,\\ t \\in T_i && \\text{(project } i \\text{ starts in year } t\\text{)} \\\\\n& \\textstyle\\sum_{t \\in T_i} x_{i,t} \\le 1 && \\forall i \\in P && \\text{(once}_i\\text{, given)} \\\\\n& \\text{?} && && \\text{(your rows)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Write your rows in \"started by year $`t`$\" terms, each with its quantifier and a label, before you code them. Decide which years $`t`$ each kind of row needs, and check the third rule against the years you chose."
+    },
+    {
+      "type": "para",
+      "text": "A sum over no variables is the plain number 0 in Python, and MathOpt refuses a row with no variable on either side (a `TypeError` about a `bool`). Such a row says nothing, so either skip it or wrap each sum in `mathopt.LinearExpression(...)`, which MathOpt accepts even when it is empty."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix every `x[pid, t]` through its bounds and ask the solver whether the model accepts the plan, so any correct formulation passes. About ten lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n\n\ndef add_testing_rules(model: mathopt.Model, x: dict, projects: list[Project], years: tuple[int, ...],\n                      testing: dict[str, tuple[str, int]]) -> None:\n    \"\"\"Testing never before its station, and started within k years of it inside the plan.\"\"\"\n    by_id = {p.pid: p for p in projects}\n\n    def begun(pid: str, year: int):\n        return mathopt.LinearExpression(sum(x[pid, u] for u in by_id[pid].starts if u <= year))\n\n    for test, (station, k) in testing.items():\n        for t in by_id[test].starts:\n            model.add_linear_constraint(begun(test, t) <= begun(station, t), name=f\"not_before_{test}_{t}\")\n        for t in years:\n            model.add_linear_constraint(begun(test, t) >= begun(station, t - k), name=f\"deadline_{test}_{t}\")\n\n\ndef build(projects: list[Project], years: tuple[int, ...],\n          testing: dict[str, tuple[str, int]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"testing\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_testing_rules(model, x, projects, years, testing)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    years = (2027, 2028, 2029)\n    projects = [Project(\"SUB\", years), Project(\"TEST\", years)]\n    model, x = build(projects, years, {\"TEST\": (\"SUB\", 1)})\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n\n\ndef add_testing_rules(model: mathopt.Model, x: dict, projects: list[Project], years: tuple[int, ...],\n                      testing: dict[str, tuple[str, int]]) -> None:\n    \"\"\"Testing never before its station, and started within k years of it inside the plan.\"\"\"\n    # TODO: the \"not before\" rows and the deadline rows.\n    return None\n\n\ndef build(projects: list[Project], years: tuple[int, ...],\n          testing: dict[str, tuple[str, int]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"testing\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_testing_rules(model, x, projects, years, testing)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    years = (2027, 2028, 2029)\n    projects = [Project(\"SUB\", years), Project(\"TEST\", years)]\n    model, x = build(projects, years, {\"TEST\": (\"SUB\", 1)})\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 6,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "e91e90c463073717383c81b1fec7efc3d7c97234aeb6bd20b6ecb47b34518f02",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n\n\ndef add_testing_rules(model: mathopt.Model, x: dict, projects: list[Project], years: tuple[int, ...],\n                      testing: dict[str, tuple[str, int]]) -> None:\n    \"\"\"Testing never before its station, and started within k years of it inside the plan.\"\"\"\n    # TODO: the \"not before\" rows and the deadline rows.\n    return None\n\n\ndef build(projects: list[Project], years: tuple[int, ...],\n          testing: dict[str, tuple[str, int]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"testing\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_testing_rules(model, x, projects, years, testing)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    years = (2027, 2028, 2029)\n    projects = [Project(\"SUB\", years), Project(\"TEST\", years)]\n    model, x = build(projects, years, {\"TEST\": (\"SUB\", 1)})\n    print(model.get_num_linear_constraints(), \"rows\")\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-2/testing.py",
+    "test_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-2/test_testing.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-2/testing.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-2/target/report.xml",
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-2/test_testing.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_built_station_is_tested_in_time",
+        "kind": "main",
+        "says": "a station tested within its deadline is allowed, and a station never tested is refused"
+      },
+      {
+        "id": "test_testing_needs_its_station",
+        "kind": "main",
+        "says": "testing a station that is never built is refused"
+      },
+      {
+        "id": "test_testing_in_the_build_year_is_allowed",
+        "kind": "edge",
+        "says": "testing that starts in the station's own build year is allowed"
+      },
+      {
+        "id": "test_testing_on_the_deadline_is_allowed",
+        "kind": "edge",
+        "says": "testing that starts exactly on the deadline is allowed, and a year later is refused"
+      },
+      {
+        "id": "test_a_deadline_after_the_plan_needs_no_testing",
+        "kind": "edge",
+        "says": "a station whose deadline falls after the plan's last year may go untested in the plan"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "27-dependencies-and-groups/README_6.5.4.md",
+      "section": "A Maximum Lag Bounds the Child From Below"
+    },
+    "concepts": [
+      "a maximum lag bounds the child's running total from below, with a switch when the child may be left out"
+    ]
+  }
+}

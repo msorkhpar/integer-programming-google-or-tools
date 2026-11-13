@@ -1,0 +1,155 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "12-engineering-the-optimization-service",
+    "47-testing-optimization-code"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Properties of a water-main plan",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility selects which mains to replace this year, and its selection code is about to be rewritten. Before the rewrite, the team wants property-based tests that would notice if the new code broke a business rule. You write the three properties; the tests run them under Hypothesis."
+    },
+    {
+      "type": "para",
+      "text": "An instance has projects $`P`$, each with a capital cost $`a_p`$ and an operating cost $`o_p`$, a capital budget $`A`$ and an operating budget $`O`$, must-do projects $`M \\subseteq P`$, and for each project a set $`N_p`$ of prerequisites, projects that must be funded whenever $`p`$ is. The selection, with $`y_p \\in \\{0, 1\\}`$ and $`v_p`$ the project's value, is"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max\\ & \\sum_{p \\in P} v_p\\, y_p \\\\\n\\text{s.t. } & \\sum_{p} a_p\\, y_p \\le A && \\text{(capital)} \\\\\n& \\sum_{p} o_p\\, y_p \\le O && \\text{(operating)} \\\\\n& y_p = 1 && \\forall p \\in M \\quad \\text{(must}_p) \\\\\n& y_p \\le y_q && \\forall p \\in P,\\ q \\in N_p \\quad \\text{(needs}_{p,q})\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "The docstring of `water_properties.py` gives the instance's dict shape; a plan is the set of funded projects. Write the three functions. Each returns `None` when its property holds for the plan and fails an `assert` when it does not:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`within_both_budgets`: the plan's spend fits both budgets;",
+        "`must_dos_funded`: every must-do is in the plan;",
+        "`prerequisites_funded`: no funded project lacks any of its prerequisites."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Check the plan against the instance's data, not against a solver. The tests draw instances that are feasible by construction and run each property, as the body of a Hypothesis test, on the plans of a correct solver (it must hold on every one) and of solvers that break a rule (it must fail on some). Ties between equal plans do not matter. About eight lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Properties every plan of a water utility's main-replacement selection must obey.\n\nAn instance is a dict:\n    \"cost\":   {project: (capital $k, operating $k)}\n    \"budget\": (capital budget $k, operating budget $k)\n    \"must\":   [projects that must be funded]\n    \"needs\":  {project: [its prerequisites]}, every project a key\n    \"value\":  {project: value}\nA plan is the set of funded projects. Each property returns None when it holds and fails an\n`assert` when it does not, so Hypothesis can use it as the body of a test.\n\"\"\"\n\nfrom __future__ import annotations\n\n\ndef within_both_budgets(instance: dict, plan: set[str]) -> None:\n    \"\"\"The plan's capital and its operating spend each fit their budget.\"\"\"\n    capital = sum(instance[\"cost\"][p][0] for p in plan)\n    operating = sum(instance[\"cost\"][p][1] for p in plan)\n    assert capital <= instance[\"budget\"][0]\n    assert operating <= instance[\"budget\"][1]\n\n\ndef must_dos_funded(instance: dict, plan: set[str]) -> None:\n    \"\"\"Every must-do project is funded.\"\"\"\n    assert all(p in plan for p in instance[\"must\"])\n\n\ndef prerequisites_funded(instance: dict, plan: set[str]) -> None:\n    \"\"\"No funded project lacks a prerequisite.\"\"\"\n    for p in plan:\n        assert all(q in plan for q in instance[\"needs\"][p])\n\n\nif __name__ == \"__main__\":\n    example = {\"cost\": {\"w1\": (30, 2), \"w2\": (20, 1)}, \"budget\": (40, 5), \"must\": [\"w1\"],\n               \"needs\": {\"w1\": [], \"w2\": [\"w1\"]}, \"value\": {\"w1\": 5, \"w2\": 4}}\n    for check in (within_both_budgets, must_dos_funded, prerequisites_funded):\n        check(example, {\"w1\"})\n    print(\"{'w1'} keeps all three properties\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Properties every plan of a water utility's main-replacement selection must obey.\n\nAn instance is a dict:\n    \"cost\":   {project: (capital $k, operating $k)}\n    \"budget\": (capital budget $k, operating budget $k)\n    \"must\":   [projects that must be funded]\n    \"needs\":  {project: [its prerequisites]}, every project a key\n    \"value\":  {project: value}\nA plan is the set of funded projects. Each property returns None when it holds and fails an\n`assert` when it does not, so Hypothesis can use it as the body of a test.\n\"\"\"\n\nfrom __future__ import annotations\n\n\ndef within_both_budgets(instance: dict, plan: set[str]) -> None:\n    \"\"\"The plan's capital and its operating spend each fit their budget.\"\"\"\n    # TODO\n\n\ndef must_dos_funded(instance: dict, plan: set[str]) -> None:\n    \"\"\"Every must-do project is funded.\"\"\"\n    # TODO\n\n\ndef prerequisites_funded(instance: dict, plan: set[str]) -> None:\n    \"\"\"No funded project lacks a prerequisite.\"\"\"\n    # TODO\n\n\nif __name__ == \"__main__\":\n    example = {\"cost\": {\"w1\": (30, 2), \"w2\": (20, 1)}, \"budget\": (40, 5), \"must\": [\"w1\"],\n               \"needs\": {\"w1\": [], \"w2\": [\"w1\"]}, \"value\": {\"w1\": 5, \"w2\": 4}}\n    for check in (within_both_budgets, must_dos_funded, prerequisites_funded):\n        check(example, {\"w1\"})\n    print(\"{'w1'} keeps all three properties\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "eb87e2172c92bc463c1f3b45553446c25940c2b641feeff7b6e59f7cb7777f10",
+  "starting_code": "\"\"\"Properties every plan of a water utility's main-replacement selection must obey.\n\nAn instance is a dict:\n    \"cost\":   {project: (capital $k, operating $k)}\n    \"budget\": (capital budget $k, operating budget $k)\n    \"must\":   [projects that must be funded]\n    \"needs\":  {project: [its prerequisites]}, every project a key\n    \"value\":  {project: value}\nA plan is the set of funded projects. Each property returns None when it holds and fails an\n`assert` when it does not, so Hypothesis can use it as the body of a test.\n\"\"\"\n\nfrom __future__ import annotations\n\n\ndef within_both_budgets(instance: dict, plan: set[str]) -> None:\n    \"\"\"The plan's capital and its operating spend each fit their budget.\"\"\"\n    # TODO\n\n\ndef must_dos_funded(instance: dict, plan: set[str]) -> None:\n    \"\"\"Every must-do project is funded.\"\"\"\n    # TODO\n\n\ndef prerequisites_funded(instance: dict, plan: set[str]) -> None:\n    \"\"\"No funded project lacks a prerequisite.\"\"\"\n    # TODO\n\n\nif __name__ == \"__main__\":\n    example = {\"cost\": {\"w1\": (30, 2), \"w2\": (20, 1)}, \"budget\": (40, 5), \"must\": [\"w1\"],\n               \"needs\": {\"w1\": [], \"w2\": [\"w1\"]}, \"value\": {\"w1\": 5, \"w2\": 4}}\n    for check in (within_both_budgets, must_dos_funded, prerequisites_funded):\n        check(example, {\"w1\"})\n    print(\"{'w1'} keeps all three properties\")\n",
+  "exercise": {
+    "main_path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-02/practice-1/water_properties.py",
+    "test_path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-02/practice-1/test_water_properties.py",
+    "run_command": [
+      "python3",
+      "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-02/practice-1/water_properties.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-02/practice-1/target/report.xml",
+      "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-02/practice-1/test_water_properties.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_budget_property_holds_and_catches_a_solver_with_no_budgets",
+        "kind": "main",
+        "says": "the budget property holds on every plan of the correct solver and fails on a solver that ignores both budgets"
+      },
+      {
+        "id": "test_the_must_do_property_holds_and_catches_a_solver_that_skips_them",
+        "kind": "main",
+        "says": "the must-do property holds on the correct solver and fails on one that treats must-dos as optional"
+      },
+      {
+        "id": "test_the_prerequisite_property_holds_and_catches_a_solver_without_them",
+        "kind": "main",
+        "says": "the prerequisite property holds on the correct solver and fails on one that ignores prerequisites"
+      },
+      {
+        "id": "test_the_budget_property_checks_the_operating_fund_too",
+        "kind": "edge",
+        "says": "a solver that keeps to the capital budget but ignores the operating one is caught"
+      },
+      {
+        "id": "test_the_prerequisite_property_needs_every_prerequisite",
+        "kind": "edge",
+        "says": "a project with two prerequisites needs both, so a solver satisfied by one of them is caught"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "47-testing-optimization-code/README_12.3.2.md",
+      "section": "Validity Properties Miss a Rule That Is Too Strict; a Witness Catches It"
+    },
+    "concepts": [
+      "a property states a business rule and checks each returned plan against the data, not against the model",
+      "a property earns its place by failing on code that breaks its rule"
+    ]
+  }
+}

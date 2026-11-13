@@ -1,0 +1,584 @@
+# 14.4.1 Baseline Specs: Write Down What the Planner Already Does
+
+GridCap's capital planner works. It chooses which projects to start, and in which year, within a
+yearly budget, and the planners use it every cycle. Now they have a queue of changes for it: a
+regional share, must-do overrides, carry-over, and an old cap to retire. Before the first one, the
+team lead writes this:
+
+> **Request 1.** Before we touch any rule, write down what the planner does today, in words the
+> planners can read and sign and in a form the tests can check. From now on, a rule changes only
+> after its change is written and agreed. And something has to check that the written rules are well
+> formed, or they will rot like every wiki page before them.
+
+This module takes that request, and the five changes after it, through **Spec-Driven Development**
+(SDD): the spec says what the system must do, and it is written and agreed before the code that
+does it. The workflow is **OpenSpec** `2.0.0`, an open-source spec workflow. The project lives in
+complete snapshots: `steps/00` is the planner before this lesson, `steps/01` the project after it.
+The portfolios are invented, made by a seeded generator in the project (GridCap is fictional).
+
+## The Planner Works, but Its Rules Live Only in Its Code and Six Tests
+
+The planner, snapshot `steps/00`, is a package of five modules: `portfolio.py` holds the project
+records and the generator, `request.py` what the planners ask for, `model.py` the model, `plan.py`
+the solve, and `report.py` what a plan spends. A project carries an id, a region (`north`, `plains`
+or `coast`), a cost in $k paid in the year it starts, a value in $k, and the earliest and latest
+years it may start. `baseline.py` plans 40 invented projects over 2027 to 2031:
+
+```text
+40 fictional projects, $3,000k a year for 2027-2031: 15 started, value $18,616k (OPTIMAL)
+starts per year: 2027 3, 2028 3, 2029 3, 2030 3, 2031 3
+```
+
+The model is a 0-1 model with start-time variables (lesson 6.4.1), solved with CP-SAT, the OR-Tools
+solver for integer models (lesson 4.4.1). CP-SAT takes integer data only, which suits GridCap: every
+cost, value and budget is a whole number of $k.
+
+## The Model
+
+The planner's model, as `steps/00` builds it. This lesson does not change it; it writes down what it
+does.
+
+**Sets.** $`P`$, the projects; $`Y`$, the plan years, 2027 onward; $`T_i \subseteq Y`$, the plan
+years from project $`i`$'s earliest to its latest start year.
+
+**Parameters.** $`c_i`$, the cost of project $`i`$ ($k), paid in its start year; $`v_i`$, its value
+($k); $`B`$, the budget of each plan year ($k); $`K`$, the most projects that may start in one year
+(3 unless the request sets another).
+
+**Variables.** $`x_{i,t} \in \{0,1\}`$ for $`i \in P`$, $`t \in T_i`$: project $`i`$ starts in year
+$`t`$. A year outside $`T_i`$ has no variable, so no start there is possible.
+
+**Objective.**
+
+```math
+\max \; \sum_{i \in P} \sum_{t \in T_i} v_i \, x_{i,t}
+```
+
+**Constraints.** With $`\text{spend}_y = \sum_{i \in P :\, y \in T_i} c_i \, x_{i,y}`$, what the plan
+spends in year $`y`$:
+
+```math
+\begin{aligned}
+\sum_{t \in T_i} x_{i,t} &\le 1 && \forall i \in P && \text{(once}_i) \\
+\text{spend}_y &\le B && \forall y \in Y && \text{(budget}_y) \\
+\sum_{i \in P :\, y \in T_i} x_{i,y} &\le K && \forall y \in Y && \text{(starts}_y)
+\end{aligned}
+```
+
+In the code the rows are named `once_P007`, `budget_2029` and `starts_2029`, and the variables
+`x_P007_2029`. The six tests of `steps/00` each check one rule on a hand-made portfolio of one to
+five projects, by fixing a plan and asking the model whether it allows it (lesson 12.3.1), or by
+comparing the plan with the best plan found by trying every one.
+
+What the planners cannot do is read any of this. The rules are rows and test functions, and the one
+place that says "the cap is three starts a year" is a default argument in `request.py`.
+
+## OpenSpec Keeps the Living Specs and the Proposed Changes Apart
+
+OpenSpec puts everything in one folder, `openspec/`, with two parts:
+
+| Folder | Holds |
+| --- | --- |
+| `openspec/specs/<capability>/spec.md` | the **living specs**: how the system behaves now, one file per capability |
+| `openspec/changes/<change-id>/` | one **change** in progress: `proposal.md` (why, and what changes), `tasks.md` (the checklist), an optional `design.md` (how), and `specs/<capability>/spec.md`, the **spec deltas** |
+| `openspec/changes/archive/<date>-<change-id>/` | each finished change, kept whole for its history |
+
+A **capability** is one area of behaviour with a spec of its own; this project will have two. A
+**spec delta** says only what a change does to a living spec: which requirements it adds, modifies,
+removes or renames. A change goes through four moves:
+
+1. **Propose.** Write the change folder: the proposal, the deltas, the tasks.
+2. **Review and validate.** The owners read the proposal and the deltas before any code, and
+   `openspec validate` checks their format.
+3. **Apply.** Work through the tasks, checking each off.
+4. **Archive.** `openspec archive` merges the deltas into the living specs and moves the change to
+   `changes/archive/`, so the living specs describe the new behaviour and the next change starts
+   from them.
+
+The OpenSpec CLI is an npm package that needs Node.js. The course's runner image carries both,
+Node.js 24.21.0 and OpenSpec 2.0.0 with its telemetry off, and the program `openspec_cli.py` runs the
+real CLI on a temporary copy of every step, so the repository's own files never change:
+
+```text
+$ openspec --version
+2.0.0
+(exit 0)
+```
+
+These are the commands for this lesson's change. `openspec_cli.py` runs the last three; the first
+three stay read-along, because the snapshots already hold the folders they would create. `--tools
+none` sets up the folder without installing commands for any editor tool.
+
+```bash
+openspec init --tools none                       # creates openspec/  (read-along)
+openspec new change add-baseline-specs           # creates openspec/changes/add-baseline-specs/  (read-along)
+openspec show add-baseline-specs                 # prints the change  (read-along)
+openspec validate --all --strict                 # checks every change and living spec
+openspec list                                    # active changes; --specs lists the living specs
+openspec archive add-baseline-specs --yes        # merges the deltas and archives the change
+```
+
+Validation names `--all` (or one item). With neither, and no terminal to ask in, the CLI checks
+nothing and exits 1:
+
+```text
+$ openspec validate --strict
+Nothing to validate. Try one of:
+  openspec validate --all
+  openspec validate --changes
+  openspec validate --specs
+  openspec validate <item-name>
+Or run in an interactive terminal.
+(exit 1)
+```
+
+The project also ships `specs_check.py`, a Python checker of about 300 lines, so that each snapshot
+checks its own specs in its tests with Python alone. It mirrors the format rules of `openspec
+validate --strict` that these specs need, and the archive merge, as read in OpenSpec's source. It is
+not the OpenSpec CLI, and it says so on its first line of output. Its commands are `python3
+specs_check.py list`, `validate --strict` and `archive <change-id> --date <date>`. The pages show its
+output and the real CLI's side by side.
+
+OpenSpec's advice for an existing project is to write specs only for what you are about to change,
+and let them grow change by change, rather than back-fill a spec of everything. Every change in this
+module touches the planning rules, so this first change specifies those rules and nothing else of
+the planner: not the generator, not the report's layout.
+
+## A Requirement States One Behaviour With SHALL or MUST; a Scenario Says When and Then
+
+A spec has a `## Purpose` and a `## Requirements` section. Each requirement is a `### Requirement:`
+heading with its text under it, and the text carries **SHALL** or **MUST**, the keywords of
+RFC 2119 for an absolute requirement (**SHOULD** and **MAY** mark weaker ones). Under each requirement
+come its **scenarios**: `#### Scenario:` headings, each with steps as bullets, **GIVEN** a starting
+state, **WHEN** something happens, **THEN** the outcome, and **AND** to continue a step.
+
+The change's delta for the planner, `specs/capital-plan/spec.md`, adds five requirements. Because the
+capability is new, the delta opens with the `## Purpose` the living spec will get, then an
+`## ADDED Requirements` section:
+
+<!-- snapshot: steps/01/openspec/changes/archive/2026-11-02-add-baseline-specs/specs/capital-plan/spec.md -->
+```markdown
+## Purpose
+Which of GridCap's capital projects the planner starts, and in which year, within the planners'
+budget and rules. GridCap is a fictional utility.
+
+## ADDED Requirements
+
+### Requirement: Yearly budget
+The planner SHALL keep what the plan spends in each plan year within the yearly budget, counting
+each project's whole cost in the year it starts.
+
+#### Scenario: Spending up to the budget is allowed
+- **GIVEN** a budget of $1,000k a year
+- **WHEN** a plan starts a $600k project and a $400k project in 2027
+- **THEN** the plan is allowed
+
+#### Scenario: Spending over the budget is refused
+- **GIVEN** a budget of $1,000k a year
+- **WHEN** a plan starts a $600k project and a $410k project in 2027
+- **THEN** the plan is refused
+```
+
+The other four requirements follow the same shape: one start per project, the start window, the
+yearly start cap, and the most valuable plan. Read the spec for what it leaves out. It names no
+variable, no row and no solver. OpenSpec's guide calls a spec a behaviour contract: what anyone can
+observe and check, with internal names and library choices left to the design and the code. A
+planner can sign "the cap is 3 when the request does not set one"; nobody signs $`K`$.
+
+The scenarios were not invented: each one is an existing test, written as words. The test names
+already said what each test checks, so each scenario took its test's name:
+
+```text
+capital-plan scenarios, and the test of steps/00 each one names:
+  Spending up to the budget is allowed             test_spending_up_to_the_budget_is_allowed (in steps/00)
+  Spending over the budget is refused              test_spending_over_the_budget_is_refused (in steps/00)
+  A project started twice is refused               test_a_project_started_twice_is_refused (in steps/00)
+  A start outside the window is refused            test_a_start_outside_the_window_is_refused (in steps/00)
+  More starts than the cap are refused             test_more_starts_than_the_cap_are_refused (in steps/00)
+  The plan has the greatest value within the rules test_the_plan_has_the_greatest_value_within_the_rules (in steps/00)
+```
+
+That naming is this project's own convention: a scenario's test is `test_` and the scenario's name
+in lower case, with each run of other characters as one underscore. OpenSpec does not require it.
+The project keeps it for the rest of the module, and the last lesson checks it.
+
+## The Checker Applies the Format Rules That Strict Validation Applies
+
+The change's second delta, `specs/spec-checks/spec.md`, specifies the checker itself, as a second
+capability: the format rules it applies, each with its scenarios. They are the rules OpenSpec's
+validator applies to every requirement, read in its source (`src/core/validation/validator.ts` at
+`v2.0.0`):
+
+| Rule | `openspec validate` | `specs_check.py` |
+| --- | --- | --- |
+| a requirement has text under its header | error | error |
+| the text has SHALL or MUST (in the text, not only the header) | warning | warning |
+| a requirement has a scenario with steps under it | error | error |
+| a scenario has a WHEN or GIVEN step and a THEN step | warning | warning |
+| a living spec has `## Purpose` and `## Requirements` | error | error |
+| the Purpose has at least 50 characters | warning | warning |
+| `--strict` fails on any warning, plain validation on errors only | | the same, `passes(issues, strict)` |
+
+A scenario heading with nothing under it does not count as a scenario, in either. The keyword rule
+reads the text: a header such as `### Requirement: The planner SHALL keep the budget` with no keyword
+in the text under it still gets the warning, because OpenSpec's validator reads the keyword on the
+lines under the header.
+
+The checker of `steps/00` can already read a spec into requirements and scenarios, but its
+`check_requirement` is a stub that fails every requirement. This change writes it:
+
+```diff
+--- 00/specs_check.py
++++ 01/specs_check.py
+@@
+ def check_requirement(req: Requirement, where: str) -> list[Issue]:
+-    """The rules every requirement keeps. (Stub: the next lesson writes them; until then none passes.)"""
+-    return [Issue("ERROR", where, f'requirement "{req.name}" has not been checked')]
++    """The rules every requirement keeps, in a living spec and in an ADDED or MODIFIED delta."""
++    issues = []
++    if not req.text:
++        issues.append(Issue("ERROR", where, f'requirement "{req.name}" has no text under its header'))
++    elif not KEYWORD.search(req.text):
++        issues.append(Issue("WARNING", where, f'requirement "{req.name}" should contain SHALL or MUST in its text'))
++    scenarios = {name: body for name, body in req.scenarios.items() if body}
++    if not scenarios:
++        issues.append(Issue("ERROR", where, f'requirement "{req.name}" must include at least one scenario'))
+```
+
+`KEYWORD` matches SHALL or MUST as whole upper-case words. The rest of the function is the last rule
+of the table, and it is yours to write in the practice: for each scenario with a body, a WARNING
+`scenario "<name>" is missing <what>` when it has no WHEN or GIVEN step (`a WHEN or GIVEN step`) or
+no THEN step (`a THEN step`), both joined by ` and ` when both are missing, and then the list of
+issues. `has_steps(body)` is already in the checker: it returns two booleans, whether the body has a
+trigger step and whether it has an outcome step, and it finds a step keyword in bold in any case
+(`**When**`) or bare in upper case (`WHEN`), as OpenSpec's reader does. To see the
+rules work, `baseline.py` plants faults in a copy of the capital-plan delta: first the keyword taken
+out of one requirement and the THEN step out of one scenario, then also every step out of the Start
+window requirement's only scenario:
+
+```text
+-- two faults
+WARNING add-baseline-specs/specs/capital-plan/spec.md: requirement "One start per project" should contain SHALL or MUST in its text
+WARNING add-baseline-specs/specs/capital-plan/spec.md: scenario "The plan has the greatest value within the rules" is missing a THEN step
+plain validation passes; strict validation fails
+-- three faults
+WARNING add-baseline-specs/specs/capital-plan/spec.md: requirement "One start per project" should contain SHALL or MUST in its text
+ERROR   add-baseline-specs/specs/capital-plan/spec.md: requirement "Start window" must include at least one scenario
+WARNING add-baseline-specs/specs/capital-plan/spec.md: scenario "The plan has the greatest value within the rules" is missing a THEN step
+plain validation fails; strict validation fails
+```
+
+The real CLI, run by `openspec_cli.py` on the same two copies of the change, reports the same
+issues at the same levels, in the same order, and reaches the same verdicts: exit 0 is a pass.
+
+```text
+== add-baseline-specs with two faults
+$ openspec validate --all
+✓ change/add-baseline-specs
+Totals: 1 passed, 0 failed (1 items)
+  ⚠ [WARNING] capital-plan/spec.md: ADDED "One start per project" should contain SHALL or MUST (RFC 2119 best practice for English specs)
+  ⚠ [WARNING] capital-plan/spec.md: ADDED "Most valuable plan": scenario "The plan has the greatest value within the rules" is missing a THEN step. A scenario needs a trigger and an outcome, e.g. "- **WHEN** an invoice is voided" and "- **THEN** a credit note is issued".
+(exit 0)
+$ openspec validate --all --strict
+Totals: 0 passed, 1 failed (1 items)
+Details: openspec validate add-baseline-specs --type change
+✗ change/add-baseline-specs
+  ⚠ [WARNING] capital-plan/spec.md: ADDED "One start per project" should contain SHALL or MUST (RFC 2119 best practice for English specs)
+  ⚠ [WARNING] capital-plan/spec.md: ADDED "Most valuable plan": scenario "The plan has the greatest value within the rules" is missing a THEN step. A scenario needs a trigger and an outcome, e.g. "- **WHEN** an invoice is voided" and "- **THEN** a credit note is issued".
+(exit 1)
+== add-baseline-specs with three faults
+$ openspec validate --all
+Totals: 0 passed, 1 failed (1 items)
+Details: openspec validate add-baseline-specs --type change
+✗ change/add-baseline-specs
+  ⚠ [WARNING] capital-plan/spec.md: ADDED "One start per project" should contain SHALL or MUST (RFC 2119 best practice for English specs)
+  ✗ [ERROR] capital-plan/spec.md: ADDED "Start window" must include at least one scenario (a scenario header with no body under it does not count; add its steps, e.g. "- **WHEN** ..." and "- **THEN** ...")
+  ⚠ [WARNING] capital-plan/spec.md: ADDED "Most valuable plan": scenario "The plan has the greatest value within the rules" is missing a THEN step. A scenario needs a trigger and an outcome, e.g. "- **WHEN** an invoice is voided" and "- **THEN** a credit note is issued".
+(exit 1)
+```
+
+Only the wording differs: the CLI names the file from the capability folder, says which delta section
+the requirement is in (`ADDED`), and adds a hint to each message.
+
+Two warnings pass plain validation and fail strict validation. That is why the project validates
+with `--strict`: a requirement without SHALL is a sentence nobody can hold the planner to, and a
+scenario without THEN asserts nothing, so neither should ever reach the living specs.
+
+## The Proposal Says Why; the Tasks Put Tests Before Code
+
+OpenSpec's proposal template has four parts: **Why**, **What Changes**, **Capabilities** (new and
+modified, each a folder under `specs/`) and **Impact**. This change's proposal:
+
+<!-- snapshot: steps/01/openspec/changes/archive/2026-11-02-add-baseline-specs/proposal.md -->
+```markdown
+## Why
+The planner's rules live only in its code and in six tests. Before the planners change a rule (a
+regional share is next), the team needs today's rules written as requirements a planner can read
+and a test can check, and a checker that keeps those specs in OpenSpec's format.
+
+## What Changes
+- Specify the planner as it is today: the yearly budget, one start per project, start windows, the
+  yearly start cap and the most valuable plan. The planner's behaviour does not change.
+- Specify the rules the checker applies to requirements and scenarios, and write them in
+  specs_check.py.
+```
+
+The tasks are a checklist in numbered groups, `## 1.` then `- [ ] 1.1 ...`, and each box is ticked as
+the task is done. OpenSpec's guide asks that each group carry its own tests rather than leave them
+to a last group; this project goes one step further and puts the tests before the code they check:
+
+<!-- snapshot: steps/01/openspec/changes/archive/2026-11-02-add-baseline-specs/tasks.md -->
+```markdown
+## 1. Specs
+- [x] 1.1 Write the capital-plan delta: one requirement per rule the code keeps, one scenario per existing test
+- [x] 1.2 Write the spec-checks delta: the rules check_requirement will apply
+
+## 2. Tests from the scenarios
+- [x] 2.1 Keep the six planner tests; rename none, since each is already named after its scenario
+- [x] 2.2 Write tests/test_spec_checks.py, one test per spec-checks scenario, and see each fail on the stub
+
+## 3. Code
+- [x] 3.1 Write check_requirement in specs_check.py
+- [x] 3.2 Run the tests and `specs_check.py validate --strict`; both pass
+
+## 4. Archive
+- [x] 4.1 Archive the change, so the two deltas become the living specs
+```
+
+Seven tasks in four groups: the specs first, then the tests, then the code, then the archive.
+
+## Each Scenario Becomes a Test, and Each Test Fails Before the Code Exists
+
+Each spec-checks scenario becomes one test, named after it, on a small spec written in the test:
+
+<!-- snapshot: steps/01/tests/test_spec_checks.py -->
+```python
+def test_a_keyword_only_in_the_header_does_not_count():
+    name = "The planner SHALL keep the budget"
+    issues = check_spec(spec(f"### Requirement: {name}\nSpending stays within it.\n\n" + FITS), "demo")
+    assert issues == [Issue("WARNING", "demo", f'requirement "{name}" should contain SHALL or MUST in its text')]
+```
+
+Run on the code before the change, with the stub, each of the eight fails on its assertion, and the
+six planner tests still pass:
+
+```text
+step 01 tests on the code of step 00 (before): 6 passed, 8 failed
+  FAILED test_spec_checks.py::test_a_requirement_with_no_text_is_an_error (AssertionError)
+         assert [Issue(level=...een checked')] == [Issue(level=... its header')]
+  FAILED test_spec_checks.py::test_text_without_shall_or_must_is_a_warning (AssertionError)
+         assert [Issue(level=...een checked')] == [Issue(level=...in its text')]
+  FAILED test_spec_checks.py::test_a_keyword_only_in_the_header_does_not_count (AssertionError)
+         assert [Issue(level=...een checked')] == [Issue(level=...in its text')]
+  FAILED test_spec_checks.py::test_a_requirement_without_scenarios_is_an_error (AssertionError)
+         assert [Issue(level=...een checked')] == [Issue(level=...ne scenario')]
+  FAILED test_spec_checks.py::test_an_empty_scenario_does_not_count (AssertionError)
+         assert [Issue(level=...een checked')] == [Issue(level=...ne scenario')]
+  FAILED test_spec_checks.py::test_a_scenario_without_then_is_a_warning (AssertionError)
+         assert [Issue(level=...een checked')] == [Issue(level=...a THEN step')]
+  FAILED test_spec_checks.py::test_strict_mode_fails_on_a_warning (AssertionError)
+         assert False
+  FAILED test_spec_checks.py::test_these_specs_pass_strict_validation (AssertionError)
+         {'spec capital-plan': [Issue(level='ERROR', where='specs/capital-plan/spec.md', message='require
+step 01 tests on the code of step 01 (after): 14 passed, 0 failed
+tests step 01 adds or changes: 8; removes: 0
+```
+
+A test that has never failed has not shown that it tests anything. The stub returns a wrong answer
+instead of raising, so each failure is the assertion the scenario predicts, not an import error.
+The last test, "These specs pass strict validation", runs the checker on the project's own
+`openspec/` folder, so from now on a malformed spec fails the test suite.
+
+## Validate, Then Archive: the Deltas Become the Living Specs
+
+With the change proposed and the code still that of `steps/00`, strict validation fails on every
+requirement, because the stub checks none. With the change's code, it passes:
+
+```text
+== validate --strict, the change proposed, with the checker of steps/01
+valid   change add-baseline-specs
+strict: 0 item(s) failed
+```
+
+The real CLI validates the same proposed change, and lists it; `specs_check.py list` on the same
+folder follows:
+
+```text
+== add-baseline-specs, proposed on steps/00
+$ openspec validate --all --strict
+✓ change/add-baseline-specs
+Totals: 1 passed, 0 failed (1 items)
+(exit 0)
+$ openspec list
+Changes:
+  add-baseline-specs     ✓ Complete    just now
+(exit 0)
+-- specs_check.py list, the same folder, with the checker of steps/01
+Changes:
+  add-baseline-specs           7/7 tasks
+Specs:
+```
+
+Archiving merges each delta into its living spec and moves the change folder. Both capabilities are
+new, so archive creates both specs, each with the delta's Purpose and a `# <capability>
+Specification` title, as OpenSpec's archive writes it:
+
+```text
+== archive
+specs/capital-plan/spec.md: created
+specs/spec-checks/spec.md: created
+moved to changes/archive/2026-11-02-add-baseline-specs
+specs/capital-plan/spec.md after archive: the same as steps/01
+specs/spec-checks/spec.md after archive: the same as steps/01
+```
+
+The real `openspec archive`, on another copy of the same proposed change, writes the same two specs,
+byte for byte:
+
+```text
+$ openspec archive add-baseline-specs --yes
+Task status: ✓ Complete
+Specs to update:
+  capital-plan: create
+  spec-checks: create
+Applying changes to openspec/specs/capital-plan/spec.md:
+  + 5 added
+Applying changes to openspec/specs/spec-checks/spec.md:
+  + 5 added
+Totals: + 10, ~ 0, - 0, → 0
+Specs updated successfully.
+Change 'add-baseline-specs' archived as '<today>-add-baseline-specs'.
+(exit 0)
+specs/capital-plan/spec.md after openspec archive: the same as steps/01
+specs/spec-checks/spec.md after openspec archive: the same as steps/01
+archive folder: <today>-add-baseline-specs
+every file under openspec/, the archive's date set to steps/01's: the same as steps/01
+```
+
+The verdicts and the files agree. Two things differ, and both are in how the tools report:
+
+- **The archive's date.** The CLI names the archive folder after the day it runs, which the program
+  prints as `<today>`; `specs_check.py archive` takes the date with `--date`, which is how the
+  snapshots keep `2026-11-02`. With the date set aside, every file under `openspec/` is the same.
+- **The list.** `openspec list` shows only the changes (`openspec list --specs` shows the living
+  specs), writes `✓ Complete` when every task is ticked, and adds how long ago the change last
+  changed (`just now`, since the program stamps its copy with the time it runs). `specs_check.py
+  list` shows the changes and the specs together, and counts the tasks, here `7/7 tasks`.
+
+`main.py` now also checks the specs on every run, and the step's report gains a line:
+
+```diff
+--- 00/main.py
++++ 01/main.py
+@@
+ from __future__ import annotations
+ 
++from pathlib import Path
++
+ from capplan.plan import plan
+@@
+ from capplan.request import Request
++from specs_check import passes, requirements, sections, validate
+@@
+         print(f"  {year}: {len(starts)} starts, ${spend:,}k  {' '.join(starts)}")
++    root = Path(__file__).resolve().parent
++    specs = sorted((root / "openspec" / "specs").glob("*/spec.md"))
++    reqs = [r for spec in specs for r in requirements(dict(sections(spec.read_text(encoding="utf-8")))["Requirements"])]
++    verdict = "passed" if all(passes(issues) for issues in validate(root).values()) else "FAILED"
++    print(f"openspec: {len(specs)} specs, {len(reqs)} requirements, "
++          f"{sum(len(r.scenarios) for r in reqs)} scenarios; strict validation {verdict}")
+```
+
+## What the Step Did to the Code
+
+```text
+step  planner lines  checker lines  tests  requirements  scenarios  most branching planner function
+00               98            296      6             0          0  model.build (5)
+01              101            309     14            10         14  model.build (5)
+```
+
+The planner gained 3 lines, a stub field and a stub function for the next lesson, and no behaviour.
+The checker gained 13. The real growth is in what the project knows about itself: 10 requirements
+and 14 scenarios, each a sentence a planner can read, and 8 new tests that keep the specs well
+formed.
+
+**Practice.** This lesson's project practice starts from `steps/00`, the whole package, with the specs
+and tests of `steps/01`. It is graded by those tests and by a check that `main.py` prints
+`steps/01/expected/report.txt`, the tiny portfolio's plan followed by the line about the specs.
+
+<!-- practice 1 -->
+
+## Summary
+
+- **Specs come before changes.** The first change writes down what the planner already does, from
+  its tests, before any rule changes.
+- **OpenSpec keeps living specs apart from proposed changes.** A change is a folder with a proposal,
+  tasks, an optional design, and spec deltas; archive merges the deltas and keeps the folder.
+- **A requirement states one behaviour with SHALL or MUST in its text; each scenario has WHEN (or
+  GIVEN) and THEN.** A spec names no variable, row or solver.
+- **Strict validation fails on warnings too.** A requirement without SHALL and a scenario without THEN
+  pass plain validation and fail strict validation.
+- **`specs_check.py` mirrors the rules; it is not the OpenSpec CLI.** The course image now runs the
+  real CLI too, and on this change the two agree on every verdict and every file; they differ in the
+  archive's date and in what `list` shows.
+
+## Reference
+
+| Part | Form |
+| --- | --- |
+| living spec | `openspec/specs/<capability>/spec.md`: `# ... Specification`, `## Purpose`, `## Requirements` |
+| change | `openspec/changes/<change-id>/`: `proposal.md`, `tasks.md`, `design.md` (optional), `specs/<capability>/spec.md` |
+| requirement | `### Requirement: <name>`, then text with SHALL or MUST |
+| scenario | `#### Scenario: <name>`, then `- **GIVEN**`, `- **WHEN**`, `- **THEN**`, `- **AND**` |
+| a new capability's delta | `## Purpose`, then `## ADDED Requirements` |
+| proposal | `## Why`, `## What Changes`, `## Capabilities`, `## Impact` |
+| tasks | `## 1. <group>`, then `- [ ] 1.1 <task>`, ticked `- [x]` when done |
+
+| OpenSpec command (run by `openspec_cli.py`) | `specs_check.py` |
+| --- | --- |
+| `openspec validate --all --strict` | `python3 specs_check.py validate --strict` |
+| `openspec list`, `openspec list --specs` | `python3 specs_check.py list` |
+| `openspec archive <change-id> --yes` (dated today) | `python3 specs_check.py archive <change-id> --date <date>` |
+
+**Further reading:** [CP-SAT Solver (OR-Tools docs)](https://developers.google.com/optimization/cp/cp_solver) (CP-SAT takes integer data, and the statuses `OPTIMAL`, `FEASIBLE` and `INFEASIBLE` the planner reads); [OpenSpec README, `v2.0.0`](https://github.com/Fission-AI/OpenSpec/blob/v2.0.0/README.md) (what OpenSpec is, its MIT license, and installing it with npm on Node.js `22.12.0` or later); [Concepts (OpenSpec docs, `v2.0.0`)](https://github.com/Fission-AI/OpenSpec/blob/v2.0.0/docs/concepts.md) (specs and changes, the spec format, a spec as a behaviour contract, proposal, design, tasks, archive); [Using OpenSpec in an existing project (OpenSpec docs, `v2.0.0`)](https://github.com/Fission-AI/OpenSpec/blob/v2.0.0/docs/existing-projects.md) (specify only what you are about to change); [CLI reference (OpenSpec docs, `v2.0.0`)](https://github.com/Fission-AI/OpenSpec/blob/v2.0.0/docs/cli.md) (`init --tools none`, `new change`, `list`, `show`, `validate --strict`, `archive --yes`); [`validator.ts` (OpenSpec source, `v2.0.0`)](https://github.com/Fission-AI/OpenSpec/blob/v2.0.0/src/core/validation/validator.ts) and [`requirement-text.ts` (OpenSpec source, `v2.0.0`)](https://github.com/Fission-AI/OpenSpec/blob/v2.0.0/src/core/parsers/requirement-text.ts) (the rules `specs_check.py` mirrors, and how a step keyword is read); [spec-driven templates (OpenSpec source, `v2.0.0`)](https://github.com/Fission-AI/OpenSpec/tree/v2.0.0/schemas/spec-driven/templates) (the proposal, spec, design and tasks templates). Lessons 4.4.1 (CP-SAT variables and constraints), 6.4.1 (start-time variables) and 12.3.1 (testing one constraint at a time) are the course's background for the planner.
+
+## Challenges
+
+1. The planners say the cap is "three a year, but four in 2031, the year the new crew starts". Write
+   the requirement's new text and one scenario, and say whether it is still one behaviour.
+2. Write a scenario for "Most valuable plan" that a planner could check by hand on two projects,
+   without trying every plan.
+3. A colleague proposes to specify the report's layout too, line by line. Using OpenSpec's advice for
+   existing projects, argue for or against doing it in this change.
+
+## Design Note: The Scenarios Come From the Tests, Not the Other Way Round
+
+A baseline can be written from the code, by reading what the rows do, or from the tests. This one was
+written from the tests, for two reasons. A test is the closest thing to a scenario the project
+already had: a starting state, an action and an outcome. And a rule that no test checked would have
+become a scenario no test checks, which is exactly the gap a spec should expose rather than hide. The
+cost is that a baseline written this way is only as complete as the tests were. Here they covered
+every row, and the last lesson of the module adds the check that keeps it so.
+
+## The Full Programs
+
+Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change.
+
+**baseline.py.** Plans 40 invented projects with `steps/00`, maps each scenario to its test,
+validates the proposed change with the stub and with the real checker, plants faults in the delta,
+archives the change, and runs the step's tests before and after (*every section*). *Try:* Change
+"SHALL" to "should" in one requirement of the planted copy. Predict whether plain validation passes,
+then run it.
+
+**openspec_cli.py.** Runs the real OpenSpec CLI, with subprocess and a fixed list of arguments, on a
+temporary copy of every snapshot and of every change proposed on the snapshot before it: `--version`,
+`validate --all --strict`, `list --specs`, `list` and `archive <id> --yes`, then compares what archive
+wrote with the snapshot. It also validates this lesson's planted faults (*the OpenSpec folder, the
+checker, validate and archive*). *Try:* Remove `--all` from `VALIDATE`. Predict the exit status of
+every validation, then run it.
+
+- Program: [baseline.py](src/baseline.py)
+- Program: [openspec_cli.py](src/openspec_cli.py)
+- Program: [growth.py](src/growth.py)
+- Library: [changes.py](src/changes.py)
+- Library: [steps.py](src/steps.py)

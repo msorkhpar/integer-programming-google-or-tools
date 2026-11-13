@@ -1,0 +1,611 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "07-the-capital-planning-domain",
+    "32-asset-risk"
+  ],
+  "variant": "prose",
+  "unit": 1,
+  "kind": "lesson",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Probability of failure and hazard curves (Weibull)",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 1,
+      "text": "7.3.1 Probability of Failure and Hazard Curves (Weibull)"
+    },
+    {
+      "type": "para",
+      "text": "GridCap's asset analytics team sends the planning group a file with two numbers per asset, `weibull_beta` and `weibull_eta`, and a note: \"PoF curves attached.\" Lesson 1.1.2 used them through one formula, next year's probability of failure, and promised that section 7 would explain them. This is that explanation. By the end you can say what each of the two numbers means, draw the curve they describe, turn it into the probability that a working asset fails next year, check every number against `scipy.stats`, and explain where the two numbers came from, in five rules."
+    },
+    {
+      "type": "para",
+      "text": "GridCap is a fictional utility generated for this course; its assets and curves describe no real company."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Failure Curve Says How the Lifetimes of Similar Assets Are Spread Out"
+    },
+    {
+      "type": "para",
+      "text": "Take one asset, the substation transformer A006 in the tiny portfolio. Imagine a large fleet of transformers built the same way and run the same way. Some fail young, most fail in middle age, a few run for a very long time. The **lifetime** $`T`$ of one of them, the age at which it fails, is a random quantity, and the failure curve describes how it is spread out. Three functions say the same thing in three ways, for an age $`t`$ in years:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "the **cumulative distribution** $`F(t) = P(T \\le t)`$, the probability that the asset has failed by age $`t`$. It starts at 0 and climbs to 1;",
+        "the **reliability** or **survival function** $`R(t) = P(T > t) = 1 - F(t)`$, the probability that it is still working at age $`t`$;",
+        "the **density** $`f(t) = F'(t)`$, how densely the failures are packed around age $`t`$. The probability of failing between ages $`t`$ and $`t + 1`$ is the area under $`f`$ over that year, which is $`F(t+1) - F(t)`$."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The **Weibull distribution** is the curve reliability engineers use most for equipment that wears out. It has two parameters: a **shape** $`\\beta > 0`$ (no unit) and a **scale** $`\\eta > 0`$ (in years). Its three functions are:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "F(t) = 1 - e^{-(t/\\eta)^{\\beta}}, \\qquad R(t) = e^{-(t/\\eta)^{\\beta}}, \\qquad\nf(t) = \\frac{\\beta}{\\eta}\\Big(\\frac{t}{\\eta}\\Big)^{\\beta - 1} e^{-(t/\\eta)^{\\beta}}"
+    },
+    {
+      "type": "para",
+      "text": "In code, each is one line:"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def cumulative(t: float, beta: float, eta: float) -> float:\n    \"\"\"F(t): the probability that the asset has failed by age t.\"\"\"\n    return 1 - math.exp(-((t / eta) ** beta))\n\n\ndef survival(t: float, beta: float, eta: float) -> float:\n    \"\"\"R(t) = 1 - F(t): the probability that it is still working at age t.\"\"\"\n    return math.exp(-((t / eta) ** beta))\n\n\ndef density(t: float, beta: float, eta: float) -> float:\n    \"\"\"f(t): how densely failures are packed around age t, per year.\"\"\"\n    return (beta / eta) * (t / eta) ** (beta - 1) * survival(t, beta, eta)"
+    },
+    {
+      "type": "para",
+      "text": "Here is A006's curve at six ages:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "A006 (transformer): beta 3.66, eta 57.8 years, age today 68\n age  F(t) failed by t  R(t) still working  f(t) per year\n  10            0.0016              0.9984         0.0006\n  30            0.0867              0.9133         0.0101\n  50            0.4447              0.5553         0.0239\n57.8            0.6321              0.3679         0.0233\n  70            0.8668              0.1332         0.0140\n  90            0.9936              0.0064         0.0013"
+    },
+    {
+      "type": "para",
+      "text": "Read it as a story about the fleet: by age 30 about 9% of such transformers have failed, by age 50 about 44%, by age 90 nearly all. The density peaks between 50 and 58 years: that is when most of them fail. A006 itself is 68 years old, past its scale of 57.8 years, where fewer than 37% of such transformers are still standing."
+    },
+    {
+      "type": "para",
+      "text": "**Check it against a library.** `scipy.stats.weibull_min` is the same curve. Its shape argument is called `c`, and the scale is passed as `scale`; its location `loc` shifts the curve and stays at its default of 0 here, so the curve starts at age 0. The program compares every function over ages 1 to 120:"
+    },
+    {
+      "type": "example",
+      "id": "weibull_curves-1",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "32-asset-risk/src/weibull_curves.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "32-asset-risk/src/weibull_curves.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "curve = weibull_min(c=beta, scale=eta)\nworst = max(max(abs(curve.cdf(t) - cumulative(t, beta, eta)), abs(curve.sf(t) - survival(t, beta, eta)),\n                abs(curve.pdf(t) - density(t, beta, eta))) for t in range(1, 121))\nprint(f\"largest difference from scipy.stats.weibull_min over ages 1-120: {worst:.1e}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "largest difference from scipy.stats.weibull_min over ages 1-120: 1.7e-16"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The difference is floating-point rounding. Two warnings about names, because they cause real bugs: scipy calls the survival function `sf` (not `reliability`), and other texts and libraries write the shape as $`k`$, $`m`$ or $`\\gamma`$ and the scale as $`\\lambda`$ or $`\\alpha`$. Some swap the letters. Always check which parameter is the shape before you pass two numbers along."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Hazard Is the Failure Rate Among the Assets Still Working"
+    },
+    {
+      "type": "para",
+      "text": "The density answers a question about a *new* asset: how likely is it to fail at age $`t`$? A planner looks at an asset that is still working today. For it the right question is: given that it has lasted to age $`t`$, how fast are assets like it failing now? That is the **hazard**, or **failure rate**:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "h(t) = \\frac{f(t)}{R(t)}"
+    },
+    {
+      "type": "para",
+      "text": "Dividing by $`R(t)`$ keeps only the assets still working at age $`t`$. For the Weibull the exponentials cancel and the hazard is a power of age:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "h(t) = \\frac{\\beta}{\\eta}\\Big(\\frac{t}{\\eta}\\Big)^{\\beta - 1}"
+    },
+    {
+      "type": "para",
+      "text": "Its running total is the **cumulative hazard** $`\\Lambda(t) = \\int_0^t h(u)\\,du = (t/\\eta)^{\\beta}`$, and the reliability is $`R(t) = e^{-\\Lambda(t)}`$. Those two facts are the whole of the Weibull algebra this module needs."
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def hazard(t: float, beta: float, eta: float) -> float:\n    \"\"\"h(t) = f(t) / R(t): the failure rate, per year, of the assets still working at age t.\"\"\"\n    return (beta / eta) * (t / eta) ** (beta - 1)\n\n\ndef cumulative_hazard(t: float, beta: float, eta: float) -> float:\n    \"\"\"Lambda(t) = (t / eta) ** beta, so that R(t) = exp(-Lambda(t)).\"\"\"\n    return (t / eta) ** beta"
+    },
+    {
+      "type": "para",
+      "text": "**The shape decides whether risk rises with age.** The exponent $`\\beta - 1`$ sets the trend. Here is the hazard for four shapes with the same scale of 40 years:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "hazard h(t) per year, eta = 40 years\nshape beta    age 5   age 20   age 40   age 60   trend\n       0.7   0.0327   0.0215   0.0175   0.0155   falls\n       1.0   0.0250   0.0250   0.0250   0.0250   flat\n       2.0   0.0063   0.0250   0.0500   0.0750   rises\n       3.5   0.0005   0.0155   0.0875   0.2411   rises"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "$`\\beta < 1`$: the hazard falls with age. Weak units fail early and leave the survivors stronger, the pattern called **infant mortality**. Replacing such an asset with a new one *raises* its risk.",
+        "$`\\beta = 1`$: the hazard is constant, $`1/\\eta`$ per year. Failures come from outside causes that do not care about age, such as storms or animals. The curve is the exponential distribution, and an old asset is exactly as risky as a new one.",
+        "$`\\beta > 1`$: the hazard rises with age, the pattern of **wear-out**. At $`\\beta = 2`$ it rises in a straight line; at $`\\beta = 3.5`$, steeply. Every GridCap asset has a shape between 1.5 and 4, because the generator draws it there: GridCap models equipment that wears out."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "So the hazard of a Weibull grows as a *power* of age, not exponentially, as some interview notes claim; a power of age grows far more slowly than an exponential over a long life."
+    },
+    {
+      "type": "para",
+      "text": "**scipy has no hazard method.** `weibull_min` offers `pdf`, `cdf`, `sf`, `logsf` and others, but no `hazard`. Build it as `pdf / sf`:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "beta 3.5 at age 40: pdf/sf from scipy 0.0875, formula 0.0875"
+    },
+    {
+      "type": "para",
+      "text": "**A hazard is a rate, not a probability.** Its unit is failures per year among the assets still working, so it can exceed 1. An invented, badly worn asset (shape 4, scale 20 years) shows it:"
+    },
+    {
+      "type": "code",
+      "lang": "text",
+      "text": "an old asset far past its scale (beta 4, eta 20):\n  age 30: hazard 0.675 per year, PoF next year 0.508\n  age 40: hazard 1.600 per year, PoF next year 0.810\n  age 50: hazard 3.125 per year, PoF next year 0.960"
+    },
+    {
+      "type": "para",
+      "text": "A hazard of 1.6 per year means that, at that age, units fail at a pace that would see 1.6 failures per unit-year if the pace held. It does not hold: the hazard changes within the year, and a unit fails only once. The probability that it fails in the next year is the next rule."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 1 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Next Year's PoF Is Conditional on the Asset Working Today"
+    },
+    {
+      "type": "para",
+      "text": "The **probability of failure next year**, PoF for short in this course, is the probability that an asset of age $`a`$, *working today*, fails before age $`a + 1`$. \"Working today\" makes it a conditional probability:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\text{PoF}(a) = P(T \\le a + 1 \\mid T > a) = \\frac{F(a+1) - F(a)}{R(a)} = 1 - \\frac{R(a+1)}{R(a)}"
+    },
+    {
+      "type": "para",
+      "text": "and with $`R = e^{-\\Lambda}`$ it has a third form, through the hazard accumulated over the year:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\text{PoF}(a) = 1 - e^{-(\\Lambda(a+1) - \\Lambda(a))}"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "def pof_next(age: float, beta: float, eta: float) -> float:\n    \"\"\"The probability it fails within a year, given that it is working at `age`.\"\"\"\n    return 1 - survival(age + 1, beta, eta) / survival(age, beta, eta)"
+    },
+    {
+      "type": "para",
+      "text": "The program computes it for every tiny asset in three ways, with this module's function, with scipy's survival function and through the cumulative hazard, and puts two numbers that are *not* next year's PoF beside them: the unconditional $`F(a+1) - F(a)`$, and the cumulative distribution $`F(a)`$ itself:"
+    },
+    {
+      "type": "example",
+      "id": "next_year_pof-2",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "32-asset-risk/src/next_year_pof.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "32-asset-risk/src/next_year_pof.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "    conditional = pof_next(age, b, e)\n    curve = weibull_min(c=b, scale=e)\n    from_scipy = 1 - curve.sf(age + 1) / curve.sf(age)\n    from_hazard = 1 - math.exp(-(cumulative_hazard(age + 1, b, e) - cumulative_hazard(age, b, e)))\n    unconditional = cumulative(age + 1, b, e) - cumulative(age, b, e)\n    failed_by_now = curve.cdf(age)"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "asset age  beta   eta | PoF next   scipy  1-e^-dL | F(a+1)-F(a)   F(a)\nA001   13  2.79  25.9 |   0.0330  0.0330   0.0330 |      0.0285 0.1360\nA002   29  3.86  50.8 |   0.0159  0.0159   0.0159 |      0.0142 0.1085\nA003   18  3.83  30.5 |   0.0301  0.0301   0.0301 |      0.0263 0.1243\nA004   62  1.94  58.8 |   0.0343  0.0343   0.0343 |      0.0113 0.6699\nA005   10  2.61  34.4 |   0.0112  0.0112   0.0112 |      0.0107 0.0390\nA006   68  3.66  57.8 |   0.0947  0.0947   0.0947 |      0.0155 0.8368\nA008   17  1.55  46.4 |   0.0193  0.0193   0.0193 |      0.0157 0.1902"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The three conditional columns agree. The unconditional column is close for young assets, because nearly all of their fleet is still standing and $`R(a)`$ is near 1. It is badly wrong for old ones: for A006 it gives 1.6% where the conditional PoF is 9.5%, six times more. The unconditional number answers \"what share of a *new* fleet fails in its 69th year?\", and most of that fleet failed long before. A006 did not; it is standing in front of you, and its PoF is the conditional one. (The tiny portfolio has no asset A007: projects P006 and P007 are the replacement and the repair of the same transformer, A006.)"
+    },
+    {
+      "type": "para",
+      "text": "**The cumulative distribution is not a yearly PoF.** Some sources write the PoF in year $`y`$ as $`1 - e^{-(\\text{age}_y/\\eta)^\\beta}`$, which is $`F(\\text{age}_y)`$. That is the probability of having failed *at some point before* that age, counted from new; it is not the chance of failing *during* year $`y`$. The last column shows how far apart they are: for A006, $`F(68) = 0.84`$, while the chance that the working transformer fails in the coming year is 0.095, almost nine times smaller. Used as a yearly PoF, $`F`$ heads to 1 for every old asset, so it turns a fleet's old assets into near-certain failures every year. A yearly PoF for an asset in service is always the conditional $`(F(a+1) - F(a))/(1 - F(a))`$."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Beta Is the Shape, and Eta Is the Age by Which 63% Have Failed"
+    },
+    {
+      "type": "para",
+      "text": "The two numbers have meanings you can check and say out loud in a planning meeting."
+    },
+    {
+      "type": "para",
+      "text": "**The scale $`\\eta`$ is the characteristic life.** Put $`t = \\eta`$ into $`F`$: the exponent is $`-(1)^{\\beta} = -1`$ for every shape, so $`F(\\eta) = 1 - e^{-1} \\approx 0.632`$. Whatever the shape, 63.2% of a fleet has failed by age $`\\eta`$. It is not the average life and not the median."
+    },
+    {
+      "type": "para",
+      "text": "**The shape $`\\beta`$ is how tightly lifetimes bunch.** A large $`\\beta`$ packs the failures close to $`\\eta`$, so most units last about the same time; a $`\\beta`$ near 1 spreads them out from very young to very old."
+    },
+    {
+      "type": "para",
+      "text": "The usual summaries, all from scipy for the tiny portfolio's assets:"
+    },
+    {
+      "type": "example",
+      "id": "parameter_meaning-3",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "32-asset-risk/src/parameter_meaning.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "32-asset-risk/src/parameter_meaning.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "    curve = weibull_min(c=a.weibull_beta, scale=a.weibull_eta)\n    print(f\"{a.asset_id:5} {a.kind:12} {a.weibull_beta:>5} {a.weibull_eta:>5} | {curve.cdf(a.weibull_eta):>6.3f} \"\n          f\"{curve.ppf(0.10):>8.1f} {curve.median():>6.1f} {curve.mean():>5.1f}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "asset kind          beta   eta | F(eta) B10 life median  mean\nA001  transformer   2.79  25.9 |  0.632     11.6   22.7  23.1\nA002  line          3.86  50.8 |  0.632     28.4   46.2  46.0\nA003  tower         3.83  30.5 |  0.632     16.9   27.7  27.6\nA004  breaker       1.94  58.8 |  0.632     18.4   48.7  52.1\nA005  circuit       2.61  34.4 |  0.632     14.5   29.9  30.6\nA006  transformer   3.66  57.8 |  0.632     31.3   52.3  52.1\nA008  corridor      1.55  46.4 |  0.632     10.9   36.6  41.7"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**F(eta)** is 0.632 in every row, as the algebra said.",
+        "The **B10 life** is the age by which 10% of the fleet has failed, the 0.10 quantile. `ppf` (the \"percent point function\") inverts $`F`$: it returns the age $`t`$ with $`F(t) = 0.10`$. In closed form, $`t = \\eta\\,(-\\ln(1 - 0.10))^{1/\\beta}`$. Equipment makers often quote B10 or B1 lives.",
+        "The **median** is the age by which half have failed, $`\\eta (\\ln 2)^{1/\\beta}`$, and the **mean** is the average lifetime, $`\\eta\\,\\Gamma(1 + 1/\\beta)`$, where $`\\Gamma`$ is the gamma function."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Compare A004 and A006: similar scales (58.8 and 57.8 years), different shapes (1.94 and 3.66). A004's B10 life is 18.4 years, A006's is 31.3: with the smaller shape, a tenth of the breakers are gone 13 years sooner, although both fleets reach 63% failed at about the same age."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 2 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "A Curve Fitted to Failures Alone Is Wrong: the Assets Still Working Count Too"
+    },
+    {
+      "type": "para",
+      "text": "The analytics team does not invent $`\\beta`$ and $`\\eta`$; it **fits** them to history: the ages at which assets of a kind failed, and the ages of those that have not failed yet. The second group is the trap. An asset still working at age 35 tells you its lifetime is *more than* 35, not what it is. Such an observation is **right-censored** at 35. Most of a utility's assets are censored, because most are still in service."
+    },
+    {
+      "type": "para",
+      "text": "The standard fitting method, **maximum likelihood**, picks the $`\\beta`$ and $`\\eta`$ that make the observed history most probable. Each failure at age $`t_j`$ contributes the density $`f(t_j)`$; each asset still working at age $`c_k`$ contributes the probability of lasting that long, $`R(c_k)`$. In logarithms, the quantity to maximize is"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\ell(\\beta, \\eta) = \\sum_{j \\in \\text{failed}} \\ln f(t_j) + \\sum_{k \\in \\text{working}} \\ln R(c_k)"
+    },
+    {
+      "type": "para",
+      "text": "Leave out the second sum and the fit sees only the assets that failed early, so it concludes that the kind fails young and all at about the same age. A fictional fleet of 300 poles shows it: draw their lifetimes from a known curve, observe them until each is 35, and fit twice. `CensoredData` is scipy's container for observations that are only known to lie above (or below) a value, and `weibull_min.fit` accepts it; `floc=0` keeps the curve starting at age 0:"
+    },
+    {
+      "type": "example",
+      "id": "censored_fit-4",
+      "tabs": [
+        {
+          "lang": "python",
+          "span": 2,
+          "code": "32-asset-risk/src/censored_fit.py",
+          "run": [
+            "env",
+            "PYTHONPATH=00-base",
+            "MPLBACKEND=Agg",
+            "python3",
+            "32-asset-risk/src/censored_fit.py"
+          ]
+        }
+      ],
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "c, _, scale = weibull_min.fit(failed, floc=0)\nprint(f\"fit to the failures only:      beta {c:.2f}, eta {scale:.1f}\")\n\ndata = CensoredData(uncensored=failed, right=standing)\nc, _, scale = weibull_min.fit(data, floc=0)\nprint(f\"fit with the survivors counted: beta {c:.2f}, eta {scale:.1f}\")"
+        },
+        {
+          "type": "code",
+          "lang": "text",
+          "text": "true curve: beta 3.0, eta 45.0; failed by age 35: 111, still working: 189\nfit to the failures only:      beta 4.36, eta 27.6\nfit with the survivors counted: beta 2.92, eta 45.5"
+        }
+      ],
+      "support": [
+        "00-base"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The fit to failures alone puts the characteristic life at 27.6 years instead of 45, so it would call a healthy 30-year-old pole worn out. The censored fit recovers the true curve to within sampling noise. When you receive curves, ask: \"Were the assets still in service included as censored observations?\" A team that answers \"we used the failures\" has handed you a curve that overstates every PoF in the fleet."
+    },
+    {
+      "type": "html",
+      "text": "<!-- practice 3 -->"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Where This Leaves the Model"
+    },
+    {
+      "type": "para",
+      "text": "Nothing in this lesson is a decision; it is the arithmetic that turns two fitted numbers into a probability. Lesson 7.3.3 multiplies that probability by the cost of a failure, and lesson 7.3.4 turns the result into the coefficient $`\\text{rr}_{i,s}`$ that the start-year model of lesson 6.4.1 maximizes. The model's sets, variables and rows do not change; only its objective coefficients do."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Summary"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**A failure curve says how the lifetimes of similar assets are spread out.** $`F`$, $`R = 1 - F`$ and $`f = F'`$ are three views of one Weibull curve, and `scipy.stats.weibull_min(c=beta, scale=eta)` computes the same numbers.",
+        "**The hazard is the failure rate among the assets still working.** $`h = f/R = (\\beta/\\eta)(t/\\eta)^{\\beta-1}`$, a power of age; $`\\beta < 1`$ falls, $`= 1`$ is flat, $`> 1`$ rises. It is a rate and can exceed 1.",
+        "**Next year's PoF is conditional on the asset working today.** $`1 - R(a+1)/R(a)`$; the unconditional $`F(a+1) - F(a)`$ understates an old asset's risk, six times for A006, and the cumulative $`F(a)`$ is not a yearly probability at all (0.84 against 0.095 for A006).",
+        "**Beta is the shape, and eta is the age by which 63% have failed.** Medians, means and B10 lives come from both.",
+        "**A curve fitted to failures alone is wrong.** Assets still working are right-censored observations and belong in the likelihood."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Reference"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "Quantity",
+        "Weibull formula",
+        "scipy (`curve = weibull_min(c=beta, scale=eta)`)"
+      ],
+      "rows": [
+        [
+          "$`F(t)`$, failed by $`t`$",
+          "$`1 - e^{-(t/\\eta)^\\beta}`$",
+          "`curve.cdf(t)`"
+        ],
+        [
+          "$`R(t)`$, working at $`t`$",
+          "$`e^{-(t/\\eta)^\\beta}`$",
+          "`curve.sf(t)`"
+        ],
+        [
+          "$`f(t)`$, density",
+          "$`(\\beta/\\eta)(t/\\eta)^{\\beta-1} e^{-(t/\\eta)^\\beta}`$",
+          "`curve.pdf(t)`"
+        ],
+        [
+          "$`h(t)`$, hazard",
+          "$`(\\beta/\\eta)(t/\\eta)^{\\beta-1}`$",
+          "`curve.pdf(t) / curve.sf(t)`"
+        ],
+        [
+          "$`\\Lambda(t)`$, cumulative hazard",
+          "$`(t/\\eta)^\\beta`$",
+          "`-curve.logsf(t)`"
+        ],
+        [
+          "PoF next year at age $`a`$",
+          "$`1 - R(a+1)/R(a)`$",
+          "`1 - curve.sf(a + 1) / curve.sf(a)`"
+        ],
+        [
+          "age by which a share $`q`$ has failed",
+          "$`\\eta(-\\ln(1-q))^{1/\\beta}`$",
+          "`curve.ppf(q)`"
+        ],
+        [
+          "median, mean",
+          "$`\\eta(\\ln 2)^{1/\\beta}`$, $`\\eta\\,\\Gamma(1+1/\\beta)`$",
+          "`curve.median()`, `curve.mean()`"
+        ],
+        [
+          "fit with survivors",
+          "maximize $`\\sum \\ln f(t_j) + \\sum \\ln R(c_k)`$",
+          "`weibull_min.fit(CensoredData(uncensored=..., right=...), floc=0)`"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**Further reading:** [NIST/SEMATECH e-Handbook, the Weibull distribution](https://www.itl.nist.gov/div898/handbook/apr/section1/apr162.htm) (the formulas for $`F`$, $`R`$, $`f`$, the hazard and the characteristic life, with a warning that texts name the parameters differently); [NIST/SEMATECH e-Handbook, the failure (hazard) rate](https://www.itl.nist.gov/div898/handbook/apr/section1/apr123.htm) (the hazard as a rate conditional on survival, the cumulative hazard and $`R = e^{-H}`$); [SciPy, `scipy.stats.weibull_min`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.weibull_min.html) (the shape `c`, `loc` and `scale`, and the methods; there is no hazard method); [SciPy, `scipy.stats.CensoredData`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.CensoredData.html) (right-censored observations and passing them to `fit`); [Wikipedia, Weibull distribution](https://en.wikipedia.org/wiki/Weibull_distribution) (shape below, at and above 1 as infant mortality, random failures and wear-out, and the ways the parameters are estimated); [Wikipedia, Survival analysis](https://en.wikipedia.org/wiki/Survival_analysis) (survival function, hazard, cumulative hazard and the probability of failing given survival so far)."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Challenges"
+    },
+    {
+      "type": "list",
+      "ordered": true,
+      "items": [
+        "A vendor quotes a B1 life of 12 years and a shape of 3 for a new breaker. What is its scale $`\\eta`$? Check your answer with `weibull_min.ppf`.",
+        "With $`\\beta = 1`$, show from the formulas that PoF next year does not depend on age. What does that say about replacing such an asset early?",
+        "Run the censored fit with the poles observed to age 20 instead of 35. Before running, predict which of the two fits moves more."
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Design Note: Why the Course Uses a Parametric Curve at All"
+    },
+    {
+      "type": "para",
+      "text": "The analytics team could hand over a table instead, the share of each kind failing at each age, read straight from history (a **life table**, or a Kaplan–Meier estimate). Such a table needs no assumption about shape. It also runs out where the data runs out: a utility with few transformers older than 60 has almost nothing to say about A006 at 68. A two-parameter curve extends the trend past the data. That is its strength and its danger: past the oldest observed failure, the curve's answer comes from the assumed shape, not from evidence. When an asset's age is beyond most of its fleet's history, treat its PoF as an extrapolation and ask for its uncertainty."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "The Full Programs"
+    },
+    {
+      "type": "para",
+      "text": "Each snippet above is part of a complete program, and each program printed the output the lesson shows. Open one to read it whole, change it, and run it again: Run starts the program on your copy of the code, so the course's own files never change."
+    },
+    {
+      "type": "para",
+      "text": "**weibull_curves.py.** Prints A006's $`F`$, $`R`$ and $`f`$ at six ages and compares them with scipy over ages 1 to 120 (*A Failure Curve Says How the Lifetimes Are Spread Out*). *Try:* Print the age at which $`f`$ is largest for A006. Predict whether it is before or after $`\\eta`$."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [weibull_curves.py](src/weibull_curves.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**hazard_shapes.py.** Prints the hazard for four shapes and shows a hazard above 1 next to a PoF below 1 (*The Hazard Is the Failure Rate*). *Try:* Add the shape 1.5. Predict whether its hazard at age 60 is above or below the shape-2 value."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [hazard_shapes.py](src/hazard_shapes.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**next_year_pof.py.** Computes next year's PoF for every tiny asset three ways, beside the unconditional number (*Next Year's PoF Is Conditional*). *Try:* Add 20 years to every age. Predict which asset's two columns move apart the most."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [next_year_pof.py](src/next_year_pof.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**parameter_meaning.py.** Prints $`F(\\eta)`$, the B10 life, the median and the mean of each tiny asset from scipy (*Beta Is the Shape, and Eta Is the Age by Which 63% Have Failed*). *Try:* Add a column for the B1 life. Predict which asset has the smallest."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [parameter_meaning.py](src/parameter_meaning.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**censored_fit.py.** Simulates a fleet observed to age 35 and fits it with and without the survivors (*A Curve Fitted to Failures Alone Is Wrong*). *Try:* Change the seed of `default_rng`. Predict how far the censored fit moves."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Program: [censored_fit.py](src/censored_fit.py)"
+      ]
+    },
+    {
+      "type": "para",
+      "text": "**asset_curves.py.** The module's library: the curve, the hazard, PoF, remaining life, risk and risk reduction."
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "Library: [asset_curves.py](src/asset_curves.py)"
+      ]
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 12,
+    "paras": 41,
+    "code": 13,
+    "tables": 1,
+    "lists": 11,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 3,
+    "disclosures": 0,
+    "examples": 4
+  },
+  "content_sha256": "99522dfe593e7ad55f310ae564ab3024c60e5eb25ed417b8b43aa7b512e7e2d3"
+}

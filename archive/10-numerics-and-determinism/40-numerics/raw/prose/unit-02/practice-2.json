@@ -1,0 +1,141 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "10-numerics-and-determinism",
+    "40-numerics"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Rescale a bus-fleet model whose units were mixed",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A city transit agency chooses which bus orders to place this year. A colleague built the model in `fleet.py` from three sources: order values in dollars from the finance system, the budget and the overdraft in $M from the board pack, and a switch row with $`M = 10^9`$. It gives the right plan, but its matrix spans more than nine powers of ten, which lesson 10.1.2 showed is outside the safe range."
+    },
+    {
+      "type": "para",
+      "text": "The colleague's model, `build_raw()`, with $`J`$ the orders, $`p_j`$ and $`v_j`$ an order's price and value in dollars, $`B`$ the budget, $`L`$ the overdraft limit and $`F`$ the arrangement fee, all in dollars:"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n\\max \\;& \\sum_{j \\in J} v_j\\, b_j - F a \\\\\n\\text{s.t. }& \\sum_{j \\in J} \\frac{p_j}{10^6}\\, b_j \\le \\frac{B}{10^6} + d && \\text{(budget)} \\\\\n& d \\le \\frac{L}{10^6} && \\text{(limit)} \\\\\n& d \\le 10^9\\, a && \\text{(switch)} \\\\\n& b_j \\in \\{0, 1\\} \\;\\; \\forall j \\in J, \\quad a \\in \\{0, 1\\}, \\quad d \\ge 0 \\text{ (the overdraft, in \\$M)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Write the rescaled model first, in this notation: every amount (the objective, the rows and the overdraft variable $`d`$) in $k, and the switch row's $`M`$ replaced by the smallest value the data make valid. Then write `build_scaled()` to build it, returning a `Fleet` with the same fields as `build_raw()`, the overdraft now in $k."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix a plan (which orders, the overdraft in $k, whether it is arranged), ask the solver whether it is allowed, and read its objective; they also check that the matrix span (largest absolute coefficient over smallest) is below 10,000. About eight lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n# Each order: (price, value), in dollars. Invented teaching data, not a real agency's.\nORDERS = {\n    \"electric\": (4_200_000, 5_100_000),\n    \"hybrid\": (2_600_000, 3_000_000),\n    \"diesel\": (1_500_000, 1_650_000),\n    \"shuttle\": (450_000, 520_000),\n}\nBUDGET = 7_000_000      # dollars\nLIMIT = 900_000         # the most the overdraft may be, dollars\nFEE = 150_000           # to arrange an overdraft, dollars\n\n\n@dataclass\nclass Fleet:\n    model: mathopt.Model\n    buy: dict[str, mathopt.Variable]\n    overdraft: mathopt.Variable\n    arranged: mathopt.Variable\n\n\ndef build_raw() -> Fleet:\n    \"\"\"The colleague's model: objective in dollars, budget rows and overdraft in $M, M = 1e9.\"\"\"\n    model = mathopt.Model(name=\"fleet, mixed units\")\n    buy = {name: model.add_binary_variable(name=f\"buy_{name}\") for name in ORDERS}\n    overdraft = model.add_variable(lb=0, name=\"overdraft\")\n    arranged = model.add_binary_variable(name=\"arranged\")\n    model.maximize(sum(value * buy[n] for n, (_, value) in ORDERS.items()) - FEE * arranged)\n    model.add_linear_constraint(\n        sum(price / 1e6 * buy[n] for n, (price, _) in ORDERS.items()) <= BUDGET / 1e6 + overdraft, name=\"budget\")\n    model.add_linear_constraint(overdraft <= LIMIT / 1e6, name=\"limit\")\n    model.add_linear_constraint(overdraft <= 1e9 * arranged, name=\"switch\")\n    return Fleet(model, buy, overdraft, arranged)\n\n\ndef build_scaled() -> Fleet:\n    \"\"\"The same model with every amount in $k, and the smallest valid M.\"\"\"\n    model = mathopt.Model(name=\"fleet, $k\")\n    buy = {name: model.add_binary_variable(name=f\"buy_{name}\") for name in ORDERS}\n    overdraft = model.add_variable(lb=0, name=\"overdraft\")\n    arranged = model.add_binary_variable(name=\"arranged\")\n    model.maximize(sum(value / 1000 * buy[n] for n, (_, value) in ORDERS.items()) - FEE / 1000 * arranged)\n    model.add_linear_constraint(\n        sum(price / 1000 * buy[n] for n, (price, _) in ORDERS.items()) <= BUDGET / 1000 + overdraft, name=\"budget\")\n    model.add_linear_constraint(overdraft <= LIMIT / 1000, name=\"limit\")\n    smallest_valid_m = LIMIT / 1000      # the limit row already caps the overdraft here\n    model.add_linear_constraint(overdraft <= smallest_valid_m * arranged, name=\"switch\")\n    return Fleet(model, buy, overdraft, arranged)\n\n\nif __name__ == \"__main__\":\n    fleet = build_scaled()\n    result = mathopt.solve(fleet.model, mathopt.SolverType.HIGHS)\n    print(result.termination.reason.name, result.objective_value())\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n# Each order: (price, value), in dollars. Invented teaching data, not a real agency's.\nORDERS = {\n    \"electric\": (4_200_000, 5_100_000),\n    \"hybrid\": (2_600_000, 3_000_000),\n    \"diesel\": (1_500_000, 1_650_000),\n    \"shuttle\": (450_000, 520_000),\n}\nBUDGET = 7_000_000      # dollars\nLIMIT = 900_000         # the most the overdraft may be, dollars\nFEE = 150_000           # to arrange an overdraft, dollars\n\n\n@dataclass\nclass Fleet:\n    model: mathopt.Model\n    buy: dict[str, mathopt.Variable]\n    overdraft: mathopt.Variable\n    arranged: mathopt.Variable\n\n\ndef build_raw() -> Fleet:\n    \"\"\"The colleague's model: objective in dollars, budget rows and overdraft in $M, M = 1e9.\"\"\"\n    model = mathopt.Model(name=\"fleet, mixed units\")\n    buy = {name: model.add_binary_variable(name=f\"buy_{name}\") for name in ORDERS}\n    overdraft = model.add_variable(lb=0, name=\"overdraft\")\n    arranged = model.add_binary_variable(name=\"arranged\")\n    model.maximize(sum(value * buy[n] for n, (_, value) in ORDERS.items()) - FEE * arranged)\n    model.add_linear_constraint(\n        sum(price / 1e6 * buy[n] for n, (price, _) in ORDERS.items()) <= BUDGET / 1e6 + overdraft, name=\"budget\")\n    model.add_linear_constraint(overdraft <= LIMIT / 1e6, name=\"limit\")\n    model.add_linear_constraint(overdraft <= 1e9 * arranged, name=\"switch\")\n    return Fleet(model, buy, overdraft, arranged)\n\n\ndef build_scaled() -> Fleet:\n    \"\"\"The same model with every amount in $k, and the smallest valid M.\"\"\"\n    # TODO: write your formulation first; then build it here, in $k, with M from the data.\n    return build_raw()\n\n\nif __name__ == \"__main__\":\n    fleet = build_scaled()\n    result = mathopt.solve(fleet.model, mathopt.SolverType.HIGHS)\n    print(result.termination.reason.name, result.objective_value())\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 2,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "ef75a9e8a134fba270c176f163b3ab9f315597fa6133b4335ac8a2465de43990",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n# Each order: (price, value), in dollars. Invented teaching data, not a real agency's.\nORDERS = {\n    \"electric\": (4_200_000, 5_100_000),\n    \"hybrid\": (2_600_000, 3_000_000),\n    \"diesel\": (1_500_000, 1_650_000),\n    \"shuttle\": (450_000, 520_000),\n}\nBUDGET = 7_000_000      # dollars\nLIMIT = 900_000         # the most the overdraft may be, dollars\nFEE = 150_000           # to arrange an overdraft, dollars\n\n\n@dataclass\nclass Fleet:\n    model: mathopt.Model\n    buy: dict[str, mathopt.Variable]\n    overdraft: mathopt.Variable\n    arranged: mathopt.Variable\n\n\ndef build_raw() -> Fleet:\n    \"\"\"The colleague's model: objective in dollars, budget rows and overdraft in $M, M = 1e9.\"\"\"\n    model = mathopt.Model(name=\"fleet, mixed units\")\n    buy = {name: model.add_binary_variable(name=f\"buy_{name}\") for name in ORDERS}\n    overdraft = model.add_variable(lb=0, name=\"overdraft\")\n    arranged = model.add_binary_variable(name=\"arranged\")\n    model.maximize(sum(value * buy[n] for n, (_, value) in ORDERS.items()) - FEE * arranged)\n    model.add_linear_constraint(\n        sum(price / 1e6 * buy[n] for n, (price, _) in ORDERS.items()) <= BUDGET / 1e6 + overdraft, name=\"budget\")\n    model.add_linear_constraint(overdraft <= LIMIT / 1e6, name=\"limit\")\n    model.add_linear_constraint(overdraft <= 1e9 * arranged, name=\"switch\")\n    return Fleet(model, buy, overdraft, arranged)\n\n\ndef build_scaled() -> Fleet:\n    \"\"\"The same model with every amount in $k, and the smallest valid M.\"\"\"\n    # TODO: write your formulation first; then build it here, in $k, with M from the data.\n    return build_raw()\n\n\nif __name__ == \"__main__\":\n    fleet = build_scaled()\n    result = mathopt.solve(fleet.model, mathopt.SolverType.HIGHS)\n    print(result.termination.reason.name, result.objective_value())\n",
+  "exercise": {
+    "main_path": "practice/10-numerics-and-determinism/40-numerics/prose/unit-02/practice-2/fleet.py",
+    "test_path": "practice/10-numerics-and-determinism/40-numerics/prose/unit-02/practice-2/test_fleet.py",
+    "run_command": [
+      "python3",
+      "practice/10-numerics-and-determinism/40-numerics/prose/unit-02/practice-2/fleet.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/10-numerics-and-determinism/40-numerics/prose/unit-02/practice-2/target/report.xml",
+      "practice/10-numerics-and-determinism/40-numerics/prose/unit-02/practice-2/test_fleet.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_an_overdraft_needs_its_arrangement_and_a_plan_without_one_is_refused",
+        "kind": "main",
+        "says": "a plan that overspends with an arranged overdraft is allowed, and the same plan with none arranged is refused, all amounts in $k"
+      },
+      {
+        "id": "test_the_matrix_span_shrinks_below_ten_thousand",
+        "kind": "edge",
+        "says": "the rescaled model's matrix span is below 10,000, which takes a data-derived M as well as new units"
+      },
+      {
+        "id": "test_the_overdraft_limit_is_converted_too",
+        "kind": "edge",
+        "says": "the overdraft limit is converted to $k with the rest, so an overdraft above it is still refused"
+      },
+      {
+        "id": "test_the_objective_is_in_k",
+        "kind": "edge",
+        "says": "the objective is in $k, so a fixed plan's value is its value in thousands"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/10-numerics-and-determinism/40-numerics/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "40-numerics/README_10.1.2.md",
+      "section": "A Valid M Is Part of Scaling: Replace 1e9 With the Bound the Data Give"
+    },
+    "concepts": [
+      "scaling a row, a column or the objective by a positive number keeps the allowed plans and the best plan",
+      "replacing a huge M by the bound the data give is the scaling step no change of units can make"
+    ]
+  }
+}

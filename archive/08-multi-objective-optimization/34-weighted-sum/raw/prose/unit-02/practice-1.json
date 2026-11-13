@@ -1,0 +1,140 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "08-multi-objective-optimization",
+    "34-weighted-sum"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Find every supported point with few solves",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A wind-farm developer chooses which turbine sites to build, scored on energy produced and on wildlife impact avoided, both to maximize. The full model takes minutes to solve, so the developer's analysts can afford a handful of weighted solves, not a sweep of a hundred. They want every point a weighted sum can return, each one found, none missed because its range of shares fell between two grid values."
+    },
+    {
+      "type": "para",
+      "text": "You get `best_for(s)`: it solves the weighted sum with share $`s`$ on the first measure and $`1 - s`$ on the second, and returns the (first, second) values of a best option. When several options tie it returns the one with the larger first value, and among those the one with the larger second value. Write `supported_points(best_for)` in `hull.py`: the list of points a weighted sum can return, sorted by first value, each once."
+    },
+    {
+      "type": "para",
+      "text": "Two consequences of that tie rule. At $`s = 1`$ only the first value counts, so `best_for(1.0)` returns the option with the most of the first measure and, among several with that much, the one with the most of the second: a Pareto-optimal end, never one that only ties on the first value (`best_for(0.0)` is the same with the roles swapped). And a point lying exactly on the straight segment between two points you have found ties with both of them at the share where they tie; `best_for` then returns the end with the larger first value, so no share ever returns that point. It is supported (lesson 8.1.2), but the search cannot see it, and the reference does not list it: the list holds the corners of the hull, each a point that some share returns."
+    },
+    {
+      "type": "para",
+      "text": "Think in the plane first. Once you know two points $`a`$ and $`b`$ that a weighted sum returns, which share makes them tie? If a solve at that share returns a point that scores more than both, what does that tell you, and where can the remaining points be? If it scores no more, can any point lie between them on the hull? Write the share as a formula in $`a`$ and $`b`$ before coding."
+    },
+    {
+      "type": "para",
+      "text": "About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom typing import Callable\n\nPoint = tuple[float, float]\n\n\ndef supported_points(best_for: Callable[[float], Point]) -> list[Point]:\n    \"\"\"Every point a weighted sum can return, found by asking `best_for` for chosen shares.\n\n    `best_for(s)` solves max s*first + (1-s)*second and returns the (first, second) values of a best\n    option. The result is sorted by the first value.\n    \"\"\"\n    def score(p: Point, s: float) -> float:\n        return s * p[0] + (1 - s) * p[1]\n\n    def between(a: Point, b: Point) -> list[Point]:\n        s = (a[1] - b[1]) / ((b[0] - a[0]) + (a[1] - b[1]))     # the share at which a and b tie\n        c = best_for(s)\n        if score(c, s) <= score(a, s) + 1e-9:                  # nothing above the segment a-b\n            return []\n        return between(a, c) + [c] + between(c, b)\n\n    left, right = best_for(0.0), best_for(1.0)\n    if left == right:\n        return [left]\n    return [left] + between(left, right) + [right]\n\n\nif __name__ == \"__main__\":\n    front = [(0, 10), (6, 7), (10, 0)]\n    print(supported_points(lambda s: max(front, key=lambda p: (s * p[0] + (1 - s) * p[1], p[0], p[1]))))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom typing import Callable\n\nPoint = tuple[float, float]\n\n\ndef supported_points(best_for: Callable[[float], Point]) -> list[Point]:\n    \"\"\"Every point a weighted sum can return, found by asking `best_for` for chosen shares.\n\n    `best_for(s)` solves max s*first + (1-s)*second and returns the (first, second) values of a best\n    option. The result is sorted by the first value.\n    \"\"\"\n    # TODO: start from the two ends and ask for the points between them.\n    return [best_for(0.0), best_for(1.0)]\n\n\nif __name__ == \"__main__\":\n    front = [(0, 10), (6, 7), (10, 0)]\n    print(supported_points(lambda s: max(front, key=lambda p: (s * p[0] + (1 - s) * p[1], p[0], p[1]))))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "4b5063447ea26274c458cb9b0a879e5b7a4a81e93772ef628311df9f21b67fdc",
+  "starting_code": "from __future__ import annotations\n\nfrom typing import Callable\n\nPoint = tuple[float, float]\n\n\ndef supported_points(best_for: Callable[[float], Point]) -> list[Point]:\n    \"\"\"Every point a weighted sum can return, found by asking `best_for` for chosen shares.\n\n    `best_for(s)` solves max s*first + (1-s)*second and returns the (first, second) values of a best\n    option. The result is sorted by the first value.\n    \"\"\"\n    # TODO: start from the two ends and ask for the points between them.\n    return [best_for(0.0), best_for(1.0)]\n\n\nif __name__ == \"__main__\":\n    front = [(0, 10), (6, 7), (10, 0)]\n    print(supported_points(lambda s: max(front, key=lambda p: (s * p[0] + (1 - s) * p[1], p[0], p[1]))))\n",
+  "exercise": {
+    "main_path": "practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-02/practice-1/hull.py",
+    "test_path": "practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-02/practice-1/test_hull.py",
+    "run_command": [
+      "python3",
+      "practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-02/practice-1/hull.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-02/practice-1/target/report.xml",
+      "practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-02/practice-1/test_hull.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_the_supported_points_of_a_short_front_are_found",
+        "kind": "main",
+        "says": "the two ends and the point between them that a weighted sum returns are found"
+      },
+      {
+        "id": "test_a_point_with_a_narrow_range_of_shares_is_found",
+        "kind": "edge",
+        "says": "a point that wins only over a narrow range of shares is still found"
+      },
+      {
+        "id": "test_the_search_continues_on_both_sides_of_each_new_point",
+        "kind": "edge",
+        "says": "each new point opens two gaps, and both are searched"
+      },
+      {
+        "id": "test_a_single_best_option_is_returned_once",
+        "kind": "edge",
+        "says": "when one option is best at every share, it is listed once"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "34-weighted-sum/README_8.1.2.md",
+      "section": "GridCap Small Has 65 Pareto-Optimal Plans, and Weighted Sums Reach 8"
+    },
+    "concepts": [
+      "on GridCap small most Pareto-optimal plans are unsupported, and a grid of weights can miss supported ones",
+      "the supported points are the upper convex hull of the front"
+    ]
+  }
+}

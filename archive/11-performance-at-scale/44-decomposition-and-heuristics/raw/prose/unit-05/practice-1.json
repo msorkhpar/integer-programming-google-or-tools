@@ -1,0 +1,130 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "11-performance-at-scale",
+    "44-decomposition-and-heuristics"
+  ],
+  "variant": "prose",
+  "unit": 5,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "Relax the years beyond the window",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A water utility rolls its pipe-renewal plan forward year by year. Its planners use a variant of the lesson's rolling horizon called **relax-and-fix**: in each window, the starts in the window's years are yes/no, and the starts in every *later* year are kept in the model as continuous variables between 0 and 1, instead of being held at 0. The later years are then a cheap look ahead: the window sees roughly what its choices leave for later. As before, the first `keep` years of each window are kept, starts decided in earlier windows are fixed, and the last window keeps everything."
+    },
+    {
+      "type": "para",
+      "text": "The years are the calendar years of `budgets`, in order, and every start year a project offers is one of them. A window is `window` consecutive years of that list, and its decisions are the starts *in* those years: a start is yes/no when its year is in the window or earlier, and relaxed when it is later. The first window begins at the first year, and each next one begins `keep` years later. The last window is the first one that reaches the final year of `budgets` (or would run past it, in which case it is cut short at that year); it keeps every start it has not yet fixed, and the plan ends there. With 2027 to 2029, `window=2` and `keep=1`, the first window 2027-2028 keeps 2027, and the second, 2028-2029, is the last and keeps 2028 and 2029."
+    },
+    {
+      "type": "para",
+      "text": "`build(projects, budgets)` gives the whole plan model (at most one start per project, a budget row per year counting each project's spend in every year of work). Write first which variables a window fixes, which it makes integer and which continuous, and what it keeps. Then write `relax_and_fix(projects, budgets, window, keep)` and return the plan, a dict from project name to start year. `projects[n]` holds `\"value\"` (start year to value) and `\"cost\"` (spend by year of work). A MathOpt variable becomes continuous with `var.integer = False`."
+    },
+    {
+      "type": "para",
+      "text": "About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef build(projects: dict, budgets: dict[int, float]):\n    \"\"\"The whole plan: at most one start per project, spend within every year's budget.\"\"\"\n    model = mathopt.Model(name=\"fleet plan\")\n    x = {(n, t): model.add_binary_variable(name=f\"x_{n}_{t}\") for n, p in projects.items() for t in p[\"value\"]}\n    for n, p in projects.items():\n        model.add_linear_constraint(sum(x[n, t] for t in p[\"value\"]) <= 1, name=f\"once_{n}\")\n    for y, b in budgets.items():\n        spend = mathopt.LinearExpression()\n        for (n, t), var in x.items():\n            for k, c in enumerate(projects[n][\"cost\"]):\n                if t + k == y:\n                    spend += c * var\n        model.add_linear_constraint(spend <= b, name=f\"budget_{y}\")\n    model.maximize(sum(projects[n][\"value\"][t] * var for (n, t), var in x.items()))\n    return model, x\n\n\ndef relax_and_fix(projects: dict, budgets: dict[int, float], window: int, keep: int) -> dict[str, int]:\n    \"\"\"Plan `window` years as integers with every later year relaxed; keep the first `keep` years; roll on.\"\"\"\n    years = sorted(budgets)\n    model, x = build(projects, budgets)\n    decided: dict[tuple[str, int], int] = {}\n    for i in range(0, len(years), keep):\n        last = years[min(i + window, len(years)) - 1]\n        for (n, t), var in x.items():\n            if (n, t) in decided:\n                var.lower_bound = var.upper_bound = decided[n, t]\n            else:\n                var.lower_bound, var.upper_bound = 0, 1\n                var.integer = t <= last              # later years: continuous, a look ahead\n        result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n        for (n, t), var in x.items():\n            if t in years[i:i + keep] or last == years[-1]:\n                decided.setdefault((n, t), round(result.variable_values(var)))\n        if last == years[-1]:\n            break\n    return {n: t for (n, t), v in decided.items() if v}\n\n\nif __name__ == \"__main__\":\n    projects = {\"main line\": {\"value\": {2027: 10}, \"cost\": [10, 10]}, \"valves\": {\"value\": {2027: 8}, \"cost\": [10]}}\n    print(relax_and_fix(projects, {2027: 10, 2028: 10}, 1, 1))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef build(projects: dict, budgets: dict[int, float]):\n    \"\"\"The whole plan: at most one start per project, spend within every year's budget.\"\"\"\n    model = mathopt.Model(name=\"fleet plan\")\n    x = {(n, t): model.add_binary_variable(name=f\"x_{n}_{t}\") for n, p in projects.items() for t in p[\"value\"]}\n    for n, p in projects.items():\n        model.add_linear_constraint(sum(x[n, t] for t in p[\"value\"]) <= 1, name=f\"once_{n}\")\n    for y, b in budgets.items():\n        spend = mathopt.LinearExpression()\n        for (n, t), var in x.items():\n            for k, c in enumerate(projects[n][\"cost\"]):\n                if t + k == y:\n                    spend += c * var\n        model.add_linear_constraint(spend <= b, name=f\"budget_{y}\")\n    model.maximize(sum(projects[n][\"value\"][t] * var for (n, t), var in x.items()))\n    return model, x\n\n\ndef relax_and_fix(projects: dict, budgets: dict[int, float], window: int, keep: int) -> dict[str, int]:\n    \"\"\"Plan `window` years as integers with every later year relaxed; keep the first `keep` years; roll on.\"\"\"\n    # TODO: write one window's model first, then the loop.\n    return {}\n\n\nif __name__ == \"__main__\":\n    projects = {\"main line\": {\"value\": {2027: 10}, \"cost\": [10, 10]}, \"valves\": {\"value\": {2027: 8}, \"cost\": [10]}}\n    print(relax_and_fix(projects, {2027: 10, 2028: 10}, 1, 1))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 4,
+    "code": 1,
+    "tables": 0,
+    "lists": 0,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "838046004ee784d5466aee542d7b74e9daee6088698b2d0f845ebd772b5e5222",
+  "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef build(projects: dict, budgets: dict[int, float]):\n    \"\"\"The whole plan: at most one start per project, spend within every year's budget.\"\"\"\n    model = mathopt.Model(name=\"fleet plan\")\n    x = {(n, t): model.add_binary_variable(name=f\"x_{n}_{t}\") for n, p in projects.items() for t in p[\"value\"]}\n    for n, p in projects.items():\n        model.add_linear_constraint(sum(x[n, t] for t in p[\"value\"]) <= 1, name=f\"once_{n}\")\n    for y, b in budgets.items():\n        spend = mathopt.LinearExpression()\n        for (n, t), var in x.items():\n            for k, c in enumerate(projects[n][\"cost\"]):\n                if t + k == y:\n                    spend += c * var\n        model.add_linear_constraint(spend <= b, name=f\"budget_{y}\")\n    model.maximize(sum(projects[n][\"value\"][t] * var for (n, t), var in x.items()))\n    return model, x\n\n\ndef relax_and_fix(projects: dict, budgets: dict[int, float], window: int, keep: int) -> dict[str, int]:\n    \"\"\"Plan `window` years as integers with every later year relaxed; keep the first `keep` years; roll on.\"\"\"\n    # TODO: write one window's model first, then the loop.\n    return {}\n\n\nif __name__ == \"__main__\":\n    projects = {\"main line\": {\"value\": {2027: 10}, \"cost\": [10, 10]}, \"valves\": {\"value\": {2027: 8}, \"cost\": [10]}}\n    print(relax_and_fix(projects, {2027: 10, 2028: 10}, 1, 1))\n",
+  "exercise": {
+    "main_path": "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-05/practice-1/relax_fix.py",
+    "test_path": "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-05/practice-1/test_relax_fix.py",
+    "run_command": [
+      "python3",
+      "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-05/practice-1/relax_fix.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-05/practice-1/target/report.xml",
+      "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-05/practice-1/test_relax_fix.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_one_window_over_every_year_is_the_whole_plan",
+        "kind": "main",
+        "says": "a window as long as the plan solves the whole plan at once"
+      },
+      {
+        "id": "test_relaxed_later_years_steer_the_early_choice",
+        "kind": "edge",
+        "says": "later years are relaxed, not held at zero, so the first window sees what its choice costs them"
+      },
+      {
+        "id": "test_the_years_kept_are_whole_decisions",
+        "kind": "edge",
+        "says": "the window's own years are integer, so a kept plan never splits a project to fit a budget"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-05/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "44-decomposition-and-heuristics/README_11.3.5.md",
+      "section": "A Rolling Horizon Plans a Few Years at a Time and Keeps Only the First Ones"
+    },
+    "concepts": [
+      "a window decides its years with later starts handled apart, keeps its first years and rolls on"
+    ]
+  }
+}

@@ -1,0 +1,171 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "06-formulation-craft",
+    "23-binary-logic"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "A water utility's engineering rules",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A regional water utility is choosing next year's capital projects. Its engineers have handed the planners four kinds of rule, each given to you as data:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "**Supports** (`needs_any`, a dict from a project to a list of projects). A project may be funded only if at least one of its supports is funded too. The treatment-plant expansion, for example, needs either the north main or the south main to carry its output.",
+        "**Group triggers** (`all_trigger`, a list of `(group, consequence)`). If *every* project in the group is funded, the consequence must be funded as well; if only some of them are, the rule asks nothing. A group may hold any number of projects.",
+        "**Incompatible pairs** (`never_with`, a list of `(a, b)`). The two projects may not both be funded.",
+        "**Pairs** (`together`, a list of `(a, b)`). Both are funded, or neither is."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "The model in `water_rules.py` already has a binary `x[pid]` per project (1 if funded) and a budget row. Write `add_engineering_rules(model, x, needs_any, all_trigger, never_with, together)` so that the model allows exactly the plans that keep every rule."
+    },
+    {
+      "type": "para",
+      "text": "With $`P`$ the projects, the model so far is"
+    },
+    {
+      "type": "code",
+      "lang": "math",
+      "text": "\\begin{aligned}\n& x_p \\in \\{0, 1\\} && \\forall p \\in P && \\text{(fund project } p\\text{)} \\\\\n& \\sum_{p \\in P} c_p\\, x_p \\le B && && \\text{(budget, given)} \\\\\n& \\text{?} && && \\text{(your rows)}\n\\end{aligned}"
+    },
+    {
+      "type": "para",
+      "text": "Name the sets each kind of rule needs (the supports $`S_p`$ of a project, the projects $`G`$ of a group and its consequence $`k_G`$, the pairs), write one family of rows per kind with its quantifier and a label, and check each row against the rule on the 0/1 combinations before you code it. Mind the group trigger: your row must work for a group of any size."
+    },
+    {
+      "type": "para",
+      "text": "The tests fix a plan through the variables' bounds and ask the solver whether the model accepts it, so any correct formulation passes. About ten lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int        # $k\n\n\ndef add_engineering_rules(model: mathopt.Model, x: dict, needs_any: dict[str, list[str]],\n                          all_trigger: list[tuple[list[str], str]], never_with: list[tuple[str, str]],\n                          together: list[tuple[str, str]]) -> None:\n    \"\"\"Supports, group triggers, incompatible pairs and pairs funded together, as linear rows.\"\"\"\n    for project, supports in needs_any.items():\n        model.add_linear_constraint(x[project] <= sum(x[s] for s in supports), name=f\"needs_{project}\")\n    for group, consequence in all_trigger:\n        model.add_linear_constraint(sum(x[g] for g in group) - (len(group) - 1) <= x[consequence],\n                                    name=f\"all_{consequence}\")\n    for a, b in never_with:\n        model.add_linear_constraint(x[a] + x[b] <= 1, name=f\"never_{a}_{b}\")\n    for a, b in together:\n        model.add_linear_constraint(x[a] == x[b], name=f\"together_{a}_{b}\")\n\n\ndef build(projects: list[Project], budget: int, needs_any: dict[str, list[str]],\n          all_trigger: list[tuple[list[str], str]], never_with: list[tuple[str, str]],\n          together: list[tuple[str, str]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"water-capital\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in projects) <= budget, name=\"budget\")\n    add_engineering_rules(model, x, needs_any, all_trigger, never_with, together)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"TX\", 900), Project(\"NM\", 400), Project(\"SM\", 350)]\n    model, x = build(projects, 2_000, {\"TX\": [\"NM\", \"SM\"]}, [], [], [])\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int        # $k\n\n\ndef add_engineering_rules(model: mathopt.Model, x: dict, needs_any: dict[str, list[str]],\n                          all_trigger: list[tuple[list[str], str]], never_with: list[tuple[str, str]],\n                          together: list[tuple[str, str]]) -> None:\n    \"\"\"Supports, group triggers, incompatible pairs and pairs funded together, as linear rows.\"\"\"\n    # TODO: one family of rows for each kind of rule.\n    return None\n\n\ndef build(projects: list[Project], budget: int, needs_any: dict[str, list[str]],\n          all_trigger: list[tuple[list[str], str]], never_with: list[tuple[str, str]],\n          together: list[tuple[str, str]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"water-capital\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in projects) <= budget, name=\"budget\")\n    add_engineering_rules(model, x, needs_any, all_trigger, never_with, together)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"TX\", 900), Project(\"NM\", 400), Project(\"SM\", 350)]\n    model, x = build(projects, 2_000, {\"TX\": [\"NM\", \"SM\"]}, [], [], [])\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 5,
+    "code": 2,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "370fd1579f86f9d1e2afba29604640dfa36e0fd37aaa7377128ce539229574ac",
+  "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int        # $k\n\n\ndef add_engineering_rules(model: mathopt.Model, x: dict, needs_any: dict[str, list[str]],\n                          all_trigger: list[tuple[list[str], str]], never_with: list[tuple[str, str]],\n                          together: list[tuple[str, str]]) -> None:\n    \"\"\"Supports, group triggers, incompatible pairs and pairs funded together, as linear rows.\"\"\"\n    # TODO: one family of rows for each kind of rule.\n    return None\n\n\ndef build(projects: list[Project], budget: int, needs_any: dict[str, list[str]],\n          all_trigger: list[tuple[list[str], str]], never_with: list[tuple[str, str]],\n          together: list[tuple[str, str]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"water-capital\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in projects) <= budget, name=\"budget\")\n    add_engineering_rules(model, x, needs_any, all_trigger, never_with, together)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"TX\", 900), Project(\"NM\", 400), Project(\"SM\", 350)]\n    model, x = build(projects, 2_000, {\"TX\": [\"NM\", \"SM\"]}, [], [], [])\n    print(len(list(model.linear_constraints())), \"rows\")\n",
+  "exercise": {
+    "main_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-1/water_rules.py",
+    "test_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-1/test_water_rules.py",
+    "run_command": [
+      "python3",
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-1/water_rules.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-1/target/report.xml",
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-1/test_water_rules.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_a_project_needs_one_of_its_supports",
+        "kind": "main",
+        "says": "a project funded with one of its supports is allowed, and one funded with none is refused"
+      },
+      {
+        "id": "test_two_projects_that_cannot_coexist_are_never_both_funded",
+        "kind": "main",
+        "says": "one of two incompatible projects is allowed, and both together are refused"
+      },
+      {
+        "id": "test_a_full_group_triggers_its_consequence",
+        "kind": "main",
+        "says": "a group funded in full together with its consequence is allowed, and without it refused"
+      },
+      {
+        "id": "test_paired_projects_are_funded_together",
+        "kind": "main",
+        "says": "a pair funded together is allowed, and its first member alone is refused"
+      },
+      {
+        "id": "test_part_of_a_group_does_not_trigger_the_consequence",
+        "kind": "edge",
+        "says": "two projects of a three-project group, funded without the consequence, are allowed"
+      },
+      {
+        "id": "test_a_project_may_have_several_supports_funded",
+        "kind": "edge",
+        "says": "a project funded with every one of its supports is allowed"
+      },
+      {
+        "id": "test_the_second_member_of_a_pair_cannot_go_alone",
+        "kind": "edge",
+        "says": "a pair's second member funded alone is refused"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "23-binary-logic/README_6.1.2.md",
+      "section": "AND or OR on Either Side of an Implication Is Still One Row"
+    },
+    "concepts": [
+      "rules with a conjunction or disjunction in the premise or the conclusion are still linear rows",
+      "an implication between two decisions is a single inequality, checked on every 0/1 combination",
+      "the negation of a yes/no decision is one minus its binary"
+    ]
+  }
+}

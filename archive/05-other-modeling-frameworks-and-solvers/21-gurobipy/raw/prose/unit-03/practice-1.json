@@ -1,0 +1,166 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "05-other-modeling-frameworks-and-solvers",
+    "21-gurobipy"
+  ],
+  "variant": "prose",
+  "unit": 3,
+  "kind": "practice",
+  "ordinal": 1,
+  "ingested": "2026-11-13",
+  "title": "An IIS report from gurobipy's IIS attributes",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A hospital's nurse-rostering model came back `INFEASIBLE`, and `computeIIS()` has run. The team has copied what it set into plain data (so the report can be written and tested anywhere, even without a license):"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "`status`: the model's `Status` code;",
+        "`rows`: one dict per linear row, `{\"name\": ConstrName, \"sense\": Sense, \"rhs\": RHS, \"iis\": IISConstr}`, where `Sense` is `\"<\"`, `\">\"` or `\"=\"` as gurobipy reports it;",
+        "`bounds`: one dict per variable, `{\"name\": VarName, \"lb\": LB, \"ub\": UB, \"iis_lb\": IISLB, \"iis_ub\": IISUB}`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Write `iis_report(status, rows, bounds)`, which returns sorted lines for a planner:"
+    },
+    {
+      "type": "table",
+      "headers": [
+        "In the IIS",
+        "Line"
+      ],
+      "rows": [
+        [
+          "a row with `iis` 1",
+          "`\"<name> <= <rhs>\"`, `\"<name> >= <rhs>\"` or `\"<name> == <rhs>\"`, by its sense"
+        ],
+        [
+          "a variable with `iis_lb` 1",
+          "`\"<name> >= <lb>\"`"
+        ],
+        [
+          "a variable with `iis_ub` 1",
+          "`\"<name> <= <ub>\"`"
+        ]
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Numbers are written with `:g` (`40.0` prints as `40`). Only what the IIS marks is listed. If `status` is not `GRB.INFEASIBLE` (`from gurobipy import GRB`), there is no IIS to read, and the function returns an empty list. About twelve lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\nfrom gurobipy import GRB\n\nOPERATOR = {\"<\": \"<=\", \">\": \">=\", \"=\": \"==\"}\n\n\ndef iis_report(status: int, rows: list[dict], bounds: list[dict]) -> list[str]:\n    \"\"\"Sorted lines, one per row and per variable bound that computeIIS marked.\"\"\"\n    if status != GRB.INFEASIBLE:\n        return []\n    lines = [f\"{r['name']} {OPERATOR[r['sense']]} {r['rhs']:g}\" for r in rows if r[\"iis\"]]\n    for v in bounds:\n        if v[\"iis_lb\"]:\n            lines.append(f\"{v['name']} >= {v['lb']:g}\")\n        if v[\"iis_ub\"]:\n            lines.append(f\"{v['name']} <= {v['ub']:g}\")\n    return sorted(lines)\n\n\nif __name__ == \"__main__\":\n    rows = [{\"name\": \"night_cover\", \"sense\": \">\", \"rhs\": 6.0, \"iis\": 1},\n            {\"name\": \"staff_hours\", \"sense\": \"<\", \"rhs\": 160.0, \"iis\": 1}]\n    print(iis_report(GRB.INFEASIBLE, rows, []))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\nfrom gurobipy import GRB\n\n\ndef iis_report(status: int, rows: list[dict], bounds: list[dict]) -> list[str]:\n    \"\"\"Sorted lines, one per row and per variable bound that computeIIS marked.\"\"\"\n    # TODO: check the status, then map each marked row's sense to an operator, then the bounds.\n    return [\"no conflict\"]\n\n\nif __name__ == \"__main__\":\n    rows = [{\"name\": \"night_cover\", \"sense\": \">\", \"rhs\": 6.0, \"iis\": 1},\n            {\"name\": \"staff_hours\", \"sense\": \"<\", \"rhs\": 160.0, \"iis\": 1}]\n    print(iis_report(GRB.INFEASIBLE, rows, []))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 3,
+    "code": 1,
+    "tables": 1,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "bcf52044e45d5c195aa32eca2056ef3d31b3a876ce43b9cf4b60c7fc83cd387d",
+  "starting_code": "from __future__ import annotations\n\nfrom gurobipy import GRB\n\n\ndef iis_report(status: int, rows: list[dict], bounds: list[dict]) -> list[str]:\n    \"\"\"Sorted lines, one per row and per variable bound that computeIIS marked.\"\"\"\n    # TODO: check the status, then map each marked row's sense to an operator, then the bounds.\n    return [\"no conflict\"]\n\n\nif __name__ == \"__main__\":\n    rows = [{\"name\": \"night_cover\", \"sense\": \">\", \"rhs\": 6.0, \"iis\": 1},\n            {\"name\": \"staff_hours\", \"sense\": \"<\", \"rhs\": 160.0, \"iis\": 1}]\n    print(iis_report(GRB.INFEASIBLE, rows, []))\n",
+  "exercise": {
+    "main_path": "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-03/practice-1/iis_report.py",
+    "test_path": "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-03/practice-1/test_iis_report.py",
+    "run_command": [
+      "python3",
+      "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-03/practice-1/iis_report.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-03/practice-1/target/report.xml",
+      "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-03/practice-1/test_iis_report.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_rows_marked_by_iisconstr_are_listed",
+        "kind": "main",
+        "says": "rows with IISConstr 1 give one line each, sorted"
+      },
+      {
+        "id": "test_rows_outside_the_iis_are_left_out",
+        "kind": "main",
+        "says": "rows with IISConstr 0 give no line"
+      },
+      {
+        "id": "test_each_sense_is_written_as_its_operator",
+        "kind": "edge",
+        "says": "a '>' row is written with >= and an '=' row with =="
+      },
+      {
+        "id": "test_variable_bounds_in_the_iis_are_listed",
+        "kind": "edge",
+        "says": "a variable whose IISLB or IISUB is 1 gives a line for that bound only"
+      },
+      {
+        "id": "test_a_model_that_is_not_infeasible_has_no_report",
+        "kind": "edge",
+        "says": "a status other than INFEASIBLE gives an empty list"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-03/practice-1/target/report.xml"
+    },
+    "origin": {
+      "path": "21-gurobipy/README_5.3.3.md",
+      "section": "computeIIS Names the Rows That Clash"
+    },
+    "concepts": [
+      "a planner's report from the IIS attributes, by sense and bound"
+    ]
+  }
+}

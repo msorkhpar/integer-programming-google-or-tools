@@ -1,0 +1,141 @@
+{
+  "raw_api": 1,
+  "source": "integer-programming-python-or-tools",
+  "address": [
+    "11-performance-at-scale",
+    "57-gpu-acceleration"
+  ],
+  "variant": "prose",
+  "unit": 2,
+  "kind": "practice",
+  "ordinal": 2,
+  "ingested": "2026-11-13",
+  "title": "Do these runs agree across devices?",
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Problem statement"
+    },
+    {
+      "type": "para",
+      "text": "A routing team solves the same LP on laptops (CPU only), on a build server, and on a GPU workstation, and keeps a record of each run: the `device` (`\"cpu\"` or `\"gpu\"`), the `solver`, the `objective`, and a `digest` of the solution's bits. Before a release they want one function that says whether a set of runs agrees, by a rule written down once:"
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        "one CPU run is the reference: the first CPU run in the list. With no CPU run there is no reference, and the result is exactly `[\"no CPU reference\"]`: no other check runs, so not even a repeat that differs is reported until a CPU run is added;",
+        "runs of the same solver on the same device are repeats, and a repeat must give the same digest and objective as that pair's first run, else `\"<device>/<solver>: repeat differs\"`;",
+        "every run's objective must be within `tol` of the reference's, relatively (divided by $`\\max(1, \\lvert\\text{reference}\\rvert)`$), else `\"<device>/<solver>: off the reference\"`."
+      ]
+    },
+    {
+      "type": "para",
+      "text": "Write `check_runs(runs, tol)` in `runs.py`, returning the problems sorted, each once; an empty list means the runs agree. One test, `test_real_runs_on_this_machine_agree_and_a_run_off_by_a_thousandth_is_caught`, solves a small LP with `highspy` on this machine; on the GPU image with a GPU it adds two GPU PDLP runs. On a machine without a GPU that test runs its CPU part only, and it says nothing about the GPU part: no test is reported as skipped. About fifteen lines."
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Lesson"
+    },
+    {
+      "type": "disclosure",
+      "summary": "Show a worked solution",
+      "open": false,
+      "blocks": [
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "from __future__ import annotations\n\n\ndef check_runs(runs: list[dict], tol: float) -> list[str]:\n    \"\"\"Problems with a set of runs of one LP on several devices; an empty list means they agree.\n\n    A run is {\"device\": \"cpu\" | \"gpu\", \"solver\": str, \"objective\": float, \"digest\": str}.\n    \"\"\"\n    cpu = [r for r in runs if r[\"device\"] == \"cpu\"]\n    if not cpu:\n        return [\"no CPU reference\"]\n    reference = cpu[0][\"objective\"]\n    problems = []\n    first = {}\n    for r in runs:\n        key = (r[\"device\"], r[\"solver\"])\n        if key in first and (first[key][\"digest\"], first[key][\"objective\"]) != (r[\"digest\"], r[\"objective\"]):\n            problems.append(f\"{r['device']}/{r['solver']}: repeat differs\")\n        first.setdefault(key, r)\n        if abs(r[\"objective\"] - reference) > tol * max(1.0, abs(reference)):\n            problems.append(f\"{r['device']}/{r['solver']}: off the reference\")\n    return sorted(set(problems))\n\n\nif __name__ == \"__main__\":\n    print(check_runs([{\"device\": \"cpu\", \"solver\": \"ipm\", \"objective\": 10.0, \"digest\": \"a\"}], 1e-6))\n"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "text": "Starting code"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "from __future__ import annotations\n\n\ndef check_runs(runs: list[dict], tol: float) -> list[str]:\n    \"\"\"Problems with a set of runs of one LP on several devices; an empty list means they agree.\n\n    A run is {\"device\": \"cpu\" | \"gpu\", \"solver\": str, \"objective\": float, \"digest\": str}.\n    \"\"\"\n    # TODO: a CPU reference, repeats held to equal bits, every run within tol of the reference.\n    return [\"not checked\"]\n\nif __name__ == \"__main__\":\n    print(check_runs([{\"device\": \"cpu\", \"solver\": \"ipm\", \"objective\": 10.0, \"digest\": \"a\"}], 1e-6))\n"
+    }
+  ],
+  "video": null,
+  "assets": [],
+  "attachments": [],
+  "counts": {
+    "headings": 3,
+    "paras": 2,
+    "code": 1,
+    "tables": 0,
+    "lists": 1,
+    "images": 0,
+    "videos": 0,
+    "rules": 0,
+    "quotes": 0,
+    "html": 0,
+    "disclosures": 1
+  },
+  "content_sha256": "c0a091761d41ad61194d448e73c124785a3d544c8dbf3cf83858a3e9b928f144",
+  "starting_code": "from __future__ import annotations\n\n\ndef check_runs(runs: list[dict], tol: float) -> list[str]:\n    \"\"\"Problems with a set of runs of one LP on several devices; an empty list means they agree.\n\n    A run is {\"device\": \"cpu\" | \"gpu\", \"solver\": str, \"objective\": float, \"digest\": str}.\n    \"\"\"\n    # TODO: a CPU reference, repeats held to equal bits, every run within tol of the reference.\n    return [\"not checked\"]\n\nif __name__ == \"__main__\":\n    print(check_runs([{\"device\": \"cpu\", \"solver\": \"ipm\", \"objective\": 10.0, \"digest\": \"a\"}], 1e-6))\n",
+  "exercise": {
+    "main_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-2/runs.py",
+    "test_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-2/test_runs.py",
+    "run_command": [
+      "python3",
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-2/runs.py"
+    ],
+    "test_command": [
+      "python3",
+      "-m",
+      "pytest",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "--junitxml=practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-2/target/report.xml",
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-2/test_runs.py"
+    ],
+    "provenance": "generated",
+    "trust": "advisory",
+    "cases": [
+      {
+        "id": "test_real_runs_on_this_machine_agree_and_a_run_off_by_a_thousandth_is_caught",
+        "kind": "main",
+        "says": "real runs on this machine agree, and a run off by a thousandth is caught"
+      },
+      {
+        "id": "test_a_repeat_that_changed_is_caught",
+        "kind": "main",
+        "says": "a repeat of one solver on one device that changed is caught"
+      },
+      {
+        "id": "test_different_solvers_are_not_held_to_equal_bits",
+        "kind": "edge",
+        "says": "different solvers or devices are compared within tolerance, not by bits"
+      },
+      {
+        "id": "test_the_tolerance_is_relative_to_the_objective",
+        "kind": "edge",
+        "says": "the tolerance is relative to the objective's size"
+      },
+      {
+        "id": "test_without_a_cpu_run_there_is_no_reference",
+        "kind": "edge",
+        "says": "with no CPU run there is no reference to compare with"
+      }
+    ],
+    "report": {
+      "format": "junit",
+      "path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-2/target/report.xml"
+    },
+    "origin": {
+      "path": "57-gpu-acceleration/README_11.4.2.md",
+      "section": "The Same Answer Means Within a Stated Tolerance"
+    },
+    "concepts": [
+      "answers from different devices are compared within a relative tolerance, repeats by their bits"
+    ]
+  }
+}
