@@ -146,6 +146,33 @@ if __name__ == &quot;__main__&quot;:
     flow, on = pump_variables(model)
     add_pump_rules(model, flow, on, 20)
     print(model.get_num_indicator_constraints(), &quot;indicator constraints&quot;)
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from ortools.math_opt.python import mathopt
+
+from pump import add_pump_rules, pump_variables
+
+
+def allowed(flow_value, running, min_flow=35):
+    model = mathopt.Model()
+    flow, on = pump_variables(model)
+    add_pump_rules(model, flow, on, min_flow)
+    flow.lower_bound = flow.upper_bound = flow_value
+    on.lower_bound = on.upper_bound = running
+    result = mathopt.solve(model, mathopt.SolverType.GSCIP)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+print(&quot;idle, flow 0:&quot;, allowed(0, 0))
+print(&quot;idle, flow 8:&quot;, allowed(8, 0))
+print(&quot;running, flow 35:&quot;, allowed(35, 1))
+print(&quot;running, flow 30:&quot;, allowed(30, 1))
+print(&quot;running, flow 250000:&quot;, allowed(250_000, 1))
 </code></pre></figure></details>
 <h2 id="practice-prose-b9">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -173,10 +200,38 @@ if __name__ == &quot;__main__&quot;:
     add_pump_rules(model, flow, on, 20)
     print(model.get_num_indicator_constraints(), &quot;indicator constraints&quot;)
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from ortools.math_opt.python import mathopt
+
+from pump import add_pump_rules, pump_variables
+
+
+def allowed(flow_value, running, min_flow=35):
+    model = mathopt.Model()
+    flow, on = pump_variables(model)
+    add_pump_rules(model, flow, on, min_flow)
+    flow.lower_bound = flow.upper_bound = flow_value
+    on.lower_bound = on.upper_bound = running
+    result = mathopt.solve(model, mathopt.SolverType.GSCIP)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+print(&quot;idle, flow 0:&quot;, allowed(0, 0))
+print(&quot;idle, flow 8:&quot;, allowed(8, 0))
+print(&quot;running, flow 35:&quot;, allowed(35, 1))
+print(&quot;running, flow 30:&quot;, allowed(30, 1))
+print(&quot;running, flow 250000:&quot;, allowed(250_000, 1))
+</code></pre></figure>
 </section>
 <section data-practice="06-formulation-craft/24-big-m-and-indicators/unit-03/practice-prose" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-03/practice-1/pump.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-03/practice-1/pump.py</code> and <code>practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-03/practice-1/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-03/practice-1/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>
@@ -276,6 +331,31 @@ if __name__ == &quot;__main__&quot;:
     solver = cp_model.CpSolver()
     solver.solve(model)
     print(&quot;most hours:&quot;, solver.value(hours))
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from ortools.sat.python import cp_model
+
+from crew_hours import add_hours_rules, crew_variables
+
+
+def allowed(worked, approved):
+    model = cp_model.CpModel()
+    hours, overtime = crew_variables(model)
+    add_hours_rules(model, hours, overtime)
+    model.add(hours == worked)
+    model.add(overtime == int(approved))
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = 5
+    return solver.solve(model) in (cp_model.OPTIMAL, cp_model.FEASIBLE)
+
+
+for worked, approved in [(36, False), (41, False), (48, True), (43, True), (57, True)]:
+    print(f&quot;{worked} hours, overtime {approved}:&quot;, allowed(worked, approved))
 </code></pre></figure></details>
 <h2 id="practice-prose-2-b9">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -304,10 +384,36 @@ if __name__ == &quot;__main__&quot;:
     solver.solve(model)
     print(&quot;most hours:&quot;, solver.value(hours))
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from ortools.sat.python import cp_model
+
+from crew_hours import add_hours_rules, crew_variables
+
+
+def allowed(worked, approved):
+    model = cp_model.CpModel()
+    hours, overtime = crew_variables(model)
+    add_hours_rules(model, hours, overtime)
+    model.add(hours == worked)
+    model.add(overtime == int(approved))
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = 5
+    return solver.solve(model) in (cp_model.OPTIMAL, cp_model.FEASIBLE)
+
+
+for worked, approved in [(36, False), (41, False), (48, True), (43, True), (57, True)]:
+    print(f&quot;{worked} hours, overtime {approved}:&quot;, allowed(worked, approved))
+</code></pre></figure>
 </section>
 <section data-practice="06-formulation-craft/24-big-m-and-indicators/unit-03/practice-prose-2" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-03/practice-2/crew_hours.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-03/practice-2/crew_hours.py</code> and <code>practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-03/practice-2/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-03/practice-2/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>

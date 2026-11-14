@@ -150,6 +150,34 @@ def build() -&gt; tuple[mathopt.Model, dict]:
 if __name__ == &quot;__main__&quot;:
     model, _ = build()
     print(model.objective.is_maximize, model.num_auxiliary_objectives())
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+from ortools.math_opt.python import mathopt
+
+from rota import set_objectives
+
+# A small ward: open early shifts, extra hours, and two liked shifts.
+model = mathopt.Model(name=&quot;ward&quot;)
+open_early = model.add_variable(lb=0, ub=6, name=&quot;open_early&quot;)
+extra = model.add_variable(lb=0, ub=24, name=&quot;extra&quot;)
+liked = [model.add_binary_variable(name=f&quot;liked_{n}&quot;) for n in (&quot;dee&quot;, &quot;eli&quot;)]
+set_objectives(model, 2 * open_early, 0.5 * extra + 1, liked[0] + 3 * liked[1])
+
+
+def show(obj):
+    terms = {t.variable.name: t.coefficient for t in obj.linear_terms()}
+    return f&quot;priority {obj.priority}, maximize {obj.is_maximize}, offset {obj.offset}, terms {terms}&quot;
+
+
+print(&quot;primary:&quot;, show(model.objective))
+for obj in model.auxiliary_objectives():
+    print(f&quot;auxiliary {obj.name!r}:&quot;, show(obj))
 </code></pre></figure></details>
 <h2 id="practice-prose-b8">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -177,10 +205,39 @@ if __name__ == &quot;__main__&quot;:
     model, _ = build()
     print(model.objective.is_maximize, model.num_auxiliary_objectives())
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+from ortools.math_opt.python import mathopt
+
+from rota import set_objectives
+
+# A small ward: open early shifts, extra hours, and two liked shifts.
+model = mathopt.Model(name=&quot;ward&quot;)
+open_early = model.add_variable(lb=0, ub=6, name=&quot;open_early&quot;)
+extra = model.add_variable(lb=0, ub=24, name=&quot;extra&quot;)
+liked = [model.add_binary_variable(name=f&quot;liked_{n}&quot;) for n in (&quot;dee&quot;, &quot;eli&quot;)]
+set_objectives(model, 2 * open_early, 0.5 * extra + 1, liked[0] + 3 * liked[1])
+
+
+def show(obj):
+    terms = {t.variable.name: t.coefficient for t in obj.linear_terms()}
+    return f&quot;priority {obj.priority}, maximize {obj.is_maximize}, offset {obj.offset}, terms {terms}&quot;
+
+
+print(&quot;primary:&quot;, show(model.objective))
+for obj in model.auxiliary_objectives():
+    print(f&quot;auxiliary {obj.name!r}:&quot;, show(obj))
+</code></pre></figure>
 </section>
 <section data-practice="04-google-or-tools-in-depth/14-mathopt-advanced/unit-02/practice-prose" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-1/rota.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-1/rota.py</code> and <code>practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-1/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-1/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>
@@ -320,6 +377,34 @@ if __name__ == &quot;__main__&quot;:
     model = mathopt.Model()
     cost = model.add_variable(lb=-1e6, ub=1e6, name=&quot;cost&quot;)
     print(keep_within(model, cost, 1000, False, mathopt.ObjectiveParameters(objective_degradation_absolute_tolerance=5)))
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+from ortools.math_opt.python import mathopt
+
+from keep import keep_within
+
+
+def accepts(value, best, is_maximize, params):
+    model = mathopt.Model()
+    margin = model.add_variable(lb=-1e6, ub=1e6, name=&quot;margin&quot;)
+    keep_within(model, 3 * margin, best, is_maximize, params)
+    margin.lower_bound = margin.upper_bound = value / 3
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+REL2 = mathopt.ObjectiveParameters(objective_degradation_relative_tolerance=0.02)
+ABS9 = mathopt.ObjectiveParameters(objective_degradation_absolute_tolerance=9)
+print(&quot;max, best 600, 2 percent, value 588:&quot;, accepts(588, 600, True, REL2))
+print(&quot;max, best 600, 2 percent, value 585:&quot;, accepts(585, 600, True, REL2))
+print(&quot;min, best 300, absolute 9, value 309:&quot;, accepts(309, 300, False, ABS9))
+print(&quot;min, best 300, no tolerance, value 301:&quot;, accepts(301, 300, False, None))
 </code></pre></figure></details>
 <h2 id="practice-prose-2-b7">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -339,10 +424,39 @@ if __name__ == &quot;__main__&quot;:
     cost = model.add_variable(lb=-1e6, ub=1e6, name=&quot;cost&quot;)
     print(keep_within(model, cost, 1000, False, mathopt.ObjectiveParameters(objective_degradation_absolute_tolerance=5)))
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+from ortools.math_opt.python import mathopt
+
+from keep import keep_within
+
+
+def accepts(value, best, is_maximize, params):
+    model = mathopt.Model()
+    margin = model.add_variable(lb=-1e6, ub=1e6, name=&quot;margin&quot;)
+    keep_within(model, 3 * margin, best, is_maximize, params)
+    margin.lower_bound = margin.upper_bound = value / 3
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+REL2 = mathopt.ObjectiveParameters(objective_degradation_relative_tolerance=0.02)
+ABS9 = mathopt.ObjectiveParameters(objective_degradation_absolute_tolerance=9)
+print(&quot;max, best 600, 2 percent, value 588:&quot;, accepts(588, 600, True, REL2))
+print(&quot;max, best 600, 2 percent, value 585:&quot;, accepts(585, 600, True, REL2))
+print(&quot;min, best 300, absolute 9, value 309:&quot;, accepts(309, 300, False, ABS9))
+print(&quot;min, best 300, no tolerance, value 301:&quot;, accepts(301, 300, False, None))
+</code></pre></figure>
 </section>
 <section data-practice="04-google-or-tools-in-depth/14-mathopt-advanced/unit-02/practice-prose-2" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-2/keep.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-2/keep.py</code> and <code>practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-2/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-2/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>

@@ -149,6 +149,29 @@ if __name__ == &quot;__main__&quot;:
     model.add_linear_constraint(0.0001 * nurses &lt;= 3, name=&quot;tiny&quot;)
     model.add_linear_constraint(1e8 * nurses &lt;= 5e9, name=&quot;huge&quot;)
     print(matrix_extremes(model))
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+from ortools.math_opt.python import mathopt
+
+from extremes import matrix_extremes
+
+model = mathopt.Model()
+pumps = model.add_variable(lb=0, ub=50, name=&quot;pumps&quot;)
+valves = model.add_variable(lb=0, ub=50, name=&quot;valves&quot;)
+model.add_linear_constraint(80_000 * pumps + 12_000 * valves &lt;= 2_000_000, name=&quot;capital&quot;)
+model.add_linear_constraint(pumps + 0.05 * valves &gt;= 6, name=&quot;flow&quot;)
+smallest, largest = matrix_extremes(model)
+print(&quot;smallest entry:&quot;, smallest)
+print(&quot;largest entry:&quot;, largest)
+
+model.add_linear_constraint(-3e7 * valves &gt;= -9e8, name=&quot;insurance&quot;)
+print(&quot;largest entry with an insurance row:&quot;, matrix_extremes(model)[1])
 </code></pre></figure></details>
 <h2 id="practice-prose-b6">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -171,10 +194,34 @@ if __name__ == &quot;__main__&quot;:
     model.add_linear_constraint(1e8 * nurses &lt;= 5e9, name=&quot;huge&quot;)
     print(matrix_extremes(model))
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+from ortools.math_opt.python import mathopt
+
+from extremes import matrix_extremes
+
+model = mathopt.Model()
+pumps = model.add_variable(lb=0, ub=50, name=&quot;pumps&quot;)
+valves = model.add_variable(lb=0, ub=50, name=&quot;valves&quot;)
+model.add_linear_constraint(80_000 * pumps + 12_000 * valves &lt;= 2_000_000, name=&quot;capital&quot;)
+model.add_linear_constraint(pumps + 0.05 * valves &gt;= 6, name=&quot;flow&quot;)
+smallest, largest = matrix_extremes(model)
+print(&quot;smallest entry:&quot;, smallest)
+print(&quot;largest entry:&quot;, largest)
+
+model.add_linear_constraint(-3e7 * valves &gt;= -9e8, name=&quot;insurance&quot;)
+print(&quot;largest entry with an insurance row:&quot;, matrix_extremes(model)[1])
+</code></pre></figure>
 </section>
 <section data-practice="10-numerics-and-determinism/40-numerics/unit-02/practice-prose" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/10-numerics-and-determinism/40-numerics/prose/unit-02/practice-1/extremes.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/10-numerics-and-determinism/40-numerics/prose/unit-02/practice-1/extremes.py</code> and <code>practice/10-numerics-and-determinism/40-numerics/prose/unit-02/practice-1/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/10-numerics-and-determinism/40-numerics/prose/unit-02/practice-1/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>
@@ -330,6 +377,29 @@ if __name__ == &quot;__main__&quot;:
     fleet = build_scaled()
     result = mathopt.solve(fleet.model, mathopt.SolverType.HIGHS)
     print(result.termination.reason.name, result.objective_value())
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from fleet import build_scaled
+
+fleet = build_scaled()
+sizes = [abs(row.get_coefficient(v)) for row in fleet.model.linear_constraints() for v in fleet.model.row_nonzeros(row)]
+print(&quot;matrix span of the $k model:&quot;, round(max(sizes) / min(sizes), 1))
+
+result = mathopt.solve(fleet.model, mathopt.SolverType.HIGHS, params=mathopt.SolveParameters(time_limit=timedelta(seconds=5)))
+print(&quot;status:&quot;, result.termination.reason.name)
+print(&quot;best value, $k:&quot;, round(result.objective_value(), 1))
+print(&quot;orders bought:&quot;, sorted(n for n, v in fleet.buy.items() if result.variable_values(v) &gt; 0.5))
+print(&quot;overdraft, $k:&quot;, round(result.variable_values(fleet.overdraft), 1))
 </code></pre></figure></details>
 <h2 id="practice-prose-2-b8">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -383,10 +453,34 @@ if __name__ == &quot;__main__&quot;:
     result = mathopt.solve(fleet.model, mathopt.SolverType.HIGHS)
     print(result.termination.reason.name, result.objective_value())
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from fleet import build_scaled
+
+fleet = build_scaled()
+sizes = [abs(row.get_coefficient(v)) for row in fleet.model.linear_constraints() for v in fleet.model.row_nonzeros(row)]
+print(&quot;matrix span of the $k model:&quot;, round(max(sizes) / min(sizes), 1))
+
+result = mathopt.solve(fleet.model, mathopt.SolverType.HIGHS, params=mathopt.SolveParameters(time_limit=timedelta(seconds=5)))
+print(&quot;status:&quot;, result.termination.reason.name)
+print(&quot;best value, $k:&quot;, round(result.objective_value(), 1))
+print(&quot;orders bought:&quot;, sorted(n for n, v in fleet.buy.items() if result.variable_values(v) &gt; 0.5))
+print(&quot;overdraft, $k:&quot;, round(result.variable_values(fleet.overdraft), 1))
+</code></pre></figure>
 </section>
 <section data-practice="10-numerics-and-determinism/40-numerics/unit-02/practice-prose-2" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/10-numerics-and-determinism/40-numerics/prose/unit-02/practice-2/fleet.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/10-numerics-and-determinism/40-numerics/prose/unit-02/practice-2/fleet.py</code> and <code>practice/10-numerics-and-determinism/40-numerics/prose/unit-02/practice-2/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/10-numerics-and-determinism/40-numerics/prose/unit-02/practice-2/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>

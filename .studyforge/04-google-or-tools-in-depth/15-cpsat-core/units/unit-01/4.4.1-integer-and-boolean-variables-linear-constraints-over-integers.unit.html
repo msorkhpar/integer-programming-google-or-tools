@@ -211,6 +211,31 @@ if __name__ == &quot;__main__&quot;:
     solver = cp_model.CpSolver()
     status = solver.solve(model)
     print(solver.status_name(status), {name: solver.value(v) for name, v in n.items()})
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+from ortools.sat.python import cp_model
+
+from vans import VanType, build
+
+fleet = [VanType(&quot;cargo&quot;, 6, 400, 4, 2), VanType(&quot;truck&quot;, 15, 900, 2, 1), VanType(&quot;mini&quot;, 3, 150, 6, 3)]
+
+for demand, budget, drivers in ((30, 3_000, 5), (45, 2_500, 4)):
+    model, n = build(fleet, demand, budget, drivers)
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = 10
+    status = solver.solve(model)
+    label = f&quot;demand {demand}, budget {budget}, drivers {drivers}:&quot;
+    if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        print(label, solver.status_name(status), {name: solver.value(v) for name, v in n.items()},
+              &quot;cost&quot;, round(solver.objective_value))
+    else:
+        print(label, solver.status_name(status))
 </code></pre></figure></details>
 <h2 id="practice-prose-b8">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -244,10 +269,36 @@ if __name__ == &quot;__main__&quot;:
     status = solver.solve(model)
     print(solver.status_name(status), {name: solver.value(v) for name, v in n.items()})
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+from ortools.sat.python import cp_model
+
+from vans import VanType, build
+
+fleet = [VanType(&quot;cargo&quot;, 6, 400, 4, 2), VanType(&quot;truck&quot;, 15, 900, 2, 1), VanType(&quot;mini&quot;, 3, 150, 6, 3)]
+
+for demand, budget, drivers in ((30, 3_000, 5), (45, 2_500, 4)):
+    model, n = build(fleet, demand, budget, drivers)
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = 10
+    status = solver.solve(model)
+    label = f&quot;demand {demand}, budget {budget}, drivers {drivers}:&quot;
+    if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        print(label, solver.status_name(status), {name: solver.value(v) for name, v in n.items()},
+              &quot;cost&quot;, round(solver.objective_value))
+    else:
+        print(label, solver.status_name(status))
+</code></pre></figure>
 </section>
 <section data-practice="04-google-or-tools-in-depth/15-cpsat-core/unit-01/practice-prose" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-1/vans.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-1/vans.py</code> and <code>practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-1/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-1/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>
@@ -360,6 +411,38 @@ if __name__ == &quot;__main__&quot;:
     model.add(2 * x[&quot;a&quot;] + 3 * x[&quot;b&quot;] + 4 * x[&quot;c&quot;] &lt;= 5)
     model.maximize(3 * x[&quot;a&quot;] + 4 * x[&quot;b&quot;] + 5 * x[&quot;c&quot;])
     print(report(model, x))
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+from ortools.sat.python import cp_model
+
+from report import report
+
+
+def boxes(capacity):
+    model = cp_model.CpModel()
+    x = {name: model.new_bool_var(name) for name in (&quot;ice&quot;, &quot;fish&quot;, &quot;bread&quot;, &quot;fruit&quot;)}
+    model.add(3 * x[&quot;ice&quot;] + 5 * x[&quot;fish&quot;] + 2 * x[&quot;bread&quot;] + 4 * x[&quot;fruit&quot;] &lt;= capacity)
+    model.maximize(4 * x[&quot;ice&quot;] + 7 * x[&quot;fish&quot;] + 2 * x[&quot;bread&quot;] + 5 * x[&quot;fruit&quot;])
+    return model, x
+
+
+solver = cp_model.CpSolver()
+solver.parameters.max_time_in_seconds = 10
+print(&quot;capacity 9:&quot;, report(*boxes(9), solver))
+
+model, x = boxes(9)
+model.add(x[&quot;ice&quot;] + x[&quot;fish&quot;] &gt;= 3)
+print(&quot;capacity 9, three of two:&quot;, report(model, x))
+
+model, x = boxes(9)
+model.add(x[&quot;ice&quot;] + x[&quot;fish&quot;] &lt;= 1).only_enforce_if(model.new_int_var(0, 3, &quot;count&quot;))
+print(&quot;enforced by an integer:&quot;, report(model, x))
 </code></pre></figure></details>
 <h2 id="practice-prose-2-b7">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -379,10 +462,43 @@ if __name__ == &quot;__main__&quot;:
     model.maximize(3 * x[&quot;a&quot;] + 4 * x[&quot;b&quot;] + 5 * x[&quot;c&quot;])
     print(report(model, x))
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+from ortools.sat.python import cp_model
+
+from report import report
+
+
+def boxes(capacity):
+    model = cp_model.CpModel()
+    x = {name: model.new_bool_var(name) for name in (&quot;ice&quot;, &quot;fish&quot;, &quot;bread&quot;, &quot;fruit&quot;)}
+    model.add(3 * x[&quot;ice&quot;] + 5 * x[&quot;fish&quot;] + 2 * x[&quot;bread&quot;] + 4 * x[&quot;fruit&quot;] &lt;= capacity)
+    model.maximize(4 * x[&quot;ice&quot;] + 7 * x[&quot;fish&quot;] + 2 * x[&quot;bread&quot;] + 5 * x[&quot;fruit&quot;])
+    return model, x
+
+
+solver = cp_model.CpSolver()
+solver.parameters.max_time_in_seconds = 10
+print(&quot;capacity 9:&quot;, report(*boxes(9), solver))
+
+model, x = boxes(9)
+model.add(x[&quot;ice&quot;] + x[&quot;fish&quot;] &gt;= 3)
+print(&quot;capacity 9, three of two:&quot;, report(model, x))
+
+model, x = boxes(9)
+model.add(x[&quot;ice&quot;] + x[&quot;fish&quot;] &lt;= 1).only_enforce_if(model.new_int_var(0, 3, &quot;count&quot;))
+print(&quot;enforced by an integer:&quot;, report(model, x))
+</code></pre></figure>
 </section>
 <section data-practice="04-google-or-tools-in-depth/15-cpsat-core/unit-01/practice-prose-2" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-2/report.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-2/report.py</code> and <code>practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-2/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-2/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>

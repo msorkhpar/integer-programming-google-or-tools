@@ -210,6 +210,34 @@ if __name__ == &quot;__main__&quot;:
     x = {(&quot;boiler&quot;, 2027): model.add_binary_variable(name=&quot;x_boiler_2027&quot;)}
     model.add_linear_constraint(x[&quot;boiler&quot;, 2027] == 1, name=&quot;must_boiler&quot;)
     print(verdicts(model, x, [{&quot;boiler&quot;: 2027}, {}]))
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+from ortools.math_opt.python import mathopt
+
+from verdict import verdicts
+
+# A school's projects: start years allowed and cost in the start year ($k); 60 per year.
+windows = {&quot;roof&quot;: (2031, 2032), &quot;gym&quot;: (2031,), &quot;boiler&quot;: (2032,)}
+cost = {&quot;roof&quot;: 45, &quot;gym&quot;: 30, &quot;boiler&quot;: 25}
+model = mathopt.Model()
+x = {(n, t): model.add_binary_variable(name=f&quot;x_{n}_{t}&quot;) for n, years in windows.items() for t in years}
+for n, years in windows.items():
+    model.add_linear_constraint(sum(x[n, t] for t in years) &lt;= 1, name=f&quot;once_{n}&quot;)
+for t in (2031, 2032):
+    model.add_linear_constraint(sum(cost[n] * x[n, t] for n in windows if t in windows[n]) &lt;= 60, name=f&quot;budget_{t}&quot;)
+x[&quot;roof&quot;, 2032].lower_bound = 1.0
+
+plans = [{&quot;roof&quot;: 2032, &quot;gym&quot;: 2031}, {&quot;roof&quot;: 2031, &quot;gym&quot;: 2031}, {&quot;roof&quot;: 2032, &quot;boiler&quot;: 2032},
+         {&quot;roof&quot;: 2032, &quot;gym&quot;: 2033}]
+for plan, ok in zip(plans, verdicts(model, x, plans)):
+    print(f&quot;plan {plan}:&quot;, ok)
+print(&quot;roof 2032 bounds afterwards:&quot;, (x[&quot;roof&quot;, 2032].lower_bound, x[&quot;roof&quot;, 2032].upper_bound))
 </code></pre></figure></details>
 <h2 id="practice-prose-b9">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -228,10 +256,39 @@ if __name__ == &quot;__main__&quot;:
     model.add_linear_constraint(x[&quot;boiler&quot;, 2027] == 1, name=&quot;must_boiler&quot;)
     print(verdicts(model, x, [{&quot;boiler&quot;: 2027}, {}]))
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+from ortools.math_opt.python import mathopt
+
+from verdict import verdicts
+
+# A school's projects: start years allowed and cost in the start year ($k); 60 per year.
+windows = {&quot;roof&quot;: (2031, 2032), &quot;gym&quot;: (2031,), &quot;boiler&quot;: (2032,)}
+cost = {&quot;roof&quot;: 45, &quot;gym&quot;: 30, &quot;boiler&quot;: 25}
+model = mathopt.Model()
+x = {(n, t): model.add_binary_variable(name=f&quot;x_{n}_{t}&quot;) for n, years in windows.items() for t in years}
+for n, years in windows.items():
+    model.add_linear_constraint(sum(x[n, t] for t in years) &lt;= 1, name=f&quot;once_{n}&quot;)
+for t in (2031, 2032):
+    model.add_linear_constraint(sum(cost[n] * x[n, t] for n in windows if t in windows[n]) &lt;= 60, name=f&quot;budget_{t}&quot;)
+x[&quot;roof&quot;, 2032].lower_bound = 1.0
+
+plans = [{&quot;roof&quot;: 2032, &quot;gym&quot;: 2031}, {&quot;roof&quot;: 2031, &quot;gym&quot;: 2031}, {&quot;roof&quot;: 2032, &quot;boiler&quot;: 2032},
+         {&quot;roof&quot;: 2032, &quot;gym&quot;: 2033}]
+for plan, ok in zip(plans, verdicts(model, x, plans)):
+    print(f&quot;plan {plan}:&quot;, ok)
+print(&quot;roof 2032 bounds afterwards:&quot;, (x[&quot;roof&quot;, 2032].lower_bound, x[&quot;roof&quot;, 2032].upper_bound))
+</code></pre></figure>
 </section>
 <section data-practice="12-engineering-the-optimization-service/47-testing-optimization-code/unit-01/practice-prose" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-01/practice-1/verdict.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-01/practice-1/verdict.py</code> and <code>practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-01/practice-1/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-01/practice-1/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>
@@ -344,6 +401,42 @@ def cases() -&gt; list[tuple[dict, dict, dict, bool]]:
 if __name__ == &quot;__main__&quot;:
     for jobs, crews, plan, verdict in cases():
         print(plan, &quot;allowed&quot; if verdict else &quot;refused&quot;)
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+from ortools.math_opt.python import mathopt
+
+from crew_cases import YEARS, cases
+
+
+def crew_rule_accepts(jobs, crews, plan):
+    &quot;&quot;&quot;A model with only the crew rule: job j started in s uses months[k] crew-months in s + k.&quot;&quot;&quot;
+    model = mathopt.Model()
+    x = {(j, s): model.add_binary_variable(name=f&quot;x_{j}_{s}&quot;)
+         for j, (months, first, last) in jobs.items() for s in range(first, last + 1)}
+    for y in YEARS:
+        used = mathopt.LinearExpression()
+        for j, (months, first, last) in jobs.items():
+            for s in range(first, last + 1):
+                if 0 &lt;= y - s &lt; len(months):
+                    used += months[y - s] * x[j, s]
+        model.add_linear_constraint(used &lt;= crews[y])
+    if any((j, s) not in x for j, s in plan.items()):
+        return False
+    for (j, s), var in x.items():
+        var.lower_bound = var.upper_bound = 1.0 if plan.get(j) == s else 0.0
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+print(&quot;cases written:&quot;, len(cases()))
+for jobs, crews, plan, allowed in cases():
+    print(f&quot;plan {plan}, crews {crews}: stated {allowed}, crew rule says {crew_rule_accepts(jobs, crews, plan)}&quot;)
 </code></pre></figure></details>
 <h2 id="practice-prose-2-b9">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Hand-made cases that pin down the crew rule of a tree-trimming contractor's model.&quot;&quot;&quot;
@@ -367,10 +460,47 @@ if __name__ == &quot;__main__&quot;:
     for jobs, crews, plan, verdict in cases():
         print(plan, &quot;allowed&quot; if verdict else &quot;refused&quot;)
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+from ortools.math_opt.python import mathopt
+
+from crew_cases import YEARS, cases
+
+
+def crew_rule_accepts(jobs, crews, plan):
+    &quot;&quot;&quot;A model with only the crew rule: job j started in s uses months[k] crew-months in s + k.&quot;&quot;&quot;
+    model = mathopt.Model()
+    x = {(j, s): model.add_binary_variable(name=f&quot;x_{j}_{s}&quot;)
+         for j, (months, first, last) in jobs.items() for s in range(first, last + 1)}
+    for y in YEARS:
+        used = mathopt.LinearExpression()
+        for j, (months, first, last) in jobs.items():
+            for s in range(first, last + 1):
+                if 0 &lt;= y - s &lt; len(months):
+                    used += months[y - s] * x[j, s]
+        model.add_linear_constraint(used &lt;= crews[y])
+    if any((j, s) not in x for j, s in plan.items()):
+        return False
+    for (j, s), var in x.items():
+        var.lower_bound = var.upper_bound = 1.0 if plan.get(j) == s else 0.0
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+print(&quot;cases written:&quot;, len(cases()))
+for jobs, crews, plan, allowed in cases():
+    print(f&quot;plan {plan}, crews {crews}: stated {allowed}, crew rule says {crew_rule_accepts(jobs, crews, plan)}&quot;)
+</code></pre></figure>
 </section>
 <section data-practice="12-engineering-the-optimization-service/47-testing-optimization-code/unit-01/practice-prose-2" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-01/practice-2/crew_cases.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-01/practice-2/crew_cases.py</code> and <code>practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-01/practice-2/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-01/practice-2/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>

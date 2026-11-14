@@ -194,6 +194,35 @@ if __name__ == &quot;__main__&quot;:
     feeders = [Project(&quot;F1&quot;, (2027, 2028), must_do=True), Project(&quot;F2&quot;, (2027, 2028)), Project(&quot;F3&quot;, (2028,))]
     model, x = build(feeders, {2027: 1, 2028: 2}, [(&quot;F2&quot;, &quot;F3&quot;)])
     print(len(list(model.linear_constraints())), &quot;rows&quot;)
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from ortools.math_opt.python import mathopt
+
+from outages import Project, build
+
+feeders = [Project(&quot;K1&quot;, (2030, 2031), must_do=True), Project(&quot;K2&quot;, (2030, 2031)),
+           Project(&quot;K3&quot;, (2031, 2032)), Project(&quot;K4&quot;, (2030,)), Project(&quot;K5&quot;, (2032,))]
+crews = {2030: 2, 2031: 1, 2032: 1}
+shared = [(&quot;K2&quot;, &quot;K3&quot;)]
+
+
+def allowed(schedule):
+    model, x = build(feeders, crews, shared)
+    for (pid, t), var in x.items():
+        var.lower_bound = var.upper_bound = 1.0 if t in schedule.get(pid, []) else 0.0
+    return mathopt.solve(model, mathopt.SolverType.HIGHS).termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+print(&quot;K1 2030, K4 2030, K5 2032:&quot;, allowed({&quot;K1&quot;: [2030], &quot;K4&quot;: [2030], &quot;K5&quot;: [2032]}))
+print(&quot;K1 2030, K4 2030, K2 2030:&quot;, allowed({&quot;K1&quot;: [2030], &quot;K4&quot;: [2030], &quot;K2&quot;: [2030]}))
+print(&quot;K1 2030, K2 2031, K3 2031:&quot;, allowed({&quot;K1&quot;: [2030], &quot;K2&quot;: [2031], &quot;K3&quot;: [2031]}))
+print(&quot;K1 2030, K2 2030, K3 2031:&quot;, allowed({&quot;K1&quot;: [2030], &quot;K2&quot;: [2030], &quot;K3&quot;: [2031]}))
+print(&quot;K1 2031, K2 2031, K3 2031:&quot;, allowed({&quot;K1&quot;: [2031], &quot;K2&quot;: [2031], &quot;K3&quot;: [2031]}))
 </code></pre></figure></details>
 <h2 id="practice-prose-b10">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -246,10 +275,40 @@ if __name__ == &quot;__main__&quot;:
     model, x = build(feeders, {2027: 1, 2028: 2}, [(&quot;F2&quot;, &quot;F3&quot;)])
     print(len(list(model.linear_constraints())), &quot;rows&quot;)
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from ortools.math_opt.python import mathopt
+
+from outages import Project, build
+
+feeders = [Project(&quot;K1&quot;, (2030, 2031), must_do=True), Project(&quot;K2&quot;, (2030, 2031)),
+           Project(&quot;K3&quot;, (2031, 2032)), Project(&quot;K4&quot;, (2030,)), Project(&quot;K5&quot;, (2032,))]
+crews = {2030: 2, 2031: 1, 2032: 1}
+shared = [(&quot;K2&quot;, &quot;K3&quot;)]
+
+
+def allowed(schedule):
+    model, x = build(feeders, crews, shared)
+    for (pid, t), var in x.items():
+        var.lower_bound = var.upper_bound = 1.0 if t in schedule.get(pid, []) else 0.0
+    return mathopt.solve(model, mathopt.SolverType.HIGHS).termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+print(&quot;K1 2030, K4 2030, K5 2032:&quot;, allowed({&quot;K1&quot;: [2030], &quot;K4&quot;: [2030], &quot;K5&quot;: [2032]}))
+print(&quot;K1 2030, K4 2030, K2 2030:&quot;, allowed({&quot;K1&quot;: [2030], &quot;K4&quot;: [2030], &quot;K2&quot;: [2030]}))
+print(&quot;K1 2030, K2 2031, K3 2031:&quot;, allowed({&quot;K1&quot;: [2030], &quot;K2&quot;: [2031], &quot;K3&quot;: [2031]}))
+print(&quot;K1 2030, K2 2030, K3 2031:&quot;, allowed({&quot;K1&quot;: [2030], &quot;K2&quot;: [2030], &quot;K3&quot;: [2031]}))
+print(&quot;K1 2031, K2 2031, K3 2031:&quot;, allowed({&quot;K1&quot;: [2031], &quot;K2&quot;: [2031], &quot;K3&quot;: [2031]}))
+</code></pre></figure>
 </section>
 <section data-practice="06-formulation-craft/26-multi-period-timing/unit-01/practice-prose" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-1/outages.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-1/outages.py</code> and <code>practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-1/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-1/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>
@@ -366,6 +425,30 @@ if __name__ == &quot;__main__&quot;:
     values = {(&quot;W1&quot;, 2027): 0.0, (&quot;W1&quot;, 2028): 1.0, (&quot;W2&quot;, 2028): 0.0}
     found = read_starts(values, demo)
     print(found, deferrals(found, demo))
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from starts import Project, ScheduleError, deferrals, read_starts
+
+mains = [Project(&quot;R1&quot;, (2030, 2031)), Project(&quot;R2&quot;, (2030, 2031, 2032)), Project(&quot;R3&quot;, (2031,))]
+
+values = {(&quot;R1&quot;, 2030): 0.0, (&quot;R1&quot;, 2031): 0.9999998,
+          (&quot;R2&quot;, 2030): 0.0, (&quot;R2&quot;, 2031): 0.0, (&quot;R2&quot;, 2032): 1.0,
+          (&quot;R3&quot;, 2031): 2e-8}
+starts = read_starts(values, mains)
+print(&quot;start years:&quot;, starts)
+print(&quot;deferrals:&quot;, deferrals(starts, mains))
+
+half = dict(values)
+half[&quot;R3&quot;, 2031] = 0.5
+try:
+    print(&quot;with R3 at 0.5:&quot;, read_starts(half, mains))
+except ScheduleError as err:
+    print(&quot;with R3 at 0.5: ScheduleError&quot;, err)
 </code></pre></figure></details>
 <h2 id="practice-prose-2-b8">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -402,10 +485,35 @@ if __name__ == &quot;__main__&quot;:
     found = read_starts(values, demo)
     print(found, deferrals(found, demo))
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from starts import Project, ScheduleError, deferrals, read_starts
+
+mains = [Project(&quot;R1&quot;, (2030, 2031)), Project(&quot;R2&quot;, (2030, 2031, 2032)), Project(&quot;R3&quot;, (2031,))]
+
+values = {(&quot;R1&quot;, 2030): 0.0, (&quot;R1&quot;, 2031): 0.9999998,
+          (&quot;R2&quot;, 2030): 0.0, (&quot;R2&quot;, 2031): 0.0, (&quot;R2&quot;, 2032): 1.0,
+          (&quot;R3&quot;, 2031): 2e-8}
+starts = read_starts(values, mains)
+print(&quot;start years:&quot;, starts)
+print(&quot;deferrals:&quot;, deferrals(starts, mains))
+
+half = dict(values)
+half[&quot;R3&quot;, 2031] = 0.5
+try:
+    print(&quot;with R3 at 0.5:&quot;, read_starts(half, mains))
+except ScheduleError as err:
+    print(&quot;with R3 at 0.5: ScheduleError&quot;, err)
+</code></pre></figure>
 </section>
 <section data-practice="06-formulation-craft/26-multi-period-timing/unit-01/practice-prose-2" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-2/starts.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-2/starts.py</code> and <code>practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-2/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-2/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>

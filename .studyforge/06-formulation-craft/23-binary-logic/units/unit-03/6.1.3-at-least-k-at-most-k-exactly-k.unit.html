@@ -188,6 +188,42 @@ if __name__ == &quot;__main__&quot;:
     towers = [Tower(&quot;A1&quot;, &quot;Alder&quot;), Tower(&quot;A2&quot;, &quot;Alder&quot;), Tower(&quot;B1&quot;, &quot;Birch&quot;)]
     model, x, y = build(towers, {&quot;Alder&quot;: 1}, {}, {&quot;Alder&quot;: 2}, {&quot;A1&quot;: [&quot;A1-fiber&quot;, &quot;A1-radio&quot;]})
     print(len(list(model.linear_constraints())), &quot;rows&quot;)
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from grant import Tower, build
+
+# Towers in two counties, with hub H1 needing one backhaul link.
+towers = [Tower(f&quot;H{k}&quot;, &quot;Hill&quot;) for k in range(1, 4)] + [Tower(f&quot;V{k}&quot;, &quot;Vale&quot;) for k in range(1, 4)]
+need = {&quot;Hill&quot;: 2, &quot;Vale&quot;: 2}
+already = {&quot;Vale&quot;: 1}
+crew_limit = {&quot;Hill&quot;: 2}
+backhaul = {&quot;H1&quot;: [&quot;H1-fiber&quot;, &quot;H1-radio&quot;]}
+plan = {&quot;H1&quot;, &quot;H1-radio&quot;, &quot;H2&quot;, &quot;V1&quot;}
+
+
+def allowed(chosen):
+    model, x, y = build(towers, need, already, crew_limit, backhaul)
+    for key, var in {**x, **y}.items():
+        var.lower_bound = var.upper_bound = 1.0 if key in chosen else 0.0
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+print(&quot;H1 H1-radio H2 V1:&quot;, allowed(plan))
+print(&quot;without V1:&quot;, allowed(plan - {&quot;V1&quot;}))
+print(&quot;plus H3:&quot;, allowed(plan | {&quot;H3&quot;}))
+print(&quot;without H1-radio:&quot;, allowed(plan - {&quot;H1-radio&quot;}))
+print(&quot;plus H1-fiber:&quot;, allowed(plan | {&quot;H1-fiber&quot;}))
 </code></pre></figure></details>
 <h2 id="practice-prose-b10">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -226,10 +262,47 @@ if __name__ == &quot;__main__&quot;:
     model, x, y = build(towers, {&quot;Alder&quot;: 1}, {}, {&quot;Alder&quot;: 2}, {&quot;A1&quot;: [&quot;A1-fiber&quot;, &quot;A1-radio&quot;]})
     print(len(list(model.linear_constraints())), &quot;rows&quot;)
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from grant import Tower, build
+
+# Towers in two counties, with hub H1 needing one backhaul link.
+towers = [Tower(f&quot;H{k}&quot;, &quot;Hill&quot;) for k in range(1, 4)] + [Tower(f&quot;V{k}&quot;, &quot;Vale&quot;) for k in range(1, 4)]
+need = {&quot;Hill&quot;: 2, &quot;Vale&quot;: 2}
+already = {&quot;Vale&quot;: 1}
+crew_limit = {&quot;Hill&quot;: 2}
+backhaul = {&quot;H1&quot;: [&quot;H1-fiber&quot;, &quot;H1-radio&quot;]}
+plan = {&quot;H1&quot;, &quot;H1-radio&quot;, &quot;H2&quot;, &quot;V1&quot;}
+
+
+def allowed(chosen):
+    model, x, y = build(towers, need, already, crew_limit, backhaul)
+    for key, var in {**x, **y}.items():
+        var.lower_bound = var.upper_bound = 1.0 if key in chosen else 0.0
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+print(&quot;H1 H1-radio H2 V1:&quot;, allowed(plan))
+print(&quot;without V1:&quot;, allowed(plan - {&quot;V1&quot;}))
+print(&quot;plus H3:&quot;, allowed(plan | {&quot;H3&quot;}))
+print(&quot;without H1-radio:&quot;, allowed(plan - {&quot;H1-radio&quot;}))
+print(&quot;plus H1-fiber:&quot;, allowed(plan | {&quot;H1-fiber&quot;}))
+</code></pre></figure>
 </section>
 <section data-practice="06-formulation-craft/23-binary-logic/unit-03/practice-prose" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-1/grant.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-1/grant.py</code> and <code>practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-1/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-1/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>
@@ -362,6 +435,47 @@ if __name__ == &quot;__main__&quot;:
     projects = [Project(&quot;F1&quot;, 6, 50), Project(&quot;F2&quot;, 5, 40), Project(&quot;F3&quot;, 0, 25)]
     model, x = build(projects, 10, 30, 20, 200)
     print(len(list(model.linear_constraints())), &quot;rows&quot;)
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from order import Project, build
+
+# Substation projects: id, transformers needed, cost ($k). Order 8 to 20 units, fee 15.
+projects = [Project(&quot;K1&quot;, 5, 40), Project(&quot;K2&quot;, 4, 35), Project(&quot;K3&quot;, 3, 20),
+            Project(&quot;K4&quot;, 9, 70), Project(&quot;K5&quot;, 0, 10)]
+
+
+def solved(model):
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+def fix(variables, plan):
+    for key, var in variables.items():
+        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0
+
+
+def allowed(plan, budget=5_000):
+    model, x = build(projects, 8, 20, 15, budget)
+    fix(x, plan)
+    return solved(model)
+
+
+print(&quot;K1+K2:&quot;, allowed({&quot;K1&quot;, &quot;K2&quot;}))
+print(&quot;K1 alone:&quot;, allowed({&quot;K1&quot;}))
+print(&quot;K1+K2+K3+K4:&quot;, allowed({&quot;K1&quot;, &quot;K2&quot;, &quot;K3&quot;, &quot;K4&quot;}))
+print(&quot;K1+K3 at budget 70:&quot;, allowed({&quot;K1&quot;, &quot;K3&quot;}, 70))
+print(&quot;K1+K3 at budget 80:&quot;, allowed({&quot;K1&quot;, &quot;K3&quot;}, 80))
+print(&quot;K5 at budget 10:&quot;, allowed({&quot;K5&quot;}, 10))
 </code></pre></figure></details>
 <h2 id="practice-prose-2-b10">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -399,10 +513,52 @@ if __name__ == &quot;__main__&quot;:
     model, x = build(projects, 10, 30, 20, 200)
     print(len(list(model.linear_constraints())), &quot;rows&quot;)
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from order import Project, build
+
+# Substation projects: id, transformers needed, cost ($k). Order 8 to 20 units, fee 15.
+projects = [Project(&quot;K1&quot;, 5, 40), Project(&quot;K2&quot;, 4, 35), Project(&quot;K3&quot;, 3, 20),
+            Project(&quot;K4&quot;, 9, 70), Project(&quot;K5&quot;, 0, 10)]
+
+
+def solved(model):
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+def fix(variables, plan):
+    for key, var in variables.items():
+        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0
+
+
+def allowed(plan, budget=5_000):
+    model, x = build(projects, 8, 20, 15, budget)
+    fix(x, plan)
+    return solved(model)
+
+
+print(&quot;K1+K2:&quot;, allowed({&quot;K1&quot;, &quot;K2&quot;}))
+print(&quot;K1 alone:&quot;, allowed({&quot;K1&quot;}))
+print(&quot;K1+K2+K3+K4:&quot;, allowed({&quot;K1&quot;, &quot;K2&quot;, &quot;K3&quot;, &quot;K4&quot;}))
+print(&quot;K1+K3 at budget 70:&quot;, allowed({&quot;K1&quot;, &quot;K3&quot;}, 70))
+print(&quot;K1+K3 at budget 80:&quot;, allowed({&quot;K1&quot;, &quot;K3&quot;}, 80))
+print(&quot;K5 at budget 10:&quot;, allowed({&quot;K5&quot;}, 10))
+</code></pre></figure>
 </section>
 <section data-practice="06-formulation-craft/23-binary-logic/unit-03/practice-prose-2" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-2/order.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-2/order.py</code> and <code>practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-2/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-2/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>

@@ -141,6 +141,42 @@ def build(buses: list[Bus], chargers: int, max_age: int) -&gt; tuple[mathopt.Mod
 if __name__ == &quot;__main__&quot;:
     model, y = build([Bus(&quot;B1&quot;, 9), Bus(&quot;B2&quot;, 18)], chargers=1, max_age=15)
     print(model.get_num_linear_constraints(), &quot;rows&quot;)
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from fleet import Bus, build
+
+buses = [Bus(&quot;V1&quot;, 3), Bus(&quot;V2&quot;, 12), Bus(&quot;V3&quot;, 12), Bus(&quot;V4&quot;, 19)]
+
+def solve_ok(model):
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+def allowed(plan):
+    model, y = build(buses, 1, 12)
+    for (bid, option), var in y.items():
+        value = 1.0 if plan.get(bid) == option else 0.0
+        if value &gt; var.upper_bound:
+            return False
+        var.lower_bound = var.upper_bound = value
+    return solve_ok(model)
+
+
+base = {&quot;V1&quot;: &quot;keep&quot;, &quot;V2&quot;: &quot;keep&quot;, &quot;V3&quot;: &quot;electric&quot;, &quot;V4&quot;: &quot;diesel&quot;}
+print(&quot;V1 keep, V2 keep, V3 electric, V4 diesel:&quot;, allowed(base))
+print(&quot;same with V4 keep:&quot;, allowed({**base, &quot;V4&quot;: &quot;keep&quot;}))
+print(&quot;same with V1 electric:&quot;, allowed({**base, &quot;V1&quot;: &quot;electric&quot;}))
+print(&quot;same with V2 missing:&quot;, allowed({b: o for b, o in base.items() if b != &quot;V2&quot;}))
 </code></pre></figure></details>
 <h2 id="practice-prose-b10">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -175,10 +211,47 @@ if __name__ == &quot;__main__&quot;:
     model, y = build([Bus(&quot;B1&quot;, 9), Bus(&quot;B2&quot;, 18)], chargers=1, max_age=15)
     print(model.get_num_linear_constraints(), &quot;rows&quot;)
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from fleet import Bus, build
+
+buses = [Bus(&quot;V1&quot;, 3), Bus(&quot;V2&quot;, 12), Bus(&quot;V3&quot;, 12), Bus(&quot;V4&quot;, 19)]
+
+def solve_ok(model):
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+def allowed(plan):
+    model, y = build(buses, 1, 12)
+    for (bid, option), var in y.items():
+        value = 1.0 if plan.get(bid) == option else 0.0
+        if value &gt; var.upper_bound:
+            return False
+        var.lower_bound = var.upper_bound = value
+    return solve_ok(model)
+
+
+base = {&quot;V1&quot;: &quot;keep&quot;, &quot;V2&quot;: &quot;keep&quot;, &quot;V3&quot;: &quot;electric&quot;, &quot;V4&quot;: &quot;diesel&quot;}
+print(&quot;V1 keep, V2 keep, V3 electric, V4 diesel:&quot;, allowed(base))
+print(&quot;same with V4 keep:&quot;, allowed({**base, &quot;V4&quot;: &quot;keep&quot;}))
+print(&quot;same with V1 electric:&quot;, allowed({**base, &quot;V1&quot;: &quot;electric&quot;}))
+print(&quot;same with V2 missing:&quot;, allowed({b: o for b, o in base.items() if b != &quot;V2&quot;}))
+</code></pre></figure>
 </section>
 <section data-practice="06-formulation-craft/27-dependencies-and-groups/unit-03/practice-prose" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-03/practice-1/fleet.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-03/practice-1/fleet.py</code> and <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-03/practice-1/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-03/practice-1/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>
@@ -290,6 +363,42 @@ def build(roofs: dict[str, tuple[tuple[int, ...], tuple[int, ...]]], gap: int,
 if __name__ == &quot;__main__&quot;:
     model, patch, replace = build({&quot;LIB&quot;: ((2027, 2028), (2029, 2030))}, gap=2, warranty=3)
     print(model.get_num_linear_constraints(), &quot;rows&quot;)
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from roofs import build
+
+# Two dormitory roofs, 2027 to 2034.
+years = tuple(range(2027, 2035))
+roofs = {&quot;DORM-A&quot;: (years, years), &quot;DORM-B&quot;: ((2027, 2028), (2031, 2032, 2033))}
+
+def accepted(model):
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+def allowed(patches, replacements, gap=2, warranty=3):
+    model, patch, replace = build(roofs, gap, warranty)
+    for chosen, variables in ((patches, patch), (replacements, replace)):
+        for key, var in variables.items():
+            var.lower_bound = var.upper_bound = 1.0 if key in chosen else 0.0
+    return accepted(model)
+
+
+print(&quot;DORM-A patch 2028, replace 2030:&quot;, allowed({(&quot;DORM-A&quot;, 2028)}, {(&quot;DORM-A&quot;, 2030)}))
+print(&quot;DORM-A patch 2028, replace 2029:&quot;, allowed({(&quot;DORM-A&quot;, 2028)}, {(&quot;DORM-A&quot;, 2029)}))
+print(&quot;DORM-A replace 2029, patch 2032:&quot;, allowed({(&quot;DORM-A&quot;, 2032)}, {(&quot;DORM-A&quot;, 2029)}))
+print(&quot;DORM-A replace 2029, patch 2033:&quot;, allowed({(&quot;DORM-A&quot;, 2033)}, {(&quot;DORM-A&quot;, 2029)}))
+print(&quot;DORM-B patch 2027, replace 2031:&quot;, allowed({(&quot;DORM-B&quot;, 2027)}, {(&quot;DORM-B&quot;, 2031)}))
 </code></pre></figure></details>
 <h2 id="practice-prose-2-b10">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -320,10 +429,47 @@ if __name__ == &quot;__main__&quot;:
     model, patch, replace = build({&quot;LIB&quot;: ((2027, 2028), (2029, 2030))}, gap=2, warranty=3)
     print(model.get_num_linear_constraints(), &quot;rows&quot;)
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from roofs import build
+
+# Two dormitory roofs, 2027 to 2034.
+years = tuple(range(2027, 2035))
+roofs = {&quot;DORM-A&quot;: (years, years), &quot;DORM-B&quot;: ((2027, 2028), (2031, 2032, 2033))}
+
+def accepted(model):
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+def allowed(patches, replacements, gap=2, warranty=3):
+    model, patch, replace = build(roofs, gap, warranty)
+    for chosen, variables in ((patches, patch), (replacements, replace)):
+        for key, var in variables.items():
+            var.lower_bound = var.upper_bound = 1.0 if key in chosen else 0.0
+    return accepted(model)
+
+
+print(&quot;DORM-A patch 2028, replace 2030:&quot;, allowed({(&quot;DORM-A&quot;, 2028)}, {(&quot;DORM-A&quot;, 2030)}))
+print(&quot;DORM-A patch 2028, replace 2029:&quot;, allowed({(&quot;DORM-A&quot;, 2028)}, {(&quot;DORM-A&quot;, 2029)}))
+print(&quot;DORM-A replace 2029, patch 2032:&quot;, allowed({(&quot;DORM-A&quot;, 2032)}, {(&quot;DORM-A&quot;, 2029)}))
+print(&quot;DORM-A replace 2029, patch 2033:&quot;, allowed({(&quot;DORM-A&quot;, 2033)}, {(&quot;DORM-A&quot;, 2029)}))
+print(&quot;DORM-B patch 2027, replace 2031:&quot;, allowed({(&quot;DORM-B&quot;, 2027)}, {(&quot;DORM-B&quot;, 2031)}))
+</code></pre></figure>
 </section>
 <section data-practice="06-formulation-craft/27-dependencies-and-groups/unit-03/practice-prose-2" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-03/practice-2/roofs.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-03/practice-2/roofs.py</code> and <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-03/practice-2/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-03/practice-2/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>

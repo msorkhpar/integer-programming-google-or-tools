@@ -190,6 +190,49 @@ if __name__ == &quot;__main__&quot;:
                 Project(&quot;TRK&quot;, (2027, 2028))]
     model, x = build(projects, [[&quot;SIG1&quot;, &quot;SIG2&quot;]], {&quot;PLAT&quot;: [&quot;TRK&quot;]})
     print(model.get_num_linear_constraints(), &quot;rows&quot;)
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from rail import Project, build
+
+works = [
+    Project(&quot;SIG-X1&quot;, (2031, 2032)),
+    Project(&quot;SIG-X2&quot;, (2032, 2033)),
+    Project(&quot;STN-E&quot;, (2032, 2033)),
+    Project(&quot;TRK-9&quot;, (2031, 2032, 2033)),
+]
+blocks = [[&quot;SIG-X1&quot;, &quot;SIG-X2&quot;]]
+platforms = {&quot;STN-E&quot;: [&quot;TRK-9&quot;]}
+
+def solve_ok(model):
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+def allowed(plan):
+    model, x = build(works, blocks, platforms)
+    for key, var in x.items():
+        value = 1.0 if key in plan else 0.0
+        if value &gt; var.upper_bound:
+            return False
+        var.lower_bound = var.upper_bound = value
+    return solve_ok(model)
+
+
+print(&quot;SIG-X1 and SIG-X2 in 2032:&quot;, allowed({(&quot;SIG-X1&quot;, 2032), (&quot;SIG-X2&quot;, 2032)}))
+print(&quot;SIG-X1 in 2031 alone:&quot;, allowed({(&quot;SIG-X1&quot;, 2031)}))
+print(&quot;SIG-X1 2031, SIG-X2 2032:&quot;, allowed({(&quot;SIG-X1&quot;, 2031), (&quot;SIG-X2&quot;, 2032)}))
+print(&quot;TRK-9 2031, STN-E 2032:&quot;, allowed({(&quot;TRK-9&quot;, 2031), (&quot;STN-E&quot;, 2032)}))
+print(&quot;TRK-9 2032, STN-E 2032:&quot;, allowed({(&quot;TRK-9&quot;, 2032), (&quot;STN-E&quot;, 2032)}))
 </code></pre></figure></details>
 <h2 id="practice-prose-b11">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -228,10 +271,54 @@ if __name__ == &quot;__main__&quot;:
     model, x = build(projects, [[&quot;SIG1&quot;, &quot;SIG2&quot;]], {&quot;PLAT&quot;: [&quot;TRK&quot;]})
     print(model.get_num_linear_constraints(), &quot;rows&quot;)
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from rail import Project, build
+
+works = [
+    Project(&quot;SIG-X1&quot;, (2031, 2032)),
+    Project(&quot;SIG-X2&quot;, (2032, 2033)),
+    Project(&quot;STN-E&quot;, (2032, 2033)),
+    Project(&quot;TRK-9&quot;, (2031, 2032, 2033)),
+]
+blocks = [[&quot;SIG-X1&quot;, &quot;SIG-X2&quot;]]
+platforms = {&quot;STN-E&quot;: [&quot;TRK-9&quot;]}
+
+def solve_ok(model):
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+def allowed(plan):
+    model, x = build(works, blocks, platforms)
+    for key, var in x.items():
+        value = 1.0 if key in plan else 0.0
+        if value &gt; var.upper_bound:
+            return False
+        var.lower_bound = var.upper_bound = value
+    return solve_ok(model)
+
+
+print(&quot;SIG-X1 and SIG-X2 in 2032:&quot;, allowed({(&quot;SIG-X1&quot;, 2032), (&quot;SIG-X2&quot;, 2032)}))
+print(&quot;SIG-X1 in 2031 alone:&quot;, allowed({(&quot;SIG-X1&quot;, 2031)}))
+print(&quot;SIG-X1 2031, SIG-X2 2032:&quot;, allowed({(&quot;SIG-X1&quot;, 2031), (&quot;SIG-X2&quot;, 2032)}))
+print(&quot;TRK-9 2031, STN-E 2032:&quot;, allowed({(&quot;TRK-9&quot;, 2031), (&quot;STN-E&quot;, 2032)}))
+print(&quot;TRK-9 2032, STN-E 2032:&quot;, allowed({(&quot;TRK-9&quot;, 2032), (&quot;STN-E&quot;, 2032)}))
+</code></pre></figure>
 </section>
 <section data-practice="06-formulation-craft/27-dependencies-and-groups/unit-02/practice-prose" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-02/practice-1/rail.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-02/practice-1/rail.py</code> and <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-02/practice-1/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-02/practice-1/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>
@@ -333,6 +420,30 @@ def implied_required(projects: dict[str, Project], required: set[str]) -&gt; set
 if __name__ == &quot;__main__&quot;:
     projects = {&quot;MAIN&quot;: Project(500), &quot;PUMP&quot;: Project(200, (&quot;MAIN&quot;,))}
     print(entry_cost(projects, &quot;PUMP&quot;), implied_required(projects, {&quot;PUMP&quot;}))
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from entry import Project, entry_cost, implied_required
+
+# HALL needs ROOF and WALLS; ROOF needs WALLS; WALLS needs SITE. FENCE needs GATE.
+works = {
+    &quot;SITE&quot;: Project(500),
+    &quot;WALLS&quot;: Project(250, (&quot;SITE&quot;,)),
+    &quot;ROOF&quot;: Project(120, (&quot;WALLS&quot;,)),
+    &quot;HALL&quot;: Project(80, (&quot;ROOF&quot;, &quot;WALLS&quot;)),
+    &quot;GATE&quot;: Project(15),
+    &quot;FENCE&quot;: Project(35, (&quot;GATE&quot;,)),
+}
+
+print(&quot;entry cost of GATE:&quot;, entry_cost(works, &quot;GATE&quot;))
+print(&quot;entry cost of FENCE:&quot;, entry_cost(works, &quot;FENCE&quot;))
+print(&quot;entry cost of HALL:&quot;, entry_cost(works, &quot;HALL&quot;))
+print(&quot;implied by {ROOF}:&quot;, sorted(implied_required(works, {&quot;ROOF&quot;})))
+print(&quot;implied by {FENCE, SITE}:&quot;, sorted(implied_required(works, {&quot;FENCE&quot;, &quot;SITE&quot;})))
 </code></pre></figure></details>
 <h2 id="practice-prose-2-b7">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -362,10 +473,35 @@ if __name__ == &quot;__main__&quot;:
     projects = {&quot;MAIN&quot;: Project(500), &quot;PUMP&quot;: Project(200, (&quot;MAIN&quot;,))}
     print(entry_cost(projects, &quot;PUMP&quot;), implied_required(projects, {&quot;PUMP&quot;}))
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from entry import Project, entry_cost, implied_required
+
+# HALL needs ROOF and WALLS; ROOF needs WALLS; WALLS needs SITE. FENCE needs GATE.
+works = {
+    &quot;SITE&quot;: Project(500),
+    &quot;WALLS&quot;: Project(250, (&quot;SITE&quot;,)),
+    &quot;ROOF&quot;: Project(120, (&quot;WALLS&quot;,)),
+    &quot;HALL&quot;: Project(80, (&quot;ROOF&quot;, &quot;WALLS&quot;)),
+    &quot;GATE&quot;: Project(15),
+    &quot;FENCE&quot;: Project(35, (&quot;GATE&quot;,)),
+}
+
+print(&quot;entry cost of GATE:&quot;, entry_cost(works, &quot;GATE&quot;))
+print(&quot;entry cost of FENCE:&quot;, entry_cost(works, &quot;FENCE&quot;))
+print(&quot;entry cost of HALL:&quot;, entry_cost(works, &quot;HALL&quot;))
+print(&quot;implied by {ROOF}:&quot;, sorted(implied_required(works, {&quot;ROOF&quot;})))
+print(&quot;implied by {FENCE, SITE}:&quot;, sorted(implied_required(works, {&quot;FENCE&quot;, &quot;SITE&quot;})))
+</code></pre></figure>
 </section>
 <section data-practice="06-formulation-craft/27-dependencies-and-groups/unit-02/practice-prose-2" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-02/practice-2/entry.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-02/practice-2/entry.py</code> and <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-02/practice-2/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-02/practice-2/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>

@@ -220,6 +220,31 @@ if __name__ == &quot;__main__&quot;:
     model.add_linear_constraint(order &lt;= 500, name=&quot;storage&quot;)
     model.maximize(2 * refund - order)
     print(free_to_grow(model))
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+from ortools.math_opt.python import mathopt
+
+from growth import free_to_grow
+
+m = mathopt.Model()
+nurses = m.add_variable(lb=0, ub=25, name=&quot;nurses&quot;)
+grant = m.add_variable(lb=0, name=&quot;grant&quot;)
+overtime = m.add_variable(lb=0, name=&quot;overtime&quot;)
+loan = m.add_variable(lb=-10, ub=float(&quot;inf&quot;), name=&quot;loan&quot;)
+m.add_linear_constraint(overtime - nurses &lt;= 30, name=&quot;overtime_cap&quot;)
+m.maximize(4 * nurses + 2 * grant + overtime - loan)
+
+print(&quot;free to grow:&quot;, free_to_grow(m))
+grant.upper_bound = 500
+print(&quot;with grant capped at 500:&quot;, free_to_grow(m))
+m.minimize(4 * nurses + 2 * grant + overtime - loan)
+print(&quot;same terms, minimized:&quot;, free_to_grow(m))
 </code></pre></figure></details>
 <h2 id="practice-prose-b8">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -244,10 +269,36 @@ if __name__ == &quot;__main__&quot;:
     model.maximize(2 * refund - order)
     print(free_to_grow(model))
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+from ortools.math_opt.python import mathopt
+
+from growth import free_to_grow
+
+m = mathopt.Model()
+nurses = m.add_variable(lb=0, ub=25, name=&quot;nurses&quot;)
+grant = m.add_variable(lb=0, name=&quot;grant&quot;)
+overtime = m.add_variable(lb=0, name=&quot;overtime&quot;)
+loan = m.add_variable(lb=-10, ub=float(&quot;inf&quot;), name=&quot;loan&quot;)
+m.add_linear_constraint(overtime - nurses &lt;= 30, name=&quot;overtime_cap&quot;)
+m.maximize(4 * nurses + 2 * grant + overtime - loan)
+
+print(&quot;free to grow:&quot;, free_to_grow(m))
+grant.upper_bound = 500
+print(&quot;with grant capped at 500:&quot;, free_to_grow(m))
+m.minimize(4 * nurses + 2 * grant + overtime - loan)
+print(&quot;same terms, minimized:&quot;, free_to_grow(m))
+</code></pre></figure>
 </section>
 <section data-practice="09-diagnostics-and-explainability/37-infeasibility/unit-01/practice-prose" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-1/growth.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-1/growth.py</code> and <code>practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-1/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-1/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>
@@ -351,6 +402,32 @@ def next_step(result: mathopt.SolveResult, max_gap: float) -&gt; str:
 if __name__ == &quot;__main__&quot;:
     done = mathopt.SolveResult(termination=mathopt.Termination(reason=R.OPTIMAL))
     print(next_step(done, 0.01))
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+from ortools.math_opt.python import mathopt
+
+from guard import next_step
+
+R = mathopt.TerminationReason
+
+
+def ended(reason, limit=None, primal=0.0, dual=0.0):
+    bounds = mathopt.ObjectiveBounds(primal_bound=primal, dual_bound=dual)
+    return mathopt.SolveResult(termination=mathopt.Termination(reason=reason, limit=limit, objective_bounds=bounds))
+
+
+print(&quot;optimal at 310:&quot;, next_step(ended(R.OPTIMAL, primal=310.0, dual=310.0), 0.02))
+print(&quot;feasible 300 vs bound 303, max gap 2%:&quot;, next_step(ended(R.FEASIBLE, mathopt.Limit.TIME, 300.0, 303.0), 0.02))
+print(&quot;feasible 300 vs bound 330, max gap 2%:&quot;, next_step(ended(R.FEASIBLE, mathopt.Limit.TIME, 300.0, 330.0), 0.02))
+print(&quot;infeasible:&quot;, next_step(ended(R.INFEASIBLE), 0.02))
+print(&quot;infeasible or unbounded:&quot;, next_step(ended(R.INFEASIBLE_OR_UNBOUNDED), 0.02))
+print(&quot;no solution, node limit:&quot;, next_step(ended(R.NO_SOLUTION_FOUND, mathopt.Limit.NODE), 0.02))
 </code></pre></figure></details>
 <h2 id="practice-prose-2-b7">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -370,10 +447,37 @@ if __name__ == &quot;__main__&quot;:
     done = mathopt.SolveResult(termination=mathopt.Termination(reason=R.OPTIMAL))
     print(next_step(done, 0.01))
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+from ortools.math_opt.python import mathopt
+
+from guard import next_step
+
+R = mathopt.TerminationReason
+
+
+def ended(reason, limit=None, primal=0.0, dual=0.0):
+    bounds = mathopt.ObjectiveBounds(primal_bound=primal, dual_bound=dual)
+    return mathopt.SolveResult(termination=mathopt.Termination(reason=reason, limit=limit, objective_bounds=bounds))
+
+
+print(&quot;optimal at 310:&quot;, next_step(ended(R.OPTIMAL, primal=310.0, dual=310.0), 0.02))
+print(&quot;feasible 300 vs bound 303, max gap 2%:&quot;, next_step(ended(R.FEASIBLE, mathopt.Limit.TIME, 300.0, 303.0), 0.02))
+print(&quot;feasible 300 vs bound 330, max gap 2%:&quot;, next_step(ended(R.FEASIBLE, mathopt.Limit.TIME, 300.0, 330.0), 0.02))
+print(&quot;infeasible:&quot;, next_step(ended(R.INFEASIBLE), 0.02))
+print(&quot;infeasible or unbounded:&quot;, next_step(ended(R.INFEASIBLE_OR_UNBOUNDED), 0.02))
+print(&quot;no solution, node limit:&quot;, next_step(ended(R.NO_SOLUTION_FOUND, mathopt.Limit.NODE), 0.02))
+</code></pre></figure>
 </section>
 <section data-practice="09-diagnostics-and-explainability/37-infeasibility/unit-01/practice-prose-2" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-2/guard.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-2/guard.py</code> and <code>practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-2/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-2/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>
