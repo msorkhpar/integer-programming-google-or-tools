@@ -5,6 +5,7 @@
     python3 scripts/exercises.py readings 01-optimization-mindset          # what the quiz readers must answer
     python3 scripts/exercises.py record Q2.json,... Q13.json,... '<page-free reader>' '<page reader>'
     python3 scripts/exercises.py ship 01-optimization-mindset 26-multi-period-timing
+    python3 scripts/exercises.py regate 01-optimization-mindset            # re-gate shipped practices in place
 
 Each practice is written once, as files, under `exercise-src/<module>/<lesson>/`:
 
@@ -304,6 +305,41 @@ def ship(slugs: list[str]) -> int:
     return 1 if authored.shortfalls else 0
 
 
+def regate(slugs: list[str]) -> int:
+    """Gate every shipped page again and write its code practices' bundles back in place.
+
+    `ship` is additive: a page it already shipped is reused, never re-gated. After a change to the
+    practices' sources (a try-it file added to each), this gates each page once more and writes
+    the files of each code practice that clears over the bundle it replaces. A page whose gated
+    practices are not exactly the bundles it shipped is refused and nothing of it is written.
+    """
+    from studyforge.skills.exercises.corpus import carried_practices
+    material, graders = material_and_graders(slugs)
+    ledger = take(ROOT, material, graders, "the course ledger")
+    run = InRunner()
+    failed = 0
+    for page in (p for s in slugs for p in pages_of(s)):
+        where = f"the page '{page.path}'"
+        outcome = author_page(page, ledger, Author(), judge, run, source=SOURCE, where=where,
+                              carried=carried_practices(ROOT, page, where))
+        code = [g for g in outcome.shipped if (ROOT / g.places.bundle / "bundle.json").exists()
+                and json.loads(text(ROOT / g.places.bundle / "bundle.json")).get("main_file")]
+        on_disk = sorted(str(b.parent.relative_to(ROOT)) for b in ROOT.glob(f"exercises/**/{page.path.split('/')[0]}/"
+                         f"{page.variant}/unit-{page.unit:02d}/practice-*/bundle.json")
+                         if json.loads(text(b)).get("main_file"))
+        if outcome.shortfalls or sorted(str(g.places.bundle) for g in code) != on_disk:
+            failed += 1
+            print(page.path, "NOT WRITTEN", outcome_summary(outcome), "on disk:", on_disk, flush=True)
+            continue
+        for gated in code:
+            for path, data in gated.files:
+                target = ROOT / path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(data)
+        print(page.path, f"rewrote {len(code)}", flush=True)
+    return 1 if failed else 0
+
+
 Q1_PROMPT = ("Read the whole lesson page, then this question. Using only what the page states, which option "
              "does the page decide is correct? Quote or cite the deciding passage.")
 Q3_PROMPT = ("Using only what the lesson page states, does a passage of the page rule this option out? "
@@ -362,6 +398,8 @@ def main(argv: list[str]) -> int:
         return 0
     if verb == "ship":
         return ship(args)
+    if verb == "regate":
+        return regate(args)
     if verb == "record":
         # record <q2 files,comma> <q13 files,comma> <q2 reader label> <page reader label>
         return record_readings(args[0].split(","), args[1].split(","), args[2], args[3])
