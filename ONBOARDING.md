@@ -18,7 +18,7 @@ manifest, not this file: a regeneration writes over it.
 The framework is the `studyforge` library, installed into the Python that
 runs these commands — never a submodule, and never a checkout this
 repository reaches by path. This corpus is pinned to `studyforge` version
-`0.1.0`, built from commit `865d47c8d64fcf5dbcbc919fb4e4d0fba14a98be`.
+`0.1.0`, built from commit `0d2810ec0e98438f1bc1830bdd2dbb2deb3d453d`.
 The library is not published to a package index: build a wheel from the
 framework at that commit and install it, for example with
 `python3 -m pip install --no-index <the wheel>`.
