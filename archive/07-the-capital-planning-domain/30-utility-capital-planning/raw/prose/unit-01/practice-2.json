@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Which program envelopes a water utility's requests break",
   "blocks": [
     {
@@ -51,6 +51,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Request:\n    rid: str\n    program: str\n    start: int\n    profile: tuple[int, ...]          # $k spent in each year of work, from `start` on\n\n\ndef requested_by_year(requests: list[Request], programs: list[str], years: list[int]) -> dict[str, dict[int, int]]:\n    \"\"\"Program -> year -> $k the requests would spend there, with a 0 for every empty cell.\"\"\"\n    table = {g: {y: 0 for y in years} for g in programs}\n    for r in requests:\n        if r.program not in table:\n            continue\n        for k, amount in enumerate(r.profile):\n            if r.start + k in table[r.program]:\n                table[r.program][r.start + k] += amount\n    return table\n\n\ndef oversubscribed(requests: list[Request], envelopes: dict[tuple[str, int], int]) -> list[tuple[str, int, int, int]]:\n    \"\"\"(program, year, requested, excess) for every envelope the requests exceed, sorted.\"\"\"\n    programs = sorted({g for g, _ in envelopes})\n    years = sorted({y for _, y in envelopes})\n    table = requested_by_year(requests, programs, years)\n    over = []\n    for (g, y), cap in sorted(envelopes.items()):\n        if table[g][y] > cap:\n            over.append((g, y, table[g][y], table[g][y] - cap))\n    return over\n\n\nif __name__ == \"__main__\":\n    reqs = [Request(\"M1\", \"mains\", 2027, (300, 200)), Request(\"T1\", \"treatment\", 2028, (900,))]\n    print(requested_by_year(reqs, [\"mains\", \"treatment\"], [2027, 2028]))\n    print(oversubscribed(reqs, {(\"mains\", 2027): 250, (\"treatment\", 2028): 1_000}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom envelopes import Request, oversubscribed, requested_by_year\n\nreqs = [Request(\"P1\", \"pumps\", 2030, (200, 100)), Request(\"P2\", \"pumps\", 2031, (250,)),\n        Request(\"R1\", \"reservoirs\", 2030, (500, 500, 300))]\nyears = [2030, 2031, 2032]\n\ntable = requested_by_year(reqs, [\"pumps\", \"reservoirs\"], years)\nprint(\"pumps by year:\", table[\"pumps\"])\nprint(\"reservoirs by year:\", table[\"reservoirs\"])\nenvelopes = {(\"pumps\", 2030): 300, (\"pumps\", 2031): 300, (\"reservoirs\", 2030): 450, (\"reservoirs\", 2032): 400}\nprint(\"over the envelopes:\", oversubscribed(reqs, envelopes))\n"
         }
       ]
     },
@@ -63,6 +72,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Request:\n    rid: str\n    program: str\n    start: int\n    profile: tuple[int, ...]          # $k spent in each year of work, from `start` on\n\n\ndef requested_by_year(requests: list[Request], programs: list[str], years: list[int]) -> dict[str, dict[int, int]]:\n    \"\"\"Program -> year -> $k the requests would spend there, with a 0 for every empty cell.\"\"\"\n    # TODO: spread each request's profile over the years it is worked. The zeros are placeholders.\n    return {g: {y: 0 for y in years} for g in programs}\n\n\ndef oversubscribed(requests: list[Request], envelopes: dict[tuple[str, int], int]) -> list[tuple[str, int, int, int]]:\n    \"\"\"(program, year, requested, excess) for every envelope the requests exceed, sorted.\"\"\"\n    # TODO: compare each envelope with what is requested in its program and year.\n    return []\n\n\nif __name__ == \"__main__\":\n    reqs = [Request(\"M1\", \"mains\", 2027, (300, 200)), Request(\"T1\", \"treatment\", 2028, (900,))]\n    print(requested_by_year(reqs, [\"mains\", \"treatment\"], [2027, 2028]))\n    print(oversubscribed(reqs, {(\"mains\", 2027): 250, (\"treatment\", 2028): 1_000}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom envelopes import Request, oversubscribed, requested_by_year\n\nreqs = [Request(\"P1\", \"pumps\", 2030, (200, 100)), Request(\"P2\", \"pumps\", 2031, (250,)),\n        Request(\"R1\", \"reservoirs\", 2030, (500, 500, 300))]\nyears = [2030, 2031, 2032]\n\ntable = requested_by_year(reqs, [\"pumps\", \"reservoirs\"], years)\nprint(\"pumps by year:\", table[\"pumps\"])\nprint(\"reservoirs by year:\", table[\"reservoirs\"])\nenvelopes = {(\"pumps\", 2030): 300, (\"pumps\", 2031): 300, (\"reservoirs\", 2030): 450, (\"reservoirs\", 2032): 400}\nprint(\"over the envelopes:\", oversubscribed(reqs, envelopes))\n"
     }
   ],
   "video": null,
@@ -70,8 +88,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -81,14 +99,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "e9208c42da6230dec5aeecd99a42cbd9f63dd4271e82c0d52cc26af8fdd16d95",
+  "content_sha256": "e10d9b795595257fd914f2a483bdd19a7aaed961cf4a2908b0cd9eea18bd91d6",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Request:\n    rid: str\n    program: str\n    start: int\n    profile: tuple[int, ...]          # $k spent in each year of work, from `start` on\n\n\ndef requested_by_year(requests: list[Request], programs: list[str], years: list[int]) -> dict[str, dict[int, int]]:\n    \"\"\"Program -> year -> $k the requests would spend there, with a 0 for every empty cell.\"\"\"\n    # TODO: spread each request's profile over the years it is worked. The zeros are placeholders.\n    return {g: {y: 0 for y in years} for g in programs}\n\n\ndef oversubscribed(requests: list[Request], envelopes: dict[tuple[str, int], int]) -> list[tuple[str, int, int, int]]:\n    \"\"\"(program, year, requested, excess) for every envelope the requests exceed, sorted.\"\"\"\n    # TODO: compare each envelope with what is requested in its program and year.\n    return []\n\n\nif __name__ == \"__main__\":\n    reqs = [Request(\"M1\", \"mains\", 2027, (300, 200)), Request(\"T1\", \"treatment\", 2028, (900,))]\n    print(requested_by_year(reqs, [\"mains\", \"treatment\"], [2027, 2028]))\n    print(oversubscribed(reqs, {(\"mains\", 2027): 250, (\"treatment\", 2028): 1_000}))\n",
   "exercise": {
     "main_path": "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-01/practice-2/envelopes.py",
     "test_path": "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-01/practice-2/test_envelopes.py",
     "run_command": [
       "python3",
-      "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-01/practice-2/envelopes.py"
+      "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -139,6 +157,10 @@
     },
     "concepts": [
       "requests are totalled by program and year and compared with the envelopes set before selection"
-    ]
+    ],
+    "files": [
+      "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-01/practice-2/try_it.py"
   }
 }

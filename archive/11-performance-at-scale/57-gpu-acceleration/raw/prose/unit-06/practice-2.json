@@ -9,7 +9,7 @@
   "unit": 6,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "What a GPU answer may be used for",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\n\ndef usable(use: str, gpu: dict, cpu: dict) -> tuple[bool, object]:\n    \"\"\"May a GPU answer serve this use of a maximisation model? Returns (accepted, value or reason).\n\n    use \"bound\": gpu {\"status\", \"objective\"} from an LP relaxation; cpu {\"objective\"} from a CPU solve.\n    use \"start\": gpu {\"status\", \"x\"} from a MILP; cpu {\"feasible\", \"integral\"} from the CPU check of x.\n    use \"plan\": the plan of record.\n    \"\"\"\n    match use:\n        case \"plan\":\n            return False, \"the plan of record runs on the CPU\"\n        case \"bound\":\n            if gpu[\"status\"] != \"Optimal\":\n                return False, \"not optimal\"\n            if abs(gpu[\"objective\"] - cpu[\"objective\"]) > 1e-6 * max(1.0, abs(cpu[\"objective\"])):\n                return False, \"not confirmed\"\n            return True, max(gpu[\"objective\"], cpu[\"objective\"])\n        case \"start\":\n            if cpu[\"feasible\"] and cpu[\"integral\"]:\n                return True, gpu[\"x\"]\n            return False, \"fails the check\"\n    return False, \"unknown use\"\n\n\nif __name__ == \"__main__\":\n    print(usable(\"bound\", {\"status\": \"Optimal\", \"objective\": 10.0}, {\"objective\": 10.0}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom answers import usable\n\nprint(\"bound, gpu 5300.0, cpu 5300.002:\", usable(\"bound\", {\"status\": \"Optimal\", \"objective\": 5300.0}, {\"objective\": 5300.002}))\nprint(\"bound, gpu 5300.0, cpu 5310.0:\", usable(\"bound\", {\"status\": \"Optimal\", \"objective\": 5300.0}, {\"objective\": 5310.0}))\nprint(\"bound, gpu status TimeLimit:\", usable(\"bound\", {\"status\": \"TimeLimit\", \"objective\": 5300.0}, {\"objective\": 5300.0}))\nprint(\"start, checked feasible and integral:\", usable(\"start\", {\"status\": \"FeasibleFound\", \"x\": [0, 1, 1]},\n                                                      {\"feasible\": True, \"integral\": True}))\nprint(\"start, not integral:\", usable(\"start\", {\"status\": \"Optimal\", \"x\": [0, 0.5, 1]}, {\"feasible\": True, \"integral\": False}))\nprint(\"plan:\", usable(\"plan\", {\"status\": \"Optimal\", \"objective\": 5300.0, \"x\": [0, 1, 1]},\n                      {\"objective\": 5300.0, \"feasible\": True, \"integral\": True}))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\n\ndef usable(use: str, gpu: dict, cpu: dict) -> tuple[bool, object]:\n    \"\"\"May a GPU answer serve this use of a maximisation model? Returns (accepted, value or reason).\n\n    use \"bound\": gpu {\"status\", \"objective\"} from an LP relaxation; cpu {\"objective\"} from a CPU solve.\n    use \"start\": gpu {\"status\", \"x\"} from a MILP; cpu {\"feasible\", \"integral\"} from the CPU check of x.\n    use \"plan\": the plan of record.\n    \"\"\"\n    # TODO: a plan never; a bound only optimal and confirmed; a start only if the CPU check passed.\n    return False, \"\"\n\n\nif __name__ == \"__main__\":\n    print(usable(\"bound\", {\"status\": \"Optimal\", \"objective\": 10.0}, {\"objective\": 10.0}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom answers import usable\n\nprint(\"bound, gpu 5300.0, cpu 5300.002:\", usable(\"bound\", {\"status\": \"Optimal\", \"objective\": 5300.0}, {\"objective\": 5300.002}))\nprint(\"bound, gpu 5300.0, cpu 5310.0:\", usable(\"bound\", {\"status\": \"Optimal\", \"objective\": 5300.0}, {\"objective\": 5310.0}))\nprint(\"bound, gpu status TimeLimit:\", usable(\"bound\", {\"status\": \"TimeLimit\", \"objective\": 5300.0}, {\"objective\": 5300.0}))\nprint(\"start, checked feasible and integral:\", usable(\"start\", {\"status\": \"FeasibleFound\", \"x\": [0, 1, 1]},\n                                                      {\"feasible\": True, \"integral\": True}))\nprint(\"start, not integral:\", usable(\"start\", {\"status\": \"Optimal\", \"x\": [0, 0.5, 1]}, {\"feasible\": True, \"integral\": False}))\nprint(\"plan:\", usable(\"plan\", {\"status\": \"Optimal\", \"objective\": 5300.0, \"x\": [0, 1, 1]},\n                      {\"objective\": 5300.0, \"feasible\": True, \"integral\": True}))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "857774665f0beaff00c0c619c66682c078c5f91a25dafa76f0f6732555023d49",
+  "content_sha256": "e51df0d80306de43a15e9f14a8eaba3e5edb859202cb7282bb0d167b171d081d",
   "starting_code": "from __future__ import annotations\n\n\ndef usable(use: str, gpu: dict, cpu: dict) -> tuple[bool, object]:\n    \"\"\"May a GPU answer serve this use of a maximisation model? Returns (accepted, value or reason).\n\n    use \"bound\": gpu {\"status\", \"objective\"} from an LP relaxation; cpu {\"objective\"} from a CPU solve.\n    use \"start\": gpu {\"status\", \"x\"} from a MILP; cpu {\"feasible\", \"integral\"} from the CPU check of x.\n    use \"plan\": the plan of record.\n    \"\"\"\n    # TODO: a plan never; a bound only optimal and confirmed; a start only if the CPU check passed.\n    return False, \"\"\n\n\nif __name__ == \"__main__\":\n    print(usable(\"bound\", {\"status\": \"Optimal\", \"objective\": 10.0}, {\"objective\": 10.0}))\n",
   "exercise": {
     "main_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-06/practice-2/answers.py",
     "test_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-06/practice-2/test_answers.py",
     "run_command": [
       "python3",
-      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-06/practice-2/answers.py"
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-06/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -145,6 +163,10 @@
     },
     "concepts": [
       "a GPU answer serves as a confirmed bound or a checked start, never as the plan of record"
-    ]
+    ],
+    "files": [
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-06/practice-2/try_it.py"
+    ],
+    "try_file": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-06/practice-2/try_it.py"
   }
 }

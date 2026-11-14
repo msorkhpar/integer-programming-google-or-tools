@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Spend by region and year",
   "blocks": [
     {
@@ -47,6 +47,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    region: str\n    cost_profile: tuple[int, ...]     # spend in each year of work, start year first\n    starts: tuple[int, ...]           # the years it may start in\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project]) -> dict:\n    return {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n\n\ndef spend_by_region_year(projects: list[Project], x: dict, years: list[int]) -> dict:\n    \"\"\"{(region, year): what the plan spends in that region in that year}, as linear expressions.\"\"\"\n    regions = sorted({p.region for p in projects})\n    spend = {(r, y): mathopt.LinearExpression() for r in regions for y in years}\n    for p in projects:\n        for t in p.starts:\n            for k, c in enumerate(p.cost_profile):\n                if t + k in years:\n                    spend[p.region, t + k] += c * x[p.pid, t]\n    return spend\n\n\nif __name__ == \"__main__\":\n    fiber = [Project(\"F1\", \"North\", (100, 300), (2027, 2028))]\n    model = mathopt.Model()\n    x = start_variables(model, fiber)\n    print(spend_by_region_year(fiber, x, [2027, 2028, 2029]))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom regional import Project, spend_by_region_year, start_variables\n\n# Sewer works in two districts: id, district, spend per year of work, allowed start years.\nyears = [2031, 2032, 2033]\nworks = [\n    Project(\"S1\", \"East\", (70, 30), (2031, 2032)),\n    Project(\"S2\", \"East\", (40,), (2031, 2032, 2033)),\n    Project(\"S3\", \"West\", (25, 100, 10), (2031,)),\n]\nschedule = {\"S1\": 2032, \"S2\": 2032, \"S3\": 2031}\n\nmodel = mathopt.Model()\nx = start_variables(model, works)\nspend = spend_by_region_year(works, x, years)\nvalues = {var: 1.0 if schedule.get(pid) == t else 0.0 for (pid, t), var in x.items()}\nfor (region, year), expr in sorted(spend.items()):\n    print(f\"{region} {year}:\", round(mathopt.evaluate_expression(expr, values), 2))\n"
         }
       ]
     },
@@ -59,6 +68,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    region: str\n    cost_profile: tuple[int, ...]     # spend in each year of work, start year first\n    starts: tuple[int, ...]           # the years it may start in\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project]) -> dict:\n    return {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n\n\ndef spend_by_region_year(projects: list[Project], x: dict, years: list[int]) -> dict:\n    \"\"\"{(region, year): what the plan spends in that region in that year}, as linear expressions.\"\"\"\n    regions = sorted({p.region for p in projects})\n    spend = {(r, y): mathopt.LinearExpression() for r in regions for y in years}\n    # TODO: add each project's cost, year by year, to the right (region, year) entry.\n    return spend\n\n\nif __name__ == \"__main__\":\n    fiber = [Project(\"F1\", \"North\", (100, 300), (2027, 2028))]\n    model = mathopt.Model()\n    x = start_variables(model, fiber)\n    print(spend_by_region_year(fiber, x, [2027, 2028, 2029]))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom regional import Project, spend_by_region_year, start_variables\n\n# Sewer works in two districts: id, district, spend per year of work, allowed start years.\nyears = [2031, 2032, 2033]\nworks = [\n    Project(\"S1\", \"East\", (70, 30), (2031, 2032)),\n    Project(\"S2\", \"East\", (40,), (2031, 2032, 2033)),\n    Project(\"S3\", \"West\", (25, 100, 10), (2031,)),\n]\nschedule = {\"S1\": 2032, \"S2\": 2032, \"S3\": 2031}\n\nmodel = mathopt.Model()\nx = start_variables(model, works)\nspend = spend_by_region_year(works, x, years)\nvalues = {var: 1.0 if schedule.get(pid) == t else 0.0 for (pid, t), var in x.items()}\nfor (region, year), expr in sorted(spend.items()):\n    print(f\"{region} {year}:\", round(mathopt.evaluate_expression(expr, values), 2))\n"
     }
   ],
   "video": null,
@@ -66,8 +84,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -77,14 +95,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "e824c317175bdc9846ea647c3df66414c23b46a76b1b3aef08e6c7f2c167792c",
+  "content_sha256": "32321855d49f2403897cf1968bc06fa1cebd5f5a470046e8f557eaf0c007fa14",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    region: str\n    cost_profile: tuple[int, ...]     # spend in each year of work, start year first\n    starts: tuple[int, ...]           # the years it may start in\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project]) -> dict:\n    return {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n\n\ndef spend_by_region_year(projects: list[Project], x: dict, years: list[int]) -> dict:\n    \"\"\"{(region, year): what the plan spends in that region in that year}, as linear expressions.\"\"\"\n    regions = sorted({p.region for p in projects})\n    spend = {(r, y): mathopt.LinearExpression() for r in regions for y in years}\n    # TODO: add each project's cost, year by year, to the right (region, year) entry.\n    return spend\n\n\nif __name__ == \"__main__\":\n    fiber = [Project(\"F1\", \"North\", (100, 300), (2027, 2028))]\n    model = mathopt.Model()\n    x = start_variables(model, fiber)\n    print(spend_by_region_year(fiber, x, [2027, 2028, 2029]))\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-02/practice-1/regional.py",
     "test_path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-02/practice-1/test_regional.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-02/practice-1/regional.py"
+      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -141,6 +159,10 @@
     "concepts": [
       "a project started in year t spends its k-th year's cost in year t + k",
       "spend is built once as expressions and every money rule is a row on them"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-02/practice-1/try_it.py"
   }
 }

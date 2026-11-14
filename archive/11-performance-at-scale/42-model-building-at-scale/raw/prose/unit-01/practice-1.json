@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Compare two builders side by side",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport statistics\nimport time\nfrom typing import Callable\n\n\ndef timed(work: Callable[[], object], clock: Callable[[], float]) -> float:\n    \"\"\"Seconds one run of `work` takes, read from `clock` just before and just after it.\"\"\"\n    began = clock()\n    work()\n    return clock() - began\n\n\ndef speedup(old: Callable[[], object], new: Callable[[], object], rounds: int = 5, warmup: int = 1,\n            clock: Callable[[], float] = time.perf_counter) -> float:\n    \"\"\"How many times faster `new` is than `old`: the median, over rounds, of old's time / new's time.\"\"\"\n    for _ in range(warmup):\n        old()\n        new()\n    ratios = [timed(old, clock) / timed(new, clock) for _ in range(rounds)]\n    return statistics.median(ratios)\n\n\nif __name__ == \"__main__\":\n    def slow():\n        return sum(i * i for i in range(200_000))\n\n    def fast():\n        return sum(i * i for i in range(20_000))\n\n    print(f\"fast is {speedup(slow, fast):.1f}x faster than slow on this machine, this time\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom compare import speedup\n\n\nclass Bench:\n    \"\"\"A pretend clock: each builder run moves it by the next duration in its list.\"\"\"\n\n    def __init__(self, old_times, new_times):\n        self.now = 0.0\n        self.old_times, self.new_times = list(old_times), list(new_times)\n\n    def clock(self):\n        return self.now\n\n    def old(self):\n        self.now += self.old_times.pop(0)\n\n    def new(self):\n        self.now += self.new_times.pop(0)\n\n\nbench = Bench([50, 10.0, 15.0, 40.0], [50, 5.0, 3.0, 4.0])\nprint(\"speedup, rounds 3 ratios 2/5/10:\", speedup(bench.old, bench.new, rounds=3, warmup=1, clock=bench.clock))\nbench = Bench([6.0, 6.0], [2.0, 1.0])\nprint(\"speedup, no warm-up, ratios 3/6:\", speedup(bench.old, bench.new, rounds=2, warmup=0, clock=bench.clock))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport statistics\nimport time\nfrom typing import Callable\n\n\ndef timed(work: Callable[[], object], clock: Callable[[], float]) -> float:\n    \"\"\"Seconds one run of `work` takes, read from `clock` just before and just after it.\"\"\"\n    began = clock()\n    work()\n    return clock() - began\n\n\ndef speedup(old: Callable[[], object], new: Callable[[], object], rounds: int = 5, warmup: int = 1,\n            clock: Callable[[], float] = time.perf_counter) -> float:\n    \"\"\"How many times faster `new` is than `old`: the median, over rounds, of old's time / new's time.\"\"\"\n    # TODO: warm both up, then time them round by round with `timed`.\n    return 1.0\n\n\nif __name__ == \"__main__\":\n    def slow():\n        return sum(i * i for i in range(200_000))\n\n    def fast():\n        return sum(i * i for i in range(20_000))\n\n    print(f\"fast is {speedup(slow, fast):.1f}x faster than slow on this machine, this time\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom compare import speedup\n\n\nclass Bench:\n    \"\"\"A pretend clock: each builder run moves it by the next duration in its list.\"\"\"\n\n    def __init__(self, old_times, new_times):\n        self.now = 0.0\n        self.old_times, self.new_times = list(old_times), list(new_times)\n\n    def clock(self):\n        return self.now\n\n    def old(self):\n        self.now += self.old_times.pop(0)\n\n    def new(self):\n        self.now += self.new_times.pop(0)\n\n\nbench = Bench([50, 10.0, 15.0, 40.0], [50, 5.0, 3.0, 4.0])\nprint(\"speedup, rounds 3 ratios 2/5/10:\", speedup(bench.old, bench.new, rounds=3, warmup=1, clock=bench.clock))\nbench = Bench([6.0, 6.0], [2.0, 1.0])\nprint(\"speedup, no warm-up, ratios 3/6:\", speedup(bench.old, bench.new, rounds=2, warmup=0, clock=bench.clock))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "d07d271bd1cbc3d1128f164164df53174a20e0cedb266ed5e35ceae5fa300169",
+  "content_sha256": "d8f8b449aba2da2c40fb1c95b98cd19bb0917280175450be741947325bc74a05",
   "starting_code": "from __future__ import annotations\n\nimport statistics\nimport time\nfrom typing import Callable\n\n\ndef timed(work: Callable[[], object], clock: Callable[[], float]) -> float:\n    \"\"\"Seconds one run of `work` takes, read from `clock` just before and just after it.\"\"\"\n    began = clock()\n    work()\n    return clock() - began\n\n\ndef speedup(old: Callable[[], object], new: Callable[[], object], rounds: int = 5, warmup: int = 1,\n            clock: Callable[[], float] = time.perf_counter) -> float:\n    \"\"\"How many times faster `new` is than `old`: the median, over rounds, of old's time / new's time.\"\"\"\n    # TODO: warm both up, then time them round by round with `timed`.\n    return 1.0\n\n\nif __name__ == \"__main__\":\n    def slow():\n        return sum(i * i for i in range(200_000))\n\n    def fast():\n        return sum(i * i for i in range(20_000))\n\n    print(f\"fast is {speedup(slow, fast):.1f}x faster than slow on this machine, this time\")\n",
   "exercise": {
     "main_path": "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-01/practice-1/compare.py",
     "test_path": "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-01/practice-1/test_compare.py",
     "run_command": [
       "python3",
-      "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-01/practice-1/compare.py"
+      "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-01/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -140,6 +158,10 @@
     },
     "concepts": [
       "a timing is a set of warmed-up samples, and builders are compared by ratios taken side by side"
-    ]
+    ],
+    "files": [
+      "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-01/practice-1/try_it.py"
+    ],
+    "try_file": "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-01/practice-1/try_it.py"
   }
 }

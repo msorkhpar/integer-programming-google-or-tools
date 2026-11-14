@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Release rules for a software team",
   "blocks": [
     {
@@ -58,6 +58,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef add_rules(model: cp_model.CpModel, x: dict, requires: list[tuple[str, str]], excludes: list[tuple[str, str]],\n              needs_one_of: list[tuple[str, list[str]]], bundles: list[tuple[str, str]]) -> None:\n    \"\"\"The release rules, one CP-SAT logic constraint each.\"\"\"\n    for a, b in requires:\n        model.add_implication(x[a], x[b])\n    for a, b in excludes:\n        model.add_at_most_one(x[a], x[b])\n    for a, options in needs_one_of:\n        model.add_bool_or(x[o] for o in options).only_enforce_if(x[a])\n    for a, b in bundles:\n        model.add(x[a] == x[b])\n\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = {f: model.new_bool_var(f) for f in (\"sso\", \"audit\", \"export\")}\n    add_rules(model, x, [(\"audit\", \"sso\")], [], [(\"export\", [\"sso\", \"audit\"])], [])\n    solver = cp_model.CpSolver()\n    print(solver.status_name(solver.solve(model)))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.sat.python import cp_model\n\nfrom release import add_rules\n\nfeatures = [\"login\", \"billing\", \"invoices\", \"email\", \"sms\", \"beta_ui\", \"classic_ui\", \"api\", \"sdk\"]\nrules = dict(requires=[(\"billing\", \"login\")], excludes=[(\"beta_ui\", \"classic_ui\")],\n             needs_one_of=[(\"invoices\", [\"email\", \"sms\"])], bundles=[(\"api\", \"sdk\")])\n\n\ndef check(plan):\n    model = cp_model.CpModel()\n    x = {f: model.new_bool_var(f) for f in features}\n    add_rules(model, x, **rules)\n    for f, var in x.items():\n        model.add(var == (1 if f in plan else 0))\n    solver = cp_model.CpSolver()\n    solver.parameters.max_time_in_seconds = 5\n    return solver.status_name(solver.solve(model))\n\n\nfor plan in ({\"billing\", \"login\"}, {\"billing\"}, {\"beta_ui\", \"classic_ui\"}, {\"invoices\"},\n             {\"invoices\", \"sms\"}, {\"api\"}, {\"api\", \"sdk\"}):\n    print(\"plan\", sorted(plan), \"->\", check(plan))\n"
         }
       ]
     },
@@ -70,6 +79,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef add_rules(model: cp_model.CpModel, x: dict, requires: list[tuple[str, str]], excludes: list[tuple[str, str]],\n              needs_one_of: list[tuple[str, list[str]]], bundles: list[tuple[str, str]]) -> None:\n    \"\"\"The release rules, one CP-SAT logic constraint each.\"\"\"\n    # TODO: one constraint per rule.\n    return None\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = {f: model.new_bool_var(f) for f in (\"sso\", \"audit\", \"export\")}\n    add_rules(model, x, [(\"audit\", \"sso\")], [], [(\"export\", [\"sso\", \"audit\"])], [])\n    solver = cp_model.CpSolver()\n    print(solver.status_name(solver.solve(model)))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.sat.python import cp_model\n\nfrom release import add_rules\n\nfeatures = [\"login\", \"billing\", \"invoices\", \"email\", \"sms\", \"beta_ui\", \"classic_ui\", \"api\", \"sdk\"]\nrules = dict(requires=[(\"billing\", \"login\")], excludes=[(\"beta_ui\", \"classic_ui\")],\n             needs_one_of=[(\"invoices\", [\"email\", \"sms\"])], bundles=[(\"api\", \"sdk\")])\n\n\ndef check(plan):\n    model = cp_model.CpModel()\n    x = {f: model.new_bool_var(f) for f in features}\n    add_rules(model, x, **rules)\n    for f, var in x.items():\n        model.add(var == (1 if f in plan else 0))\n    solver = cp_model.CpSolver()\n    solver.parameters.max_time_in_seconds = 5\n    return solver.status_name(solver.solve(model))\n\n\nfor plan in ({\"billing\", \"login\"}, {\"billing\"}, {\"beta_ui\", \"classic_ui\"}, {\"invoices\"},\n             {\"invoices\", \"sms\"}, {\"api\"}, {\"api\", \"sdk\"}):\n    print(\"plan\", sorted(plan), \"->\", check(plan))\n"
     }
   ],
   "video": null,
@@ -77,8 +95,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 2,
+    "paras": 4,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -88,14 +106,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "038cb9cba9c67a421b3d6de1a754e6430d465b6c99e9883f05bf407123482f67",
+  "content_sha256": "729f6756cacd60b6f051db622172d78f46e44e95d2d5b9434521b2f18e478910",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef add_rules(model: cp_model.CpModel, x: dict, requires: list[tuple[str, str]], excludes: list[tuple[str, str]],\n              needs_one_of: list[tuple[str, list[str]]], bundles: list[tuple[str, str]]) -> None:\n    \"\"\"The release rules, one CP-SAT logic constraint each.\"\"\"\n    # TODO: one constraint per rule.\n    return None\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = {f: model.new_bool_var(f) for f in (\"sso\", \"audit\", \"export\")}\n    add_rules(model, x, [(\"audit\", \"sso\")], [], [(\"export\", [\"sso\", \"audit\"])], [])\n    solver = cp_model.CpSolver()\n    print(solver.status_name(solver.solve(model)))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-1/release.py",
     "test_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-1/test_release.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-1/release.py"
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -152,6 +170,10 @@
     "concepts": [
       "requirement, exclusion, needs-one-of and all-or-nothing rules are one logic constraint each",
       "bool_or, bool_and, implication, at-most-one, exactly-one and equality each allow a fixed truth table"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-1/try_it.py"
   }
 }

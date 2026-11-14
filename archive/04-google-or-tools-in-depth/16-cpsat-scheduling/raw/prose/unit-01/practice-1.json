@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A welding rig with booked days",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef shortest_schedule(jobs: dict[str, int], booked: list[tuple[int, int]], horizon: int) -> dict[str, int]:\n    \"\"\"Start day of each job on one rig, so the last job ends as early as possible.\"\"\"\n    model = cp_model.CpModel()\n    start, intervals = {}, []\n    for name, days in jobs.items():\n        start[name] = model.new_int_var(0, horizon - days, f\"start_{name}\")\n        intervals.append(model.new_fixed_size_interval_var(start[name], days, f\"work_{name}\"))\n    for first, last in booked:\n        intervals.append(model.new_fixed_size_interval_var(first, last - first + 1, f\"booked_{first}\"))\n    model.add_no_overlap(intervals)\n\n    makespan = model.new_int_var(0, horizon, \"makespan\")\n    model.add_max_equality(makespan, [start[name] + days for name, days in jobs.items()])\n    model.minimize(makespan)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.solve(model)\n    return {name: solver.value(start[name]) for name in jobs}\n\n\nif __name__ == \"__main__\":\n    print(shortest_schedule({\"S1\": 3, \"S2\": 2, \"S3\": 4}, [(4, 5)], 20))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom rig import shortest_schedule\n\n# Four pipe welds share one rig; the rig is booked for days 3 to 4.\njobs = {\"P1\": 2, \"P2\": 3, \"P3\": 1, \"P4\": 2}\nstart = shortest_schedule(jobs, [(3, 4)], 25)\nfor name in sorted(start):\n    print(f\"{name} ({jobs[name]} days) starts on day:\", start[name])\nprint(\"last weld ends on day:\", max(start[n] + d for n, d in jobs.items()))\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef shortest_schedule(jobs: dict[str, int], booked: list[tuple[int, int]], horizon: int) -> dict[str, int]:\n    \"\"\"Start day of each job on one rig, so the last job ends as early as possible.\"\"\"\n    # TODO: one interval per job, one fixed interval per booking, NoOverlap over all of them,\n    # and minimize the latest end. Every start below is a placeholder.\n    return {name: -1 for name in jobs}\n\n\nif __name__ == \"__main__\":\n    print(shortest_schedule({\"S1\": 3, \"S2\": 2, \"S3\": 4}, [(4, 5)], 20))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom rig import shortest_schedule\n\n# Four pipe welds share one rig; the rig is booked for days 3 to 4.\njobs = {\"P1\": 2, \"P2\": 3, \"P3\": 1, \"P4\": 2}\nstart = shortest_schedule(jobs, [(3, 4)], 25)\nfor name in sorted(start):\n    print(f\"{name} ({jobs[name]} days) starts on day:\", start[name])\nprint(\"last weld ends on day:\", max(start[n] + d for n, d in jobs.items()))\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "02cce2edae69ad7d543db638f5914742b0c57992159396e755f0c62d33f40e00",
+  "content_sha256": "d10886a6a39977e58da183685ac7d7403d0304ca3cc2a6a57b047ffa89574d82",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef shortest_schedule(jobs: dict[str, int], booked: list[tuple[int, int]], horizon: int) -> dict[str, int]:\n    \"\"\"Start day of each job on one rig, so the last job ends as early as possible.\"\"\"\n    # TODO: one interval per job, one fixed interval per booking, NoOverlap over all of them,\n    # and minimize the latest end. Every start below is a placeholder.\n    return {name: -1 for name in jobs}\n\n\nif __name__ == \"__main__\":\n    print(shortest_schedule({\"S1\": 3, \"S2\": 2, \"S3\": 4}, [(4, 5)], 20))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-1/rig.py",
     "test_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-1/test_rig.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-1/rig.py"
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -140,6 +158,10 @@
     "concepts": [
       "time a resource cannot use is a fixed interval in the same NoOverlap",
       "NoOverlap keeps every pair of present intervals in a list apart, in place of an order Boolean per pair"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-1/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-1/try_it.py"
   }
 }

@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Is this plan allowed by the old model?",
   "blocks": [
     {
@@ -48,6 +48,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.linear_solver import pywraplp\n\n\ndef allowed(solver: pywraplp.Solver, values: dict, tol: float = 1e-6) -> bool:\n    \"\"\"Does the plan {variable name: value} keep every bound, integrality and row of the model?\"\"\"\n    for var in solver.variables():\n        value = values[var.name()]\n        if value < var.lb() - tol or value > var.ub() + tol:\n            return False\n        if var.Integer() and abs(value - round(value)) > tol:\n            return False\n    for row in solver.constraints():\n        activity = sum(row.GetCoefficient(var) * values[var.name()] for var in solver.variables())\n        if activity < row.lb() - tol or activity > row.ub() + tol:\n            return False\n    return True\n\n\ndef depot_model() -> pywraplp.Solver:\n    \"\"\"A small model to try allowed() on.\"\"\"\n    solver = pywraplp.Solver.CreateSolver(\"SCIP\")\n    line = solver.IntVar(0, 6, \"line\")\n    tree = solver.IntVar(0, 6, \"tree\")\n    overtime = solver.NumVar(0, 40, \"overtime\")\n    cover = solver.RowConstraint(200, 240, \"cover\")\n    cover.SetCoefficient(line, 40)\n    cover.SetCoefficient(tree, 30)\n    cover.SetCoefficient(overtime, 1)\n    solver.Add(30 * line + 20 * tree <= 200, \"budget\")\n    return solver\n\n\nif __name__ == \"__main__\":\n    print(allowed(depot_model(), {\"line\": 2, \"tree\": 4, \"overtime\": 0}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.linear_solver import pywraplp\n\nfrom check import allowed\n\n# Vans v (integer, 0..4) and hours h (0..25): 12 <= 5v + h <= 30, and v + h <= 18.\nsolver = pywraplp.Solver.CreateSolver(\"SCIP\")\nv = solver.IntVar(0, 4, \"v\")\nh = solver.NumVar(0, 25, \"h\")\nband = solver.RowConstraint(12, 30, \"band\")\nband.SetCoefficient(v, 5)\nband.SetCoefficient(h, 1)\nsolver.Add(v + h <= 18, \"total\")\n\nfor plan in ({\"v\": 2, \"h\": 8.0}, {\"v\": 4, \"h\": 12.0}, {\"v\": 3, \"h\": 0.0}, {\"v\": 1, \"h\": 3.0}, {\"v\": 1.5, \"h\": 9.0}, {\"v\": 5, \"h\": 0.0}):\n    print(f\"plan {plan}:\", allowed(solver, plan))\n"
         }
       ]
     },
@@ -60,6 +69,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.linear_solver import pywraplp\n\n\ndef allowed(solver: pywraplp.Solver, values: dict, tol: float = 1e-6) -> bool:\n    \"\"\"Does the plan {variable name: value} keep every bound, integrality and row of the model?\"\"\"\n    # TODO: check every variable's bounds and integrality, then every row's bounds.\n    return False\n\n\ndef depot_model() -> pywraplp.Solver:\n    \"\"\"A small model to try allowed() on.\"\"\"\n    solver = pywraplp.Solver.CreateSolver(\"SCIP\")\n    line = solver.IntVar(0, 6, \"line\")\n    tree = solver.IntVar(0, 6, \"tree\")\n    overtime = solver.NumVar(0, 40, \"overtime\")\n    cover = solver.RowConstraint(200, 240, \"cover\")\n    cover.SetCoefficient(line, 40)\n    cover.SetCoefficient(tree, 30)\n    cover.SetCoefficient(overtime, 1)\n    solver.Add(30 * line + 20 * tree <= 200, \"budget\")\n    return solver\n\n\nif __name__ == \"__main__\":\n    print(allowed(depot_model(), {\"line\": 2, \"tree\": 4, \"overtime\": 0}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.linear_solver import pywraplp\n\nfrom check import allowed\n\n# Vans v (integer, 0..4) and hours h (0..25): 12 <= 5v + h <= 30, and v + h <= 18.\nsolver = pywraplp.Solver.CreateSolver(\"SCIP\")\nv = solver.IntVar(0, 4, \"v\")\nh = solver.NumVar(0, 25, \"h\")\nband = solver.RowConstraint(12, 30, \"band\")\nband.SetCoefficient(v, 5)\nband.SetCoefficient(h, 1)\nsolver.Add(v + h <= 18, \"total\")\n\nfor plan in ({\"v\": 2, \"h\": 8.0}, {\"v\": 4, \"h\": 12.0}, {\"v\": 3, \"h\": 0.0}, {\"v\": 1, \"h\": 3.0}, {\"v\": 1.5, \"h\": 9.0}, {\"v\": 5, \"h\": 0.0}):\n    print(f\"plan {plan}:\", allowed(solver, plan))\n"
     }
   ],
   "video": null,
@@ -67,8 +85,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 2,
+    "paras": 4,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -78,14 +96,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "1776c77789b439c35f313dda4cfe3e2ed28a5fd8cb3f8e0d5d6dcd287286e89e",
+  "content_sha256": "9280a670483f538a52a6ba2f5cfb8cf79d8e268708eac5af348096fd826eeaec",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.linear_solver import pywraplp\n\n\ndef allowed(solver: pywraplp.Solver, values: dict, tol: float = 1e-6) -> bool:\n    \"\"\"Does the plan {variable name: value} keep every bound, integrality and row of the model?\"\"\"\n    # TODO: check every variable's bounds and integrality, then every row's bounds.\n    return False\n\n\ndef depot_model() -> pywraplp.Solver:\n    \"\"\"A small model to try allowed() on.\"\"\"\n    solver = pywraplp.Solver.CreateSolver(\"SCIP\")\n    line = solver.IntVar(0, 6, \"line\")\n    tree = solver.IntVar(0, 6, \"tree\")\n    overtime = solver.NumVar(0, 40, \"overtime\")\n    cover = solver.RowConstraint(200, 240, \"cover\")\n    cover.SetCoefficient(line, 40)\n    cover.SetCoefficient(tree, 30)\n    cover.SetCoefficient(overtime, 1)\n    solver.Add(30 * line + 20 * tree <= 200, \"budget\")\n    return solver\n\n\nif __name__ == \"__main__\":\n    print(allowed(depot_model(), {\"line\": 2, \"tree\": 4, \"overtime\": 0}))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-02/practice-2/check.py",
     "test_path": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-02/practice-2/test_check.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-02/practice-2/check.py"
+      "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -136,6 +154,10 @@
     },
     "concepts": [
       "a port is proved by equal values at zero gap and by each plan keeping the other model's rules"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-02/practice-2/try_it.py"
   }
 }

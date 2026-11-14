@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A strict, versioned fleet contract",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport json\nfrom typing import Literal\n\nfrom pydantic import BaseModel, ConfigDict, ValidationError\n\n\nclass Contract(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\", strict=True, frozen=True)\n\n\nclass Bus(Contract):\n    bus_id: str\n    depot: str\n    cost: int                                   # $k\n    must_replace: bool\n\n\nclass Fleet(Contract):\n    schema_version: Literal[3]\n    buses: tuple[Bus, ...]\n\n\ndef upgrade(raw: dict) -> dict:\n    \"\"\"Version 2 called the depot `garage` and had no `must_replace`: nothing was mandatory then.\"\"\"\n    if raw.get(\"schema_version\") == 2:\n        if any(\"depot\" in b or \"must_replace\" in b for b in raw[\"buses\"]):\n            return raw                          # keys version 2 never had: left for the schema to refuse\n        buses = [{**{(\"depot\" if k == \"garage\" else k): v for k, v in b.items()}, \"must_replace\": False}\n                 for b in raw[\"buses\"]]\n        raw = {**raw, \"buses\": buses, \"schema_version\": 3}\n    return raw\n\n\ndef parse(text: str) -> Fleet | None:\n    \"\"\"The fleet if the document is valid in version 3 (after upgrading version 2), else None.\"\"\"\n    try:\n        return Fleet.model_validate_json(json.dumps(upgrade(json.loads(text))))\n    except ValidationError:\n        return None\n\n\nif __name__ == \"__main__\":\n    print(parse('{\"schema_version\": 2, \"buses\": [{\"bus_id\": \"B7\", \"garage\": \"North\", \"cost\": 400}]}'))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport json\n\nfrom contract import parse\n\nv3 = {\"schema_version\": 3, \"buses\": [\n    {\"bus_id\": \"C11\", \"depot\": \"East\", \"cost\": 510, \"must_replace\": False},\n    {\"bus_id\": \"C12\", \"depot\": \"West\", \"cost\": 530, \"must_replace\": True}]}\nv2 = {\"schema_version\": 2, \"buses\": [{\"bus_id\": \"C21\", \"garage\": \"East\", \"cost\": 280}]}\ncost_as_text = {**v3, \"buses\": [{**v3[\"buses\"][0], \"cost\": \"510\"}]}\nv2_with_flag = {**v2, \"buses\": [{**v2[\"buses\"][0], \"must_replace\": True}]}\n\nprint(\"version 3:\", parse(json.dumps(v3)))\nprint(\"version 2:\", parse(json.dumps(v2)))\nprint(\"cost sent as text:\", parse(json.dumps(cost_as_text)))\nprint(\"version 2 with must_replace:\", parse(json.dumps(v2_with_flag)))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport json\n\nfrom pydantic import BaseModel, ValidationError\n\n\nclass Contract(BaseModel):\n    # TODO: the policy for a document sent by another program.\n    pass\n\n\nclass Bus(Contract):\n    bus_id: str\n    depot: str\n    cost: int                                   # $k\n    must_replace: bool\n\n\nclass Fleet(Contract):\n    schema_version: int                         # TODO: only version 3 is valid here\n    buses: tuple[Bus, ...]\n\n\ndef upgrade(raw: dict) -> dict:\n    \"\"\"Version 2 called the depot `garage` and had no `must_replace`: nothing was mandatory then.\"\"\"\n    # TODO: bring a version-2 document up to version 3; leave every other document alone.\n    return raw\n\n\ndef parse(text: str) -> Fleet | None:\n    \"\"\"The fleet if the document is valid in version 3 (after upgrading version 2), else None.\"\"\"\n    try:\n        return Fleet.model_validate_json(json.dumps(upgrade(json.loads(text))))\n    except ValidationError:\n        return None\n\n\nif __name__ == \"__main__\":\n    print(parse('{\"schema_version\": 2, \"buses\": [{\"bus_id\": \"B7\", \"garage\": \"North\", \"cost\": 400}]}'))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport json\n\nfrom contract import parse\n\nv3 = {\"schema_version\": 3, \"buses\": [\n    {\"bus_id\": \"C11\", \"depot\": \"East\", \"cost\": 510, \"must_replace\": False},\n    {\"bus_id\": \"C12\", \"depot\": \"West\", \"cost\": 530, \"must_replace\": True}]}\nv2 = {\"schema_version\": 2, \"buses\": [{\"bus_id\": \"C21\", \"garage\": \"East\", \"cost\": 280}]}\ncost_as_text = {**v3, \"buses\": [{**v3[\"buses\"][0], \"cost\": \"510\"}]}\nv2_with_flag = {**v2, \"buses\": [{**v2[\"buses\"][0], \"must_replace\": True}]}\n\nprint(\"version 3:\", parse(json.dumps(v3)))\nprint(\"version 2:\", parse(json.dumps(v2)))\nprint(\"cost sent as text:\", parse(json.dumps(cost_as_text)))\nprint(\"version 2 with must_replace:\", parse(json.dumps(v2_with_flag)))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "c66eae316a07e8dc4bc3c24e28858edae29de5641ca020c269c9d2ec45584d0e",
+  "content_sha256": "164af42af1787bf36dc5994e720b9b4ffc45d8adf71bf5cfce25e3cfcd5c5837",
   "starting_code": "from __future__ import annotations\n\nimport json\n\nfrom pydantic import BaseModel, ValidationError\n\n\nclass Contract(BaseModel):\n    # TODO: the policy for a document sent by another program.\n    pass\n\n\nclass Bus(Contract):\n    bus_id: str\n    depot: str\n    cost: int                                   # $k\n    must_replace: bool\n\n\nclass Fleet(Contract):\n    schema_version: int                         # TODO: only version 3 is valid here\n    buses: tuple[Bus, ...]\n\n\ndef upgrade(raw: dict) -> dict:\n    \"\"\"Version 2 called the depot `garage` and had no `must_replace`: nothing was mandatory then.\"\"\"\n    # TODO: bring a version-2 document up to version 3; leave every other document alone.\n    return raw\n\n\ndef parse(text: str) -> Fleet | None:\n    \"\"\"The fleet if the document is valid in version 3 (after upgrading version 2), else None.\"\"\"\n    try:\n        return Fleet.model_validate_json(json.dumps(upgrade(json.loads(text))))\n    except ValidationError:\n        return None\n\n\nif __name__ == \"__main__\":\n    print(parse('{\"schema_version\": 2, \"buses\": [{\"bus_id\": \"B7\", \"garage\": \"North\", \"cost\": 400}]}'))\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-2/contract.py",
     "test_path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-2/test_contract.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-2/contract.py"
+      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -150,6 +168,10 @@
     },
     "concepts": [
       "a document sent by a program is validated with unknown keys forbidden and conversions off, against one schema version, and older versions are brought forward by an explicit upgrade"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-2/try_it.py"
   }
 }

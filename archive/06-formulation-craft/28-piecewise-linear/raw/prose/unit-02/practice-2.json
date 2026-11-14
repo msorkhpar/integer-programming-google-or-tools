@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A bulk fuel price curve with an audit above a volume",
   "blocks": [
     {
@@ -79,6 +79,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_order_rules(model: mathopt.Model, volume: mathopt.Variable, bill: mathopt.Variable,\n                    audit: mathopt.Variable, xs: tuple[float, ...], ys: tuple[float, ...],\n                    audit_above: float) -> None:\n    \"\"\"The bill on the price curve, and an audit for every order above `audit_above` litres.\"\"\"\n    def price(v: float) -> float:\n        for k in range(len(xs) - 1):\n            if xs[k] <= v <= xs[k + 1]:\n                return ys[k] + (ys[k + 1] - ys[k]) * (v - xs[k]) / (xs[k + 1] - xs[k])\n        raise ValueError(v)\n\n    points = sorted(set(xs) | {audit_above})          # the audit volume becomes a breakpoint\n    weight = {}\n    for j, at in enumerate(points):\n        weight[j] = model.add_variable(lb=0, ub=1, name=f\"w_{j}\")\n    band = {k: model.add_binary_variable(name=f\"band_{k}\") for k in range(len(points) - 1)}\n    model.add_linear_constraint(sum(weight.values()) == 1, name=\"weights\")\n    model.add_linear_constraint(sum(band.values()) == 1, name=\"one_band\")\n    for j in weight:\n        near = [band[k] for k in band if k in (j - 1, j)]\n        model.add_linear_constraint(weight[j] <= sum(near), name=f\"near_{j}\")\n    model.add_linear_constraint(volume == sum(at * weight[j] for j, at in enumerate(points)), name=\"volume\")\n    model.add_linear_constraint(bill == sum(price(at) * weight[j] for j, at in enumerate(points)), name=\"bill\")\n    for k, start in enumerate(points[:-1]):\n        if start >= audit_above:\n            model.add_linear_constraint(audit >= band[k], name=f\"audit_{k}\")\n\n\ndef build(xs, ys, audit_above) -> tuple[mathopt.Model, mathopt.Variable, mathopt.Variable, mathopt.Variable]:\n    model = mathopt.Model(name=\"fuel order\")\n    volume = model.add_variable(lb=0, name=\"volume\")\n    bill = model.add_variable(lb=-1e9, ub=1e9, name=\"bill\")\n    audit = model.add_binary_variable(name=\"audit\")\n    add_order_rules(model, volume, bill, audit, xs, ys, audit_above)\n    return model, volume, bill, audit\n\n\nif __name__ == \"__main__\":\n    model, *_ = build((0, 20_000, 50_000, 80_000), (0, 30_000, 63_000, 87_000), 30_000)\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom fuel_order import build\n\n# Heating oil: litres and total bill, 1.20 then 0.90 then 0.70 $ per litre.\nxs, ys = (0, 10_000, 40_000, 60_000), (0, 12_000, 39_000, 53_000)\n\ndef accepted(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(volume, bill, audit, audit_above=20_000):\n    model, v, b, a = build(xs, ys, audit_above)\n    v.lower_bound = v.upper_bound = volume\n    b.lower_bound = b.upper_bound = bill\n    a.lower_bound = a.upper_bound = audit\n    return accepted(model)\n\n\nprint(\"5000 L, bill 6000, no audit:\", allowed(5_000, 6_000, 0))\nprint(\"5000 L, bill 5000, no audit:\", allowed(5_000, 5_000, 0))\nprint(\"30000 L, bill 30000, audit:\", allowed(30_000, 30_000, 1))\nprint(\"30000 L, bill 30000, no audit:\", allowed(30_000, 30_000, 0))\nprint(\"20000 L, bill 21000, no audit:\", allowed(20_000, 21_000, 0))\nprint(\"50000 L, bill 46000, audit:\", allowed(50_000, 46_000, 1))\n"
         }
       ]
     },
@@ -91,6 +100,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_order_rules(model: mathopt.Model, volume: mathopt.Variable, bill: mathopt.Variable,\n                    audit: mathopt.Variable, xs: tuple[float, ...], ys: tuple[float, ...],\n                    audit_above: float) -> None:\n    \"\"\"The bill on the price curve, and an audit for every order above `audit_above` litres.\"\"\"\n    # TODO: the bill as the curve's value at the volume, and the audit rule.\n    return None\n\n\ndef build(xs, ys, audit_above) -> tuple[mathopt.Model, mathopt.Variable, mathopt.Variable, mathopt.Variable]:\n    model = mathopt.Model(name=\"fuel order\")\n    volume = model.add_variable(lb=0, name=\"volume\")\n    bill = model.add_variable(lb=-1e9, ub=1e9, name=\"bill\")\n    audit = model.add_binary_variable(name=\"audit\")\n    add_order_rules(model, volume, bill, audit, xs, ys, audit_above)\n    return model, volume, bill, audit\n\n\nif __name__ == \"__main__\":\n    model, *_ = build((0, 20_000, 50_000, 80_000), (0, 30_000, 63_000, 87_000), 30_000)\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom fuel_order import build\n\n# Heating oil: litres and total bill, 1.20 then 0.90 then 0.70 $ per litre.\nxs, ys = (0, 10_000, 40_000, 60_000), (0, 12_000, 39_000, 53_000)\n\ndef accepted(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(volume, bill, audit, audit_above=20_000):\n    model, v, b, a = build(xs, ys, audit_above)\n    v.lower_bound = v.upper_bound = volume\n    b.lower_bound = b.upper_bound = bill\n    a.lower_bound = a.upper_bound = audit\n    return accepted(model)\n\n\nprint(\"5000 L, bill 6000, no audit:\", allowed(5_000, 6_000, 0))\nprint(\"5000 L, bill 5000, no audit:\", allowed(5_000, 5_000, 0))\nprint(\"30000 L, bill 30000, audit:\", allowed(30_000, 30_000, 1))\nprint(\"30000 L, bill 30000, no audit:\", allowed(30_000, 30_000, 0))\nprint(\"20000 L, bill 21000, no audit:\", allowed(20_000, 21_000, 0))\nprint(\"50000 L, bill 46000, audit:\", allowed(50_000, 46_000, 1))\n"
     }
   ],
   "video": null,
@@ -98,8 +116,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 6,
-    "code": 2,
+    "paras": 7,
+    "code": 3,
     "tables": 1,
     "lists": 0,
     "images": 0,
@@ -109,14 +127,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "2061bd7082ef9f7f8bce920a165f8d3134e11738535529bf9c3ad6ecbe6d5c7d",
+  "content_sha256": "dbc886874eb5e3d43815f01b859cafe79235667ca5c9263b09a03f51c7864424",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_order_rules(model: mathopt.Model, volume: mathopt.Variable, bill: mathopt.Variable,\n                    audit: mathopt.Variable, xs: tuple[float, ...], ys: tuple[float, ...],\n                    audit_above: float) -> None:\n    \"\"\"The bill on the price curve, and an audit for every order above `audit_above` litres.\"\"\"\n    # TODO: the bill as the curve's value at the volume, and the audit rule.\n    return None\n\n\ndef build(xs, ys, audit_above) -> tuple[mathopt.Model, mathopt.Variable, mathopt.Variable, mathopt.Variable]:\n    model = mathopt.Model(name=\"fuel order\")\n    volume = model.add_variable(lb=0, name=\"volume\")\n    bill = model.add_variable(lb=-1e9, ub=1e9, name=\"bill\")\n    audit = model.add_binary_variable(name=\"audit\")\n    add_order_rules(model, volume, bill, audit, xs, ys, audit_above)\n    return model, volume, bill, audit\n\n\nif __name__ == \"__main__\":\n    model, *_ = build((0, 20_000, 50_000, 80_000), (0, 30_000, 63_000, 87_000), 30_000)\n    print(model.get_num_linear_constraints(), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-2/fuel_order.py",
     "test_path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-2/test_fuel_order.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-2/fuel_order.py"
+      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -162,6 +180,10 @@
     },
     "concepts": [
       "a segment binary used by another business rule, with a threshold that needs its own breakpoint"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-2/try_it.py"
   }
 }

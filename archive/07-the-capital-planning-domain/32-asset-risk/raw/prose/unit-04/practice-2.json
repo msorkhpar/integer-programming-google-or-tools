@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Coefficients over a fixed service period",
   "blocks": [
     {
@@ -43,6 +43,15 @@
           "type": "code",
           "lang": "python",
           "text": "from dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Main:\n    age: float          # in the plan's first year\n    beta: float\n    eta: float\n    cof: float          # $k per failure\n\n\ndef failures(age: float, beta: float, eta: float) -> float:\n    return ((age + 1) / eta) ** beta - (age / eta) ** beta\n\n\ndef yearly_cut(main: Main, years: list[int], start: int, duration: int, keep: float) -> dict[int, float]:\n    \"\"\"Risk removed in each year ($k); `years` starts at the plan's first year.\"\"\"\n    done = start + duration\n    cut = {}\n    for y in years:\n        old = main.age + (y - years[0])\n        new = old if y < done else keep * (main.age + done - years[0]) + (y - done)\n        cut[y] = main.cof * (failures(old, main.beta, main.eta) - failures(new, main.beta, main.eta))\n    return cut\n\n\ndef coefficients(main: Main, starts: list[int], first_year: int, duration: int, keep: float,\n                 service_years: int, rate: float) -> dict[int, float]:\n    \"\"\"For each start year: the risk removed over its service years, discounted to `first_year`.\"\"\"\n    out = {}\n    for s in starts:\n        years = list(range(first_year, s + duration + service_years))\n        cut = yearly_cut(main, years, s, duration, keep)\n        out[s] = sum(cut[y] / (1 + rate) ** (y - first_year) for y in years)\n    return out\n\n\nif __name__ == \"__main__\":\n    print(coefficients(Main(48, 2.8, 45, 1_200), [2027, 2028, 2029], 2027, 2, 0.0, 10, 0.06))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom coefficients import Main, coefficients\n\nmain = Main(40, 3.0, 50.0, 1_000.0)\nstarts = [2030, 2031, 2032]\n\nflat = coefficients(main, starts, 2030, 1, 0.0, 5, 0.0)\nprint(\"replace, 5 service years, 0%:\", {s: round(v, 2) for s, v in flat.items()})\ndisc = coefficients(main, starts, 2030, 1, 0.0, 5, 0.05)\nprint(\"replace, 5 service years, 5%:\", {s: round(v, 2) for s, v in disc.items()})\nhalf = coefficients(main, starts, 2030, 1, 0.5, 5, 0.05)\nprint(\"keep half the age, 5 service years, 5%:\", {s: round(v, 2) for s, v in half.items()})\n"
         }
       ]
     },
@@ -55,6 +64,15 @@
       "type": "code",
       "lang": "python",
       "text": "from dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Main:\n    age: float          # in the plan's first year\n    beta: float\n    eta: float\n    cof: float          # $k per failure\n\n\ndef failures(age: float, beta: float, eta: float) -> float:\n    return ((age + 1) / eta) ** beta - (age / eta) ** beta\n\n\ndef yearly_cut(main: Main, years: list[int], start: int, duration: int, keep: float) -> dict[int, float]:\n    \"\"\"Risk removed in each year ($k); `years` starts at the plan's first year.\"\"\"\n    done = start + duration\n    cut = {}\n    for y in years:\n        old = main.age + (y - years[0])\n        new = old if y < done else keep * (main.age + done - years[0]) + (y - done)\n        cut[y] = main.cof * (failures(old, main.beta, main.eta) - failures(new, main.beta, main.eta))\n    return cut\n\n\ndef coefficients(main: Main, starts: list[int], first_year: int, duration: int, keep: float,\n                 service_years: int, rate: float) -> dict[int, float]:\n    \"\"\"For each start year: the risk removed over its service years, discounted to `first_year`.\"\"\"\n    # TODO: sum each start's yearly reductions up to the end of its service period, discounted.\n    return {s: -1.0 for s in starts}\n\n\nif __name__ == \"__main__\":\n    print(coefficients(Main(48, 2.8, 45, 1_200), [2027, 2028, 2029], 2027, 2, 0.0, 10, 0.06))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom coefficients import Main, coefficients\n\nmain = Main(40, 3.0, 50.0, 1_000.0)\nstarts = [2030, 2031, 2032]\n\nflat = coefficients(main, starts, 2030, 1, 0.0, 5, 0.0)\nprint(\"replace, 5 service years, 0%:\", {s: round(v, 2) for s, v in flat.items()})\ndisc = coefficients(main, starts, 2030, 1, 0.0, 5, 0.05)\nprint(\"replace, 5 service years, 5%:\", {s: round(v, 2) for s, v in disc.items()})\nhalf = coefficients(main, starts, 2030, 1, 0.5, 5, 0.05)\nprint(\"keep half the age, 5 service years, 5%:\", {s: round(v, 2) for s, v in half.items()})\n"
     }
   ],
   "video": null,
@@ -62,8 +80,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -73,14 +91,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "01f247823c08f837ca473fd482c268008673396f9fd84069bb74d64ca6a97994",
+  "content_sha256": "46175e0649c9e832fee3409357c25c90e18a48ddb71ebe875900dc69e7533c20",
   "starting_code": "from dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Main:\n    age: float          # in the plan's first year\n    beta: float\n    eta: float\n    cof: float          # $k per failure\n\n\ndef failures(age: float, beta: float, eta: float) -> float:\n    return ((age + 1) / eta) ** beta - (age / eta) ** beta\n\n\ndef yearly_cut(main: Main, years: list[int], start: int, duration: int, keep: float) -> dict[int, float]:\n    \"\"\"Risk removed in each year ($k); `years` starts at the plan's first year.\"\"\"\n    done = start + duration\n    cut = {}\n    for y in years:\n        old = main.age + (y - years[0])\n        new = old if y < done else keep * (main.age + done - years[0]) + (y - done)\n        cut[y] = main.cof * (failures(old, main.beta, main.eta) - failures(new, main.beta, main.eta))\n    return cut\n\n\ndef coefficients(main: Main, starts: list[int], first_year: int, duration: int, keep: float,\n                 service_years: int, rate: float) -> dict[int, float]:\n    \"\"\"For each start year: the risk removed over its service years, discounted to `first_year`.\"\"\"\n    # TODO: sum each start's yearly reductions up to the end of its service period, discounted.\n    return {s: -1.0 for s in starts}\n\n\nif __name__ == \"__main__\":\n    print(coefficients(Main(48, 2.8, 45, 1_200), [2027, 2028, 2029], 2027, 2, 0.0, 10, 0.06))\n",
   "exercise": {
     "main_path": "practice/07-the-capital-planning-domain/32-asset-risk/prose/unit-04/practice-2/coefficients.py",
     "test_path": "practice/07-the-capital-planning-domain/32-asset-risk/prose/unit-04/practice-2/test_coefficients.py",
     "run_command": [
       "python3",
-      "practice/07-the-capital-planning-domain/32-asset-risk/prose/unit-04/practice-2/coefficients.py"
+      "practice/07-the-capital-planning-domain/32-asset-risk/prose/unit-04/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -126,6 +144,10 @@
     },
     "concepts": [
       "a fixed counting period and discounting turn yearly reductions into one coefficient per start"
-    ]
+    ],
+    "files": [
+      "practice/07-the-capital-planning-domain/32-asset-risk/prose/unit-04/practice-2/try_it.py"
+    ],
+    "try_file": "practice/07-the-capital-planning-domain/32-asset-risk/prose/unit-04/practice-2/try_it.py"
   }
 }

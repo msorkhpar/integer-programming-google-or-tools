@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Crew-hours rows as one table",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport pandas as pd\n\n\ndef hours_entries(options: pd.DataFrame, profile: pd.DataFrame, weeks: list[int]) -> pd.DataFrame:\n    \"\"\"The nonzeros of the weekly crew-hours rows, one table row each: week, col, coef.\n\n    `options` has one row per variable y[task, start], columns `task` and `start`; the variable's\n    column number `col` is its position in `options`, counting from 0. `profile` has columns `task`,\n    `k` and `hours`: the crew-hours a task needs in its k-th week of work (k = 0 is its start week).\n    \"\"\"\n    cols = options[[\"task\", \"start\"]].reset_index(drop=True)\n    cols[\"col\"] = cols.index\n    terms = cols.merge(profile, on=\"task\")\n    terms[\"week\"] = terms[\"start\"] + terms[\"k\"]\n    terms = terms[terms[\"week\"].isin(weeks) & (terms[\"hours\"] != 0)]\n    out = terms.sort_values([\"week\", \"col\"])[[\"week\", \"col\", \"hours\"]].rename(columns={\"hours\": \"coef\"})\n    out[\"coef\"] = out[\"coef\"].astype(float)\n    return out.reset_index(drop=True)\n\n\nif __name__ == \"__main__\":\n    options = pd.DataFrame({\"task\": [\"T1\", \"T1\", \"T2\"], \"start\": [1, 2, 1]})\n    profile = pd.DataFrame({\"task\": [\"T1\", \"T1\", \"T2\"], \"k\": [0, 1, 0], \"hours\": [5, 3, 4]})\n    print(hours_entries(options, profile, [1, 2, 3]).to_string(index=False))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport pandas as pd\n\nfrom entries import hours_entries\n\noptions = pd.DataFrame({\"task\": [\"P1\", \"P2\", \"P2\"], \"start\": [2, 1, 3]})\nprofile = pd.DataFrame({\"task\": [\"P1\", \"P1\", \"P2\", \"P2\"], \"k\": [0, 1, 0, 1], \"hours\": [6, 2, 4, 0]})\n\ntable = hours_entries(options, profile, [1, 2, 3])\nprint(\"entries for weeks 1 to 3:\")\nprint(table.to_string(index=False))\nprint(\"entries for week 3 only:\", list(hours_entries(options, profile, [3]).itertuples(index=False, name=None)))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport pandas as pd\n\n\ndef hours_entries(options: pd.DataFrame, profile: pd.DataFrame, weeks: list[int]) -> pd.DataFrame:\n    \"\"\"The nonzeros of the weekly crew-hours rows, one table row each: week, col, coef.\n\n    `options` has one row per variable y[task, start], columns `task` and `start`; the variable's\n    column number `col` is its position in `options`, counting from 0. `profile` has columns `task`,\n    `k` and `hours`: the crew-hours a task needs in its k-th week of work (k = 0 is its start week).\n    \"\"\"\n    # TODO: number the columns, join them to the profile, and keep the entries the rows need.\n    return pd.DataFrame({\"week\": [], \"col\": [], \"coef\": []})\n\n\nif __name__ == \"__main__\":\n    options = pd.DataFrame({\"task\": [\"T1\", \"T1\", \"T2\"], \"start\": [1, 2, 1]})\n    profile = pd.DataFrame({\"task\": [\"T1\", \"T1\", \"T2\"], \"k\": [0, 1, 0], \"hours\": [5, 3, 4]})\n    print(hours_entries(options, profile, [1, 2, 3]).to_string(index=False))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport pandas as pd\n\nfrom entries import hours_entries\n\noptions = pd.DataFrame({\"task\": [\"P1\", \"P2\", \"P2\"], \"start\": [2, 1, 3]})\nprofile = pd.DataFrame({\"task\": [\"P1\", \"P1\", \"P2\", \"P2\"], \"k\": [0, 1, 0, 1], \"hours\": [6, 2, 4, 0]})\n\ntable = hours_entries(options, profile, [1, 2, 3])\nprint(\"entries for weeks 1 to 3:\")\nprint(table.to_string(index=False))\nprint(\"entries for week 3 only:\", list(hours_entries(options, profile, [3]).itertuples(index=False, name=None)))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "c654caa702e9d1c7328492756691fb9febf09756a74ae9bb393dc8d353b77e1c",
+  "content_sha256": "3fca2687ee1debc5f03451566b582ba8178bedf0e013e6ded1286aab8f476f72",
   "starting_code": "from __future__ import annotations\n\nimport pandas as pd\n\n\ndef hours_entries(options: pd.DataFrame, profile: pd.DataFrame, weeks: list[int]) -> pd.DataFrame:\n    \"\"\"The nonzeros of the weekly crew-hours rows, one table row each: week, col, coef.\n\n    `options` has one row per variable y[task, start], columns `task` and `start`; the variable's\n    column number `col` is its position in `options`, counting from 0. `profile` has columns `task`,\n    `k` and `hours`: the crew-hours a task needs in its k-th week of work (k = 0 is its start week).\n    \"\"\"\n    # TODO: number the columns, join them to the profile, and keep the entries the rows need.\n    return pd.DataFrame({\"week\": [], \"col\": [], \"coef\": []})\n\n\nif __name__ == \"__main__\":\n    options = pd.DataFrame({\"task\": [\"T1\", \"T1\", \"T2\"], \"start\": [1, 2, 1]})\n    profile = pd.DataFrame({\"task\": [\"T1\", \"T1\", \"T2\"], \"k\": [0, 1, 0], \"hours\": [5, 3, 4]})\n    print(hours_entries(options, profile, [1, 2, 3]).to_string(index=False))\n",
   "exercise": {
     "main_path": "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-1/entries.py",
     "test_path": "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-1/test_entries.py",
     "run_command": [
       "python3",
-      "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-1/entries.py"
+      "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -141,6 +159,10 @@
     "concepts": [
       "each family of rows is computed as a table of row, column and coefficient with joins and filters",
       "the planning export is read as tables, and a packed cost profile becomes one row per year of work"
-    ]
+    ],
+    "files": [
+      "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-1/try_it.py"
   }
 }

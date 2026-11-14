@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Feeder upgrades that need their substation",
   "blocks": [
     {
@@ -60,6 +60,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n\n\ndef selection_variables(model: mathopt.Model, projects: list[Project], integer: bool = True) -> dict:\n    return {p.pid: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{p.pid}\") for p in projects}\n\n\ndef add_aggregated_needs(model, x, parent: str, children: list[str]) -> None:\n    \"\"\"The colleague's version: all the children together, in one row.\"\"\"\n    model.add_linear_constraint(sum(x[c] for c in children) <= len(children) * x[parent])\n\n\ndef add_parent_rows(model, x, parent: str, children: list[str]) -> None:\n    \"\"\"Every child upgrade needs the parent; the parent may be done alone.\"\"\"\n    for child in children:\n        model.add_linear_constraint(x[child] <= x[parent], name=f\"needs_{child}\")\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"SUB\", 90, 0), Project(\"F1\", 10, 50), Project(\"F2\", 10, 5)]\n    model = mathopt.Model()\n    x = selection_variables(model, projects)\n    add_parent_rows(model, x, \"SUB\", [\"F1\", \"F2\"])\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom feeders import Project, add_parent_rows, selection_variables\n\ndef solve_ok(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(plan):\n    model = mathopt.Model()\n    x = selection_variables(model, [Project(pid, 5, 1) for pid in [\"HUB\", \"L1\", \"L2\", \"L3\"]])\n    add_parent_rows(model, x, \"HUB\", [\"L1\", \"L2\", \"L3\"])\n    for pid, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if pid in plan else 0.0\n    return solve_ok(model)\n\n\nprint(\"plan HUB:\", allowed({\"HUB\"}))\nprint(\"plan HUB L1 L3:\", allowed({\"HUB\", \"L1\", \"L3\"}))\nprint(\"plan L2:\", allowed({\"L2\"}))\nprint(\"plan L1 L2:\", allowed({\"L1\", \"L2\"}))\n"
         }
       ]
     },
@@ -72,6 +81,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n\n\ndef selection_variables(model: mathopt.Model, projects: list[Project], integer: bool = True) -> dict:\n    return {p.pid: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{p.pid}\") for p in projects}\n\n\ndef add_aggregated_needs(model, x, parent: str, children: list[str]) -> None:\n    \"\"\"The colleague's version: all the children together, in one row.\"\"\"\n    model.add_linear_constraint(sum(x[c] for c in children) <= len(children) * x[parent])\n\n\ndef add_parent_rows(model, x, parent: str, children: list[str]) -> None:\n    \"\"\"Every child upgrade needs the parent; the parent may be done alone.\"\"\"\n    # TODO: your rows.\n    return None\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"SUB\", 90, 0), Project(\"F1\", 10, 50), Project(\"F2\", 10, 5)]\n    model = mathopt.Model()\n    x = selection_variables(model, projects)\n    add_parent_rows(model, x, \"SUB\", [\"F1\", \"F2\"])\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom feeders import Project, add_parent_rows, selection_variables\n\ndef solve_ok(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(plan):\n    model = mathopt.Model()\n    x = selection_variables(model, [Project(pid, 5, 1) for pid in [\"HUB\", \"L1\", \"L2\", \"L3\"]])\n    add_parent_rows(model, x, \"HUB\", [\"L1\", \"L2\", \"L3\"])\n    for pid, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if pid in plan else 0.0\n    return solve_ok(model)\n\n\nprint(\"plan HUB:\", allowed({\"HUB\"}))\nprint(\"plan HUB L1 L3:\", allowed({\"HUB\", \"L1\", \"L3\"}))\nprint(\"plan L2:\", allowed({\"L2\"}))\nprint(\"plan L1 L2:\", allowed({\"L1\", \"L2\"}))\n"
     }
   ],
   "video": null,
@@ -79,8 +97,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 6,
-    "code": 2,
+    "paras": 7,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -90,14 +108,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "c8fc0870b47950d3890881d029134668eb3555fcbba4d70630752948a28ea1b8",
+  "content_sha256": "03e516c74476c73187004018e460e9473bc58fcdd3a065452f682caf401697e5",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n\n\ndef selection_variables(model: mathopt.Model, projects: list[Project], integer: bool = True) -> dict:\n    return {p.pid: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{p.pid}\") for p in projects}\n\n\ndef add_aggregated_needs(model, x, parent: str, children: list[str]) -> None:\n    \"\"\"The colleague's version: all the children together, in one row.\"\"\"\n    model.add_linear_constraint(sum(x[c] for c in children) <= len(children) * x[parent])\n\n\ndef add_parent_rows(model, x, parent: str, children: list[str]) -> None:\n    \"\"\"Every child upgrade needs the parent; the parent may be done alone.\"\"\"\n    # TODO: your rows.\n    return None\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"SUB\", 90, 0), Project(\"F1\", 10, 50), Project(\"F2\", 10, 5)]\n    model = mathopt.Model()\n    x = selection_variables(model, projects)\n    add_parent_rows(model, x, \"SUB\", [\"F1\", \"F2\"])\n    print(model.get_num_linear_constraints(), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-03/practice-2/feeders.py",
     "test_path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-03/practice-2/test_feeders.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-03/practice-2/feeders.py"
+      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-03/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -144,6 +162,10 @@
     "concepts": [
       "a parent rule over several children can be written in more than one form, and the forms can allow the same whole-number plans",
       "how the number of rows in a form trades against the strength of its LP bound"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-03/practice-2/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-03/practice-2/try_it.py"
   }
 }

@@ -9,7 +9,7 @@
   "unit": 5,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A water board's maintenance share",
   "blocks": [
     {
@@ -65,6 +65,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    kind: str          # \"maintenance\" or \"growth\"\n    cost: int\n\n\ndef add_spend_rules(model: mathopt.Model, x: dict, projects: list[Project], budget: int, use: float,\n                    low: float, high: float) -> None:\n    \"\"\"Spend between use x budget and budget; maintenance between low and high of the plan's spend.\"\"\"\n    total = sum(p.cost * x[p.pid] for p in projects)\n    upkeep = sum(p.cost * x[p.pid] for p in projects if p.kind == \"maintenance\")\n    model.add_linear_constraint(total <= budget, name=\"budget\")\n    model.add_linear_constraint(total >= use * budget, name=\"use_it\")\n    model.add_linear_constraint(upkeep >= low * total, name=\"upkeep_low\")\n    model.add_linear_constraint(upkeep <= high * total, name=\"upkeep_high\")\n\n\ndef build(projects: list[Project], budget: int, use: float, low: float,\n          high: float) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"water-board\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    add_spend_rules(model, x, projects, budget, use, low, high)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"PIPE\", \"maintenance\", 300), Project(\"TANK\", \"growth\", 500)]\n    model, x = build(projects, 900, 0.8, 0.3, 0.5)\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom board import Project, build\n\n# A water board's candidates, cost in $k.\nprojects = [Project(\"R1\", \"maintenance\", 180), Project(\"R2\", \"maintenance\", 220),\n            Project(\"R3\", \"maintenance\", 90), Project(\"N1\", \"growth\", 350),\n            Project(\"N2\", \"growth\", 200), Project(\"N3\", \"growth\", 60)]\n\ndef accepted(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(plan, budget=900, use=0.7, low=0.35, high=0.6):\n    model, x = build(projects, budget, use, low, high)\n    for pid, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if pid in plan else 0.0\n    return accepted(model)\n\n\nprint(\"R1 R2 N1 at budget 900:\", allowed({\"R1\", \"R2\", \"N1\"}))\nprint(\"R1 N1 at budget 900:\", allowed({\"R1\", \"N1\"}))\nprint(\"R1 R2 R3 N1 N3 at budget 900:\", allowed({\"R1\", \"R2\", \"R3\", \"N1\", \"N3\"}))\nprint(\"R1 R2 R3 N2 at budget 900:\", allowed({\"R1\", \"R2\", \"R3\", \"N2\"}))\nprint(\"R3 N1 N2 N3 at budget 900:\", allowed({\"R3\", \"N1\", \"N2\", \"N3\"}))\n"
         }
       ]
     },
@@ -77,6 +86,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    kind: str          # \"maintenance\" or \"growth\"\n    cost: int\n\n\ndef add_spend_rules(model: mathopt.Model, x: dict, projects: list[Project], budget: int, use: float,\n                    low: float, high: float) -> None:\n    \"\"\"Spend between use x budget and budget; maintenance between low and high of the plan's spend.\"\"\"\n    # TODO: your rows.\n    return None\n\n\ndef build(projects: list[Project], budget: int, use: float, low: float,\n          high: float) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"water-board\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    add_spend_rules(model, x, projects, budget, use, low, high)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"PIPE\", \"maintenance\", 300), Project(\"TANK\", \"growth\", 500)]\n    model, x = build(projects, 900, 0.8, 0.3, 0.5)\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom board import Project, build\n\n# A water board's candidates, cost in $k.\nprojects = [Project(\"R1\", \"maintenance\", 180), Project(\"R2\", \"maintenance\", 220),\n            Project(\"R3\", \"maintenance\", 90), Project(\"N1\", \"growth\", 350),\n            Project(\"N2\", \"growth\", 200), Project(\"N3\", \"growth\", 60)]\n\ndef accepted(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(plan, budget=900, use=0.7, low=0.35, high=0.6):\n    model, x = build(projects, budget, use, low, high)\n    for pid, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if pid in plan else 0.0\n    return accepted(model)\n\n\nprint(\"R1 R2 N1 at budget 900:\", allowed({\"R1\", \"R2\", \"N1\"}))\nprint(\"R1 N1 at budget 900:\", allowed({\"R1\", \"N1\"}))\nprint(\"R1 R2 R3 N1 N3 at budget 900:\", allowed({\"R1\", \"R2\", \"R3\", \"N1\", \"N3\"}))\nprint(\"R1 R2 R3 N2 at budget 900:\", allowed({\"R1\", \"R2\", \"R3\", \"N2\"}))\nprint(\"R3 N1 N2 N3 at budget 900:\", allowed({\"R3\", \"N1\", \"N2\", \"N3\"}))\n"
     }
   ],
   "video": null,
@@ -84,8 +102,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -95,14 +113,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "05598cf0edc83d1bfbc8ed56a303b193dbe78fade58b86c30e60a055073b5e1c",
+  "content_sha256": "83781c8b7cc6d1a77acc4cef557c5890addc1501665c107e464d66d3af43f58d",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    kind: str          # \"maintenance\" or \"growth\"\n    cost: int\n\n\ndef add_spend_rules(model: mathopt.Model, x: dict, projects: list[Project], budget: int, use: float,\n                    low: float, high: float) -> None:\n    \"\"\"Spend between use x budget and budget; maintenance between low and high of the plan's spend.\"\"\"\n    # TODO: your rows.\n    return None\n\n\ndef build(projects: list[Project], budget: int, use: float, low: float,\n          high: float) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"water-board\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    add_spend_rules(model, x, projects, budget, use, low, high)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"PIPE\", \"maintenance\", 300), Project(\"TANK\", \"growth\", 500)]\n    model, x = build(projects, 900, 0.8, 0.3, 0.5)\n    print(model.get_num_linear_constraints(), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-2/board.py",
     "test_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-2/test_board.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-2/board.py"
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -149,6 +167,10 @@
     "concepts": [
       "a share of the plan's spend becomes linear once both sides are multiplied by the total",
       "a ceiling and a floor are rows on the same spend expression, and a floor makes the model fund work for its spend"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-2/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-2/try_it.py"
   }
 }

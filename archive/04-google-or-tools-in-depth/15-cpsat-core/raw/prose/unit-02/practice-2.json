@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Site rules for a cold-storage warehouse",
   "blocks": [
     {
@@ -44,6 +44,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef site_variables(model: cp_model.CpModel) -> dict:\n    \"\"\"The warehouse's decisions for one day.\"\"\"\n    return {\n        \"night\": model.new_bool_var(\"night\"),            # the night shift runs\n        \"freezer\": model.new_bool_var(\"freezer\"),        # the freezer room is open\n        \"dock_a\": model.new_bool_var(\"dock_a\"),          # dock A is open\n        \"dock_b\": model.new_bool_var(\"dock_b\"),          # dock B is open\n        \"night_staff\": model.new_int_var(0, 20, \"night_staff\"),\n        \"frozen_orders\": model.new_int_var(0, 500, \"frozen_orders\"),\n        \"forklifts\": model.new_int_var(0, 6, \"forklifts\"),\n    }\n\n\ndef add_site_rules(model: cp_model.CpModel, v: dict, min_night: int, forklifts_both: int) -> None:\n    \"\"\"The site rules, each a linear row switched by literals.\"\"\"\n    model.add(v[\"night_staff\"] >= min_night).only_enforce_if(v[\"night\"])\n    model.add(v[\"night_staff\"] == 0).only_enforce_if(~v[\"night\"])\n    model.add(v[\"frozen_orders\"] == 0).only_enforce_if(~v[\"freezer\"])\n    model.add(v[\"forklifts\"] >= forklifts_both).only_enforce_if(v[\"dock_a\"], v[\"dock_b\"])\n\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    v = site_variables(model)\n    add_site_rules(model, v, 4, 3)\n    model.maximize(v[\"frozen_orders\"] - 10 * v[\"forklifts\"])\n    solver = cp_model.CpSolver()\n    print(solver.status_name(solver.solve(model)), {k: solver.value(x) for k, x in v.items()})\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.sat.python import cp_model\n\nfrom site_rules import add_site_rules, site_variables\n\n\ndef check(**fixed):\n    model = cp_model.CpModel()\n    v = site_variables(model)\n    add_site_rules(model, v, 6, 2)\n    for name, value in fixed.items():\n        model.add(v[name] == value)\n    solver = cp_model.CpSolver()\n    solver.parameters.max_time_in_seconds = 5\n    return solver.status_name(solver.solve(model))\n\n\nprint(\"min_night 6, night with 7 staff:\", check(night=1, night_staff=7))\nprint(\"min_night 6, night with 3 staff:\", check(night=1, night_staff=3))\nprint(\"no night, 2 staff:\", check(night=0, night_staff=2))\nprint(\"freezer shut, 40 frozen orders:\", check(freezer=0, frozen_orders=40))\nprint(\"forklifts_both 2, both docks, 1 forklift:\", check(dock_a=1, dock_b=1, forklifts=1))\nprint(\"forklifts_both 2, dock A only, 1 forklift:\", check(dock_a=1, dock_b=0, forklifts=1))\n"
         }
       ]
     },
@@ -56,6 +65,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef site_variables(model: cp_model.CpModel) -> dict:\n    \"\"\"The warehouse's decisions for one day.\"\"\"\n    return {\n        \"night\": model.new_bool_var(\"night\"),            # the night shift runs\n        \"freezer\": model.new_bool_var(\"freezer\"),        # the freezer room is open\n        \"dock_a\": model.new_bool_var(\"dock_a\"),          # dock A is open\n        \"dock_b\": model.new_bool_var(\"dock_b\"),          # dock B is open\n        \"night_staff\": model.new_int_var(0, 20, \"night_staff\"),\n        \"frozen_orders\": model.new_int_var(0, 500, \"frozen_orders\"),\n        \"forklifts\": model.new_int_var(0, 6, \"forklifts\"),\n    }\n\n\ndef add_site_rules(model: cp_model.CpModel, v: dict, min_night: int, forklifts_both: int) -> None:\n    \"\"\"The site rules, each a linear row switched by literals.\"\"\"\n    # TODO: four rows, each switched by the right literals.\n    return None\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    v = site_variables(model)\n    add_site_rules(model, v, 4, 3)\n    model.maximize(v[\"frozen_orders\"] - 10 * v[\"forklifts\"])\n    solver = cp_model.CpSolver()\n    print(solver.status_name(solver.solve(model)), {k: solver.value(x) for k, x in v.items()})\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.sat.python import cp_model\n\nfrom site_rules import add_site_rules, site_variables\n\n\ndef check(**fixed):\n    model = cp_model.CpModel()\n    v = site_variables(model)\n    add_site_rules(model, v, 6, 2)\n    for name, value in fixed.items():\n        model.add(v[name] == value)\n    solver = cp_model.CpSolver()\n    solver.parameters.max_time_in_seconds = 5\n    return solver.status_name(solver.solve(model))\n\n\nprint(\"min_night 6, night with 7 staff:\", check(night=1, night_staff=7))\nprint(\"min_night 6, night with 3 staff:\", check(night=1, night_staff=3))\nprint(\"no night, 2 staff:\", check(night=0, night_staff=2))\nprint(\"freezer shut, 40 frozen orders:\", check(freezer=0, frozen_orders=40))\nprint(\"forklifts_both 2, both docks, 1 forklift:\", check(dock_a=1, dock_b=1, forklifts=1))\nprint(\"forklifts_both 2, dock A only, 1 forklift:\", check(dock_a=1, dock_b=0, forklifts=1))\n"
     }
   ],
   "video": null,
@@ -63,8 +81,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 2,
-    "code": 2,
+    "paras": 3,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -74,14 +92,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "8c415485804610f2467b02d99f51bd3c7f5f8906ea5da65e16d90a1378ed6e08",
+  "content_sha256": "033736f81b31e6541e7878bcb4547ffa77a673634a66e171a733dee187014a96",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef site_variables(model: cp_model.CpModel) -> dict:\n    \"\"\"The warehouse's decisions for one day.\"\"\"\n    return {\n        \"night\": model.new_bool_var(\"night\"),            # the night shift runs\n        \"freezer\": model.new_bool_var(\"freezer\"),        # the freezer room is open\n        \"dock_a\": model.new_bool_var(\"dock_a\"),          # dock A is open\n        \"dock_b\": model.new_bool_var(\"dock_b\"),          # dock B is open\n        \"night_staff\": model.new_int_var(0, 20, \"night_staff\"),\n        \"frozen_orders\": model.new_int_var(0, 500, \"frozen_orders\"),\n        \"forklifts\": model.new_int_var(0, 6, \"forklifts\"),\n    }\n\n\ndef add_site_rules(model: cp_model.CpModel, v: dict, min_night: int, forklifts_both: int) -> None:\n    \"\"\"The site rules, each a linear row switched by literals.\"\"\"\n    # TODO: four rows, each switched by the right literals.\n    return None\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    v = site_variables(model)\n    add_site_rules(model, v, 4, 3)\n    model.maximize(v[\"frozen_orders\"] - 10 * v[\"forklifts\"])\n    solver = cp_model.CpSolver()\n    print(solver.status_name(solver.solve(model)), {k: solver.value(x) for k, x in v.items()})\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-2/site_rules.py",
     "test_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-2/test_site_rules.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-2/site_rules.py"
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -138,6 +156,10 @@
     "concepts": [
       "only_enforce_if switches a linear row on when all its literals are true, with no big-M",
       "a literal is a Boolean variable or its negation, written with the tilde operator"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-02/practice-2/try_it.py"
   }
 }

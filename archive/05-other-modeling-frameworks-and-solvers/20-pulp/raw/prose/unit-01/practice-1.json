@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Write a pump refurbishment model in PuLP from its formulation",
   "blocks": [
     {
@@ -64,6 +64,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pulp\n\n\n@dataclass(frozen=True)\nclass Station:\n    sid: str\n    savings: float        # energy saved per year after the refurbishment, $k\n    cost: float           # cost of the refurbishment, $k\n    crew_days: int        # crew-days the refurbishment takes\n    must: bool = False    # required by the regulator this year\n\n\ndef build(stations: list[Station], budget: float, crew_days: int,\n          bypass_pairs: list[tuple[str, str]]) -> tuple[pulp.LpProblem, dict[str, pulp.LpVariable]]:\n    \"\"\"The refurbishment model, with one named row per rule.\"\"\"\n    prob = pulp.LpProblem(\"pump_refurbishment\", pulp.LpMaximize)\n    y = {s.sid: prob.add_variable(f\"y_{s.sid}\", 0, 1, cat=pulp.LpBinary) for s in stations}\n    prob += pulp.lpSum(s.savings * y[s.sid] for s in stations), \"savings\"\n    prob += pulp.lpSum(s.cost * y[s.sid] for s in stations) <= budget, \"budget\"\n    prob += pulp.lpSum(s.crew_days * y[s.sid] for s in stations) <= crew_days, \"crew\"\n    for a, b in bypass_pairs:\n        prob += y[a] + y[b] <= 1, f\"bypass_{a}_{b}\"\n    for s in stations:\n        if s.must:\n            prob += y[s.sid] == 1, f\"must_{s.sid}\"\n    return prob, y\n\n\ndef refurbish(stations: list[Station], budget: float, crew_days: int,\n              bypass_pairs: list[tuple[str, str]]) -> tuple[float, list[str]]:\n    \"\"\"Solve with CBC at a gap of 0: the yearly savings and the stations to refurbish, sorted.\"\"\"\n    prob, y = build(stations, budget, crew_days, bypass_pairs)\n    prob.solve(pulp.PULP_CBC_CMD(msg=False, gapRel=0))\n    return pulp.value(prob.objective), sorted(sid for sid, v in y.items() if v.varValue > 0.5)\n\n\nif __name__ == \"__main__\":\n    demo = [Station(\"N1\", 20, 30, 4), Station(\"N2\", 15, 20, 3, must=True), Station(\"N3\", 18, 25, 5)]\n    print(refurbish(demo, budget=50, crew_days=8, bypass_pairs=[(\"N1\", \"N3\")]))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom refurbish import Station, refurbish\n\n# Station(id, savings $k, cost $k, crew-days, required this year)\nnorth = [\n    Station(\"K1\", 40, 35, 3),\n    Station(\"K2\", 28, 25, 4),\n    Station(\"K3\", 33, 30, 2),\n    Station(\"K4\", 10, 15, 1, must=True),\n    Station(\"K5\", 18, 20, 3),\n]\nprint(\"budget 70, 20 crew-days, no pairs:\", refurbish(north, budget=70, crew_days=20, bypass_pairs=[]))\nprint(\"budget 70, 20 crew-days, K2/K3 bypass:\", refurbish(north, budget=70, crew_days=20, bypass_pairs=[(\"K2\", \"K3\")]))\nprint(\"budget 100, 6 crew-days, no pairs:\", refurbish(north, budget=100, crew_days=6, bypass_pairs=[]))\n"
         }
       ]
     },
@@ -76,6 +85,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pulp\n\n\n@dataclass(frozen=True)\nclass Station:\n    sid: str\n    savings: float        # energy saved per year after the refurbishment, $k\n    cost: float           # cost of the refurbishment, $k\n    crew_days: int        # crew-days the refurbishment takes\n    must: bool = False    # required by the regulator this year\n\n\ndef build(stations: list[Station], budget: float, crew_days: int,\n          bypass_pairs: list[tuple[str, str]]) -> tuple[pulp.LpProblem, dict[str, pulp.LpVariable]]:\n    \"\"\"The refurbishment model, with one named row per rule.\"\"\"\n    prob = pulp.LpProblem(\"pump_refurbishment\", pulp.LpMaximize)\n    y = {s.sid: prob.add_variable(f\"y_{s.sid}\", 0, 1, cat=pulp.LpBinary) for s in stations}\n    prob += pulp.lpSum(s.savings * y[s.sid] for s in stations), \"savings\"\n    # TODO: add the budget, crew, bypass and must rows of the formulation, each with its name.\n    return prob, y\n\n\ndef refurbish(stations: list[Station], budget: float, crew_days: int,\n              bypass_pairs: list[tuple[str, str]]) -> tuple[float, list[str]]:\n    \"\"\"Solve with CBC at a gap of 0: the yearly savings and the stations to refurbish, sorted.\"\"\"\n    prob, y = build(stations, budget, crew_days, bypass_pairs)\n    prob.solve(pulp.PULP_CBC_CMD(msg=False, gapRel=0))\n    return pulp.value(prob.objective), sorted(sid for sid, v in y.items() if v.varValue > 0.5)\n\n\nif __name__ == \"__main__\":\n    demo = [Station(\"N1\", 20, 30, 4), Station(\"N2\", 15, 20, 3, must=True), Station(\"N3\", 18, 25, 5)]\n    print(refurbish(demo, budget=50, crew_days=8, bypass_pairs=[(\"N1\", \"N3\")]))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom refurbish import Station, refurbish\n\n# Station(id, savings $k, cost $k, crew-days, required this year)\nnorth = [\n    Station(\"K1\", 40, 35, 3),\n    Station(\"K2\", 28, 25, 4),\n    Station(\"K3\", 33, 30, 2),\n    Station(\"K4\", 10, 15, 1, must=True),\n    Station(\"K5\", 18, 20, 3),\n]\nprint(\"budget 70, 20 crew-days, no pairs:\", refurbish(north, budget=70, crew_days=20, bypass_pairs=[]))\nprint(\"budget 70, 20 crew-days, K2/K3 bypass:\", refurbish(north, budget=70, crew_days=20, bypass_pairs=[(\"K2\", \"K3\")]))\nprint(\"budget 100, 6 crew-days, no pairs:\", refurbish(north, budget=100, crew_days=6, bypass_pairs=[]))\n"
     }
   ],
   "video": null,
@@ -83,8 +101,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -94,14 +112,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "e148bdd88d3e343d68865f3305e49f6c9d2ae0e93fd4e534ed75c25de0e4e256",
+  "content_sha256": "3008abc719e071ebe18eacedf57931ed02dba574f5a1378824de1c0ddb23161b",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pulp\n\n\n@dataclass(frozen=True)\nclass Station:\n    sid: str\n    savings: float        # energy saved per year after the refurbishment, $k\n    cost: float           # cost of the refurbishment, $k\n    crew_days: int        # crew-days the refurbishment takes\n    must: bool = False    # required by the regulator this year\n\n\ndef build(stations: list[Station], budget: float, crew_days: int,\n          bypass_pairs: list[tuple[str, str]]) -> tuple[pulp.LpProblem, dict[str, pulp.LpVariable]]:\n    \"\"\"The refurbishment model, with one named row per rule.\"\"\"\n    prob = pulp.LpProblem(\"pump_refurbishment\", pulp.LpMaximize)\n    y = {s.sid: prob.add_variable(f\"y_{s.sid}\", 0, 1, cat=pulp.LpBinary) for s in stations}\n    prob += pulp.lpSum(s.savings * y[s.sid] for s in stations), \"savings\"\n    # TODO: add the budget, crew, bypass and must rows of the formulation, each with its name.\n    return prob, y\n\n\ndef refurbish(stations: list[Station], budget: float, crew_days: int,\n              bypass_pairs: list[tuple[str, str]]) -> tuple[float, list[str]]:\n    \"\"\"Solve with CBC at a gap of 0: the yearly savings and the stations to refurbish, sorted.\"\"\"\n    prob, y = build(stations, budget, crew_days, bypass_pairs)\n    prob.solve(pulp.PULP_CBC_CMD(msg=False, gapRel=0))\n    return pulp.value(prob.objective), sorted(sid for sid, v in y.items() if v.varValue > 0.5)\n\n\nif __name__ == \"__main__\":\n    demo = [Station(\"N1\", 20, 30, 4), Station(\"N2\", 15, 20, 3, must=True), Station(\"N3\", 18, 25, 5)]\n    print(refurbish(demo, budget=50, crew_days=8, bypass_pairs=[(\"N1\", \"N3\")]))\n",
   "exercise": {
     "main_path": "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-01/practice-1/refurbish.py",
     "test_path": "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-01/practice-1/test_refurbish.py",
     "run_command": [
       "python3",
-      "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-01/practice-1/refurbish.py"
+      "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-01/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -153,6 +171,10 @@
     "concepts": [
       "the LP file shows every row by name with its terms moved to the left, as the solver receives it",
       "a PuLP model is a problem with variables, an objective set by += of an expression, and rows added by += of a named comparison"
-    ]
+    ],
+    "files": [
+      "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-01/practice-1/try_it.py"
+    ],
+    "try_file": "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-01/practice-1/try_it.py"
   }
 }

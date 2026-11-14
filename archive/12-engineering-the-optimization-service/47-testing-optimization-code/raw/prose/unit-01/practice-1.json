@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Ask a hospital's model about several plans",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef verdicts(model: mathopt.Model, x: dict[tuple[str, int], mathopt.Variable], plans: list[dict[str, int]]) -> list[bool]:\n    \"\"\"For each plan (project -> start year), does `model` accept it? Every bound is left as found.\"\"\"\n    found = {key: (var.lower_bound, var.upper_bound) for key, var in x.items()}\n    answers = []\n    for plan in plans:\n        if any((name, year) not in x for name, year in plan.items()):\n            answers.append(False)\n            continue\n        for (name, year), var in x.items():\n            var.lower_bound = var.upper_bound = 1.0 if plan.get(name) == year else 0.0\n        result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n        answers.append(result.termination.reason == mathopt.TerminationReason.OPTIMAL)\n    for key, (low, high) in found.items():\n        x[key].lower_bound, x[key].upper_bound = low, high\n    return answers\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = {(\"boiler\", 2027): model.add_binary_variable(name=\"x_boiler_2027\")}\n    model.add_linear_constraint(x[\"boiler\", 2027] == 1, name=\"must_boiler\")\n    print(verdicts(model, x, [{\"boiler\": 2027}, {}]))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom verdict import verdicts\n\n# A school's projects: start years allowed and cost in the start year ($k); 60 per year.\nwindows = {\"roof\": (2031, 2032), \"gym\": (2031,), \"boiler\": (2032,)}\ncost = {\"roof\": 45, \"gym\": 30, \"boiler\": 25}\nmodel = mathopt.Model()\nx = {(n, t): model.add_binary_variable(name=f\"x_{n}_{t}\") for n, years in windows.items() for t in years}\nfor n, years in windows.items():\n    model.add_linear_constraint(sum(x[n, t] for t in years) <= 1, name=f\"once_{n}\")\nfor t in (2031, 2032):\n    model.add_linear_constraint(sum(cost[n] * x[n, t] for n in windows if t in windows[n]) <= 60, name=f\"budget_{t}\")\nx[\"roof\", 2032].lower_bound = 1.0\n\nplans = [{\"roof\": 2032, \"gym\": 2031}, {\"roof\": 2031, \"gym\": 2031}, {\"roof\": 2032, \"boiler\": 2032},\n         {\"roof\": 2032, \"gym\": 2033}]\nfor plan, ok in zip(plans, verdicts(model, x, plans)):\n    print(f\"plan {plan}:\", ok)\nprint(\"roof 2032 bounds afterwards:\", (x[\"roof\", 2032].lower_bound, x[\"roof\", 2032].upper_bound))\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef verdicts(model: mathopt.Model, x: dict[tuple[str, int], mathopt.Variable], plans: list[dict[str, int]]) -> list[bool]:\n    \"\"\"For each plan (project -> start year), does `model` accept it? Every bound is left as found.\"\"\"\n    # TODO: fix each plan into the model, solve, read the answer, and leave the model as found.\n    return [True for plan in plans]\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = {(\"boiler\", 2027): model.add_binary_variable(name=\"x_boiler_2027\")}\n    model.add_linear_constraint(x[\"boiler\", 2027] == 1, name=\"must_boiler\")\n    print(verdicts(model, x, [{\"boiler\": 2027}, {}]))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom verdict import verdicts\n\n# A school's projects: start years allowed and cost in the start year ($k); 60 per year.\nwindows = {\"roof\": (2031, 2032), \"gym\": (2031,), \"boiler\": (2032,)}\ncost = {\"roof\": 45, \"gym\": 30, \"boiler\": 25}\nmodel = mathopt.Model()\nx = {(n, t): model.add_binary_variable(name=f\"x_{n}_{t}\") for n, years in windows.items() for t in years}\nfor n, years in windows.items():\n    model.add_linear_constraint(sum(x[n, t] for t in years) <= 1, name=f\"once_{n}\")\nfor t in (2031, 2032):\n    model.add_linear_constraint(sum(cost[n] * x[n, t] for n in windows if t in windows[n]) <= 60, name=f\"budget_{t}\")\nx[\"roof\", 2032].lower_bound = 1.0\n\nplans = [{\"roof\": 2032, \"gym\": 2031}, {\"roof\": 2031, \"gym\": 2031}, {\"roof\": 2032, \"boiler\": 2032},\n         {\"roof\": 2032, \"gym\": 2033}]\nfor plan, ok in zip(plans, verdicts(model, x, plans)):\n    print(f\"plan {plan}:\", ok)\nprint(\"roof 2032 bounds afterwards:\", (x[\"roof\", 2032].lower_bound, x[\"roof\", 2032].upper_bound))\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "351197b7dfcff448c20916d82eddae2fac8cceff6766832d5597a161575f14ea",
+  "content_sha256": "c20623f5ad4f626fbb2d5478966311a0a98147b51f205f90ebff9f6e38711a30",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef verdicts(model: mathopt.Model, x: dict[tuple[str, int], mathopt.Variable], plans: list[dict[str, int]]) -> list[bool]:\n    \"\"\"For each plan (project -> start year), does `model` accept it? Every bound is left as found.\"\"\"\n    # TODO: fix each plan into the model, solve, read the answer, and leave the model as found.\n    return [True for plan in plans]\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = {(\"boiler\", 2027): model.add_binary_variable(name=\"x_boiler_2027\")}\n    model.add_linear_constraint(x[\"boiler\", 2027] == 1, name=\"must_boiler\")\n    print(verdicts(model, x, [{\"boiler\": 2027}, {}]))\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-01/practice-1/verdict.py",
     "test_path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-01/practice-1/test_verdict.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-01/practice-1/verdict.py"
+      "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-01/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -144,6 +162,10 @@
     },
     "concepts": [
       "a unit test fixes every start decision by its bounds, leaves helper variables free, and reads the termination reason"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-01/practice-1/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-01/practice-1/try_it.py"
   }
 }

@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Saying what a solve returned",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport pyomo.environ as pyo\nfrom pyomo.contrib.solver.common.factory import SolverFactory\nfrom pyomo.contrib.solver.common.results import SolutionStatus, TerminationCondition\n\nWORDS = {\n    TerminationCondition.convergenceCriteriaSatisfied: \"optimal\",\n    TerminationCondition.provenInfeasible: \"infeasible\",\n    TerminationCondition.unbounded: \"unbounded\",\n    TerminationCondition.infeasibleOrUnbounded: \"infeasible or unbounded\",\n}\n\n\ndef outcome(model: pyo.ConcreteModel, **options) -> dict:\n    \"\"\"Solve `model` with HiGHS and say what happened, without raising.\n\n    Returns {\"status\": a word for the termination condition (or \"stopped\" for a limit or anything\n    else), \"objective\": the incumbent's objective or None, \"plan\": {variable name: value} for every\n    variable when a solution exists, else {}}.\n    \"\"\"\n    results = SolverFactory(\"highs\").solve(model, raise_exception_on_nonoptimal_result=False,\n                                           load_solutions=False, **options)\n    status = WORDS.get(results.termination_condition, \"stopped\")\n    has_plan = results.solution_status in (SolutionStatus.optimal, SolutionStatus.feasible)\n    plan = {}\n    if has_plan:\n        results.solution_loader.load_vars()\n        plan = {v.name: v.value for v in model.component_data_objects(pyo.Var)}\n    return {\"status\": status, \"objective\": results.incumbent_objective if has_plan else None, \"plan\": plan}\n\n\nif __name__ == \"__main__\":\n    m = pyo.ConcreteModel()\n    m.x = pyo.Var(domain=pyo.Binary)\n    m.y = pyo.Var(domain=pyo.Binary)\n    m.c = pyo.Constraint(expr=m.x + m.y <= 1)\n    m.o = pyo.Objective(expr=3 * m.x + 2 * m.y, sense=pyo.maximize)\n    print(outcome(m))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\n# Pyomo logs every set it builds and the whole solver log; keep its own logger to warnings.\nlogging.getLogger(\"pyomo\").setLevel(logging.WARNING)\n\nimport pyomo.environ as pyo\n\nfrom report import outcome\n\n\ndef depot(vans_needed):\n    \"\"\"Small vans (cost 2) and lorries (cost 5, carry 3) covering a load.\"\"\"\n    m = pyo.ConcreteModel()\n    m.van = pyo.Var(domain=pyo.NonNegativeIntegers, bounds=(0, 4))\n    m.lorry = pyo.Var(domain=pyo.NonNegativeIntegers, bounds=(0, 2))\n    m.cover = pyo.Constraint(expr=m.van + 3 * m.lorry >= vans_needed)\n    m.cost = pyo.Objective(expr=2 * m.van + 5 * m.lorry)\n    return m\n\n\nprint(\"load 7:\", outcome(depot(7)))\nprint(\"load 20:\", outcome(depot(20)))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport pyomo.environ as pyo\nfrom pyomo.contrib.solver.common.factory import SolverFactory\nfrom pyomo.contrib.solver.common.results import SolutionStatus, TerminationCondition\n\nWORDS = {\n    TerminationCondition.convergenceCriteriaSatisfied: \"optimal\",\n    TerminationCondition.provenInfeasible: \"infeasible\",\n    TerminationCondition.unbounded: \"unbounded\",\n    TerminationCondition.infeasibleOrUnbounded: \"infeasible or unbounded\",\n}\n\n\ndef outcome(model: pyo.ConcreteModel, **options) -> dict:\n    \"\"\"Solve `model` with HiGHS and say what happened, without raising.\n\n    Returns {\"status\": a word for the termination condition (or \"stopped\" for a limit or anything\n    else), \"objective\": the incumbent's objective or None, \"plan\": {variable name: value} for every\n    variable when a solution exists, else {}}.\n    \"\"\"\n    # TODO: solve without raising and without loading; map the termination condition through WORDS;\n    #       load and read the plan only when the solution status says there is one.\n    return {\"status\": \"optimal\", \"objective\": None, \"plan\": {}}\n\n\nif __name__ == \"__main__\":\n    m = pyo.ConcreteModel()\n    m.x = pyo.Var(domain=pyo.Binary)\n    m.y = pyo.Var(domain=pyo.Binary)\n    m.c = pyo.Constraint(expr=m.x + m.y <= 1)\n    m.o = pyo.Objective(expr=3 * m.x + 2 * m.y, sense=pyo.maximize)\n    print(outcome(m))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\n# Pyomo logs every set it builds and the whole solver log; keep its own logger to warnings.\nlogging.getLogger(\"pyomo\").setLevel(logging.WARNING)\n\nimport pyomo.environ as pyo\n\nfrom report import outcome\n\n\ndef depot(vans_needed):\n    \"\"\"Small vans (cost 2) and lorries (cost 5, carry 3) covering a load.\"\"\"\n    m = pyo.ConcreteModel()\n    m.van = pyo.Var(domain=pyo.NonNegativeIntegers, bounds=(0, 4))\n    m.lorry = pyo.Var(domain=pyo.NonNegativeIntegers, bounds=(0, 2))\n    m.cover = pyo.Constraint(expr=m.van + 3 * m.lorry >= vans_needed)\n    m.cost = pyo.Objective(expr=2 * m.van + 5 * m.lorry)\n    return m\n\n\nprint(\"load 7:\", outcome(depot(7)))\nprint(\"load 20:\", outcome(depot(20)))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "ab97aab074f6004a00ef36a138504a98789ca323e3a892f33d36d21e33dbefd3",
+  "content_sha256": "1991560cd84cdb95f2c0b3c8cb65bd8cea8978dc084112833cfea577f171692f",
   "starting_code": "from __future__ import annotations\n\nimport pyomo.environ as pyo\nfrom pyomo.contrib.solver.common.factory import SolverFactory\nfrom pyomo.contrib.solver.common.results import SolutionStatus, TerminationCondition\n\nWORDS = {\n    TerminationCondition.convergenceCriteriaSatisfied: \"optimal\",\n    TerminationCondition.provenInfeasible: \"infeasible\",\n    TerminationCondition.unbounded: \"unbounded\",\n    TerminationCondition.infeasibleOrUnbounded: \"infeasible or unbounded\",\n}\n\n\ndef outcome(model: pyo.ConcreteModel, **options) -> dict:\n    \"\"\"Solve `model` with HiGHS and say what happened, without raising.\n\n    Returns {\"status\": a word for the termination condition (or \"stopped\" for a limit or anything\n    else), \"objective\": the incumbent's objective or None, \"plan\": {variable name: value} for every\n    variable when a solution exists, else {}}.\n    \"\"\"\n    # TODO: solve without raising and without loading; map the termination condition through WORDS;\n    #       load and read the plan only when the solution status says there is one.\n    return {\"status\": \"optimal\", \"objective\": None, \"plan\": {}}\n\n\nif __name__ == \"__main__\":\n    m = pyo.ConcreteModel()\n    m.x = pyo.Var(domain=pyo.Binary)\n    m.y = pyo.Var(domain=pyo.Binary)\n    m.c = pyo.Constraint(expr=m.x + m.y <= 1)\n    m.o = pyo.Objective(expr=3 * m.x + 2 * m.y, sense=pyo.maximize)\n    print(outcome(m))\n",
   "exercise": {
     "main_path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-02/practice-1/report.py",
     "test_path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-02/practice-1/test_report.py",
     "run_command": [
       "python3",
-      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-02/practice-1/report.py"
+      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -132,6 +150,10 @@
       "a failed solve reported instead of raised",
       "the fields that say why a solve stopped and what it found",
       "calling HiGHS from Pyomo"
-    ]
+    ],
+    "files": [
+      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-02/practice-1/try_it.py"
   }
 }

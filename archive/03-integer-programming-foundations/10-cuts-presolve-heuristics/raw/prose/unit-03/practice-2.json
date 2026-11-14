@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A fractional dive",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom typing import Callable\n\nEPS = 1e-6\nLP = Callable[[dict[str, int]], \"dict[str, float] | None\"]\n\n\ndef dive(lp: LP) -> tuple[dict[str, int] | None, list[tuple[str, int]]]:\n    \"\"\"Fix the least fractional variable to its nearest value, re-solve, repeat until the point is 0-1.\"\"\"\n    fixed: dict[str, int] = {}\n    steps: list[tuple[str, int]] = []\n    x = lp(fixed)\n    while True:\n        fractional = [j for j, v in x.items() if EPS < v < 1 - EPS]\n        if not fractional:\n            return {j: round(v) for j, v in x.items()}, steps\n        j = min(fractional, key=lambda j: (min(x[j], 1 - x[j]), j))\n        target = 1 if x[j] >= 0.5 else 0\n        new = lp({**fixed, j: target})\n        if new is None:\n            target = 1 - target\n            new = lp({**fixed, j: target})\n            if new is None:\n                return None, steps\n        fixed[j] = target\n        steps.append((j, target))\n        x = new\n\n\nif __name__ == \"__main__\":\n    answers = {(): {\"a\": 1, \"b\": 0.9, \"c\": 0.4}, ((\"b\", 1),): {\"a\": 1, \"b\": 1, \"c\": 0}}\n    print(dive(lambda fixed: answers[tuple(sorted(fixed.items()))]))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom dive import dive\n\n# A pretend LP: it knows the points for a few sets of fixings.\nanswers = {\n    (): {\"s1\": 0.7, \"s2\": 0.2, \"s3\": 1},\n    ((\"s2\", 0),): {\"s1\": 0.95, \"s2\": 0, \"s3\": 1},\n    ((\"s1\", 1), (\"s2\", 0)): {\"s1\": 1, \"s2\": 0, \"s3\": 1},\n}\n\n\ndef lp(fixed):\n    return answers.get(tuple(sorted(fixed.items())))\n\n\nprint(\"dive over s1, s2, s3:\", dive(lp))\nprint(\"dive when the first LP is 0-1:\", dive(lambda fixed: {\"t1\": 1, \"t2\": 0}))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom typing import Callable\n\nEPS = 1e-6\nLP = Callable[[dict[str, int]], \"dict[str, float] | None\"]\n\n\ndef dive(lp: LP) -> tuple[dict[str, int] | None, list[tuple[str, int]]]:\n    \"\"\"Fix the least fractional variable to its nearest value, re-solve, repeat until the point is 0-1.\"\"\"\n    # TODO: start from lp({}); while a variable is fractional, fix the least fractional one to its\n    # nearest value (the other value if that LP is None), keeping every earlier fixing.\n    return None, []\n\n\nif __name__ == \"__main__\":\n    answers = {(): {\"a\": 1, \"b\": 0.9, \"c\": 0.4}, ((\"b\", 1),): {\"a\": 1, \"b\": 1, \"c\": 0}}\n    print(dive(lambda fixed: answers[tuple(sorted(fixed.items()))]))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom dive import dive\n\n# A pretend LP: it knows the points for a few sets of fixings.\nanswers = {\n    (): {\"s1\": 0.7, \"s2\": 0.2, \"s3\": 1},\n    ((\"s2\", 0),): {\"s1\": 0.95, \"s2\": 0, \"s3\": 1},\n    ((\"s1\", 1), (\"s2\", 0)): {\"s1\": 1, \"s2\": 0, \"s3\": 1},\n}\n\n\ndef lp(fixed):\n    return answers.get(tuple(sorted(fixed.items())))\n\n\nprint(\"dive over s1, s2, s3:\", dive(lp))\nprint(\"dive when the first LP is 0-1:\", dive(lambda fixed: {\"t1\": 1, \"t2\": 0}))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "90502f0c5b9207a607e8868d3f6714a61df190bd6df0754561bc6ca0b0bbc7ff",
+  "content_sha256": "3107b9cc702320b7bd1f4ab9dde3ec3f276a0e4da95ae1adffc66a3ef028c7b3",
   "starting_code": "from __future__ import annotations\n\nfrom typing import Callable\n\nEPS = 1e-6\nLP = Callable[[dict[str, int]], \"dict[str, float] | None\"]\n\n\ndef dive(lp: LP) -> tuple[dict[str, int] | None, list[tuple[str, int]]]:\n    \"\"\"Fix the least fractional variable to its nearest value, re-solve, repeat until the point is 0-1.\"\"\"\n    # TODO: start from lp({}); while a variable is fractional, fix the least fractional one to its\n    # nearest value (the other value if that LP is None), keeping every earlier fixing.\n    return None, []\n\n\nif __name__ == \"__main__\":\n    answers = {(): {\"a\": 1, \"b\": 0.9, \"c\": 0.4}, ((\"b\", 1),): {\"a\": 1, \"b\": 1, \"c\": 0}}\n    print(dive(lambda fixed: answers[tuple(sorted(fixed.items()))]))\n",
   "exercise": {
     "main_path": "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-03/practice-2/dive.py",
     "test_path": "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-03/practice-2/test_dive.py",
     "run_command": [
       "python3",
-      "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-03/practice-2/dive.py"
+      "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-03/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -140,6 +158,10 @@
     },
     "concepts": [
       "a dive fixes the least fractional variable, re-solves, and keeps every earlier fixing"
-    ]
+    ],
+    "files": [
+      "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-03/practice-2/try_it.py"
+    ],
+    "try_file": "practice/03-integer-programming-foundations/10-cuts-presolve-heuristics/prose/unit-03/practice-2/try_it.py"
   }
 }

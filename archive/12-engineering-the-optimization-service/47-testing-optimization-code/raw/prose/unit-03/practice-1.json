@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A readable diff for a crew roster",
   "blocks": [
     {
@@ -53,6 +53,15 @@
           "type": "code",
           "lang": "python",
           "text": "\"\"\"Compare a crew-roster result with its golden record.\n\nA record is a dict:\n    \"status\":   the solver's termination, e.g. \"OPTIMAL\"\n    \"cost\":     the roster's cost in dollars (a float from the solver)\n    \"assign\":   {job: crew}\n    \"overtime\": {crew: overtime hours} (floats from the solver; a crew not listed has 0)\n\"\"\"\n\nfrom __future__ import annotations\n\nTOLERANCE = {\"cost\": 1.0, \"overtime\": 0.01}   # $1 on cost; 0.01 hours (36 seconds) on overtime\n\n\ndef compare(expected: dict, actual: dict) -> list[str]:\n    \"\"\"One line per difference, in the order: status, cost, assignments, overtime.\"\"\"\n    if expected[\"status\"] != actual[\"status\"]:\n        return [f\"status: {expected['status']} -> {actual['status']}\"]\n    lines = []\n    if abs(actual[\"cost\"] - expected[\"cost\"]) > TOLERANCE[\"cost\"]:\n        lines.append(f\"cost: {expected['cost']:.2f} -> {actual['cost']:.2f}\")\n    was, now = expected[\"assign\"], actual[\"assign\"]\n    for job in sorted(set(was) | set(now)):\n        if was.get(job) != now.get(job):\n            lines.append(f\"assign: {job} {was.get(job, 'none')} -> {now.get(job, 'none')}\")\n    before, after = expected[\"overtime\"], actual[\"overtime\"]\n    for crew in sorted(set(before) | set(after)):\n        b, a = before.get(crew, 0.0), after.get(crew, 0.0)\n        if abs(a - b) > TOLERANCE[\"overtime\"]:\n            lines.append(f\"overtime {crew}: {b:.2f} -> {a:.2f}\")\n    return lines\n\n\nif __name__ == \"__main__\":\n    golden = {\"status\": \"OPTIMAL\", \"cost\": 1200.0, \"assign\": {\"j1\": \"red\"}, \"overtime\": {\"red\": 2.0}}\n    print(compare(golden, {**golden, \"cost\": 1250.0}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom roster_golden import compare\n\ngolden = {\"status\": \"OPTIMAL\", \"cost\": 860.0, \"assign\": {\"k1\": \"green\", \"k2\": \"gold\"},\n          \"overtime\": {\"green\": 1.5, \"gold\": 0.0}}\n\nprint(\"identical record:\", compare(golden, dict(golden)))\nprint(\"cost 860.3, gold overtime 0.003:\", compare(golden, {**golden, \"cost\": 860.3, \"overtime\": {\"green\": 1.5, \"gold\": 0.003}}))\nprint(\"cost 905, k2 to green, k5 added:\",\n      compare(golden, {**golden, \"cost\": 905.0, \"assign\": {\"k1\": \"green\", \"k2\": \"green\", \"k5\": \"gold\"}}))\nprint(\"status INFEASIBLE:\", compare(golden, {**golden, \"status\": \"INFEASIBLE\", \"cost\": 0.0}))\n"
         }
       ]
     },
@@ -65,6 +74,15 @@
       "type": "code",
       "lang": "python",
       "text": "\"\"\"Compare a crew-roster result with its golden record.\n\nA record is a dict:\n    \"status\":   the solver's termination, e.g. \"OPTIMAL\"\n    \"cost\":     the roster's cost in dollars (a float from the solver)\n    \"assign\":   {job: crew}\n    \"overtime\": {crew: overtime hours} (floats from the solver; a crew not listed has 0)\n\"\"\"\n\nfrom __future__ import annotations\n\nTOLERANCE = {\"cost\": 1.0, \"overtime\": 0.01}   # $1 on cost; 0.01 hours (36 seconds) on overtime\n\n\ndef compare(expected: dict, actual: dict) -> list[str]:\n    \"\"\"One line per difference, in the order: status, cost, assignments, overtime.\"\"\"\n    # TODO: status first, then each field with its tolerance.\n    return []\n\nif __name__ == \"__main__\":\n    golden = {\"status\": \"OPTIMAL\", \"cost\": 1200.0, \"assign\": {\"j1\": \"red\"}, \"overtime\": {\"red\": 2.0}}\n    print(compare(golden, {**golden, \"cost\": 1250.0}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom roster_golden import compare\n\ngolden = {\"status\": \"OPTIMAL\", \"cost\": 860.0, \"assign\": {\"k1\": \"green\", \"k2\": \"gold\"},\n          \"overtime\": {\"green\": 1.5, \"gold\": 0.0}}\n\nprint(\"identical record:\", compare(golden, dict(golden)))\nprint(\"cost 860.3, gold overtime 0.003:\", compare(golden, {**golden, \"cost\": 860.3, \"overtime\": {\"green\": 1.5, \"gold\": 0.003}}))\nprint(\"cost 905, k2 to green, k5 added:\",\n      compare(golden, {**golden, \"cost\": 905.0, \"assign\": {\"k1\": \"green\", \"k2\": \"green\", \"k5\": \"gold\"}}))\nprint(\"status INFEASIBLE:\", compare(golden, {**golden, \"status\": \"INFEASIBLE\", \"cost\": 0.0}))\n"
     }
   ],
   "video": null,
@@ -72,8 +90,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -83,14 +101,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "ab3f9455f9db93da2834926feacd3433b2f75495f5f0bacdb957c6e481babefe",
+  "content_sha256": "9d490ca42c6384456c0381d7182600c72c5eaef3d3e47ac896c6f1ca5f44a0a7",
   "starting_code": "\"\"\"Compare a crew-roster result with its golden record.\n\nA record is a dict:\n    \"status\":   the solver's termination, e.g. \"OPTIMAL\"\n    \"cost\":     the roster's cost in dollars (a float from the solver)\n    \"assign\":   {job: crew}\n    \"overtime\": {crew: overtime hours} (floats from the solver; a crew not listed has 0)\n\"\"\"\n\nfrom __future__ import annotations\n\nTOLERANCE = {\"cost\": 1.0, \"overtime\": 0.01}   # $1 on cost; 0.01 hours (36 seconds) on overtime\n\n\ndef compare(expected: dict, actual: dict) -> list[str]:\n    \"\"\"One line per difference, in the order: status, cost, assignments, overtime.\"\"\"\n    # TODO: status first, then each field with its tolerance.\n    return []\n\nif __name__ == \"__main__\":\n    golden = {\"status\": \"OPTIMAL\", \"cost\": 1200.0, \"assign\": {\"j1\": \"red\"}, \"overtime\": {\"red\": 2.0}}\n    print(compare(golden, {**golden, \"cost\": 1250.0}))\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-03/practice-1/roster_golden.py",
     "test_path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-03/practice-1/test_roster_golden.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-03/practice-1/roster_golden.py"
+      "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-03/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -141,6 +159,10 @@
     },
     "concepts": [
       "each field is compared exactly or within a tolerance stated in its own units, with one readable line per difference"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-03/practice-1/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-03/practice-1/try_it.py"
   }
 }

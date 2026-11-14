@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Jobs too big to share a resource",
   "blocks": [
     {
@@ -64,6 +64,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Limit:\n    name: str\n    use: dict          # job -> how much of this resource it uses (whole numbers)\n    capacity: int\n\n\ndef add_big_item_rows(model: mathopt.Model, x: dict, limits: list[Limit]) -> None:\n    \"\"\"Valid rows from the jobs too big to share a resource: at most one of them, none if alone too big.\"\"\"\n    for lim in limits:\n        big = [j for j, u in lim.use.items() if 2 * u > lim.capacity]       # any two of these overflow\n        if len(big) >= 2:\n            model.add_linear_constraint(sum(x[j] for j in big) <= 1, name=f\"big_{lim.name}\")\n        for j in big:\n            if lim.use[j] > lim.capacity:                                     # a cover of one job\n                model.add_linear_constraint(x[j] <= 0, name=f\"never_{lim.name}_{j}\")\n\n\ndef build(values: dict, limits: list[Limit], *, integer: bool = True) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"substation-jobs\")\n    x = {j: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{j}\") for j in values}\n    for lim in limits:\n        model.add_linear_constraint(sum(u * x[j] for j, u in lim.use.items()) <= lim.capacity, name=lim.name)\n    add_big_item_rows(model, x, limits)\n    model.maximize(sum(v * x[j] for j, v in values.items()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    limits = [Limit(\"crane\", {\"J1\": 7, \"J2\": 6, \"J3\": 2}, 10)]\n    model, x = build({\"J1\": 5, \"J2\": 4, \"J3\": 1}, limits, integer=False)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom jobs import Limit, build\n\nvalues = {\"T1\": 10, \"T2\": 6, \"T3\": 5, \"T4\": 4}\ncrane = Limit(\"crane_days\", {\"T1\": 8, \"T2\": 7, \"T3\": 2, \"T4\": 3}, 12)\nbudget = Limit(\"budget\", {\"T1\": 3, \"T2\": 3, \"T3\": 25, \"T4\": 4}, 20)\n\n\ndef lp_bound(limits):\n    model, _ = build(values, limits, integer=False)\n    return round(mathopt.solve(model, mathopt.SolverType.HIGHS).objective_value(), 3)\n\n\ndef best_plan(limits):\n    model, _ = build(values, limits)\n    return round(mathopt.solve(model, mathopt.SolverType.HIGHS).objective_value(), 3)\n\n\nprint(\"LP bound, crane only:\", lp_bound([crane]))\nprint(\"best plan, crane only:\", best_plan([crane]))\nprint(\"LP bound, crane and budget:\", lp_bound([crane, budget]))\nprint(\"best plan, crane and budget:\", best_plan([crane, budget]))\n"
         }
       ]
     },
@@ -76,6 +85,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Limit:\n    name: str\n    use: dict          # job -> how much of this resource it uses (whole numbers)\n    capacity: int\n\n\ndef add_big_item_rows(model: mathopt.Model, x: dict, limits: list[Limit]) -> None:\n    \"\"\"Valid rows from the jobs too big to share a resource: at most one of them, none if alone too big.\"\"\"\n    # TODO: the valid rows that pairs of big jobs give.\n    return None\n\ndef build(values: dict, limits: list[Limit], *, integer: bool = True) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"substation-jobs\")\n    x = {j: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{j}\") for j in values}\n    for lim in limits:\n        model.add_linear_constraint(sum(u * x[j] for j, u in lim.use.items()) <= lim.capacity, name=lim.name)\n    add_big_item_rows(model, x, limits)\n    model.maximize(sum(v * x[j] for j, v in values.items()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    limits = [Limit(\"crane\", {\"J1\": 7, \"J2\": 6, \"J3\": 2}, 10)]\n    model, x = build({\"J1\": 5, \"J2\": 4, \"J3\": 1}, limits, integer=False)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom jobs import Limit, build\n\nvalues = {\"T1\": 10, \"T2\": 6, \"T3\": 5, \"T4\": 4}\ncrane = Limit(\"crane_days\", {\"T1\": 8, \"T2\": 7, \"T3\": 2, \"T4\": 3}, 12)\nbudget = Limit(\"budget\", {\"T1\": 3, \"T2\": 3, \"T3\": 25, \"T4\": 4}, 20)\n\n\ndef lp_bound(limits):\n    model, _ = build(values, limits, integer=False)\n    return round(mathopt.solve(model, mathopt.SolverType.HIGHS).objective_value(), 3)\n\n\ndef best_plan(limits):\n    model, _ = build(values, limits)\n    return round(mathopt.solve(model, mathopt.SolverType.HIGHS).objective_value(), 3)\n\n\nprint(\"LP bound, crane only:\", lp_bound([crane]))\nprint(\"best plan, crane only:\", best_plan([crane]))\nprint(\"LP bound, crane and budget:\", lp_bound([crane, budget]))\nprint(\"best plan, crane and budget:\", best_plan([crane, budget]))\n"
     }
   ],
   "video": null,
@@ -83,8 +101,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -94,14 +112,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "f608b00807a44666553d90897bff56adffc99ec05e20cbc94f95bdf2fd95d812",
+  "content_sha256": "f7b3c8a43e1721a61bb20f298d1590b06ff53c86340319649ca5f309033e8b64",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Limit:\n    name: str\n    use: dict          # job -> how much of this resource it uses (whole numbers)\n    capacity: int\n\n\ndef add_big_item_rows(model: mathopt.Model, x: dict, limits: list[Limit]) -> None:\n    \"\"\"Valid rows from the jobs too big to share a resource: at most one of them, none if alone too big.\"\"\"\n    # TODO: the valid rows that pairs of big jobs give.\n    return None\n\ndef build(values: dict, limits: list[Limit], *, integer: bool = True) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"substation-jobs\")\n    x = {j: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{j}\") for j in values}\n    for lim in limits:\n        model.add_linear_constraint(sum(u * x[j] for j, u in lim.use.items()) <= lim.capacity, name=lim.name)\n    add_big_item_rows(model, x, limits)\n    model.maximize(sum(v * x[j] for j, v in values.items()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    limits = [Limit(\"crane\", {\"J1\": 7, \"J2\": 6, \"J3\": 2}, 10)]\n    model, x = build({\"J1\": 5, \"J2\": 4, \"J3\": 1}, limits, integer=False)\n    print(len(list(model.linear_constraints())), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-1/jobs.py",
     "test_path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-1/test_jobs.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-1/jobs.py"
+      "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -148,6 +166,10 @@
     "concepts": [
       "a cover row removes fractional LP points the knapsack row allows and keeps every whole plan",
       "a set of items whose weights exceed the capacity gives a row that every whole plan obeys"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-1/try_it.py"
   }
 }

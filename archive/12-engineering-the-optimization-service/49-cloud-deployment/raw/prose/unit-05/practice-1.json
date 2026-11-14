@@ -9,7 +9,7 @@
   "unit": 5,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Does this policy allow the request?",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport re\n\n\ndef matches(pattern: str, value: str, ignore_case: bool) -> bool:\n    \"\"\"IAM's wildcards: * is any run of characters, ? is one character; nothing else is special.\"\"\"\n    regex = \"\".join(\".*\" if c == \"*\" else \".\" if c == \"?\" else re.escape(c) for c in pattern)\n    return re.fullmatch(regex, value, re.IGNORECASE if ignore_case else 0) is not None\n\n\ndef as_list(value) -> list[str]:\n    return [value] if isinstance(value, str) else list(value)\n\n\ndef applies(statement: dict, action: str, resource: str) -> bool:\n    return (any(matches(a, action, True) for a in as_list(statement[\"Action\"]))\n            and any(matches(r, resource, False) for r in as_list(statement[\"Resource\"])))\n\n\ndef allowed(policy: dict, action: str, resource: str) -> bool:\n    \"\"\"Whether this one policy allows the request: an explicit Deny wins, then an Allow, else denied.\"\"\"\n    hits = [s[\"Effect\"] for s in policy[\"Statement\"] if applies(s, action, resource)]\n    return \"Allow\" in hits and \"Deny\" not in hits\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom iam_check import allowed\n\nBUCKET = \"arn:aws:s3:::depot-plans-example\"\npolicy = {\n    \"Statement\": [\n        {\"Effect\": \"Allow\", \"Action\": \"s3:GetObject\", \"Resource\": f\"{BUCKET}/inputs/*\"},\n        {\"Effect\": \"Allow\", \"Action\": [\"s3:PutObject\"], \"Resource\": [f\"{BUCKET}/plans/R-??/*\"]},\n        {\"Effect\": \"Deny\", \"Action\": \"s3:Put*\", \"Resource\": f\"{BUCKET}/plans/R-00/*\"},\n    ],\n}\n\nprint(\"GetObject inputs/day1.csv:\", allowed(policy, \"s3:GetObject\", f\"{BUCKET}/inputs/day1.csv\"))\nprint(\"s3:getobject inputs/day1.csv:\", allowed(policy, \"s3:getobject\", f\"{BUCKET}/inputs/day1.csv\"))\nprint(\"GetObject Inputs/day1.csv:\", allowed(policy, \"s3:GetObject\", f\"{BUCKET}/Inputs/day1.csv\"))\nprint(\"PutObject plans/R-12/p.json:\", allowed(policy, \"s3:PutObject\", f\"{BUCKET}/plans/R-12/p.json\"))\nprint(\"PutObject plans/R-123/p.json:\", allowed(policy, \"s3:PutObject\", f\"{BUCKET}/plans/R-123/p.json\"))\nprint(\"PutObject plans/R-00/p.json:\", allowed(policy, \"s3:PutObject\", f\"{BUCKET}/plans/R-00/p.json\"))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport re  # noqa: F401\n\n\ndef matches(pattern: str, value: str, ignore_case: bool) -> bool:\n    \"\"\"IAM's wildcards: * is any run of characters, ? is one character; nothing else is special.\"\"\"\n    return False\n\n\ndef as_list(value) -> list[str]:\n    return list(value)\n\n\ndef applies(statement: dict, action: str, resource: str) -> bool:\n    return False\n\n\ndef allowed(policy: dict, action: str, resource: str) -> bool:\n    \"\"\"Whether this one policy allows the request: an explicit Deny wins, then an Allow, else denied.\"\"\"\n    # TODO: collect the effects of the statements that apply; an explicit Deny wins.\n    return False\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom iam_check import allowed\n\nBUCKET = \"arn:aws:s3:::depot-plans-example\"\npolicy = {\n    \"Statement\": [\n        {\"Effect\": \"Allow\", \"Action\": \"s3:GetObject\", \"Resource\": f\"{BUCKET}/inputs/*\"},\n        {\"Effect\": \"Allow\", \"Action\": [\"s3:PutObject\"], \"Resource\": [f\"{BUCKET}/plans/R-??/*\"]},\n        {\"Effect\": \"Deny\", \"Action\": \"s3:Put*\", \"Resource\": f\"{BUCKET}/plans/R-00/*\"},\n    ],\n}\n\nprint(\"GetObject inputs/day1.csv:\", allowed(policy, \"s3:GetObject\", f\"{BUCKET}/inputs/day1.csv\"))\nprint(\"s3:getobject inputs/day1.csv:\", allowed(policy, \"s3:getobject\", f\"{BUCKET}/inputs/day1.csv\"))\nprint(\"GetObject Inputs/day1.csv:\", allowed(policy, \"s3:GetObject\", f\"{BUCKET}/Inputs/day1.csv\"))\nprint(\"PutObject plans/R-12/p.json:\", allowed(policy, \"s3:PutObject\", f\"{BUCKET}/plans/R-12/p.json\"))\nprint(\"PutObject plans/R-123/p.json:\", allowed(policy, \"s3:PutObject\", f\"{BUCKET}/plans/R-123/p.json\"))\nprint(\"PutObject plans/R-00/p.json:\", allowed(policy, \"s3:PutObject\", f\"{BUCKET}/plans/R-00/p.json\"))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "1f8a55ea43055dbcfba3968364ee29c8a7ad3339bdb8ca515c83529775d0b387",
+  "content_sha256": "f7fba31d940981425ebf64181df0103c2596e94b1f3bd42300f9b0cc4a04ca14",
   "starting_code": "from __future__ import annotations\n\nimport re  # noqa: F401\n\n\ndef matches(pattern: str, value: str, ignore_case: bool) -> bool:\n    \"\"\"IAM's wildcards: * is any run of characters, ? is one character; nothing else is special.\"\"\"\n    return False\n\n\ndef as_list(value) -> list[str]:\n    return list(value)\n\n\ndef applies(statement: dict, action: str, resource: str) -> bool:\n    return False\n\n\ndef allowed(policy: dict, action: str, resource: str) -> bool:\n    \"\"\"Whether this one policy allows the request: an explicit Deny wins, then an Allow, else denied.\"\"\"\n    # TODO: collect the effects of the statements that apply; an explicit Deny wins.\n    return False\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-05/practice-1/iam_check.py",
     "test_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-05/practice-1/test_iam_check.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-05/practice-1/iam_check.py"
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-05/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -145,6 +163,10 @@
     },
     "concepts": [
       "one role per part, and a policy that allows only that part's requests"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-05/practice-1/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-05/practice-1/try_it.py"
   }
 }

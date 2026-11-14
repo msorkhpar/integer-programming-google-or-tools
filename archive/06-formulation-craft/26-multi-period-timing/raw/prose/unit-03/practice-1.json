@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A replacement deadline, year by year",
   "blocks": [
     {
@@ -60,6 +60,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]          # the years it may start in\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project], integer: bool = True) -> dict:\n    return {(p.pid, t): model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{p.pid}_{t}\")\n            for p in projects for t in p.starts}\n\n\ndef add_aggregated_deadline(model, x, bypass: Project, replacement: Project, within: int) -> None:\n    \"\"\"The colleague's version: equal funding, then two rows on the start years' weighted sums.\"\"\"\n    funded_b = sum(x[bypass.pid, s] for s in bypass.starts)\n    funded_r = sum(x[replacement.pid, u] for u in replacement.starts)\n    model.add_linear_constraint(funded_r == funded_b)\n    year_b = sum(s * x[bypass.pid, s] for s in bypass.starts)\n    year_r = sum(u * x[replacement.pid, u] for u in replacement.starts)\n    model.add_linear_constraint(year_r >= year_b)\n    model.add_linear_constraint(year_r <= year_b + within * funded_b)\n\n\ndef add_deadline_rows(model, x, bypass: Project, replacement: Project, within: int) -> None:\n    \"\"\"The replacement starts in the bypass's start year or up to `within` years later, and only then.\"\"\"\n    years = sorted(set(bypass.starts) | set(replacement.starts))\n    for t in years:\n        bypass_by_t = sum(x[bypass.pid, s] for s in bypass.starts if s <= t)\n        model.add_linear_constraint(\n            bypass_by_t <= sum(x[replacement.pid, u] for u in replacement.starts if u <= t + within),\n            name=f\"deadline_{t}\")\n        model.add_linear_constraint(\n            sum(x[replacement.pid, u] for u in replacement.starts if u <= t) <= bypass_by_t,\n            name=f\"not_before_{t}\")\n\n\nif __name__ == \"__main__\":\n    bypass, replacement = Project(\"BY\", (2027, 2028, 2029)), Project(\"RP\", (2027, 2028, 2029, 2030))\n    model = mathopt.Model()\n    x = start_variables(model, [bypass, replacement])\n    add_deadline_rows(model, x, bypass, replacement, 1)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom deadline import Project, add_deadline_rows, start_variables\n\ndef solve_ok(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(schedule, within):\n    first, second = Project(\"BY\", (2031, 2032)), Project(\"RP\", (2031, 2032, 2033, 2034))\n    model = mathopt.Model()\n    x = start_variables(model, [first, second])\n    for p in (first, second):\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1)\n    add_deadline_rows(model, x, first, second, within)\n    for (pid, t), var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if schedule.get(pid) == t else 0.0\n    return solve_ok(model)\n\n\nprint(\"BY 2031, RP 2033, within 2:\", allowed({\"BY\": 2031, \"RP\": 2033}, 2))\nprint(\"BY 2031, RP 2034, within 2:\", allowed({\"BY\": 2031, \"RP\": 2034}, 2))\nprint(\"BY 2032, RP 2031, within 3:\", allowed({\"BY\": 2032, \"RP\": 2031}, 3))\nprint(\"RP 2032 alone, within 3:\", allowed({\"RP\": 2032}, 3))\nprint(\"nothing, within 1:\", allowed({}, 1))\n"
         }
       ]
     },
@@ -72,6 +81,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]          # the years it may start in\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project], integer: bool = True) -> dict:\n    return {(p.pid, t): model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{p.pid}_{t}\")\n            for p in projects for t in p.starts}\n\n\ndef add_aggregated_deadline(model, x, bypass: Project, replacement: Project, within: int) -> None:\n    \"\"\"The colleague's version: equal funding, then two rows on the start years' weighted sums.\"\"\"\n    funded_b = sum(x[bypass.pid, s] for s in bypass.starts)\n    funded_r = sum(x[replacement.pid, u] for u in replacement.starts)\n    model.add_linear_constraint(funded_r == funded_b)\n    year_b = sum(s * x[bypass.pid, s] for s in bypass.starts)\n    year_r = sum(u * x[replacement.pid, u] for u in replacement.starts)\n    model.add_linear_constraint(year_r >= year_b)\n    model.add_linear_constraint(year_r <= year_b + within * funded_b)\n\n\ndef add_deadline_rows(model, x, bypass: Project, replacement: Project, within: int) -> None:\n    \"\"\"The replacement starts in the bypass's start year or up to `within` years later, and only then.\"\"\"\n    # TODO: your rows, year by year.\n    return None\n\n\nif __name__ == \"__main__\":\n    bypass, replacement = Project(\"BY\", (2027, 2028, 2029)), Project(\"RP\", (2027, 2028, 2029, 2030))\n    model = mathopt.Model()\n    x = start_variables(model, [bypass, replacement])\n    add_deadline_rows(model, x, bypass, replacement, 1)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom deadline import Project, add_deadline_rows, start_variables\n\ndef solve_ok(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(schedule, within):\n    first, second = Project(\"BY\", (2031, 2032)), Project(\"RP\", (2031, 2032, 2033, 2034))\n    model = mathopt.Model()\n    x = start_variables(model, [first, second])\n    for p in (first, second):\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1)\n    add_deadline_rows(model, x, first, second, within)\n    for (pid, t), var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if schedule.get(pid) == t else 0.0\n    return solve_ok(model)\n\n\nprint(\"BY 2031, RP 2033, within 2:\", allowed({\"BY\": 2031, \"RP\": 2033}, 2))\nprint(\"BY 2031, RP 2034, within 2:\", allowed({\"BY\": 2031, \"RP\": 2034}, 2))\nprint(\"BY 2032, RP 2031, within 3:\", allowed({\"BY\": 2032, \"RP\": 2031}, 3))\nprint(\"RP 2032 alone, within 3:\", allowed({\"RP\": 2032}, 3))\nprint(\"nothing, within 1:\", allowed({}, 1))\n"
     }
   ],
   "video": null,
@@ -79,8 +97,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 6,
-    "code": 2,
+    "paras": 7,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -90,14 +108,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "9456507eae90d7886346d893af4fde6b0a63e09c3a1ae94cac23313783617951",
+  "content_sha256": "4877a0b59a4f0ae826ce43142fd9b02237fe9ce06219b571c74ede928bbba934",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]          # the years it may start in\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project], integer: bool = True) -> dict:\n    return {(p.pid, t): model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{p.pid}_{t}\")\n            for p in projects for t in p.starts}\n\n\ndef add_aggregated_deadline(model, x, bypass: Project, replacement: Project, within: int) -> None:\n    \"\"\"The colleague's version: equal funding, then two rows on the start years' weighted sums.\"\"\"\n    funded_b = sum(x[bypass.pid, s] for s in bypass.starts)\n    funded_r = sum(x[replacement.pid, u] for u in replacement.starts)\n    model.add_linear_constraint(funded_r == funded_b)\n    year_b = sum(s * x[bypass.pid, s] for s in bypass.starts)\n    year_r = sum(u * x[replacement.pid, u] for u in replacement.starts)\n    model.add_linear_constraint(year_r >= year_b)\n    model.add_linear_constraint(year_r <= year_b + within * funded_b)\n\n\ndef add_deadline_rows(model, x, bypass: Project, replacement: Project, within: int) -> None:\n    \"\"\"The replacement starts in the bypass's start year or up to `within` years later, and only then.\"\"\"\n    # TODO: your rows, year by year.\n    return None\n\n\nif __name__ == \"__main__\":\n    bypass, replacement = Project(\"BY\", (2027, 2028, 2029)), Project(\"RP\", (2027, 2028, 2029, 2030))\n    model = mathopt.Model()\n    x = start_variables(model, [bypass, replacement])\n    add_deadline_rows(model, x, bypass, replacement, 1)\n    print(len(list(model.linear_constraints())), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-03/practice-1/deadline.py",
     "test_path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-03/practice-1/test_deadline.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-03/practice-1/deadline.py"
+      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-03/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -159,6 +177,10 @@
     "concepts": [
       "forms that allow the same plans can have different LP bounds, and the cumulative one is never weaker",
       "a precedence with a lag can be written as one aggregated row or as one cumulative row per year, and both allow the same whole-number plans"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-03/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-03/practice-1/try_it.py"
   }
 }

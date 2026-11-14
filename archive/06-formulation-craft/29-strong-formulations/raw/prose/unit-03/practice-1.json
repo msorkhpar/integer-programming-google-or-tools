@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Identical rented units, numbered once",
   "blocks": [
     {
@@ -64,6 +64,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nRENTAL_DAYS = 30           # days one mobile unit is rented for\n\n\n@dataclass\nclass Fleet:\n    model: mathopt.Model\n    x: dict                # x[s, k] = 1: site s is served by unit k\n    y: dict                # y[k] = 1: unit k is rented\n\n\ndef build(days: dict, units: int, *, ordered: bool = False) -> Fleet:\n    \"\"\"Serve every site with one rented unit; a unit's sites fit in its rental; rent as few as possible.\"\"\"\n    model = mathopt.Model(name=\"mobile units\")\n    x = {(s, k): model.add_binary_variable(name=f\"x_{s}_{k}\") for s in days for k in range(units)}\n    y = {k: model.add_binary_variable(name=f\"y_{k}\") for k in range(units)}\n    for s in days:\n        model.add_linear_constraint(sum(x[s, k] for k in range(units)) == 1, name=f\"served_{s}\")\n    for k in range(units):\n        model.add_linear_constraint(sum(d * x[s, k] for s, d in days.items()) <= RENTAL_DAYS * y[k],\n                                    name=f\"rental_{k}\")\n    fleet = Fleet(model, x, y)\n    if ordered:\n        add_symmetry_breaking(fleet, days, units)\n    model.minimize(sum(y.values()))\n    return fleet\n\n\ndef add_symmetry_breaking(fleet: Fleet, days: dict, units: int) -> None:\n    \"\"\"Keep one numbering of the identical units: rented units come first, and sites fill them in order.\"\"\"\n    for k in range(units - 1):\n        fleet.model.add_linear_constraint(fleet.y[k] >= fleet.y[k + 1], name=f\"rent_in_order_{k}\")\n    for n, s in enumerate(days):\n        # Site number n is served by one of the units 0..n (its served row then leaves the rest at 0).\n        fleet.model.add_linear_constraint(sum(fleet.x[s, k] for k in range(min(n + 1, units))) == 1,\n                                          name=f\"site_order_{s}\")\n\n\ndef nodes(days: dict, units: int, ordered: bool) -> tuple[float, int]:\n    result = mathopt.solve(build(days, units, ordered=ordered).model, mathopt.SolverType.HIGHS,\n                           params=mathopt.SolveParameters(relative_gap_tolerance=0.0))\n    return result.objective_value(), result.solve_stats.node_count\n\n\nif __name__ == \"__main__\":\n    days = {f\"S{i:02d}\": d for i, d in enumerate([16, 16, 14, 13, 13, 13, 12, 12, 12, 11, 11, 10, 9, 8])}\n    for ordered in (False, True):\n        units, count = nodes(days, 8, ordered)\n        print(f\"symmetry rows {ordered!s:5}  units rented {units:.0f}  nodes {count}\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom fleet import build\n\ndays = {\"Ash\": 18, \"Elm\": 15, \"Oak\": 11, \"Yew\": 10, \"Fir\": 6}\n\nfor ordered in (False, True):\n    fleet = build(days, 4, ordered=ordered)\n    result = mathopt.solve(fleet.model, mathopt.SolverType.HIGHS,\n                           params=mathopt.SolveParameters(time_limit=timedelta(seconds=5)))\n    print(f\"ordered={ordered} rows:\", sum(1 for _ in fleet.model.linear_constraints()))\n    print(f\"ordered={ordered} units rented:\", round(result.objective_value()),\n          {s: k for (s, k), v in fleet.x.items() if result.variable_values(v) > 0.5})\n"
         }
       ]
     },
@@ -76,6 +85,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nRENTAL_DAYS = 30           # days one mobile unit is rented for\n\n\n@dataclass\nclass Fleet:\n    model: mathopt.Model\n    x: dict                # x[s, k] = 1: site s is served by unit k\n    y: dict                # y[k] = 1: unit k is rented\n\n\ndef build(days: dict, units: int, *, ordered: bool = False) -> Fleet:\n    \"\"\"Serve every site with one rented unit; a unit's sites fit in its rental; rent as few as possible.\"\"\"\n    model = mathopt.Model(name=\"mobile units\")\n    x = {(s, k): model.add_binary_variable(name=f\"x_{s}_{k}\") for s in days for k in range(units)}\n    y = {k: model.add_binary_variable(name=f\"y_{k}\") for k in range(units)}\n    for s in days:\n        model.add_linear_constraint(sum(x[s, k] for k in range(units)) == 1, name=f\"served_{s}\")\n    for k in range(units):\n        model.add_linear_constraint(sum(d * x[s, k] for s, d in days.items()) <= RENTAL_DAYS * y[k],\n                                    name=f\"rental_{k}\")\n    fleet = Fleet(model, x, y)\n    if ordered:\n        add_symmetry_breaking(fleet, days, units)\n    model.minimize(sum(y.values()))\n    return fleet\n\n\ndef add_symmetry_breaking(fleet: Fleet, days: dict, units: int) -> None:\n    \"\"\"Keep one numbering of the identical units: rented units come first, and sites fill them in order.\"\"\"\n    # TODO: rows that keep one numbering of the units.\n    return None\n\ndef nodes(days: dict, units: int, ordered: bool) -> tuple[float, int]:\n    result = mathopt.solve(build(days, units, ordered=ordered).model, mathopt.SolverType.HIGHS,\n                           params=mathopt.SolveParameters(relative_gap_tolerance=0.0))\n    return result.objective_value(), result.solve_stats.node_count\n\n\nif __name__ == \"__main__\":\n    days = {f\"S{i:02d}\": d for i, d in enumerate([16, 16, 14, 13, 13, 13, 12, 12, 12, 11, 11, 10, 9, 8])}\n    for ordered in (False, True):\n        units, count = nodes(days, 8, ordered)\n        print(f\"symmetry rows {ordered!s:5}  units rented {units:.0f}  nodes {count}\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom fleet import build\n\ndays = {\"Ash\": 18, \"Elm\": 15, \"Oak\": 11, \"Yew\": 10, \"Fir\": 6}\n\nfor ordered in (False, True):\n    fleet = build(days, 4, ordered=ordered)\n    result = mathopt.solve(fleet.model, mathopt.SolverType.HIGHS,\n                           params=mathopt.SolveParameters(time_limit=timedelta(seconds=5)))\n    print(f\"ordered={ordered} rows:\", sum(1 for _ in fleet.model.linear_constraints()))\n    print(f\"ordered={ordered} units rented:\", round(result.objective_value()),\n          {s: k for (s, k), v in fleet.x.items() if result.variable_values(v) > 0.5})\n"
     }
   ],
   "video": null,
@@ -83,8 +101,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -94,14 +112,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "dc856973494a47f637ef19f98e2ad48d99a3f9300f065b6cbf117976714535f8",
+  "content_sha256": "56316d89b32e4497874cdfd4b982d2d1ffea50e1e0517fd55bf2d5df470907f8",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nRENTAL_DAYS = 30           # days one mobile unit is rented for\n\n\n@dataclass\nclass Fleet:\n    model: mathopt.Model\n    x: dict                # x[s, k] = 1: site s is served by unit k\n    y: dict                # y[k] = 1: unit k is rented\n\n\ndef build(days: dict, units: int, *, ordered: bool = False) -> Fleet:\n    \"\"\"Serve every site with one rented unit; a unit's sites fit in its rental; rent as few as possible.\"\"\"\n    model = mathopt.Model(name=\"mobile units\")\n    x = {(s, k): model.add_binary_variable(name=f\"x_{s}_{k}\") for s in days for k in range(units)}\n    y = {k: model.add_binary_variable(name=f\"y_{k}\") for k in range(units)}\n    for s in days:\n        model.add_linear_constraint(sum(x[s, k] for k in range(units)) == 1, name=f\"served_{s}\")\n    for k in range(units):\n        model.add_linear_constraint(sum(d * x[s, k] for s, d in days.items()) <= RENTAL_DAYS * y[k],\n                                    name=f\"rental_{k}\")\n    fleet = Fleet(model, x, y)\n    if ordered:\n        add_symmetry_breaking(fleet, days, units)\n    model.minimize(sum(y.values()))\n    return fleet\n\n\ndef add_symmetry_breaking(fleet: Fleet, days: dict, units: int) -> None:\n    \"\"\"Keep one numbering of the identical units: rented units come first, and sites fill them in order.\"\"\"\n    # TODO: rows that keep one numbering of the units.\n    return None\n\ndef nodes(days: dict, units: int, ordered: bool) -> tuple[float, int]:\n    result = mathopt.solve(build(days, units, ordered=ordered).model, mathopt.SolverType.HIGHS,\n                           params=mathopt.SolveParameters(relative_gap_tolerance=0.0))\n    return result.objective_value(), result.solve_stats.node_count\n\n\nif __name__ == \"__main__\":\n    days = {f\"S{i:02d}\": d for i, d in enumerate([16, 16, 14, 13, 13, 13, 12, 12, 12, 11, 11, 10, 9, 8])}\n    for ordered in (False, True):\n        units, count = nodes(days, 8, ordered)\n        print(f\"symmetry rows {ordered!s:5}  units rented {units:.0f}  nodes {count}\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-03/practice-1/fleet.py",
     "test_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-03/practice-1/test_fleet.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/29-strong-formulations/prose/unit-03/practice-1/fleet.py"
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-03/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -148,6 +166,10 @@
     "concepts": [
       "the node count with and without the rows is measured, since rows can also cost nodes",
       "ordering rows refuse some numberings and keep at least one copy of every plan"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-03/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/29-strong-formulations/prose/unit-03/practice-1/try_it.py"
   }
 }

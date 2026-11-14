@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Street trees with diminishing shade benefit",
   "blocks": [
     {
@@ -79,6 +79,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Street:\n    name: str\n    xs: tuple[float, ...]       # trees at each breakpoint, increasing, starting at 0\n    ys: tuple[float, ...]       # benefit at each breakpoint\n\n\ndef add_benefit(model: mathopt.Model, trees: mathopt.Variable, xs: tuple[float, ...],\n                ys: tuple[float, ...]):\n    \"\"\"Rows for one street; returns an expression equal to its benefit at `trees`.\"\"\"\n    benefit = model.add_variable(lb=0, name=f\"benefit_{trees.name}\")\n    model.add_linear_constraint(trees <= xs[-1], name=f\"curb_{trees.name}\")\n    for k in range(len(xs) - 1):\n        rise = (ys[k + 1] - ys[k]) / (xs[k + 1] - xs[k])\n        model.add_linear_constraint(benefit <= ys[k] + rise * (trees - xs[k]), name=f\"under_{trees.name}_{k}\")\n    return benefit\n\n\ndef build(streets: list[Street], stock: float) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"street trees\")\n    trees = {s.name: model.add_variable(lb=0, name=f\"trees_{s.name}\") for s in streets}\n    model.add_linear_constraint(sum(trees.values()) <= stock, name=\"stock\")\n    model.maximize(sum(add_benefit(model, trees[s.name], s.xs, s.ys) for s in streets))\n    return model, trees\n\n\nif __name__ == \"__main__\":\n    elm = Street(\"Elm St\", (0, 10, 25, 40), (0, 30, 51, 57))\n    model, trees = build([elm], 20)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    print(result.objective_value())\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom street_trees import Street, build\n\n# Three streets: tree breakpoints and shade benefit.\noak = Street(\"Oak\", (0, 8, 20), (0, 24, 36))\npine = Street(\"Pine\", (0, 15, 30), (0, 30, 45))\nlime = Street(\"Lime\", (0, 4, 12), (0, 20, 28))\n\n\ndef best(streets, stock, fixed=None):\n    model, trees = build(streets, stock)\n    for name, value in (fixed or {}).items():\n        trees[name].lower_bound = trees[name].upper_bound = value\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    return round(result.objective_value(), 2)\n\n\nprint(\"three streets with 30 trees:\", best([oak, pine, lime], 30))\nprint(\"Oak fixed at 14 trees:\", best([oak], 50, {\"Oak\": 14}))\nprint(\"Pine fixed at 20 trees:\", best([pine], 50, {\"Pine\": 20}))\nprint(\"Oak fixed at 25 trees:\", best([oak], 50, {\"Oak\": 25}))\n"
         }
       ]
     },
@@ -91,6 +100,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Street:\n    name: str\n    xs: tuple[float, ...]       # trees at each breakpoint, increasing, starting at 0\n    ys: tuple[float, ...]       # benefit at each breakpoint\n\n\ndef add_benefit(model: mathopt.Model, trees: mathopt.Variable, xs: tuple[float, ...],\n                ys: tuple[float, ...]):\n    \"\"\"Rows for one street; returns an expression equal to its benefit at `trees`.\"\"\"\n    # TODO: the street's benefit as a function of its trees, and no more trees than the curve covers.\n    return 0 * trees\n\n\ndef build(streets: list[Street], stock: float) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"street trees\")\n    trees = {s.name: model.add_variable(lb=0, name=f\"trees_{s.name}\") for s in streets}\n    model.add_linear_constraint(sum(trees.values()) <= stock, name=\"stock\")\n    model.maximize(sum(add_benefit(model, trees[s.name], s.xs, s.ys) for s in streets))\n    return model, trees\n\n\nif __name__ == \"__main__\":\n    elm = Street(\"Elm St\", (0, 10, 25, 40), (0, 30, 51, 57))\n    model, trees = build([elm], 20)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    print(result.objective_value())\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom street_trees import Street, build\n\n# Three streets: tree breakpoints and shade benefit.\noak = Street(\"Oak\", (0, 8, 20), (0, 24, 36))\npine = Street(\"Pine\", (0, 15, 30), (0, 30, 45))\nlime = Street(\"Lime\", (0, 4, 12), (0, 20, 28))\n\n\ndef best(streets, stock, fixed=None):\n    model, trees = build(streets, stock)\n    for name, value in (fixed or {}).items():\n        trees[name].lower_bound = trees[name].upper_bound = value\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    return round(result.objective_value(), 2)\n\n\nprint(\"three streets with 30 trees:\", best([oak, pine, lime], 30))\nprint(\"Oak fixed at 14 trees:\", best([oak], 50, {\"Oak\": 14}))\nprint(\"Pine fixed at 20 trees:\", best([pine], 50, {\"Pine\": 20}))\nprint(\"Oak fixed at 25 trees:\", best([oak], 50, {\"Oak\": 25}))\n"
     }
   ],
   "video": null,
@@ -98,8 +116,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 6,
-    "code": 2,
+    "paras": 7,
+    "code": 3,
     "tables": 1,
     "lists": 0,
     "images": 0,
@@ -109,14 +127,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "1a640faccd5c3ee9bb1054534d922462268aab1dfa23970c739d7bd2f9e50e81",
+  "content_sha256": "589b97b0c1db89e835220f9fad38008f3844bbc68cd4eaae764cb99d84d09072",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Street:\n    name: str\n    xs: tuple[float, ...]       # trees at each breakpoint, increasing, starting at 0\n    ys: tuple[float, ...]       # benefit at each breakpoint\n\n\ndef add_benefit(model: mathopt.Model, trees: mathopt.Variable, xs: tuple[float, ...],\n                ys: tuple[float, ...]):\n    \"\"\"Rows for one street; returns an expression equal to its benefit at `trees`.\"\"\"\n    # TODO: the street's benefit as a function of its trees, and no more trees than the curve covers.\n    return 0 * trees\n\n\ndef build(streets: list[Street], stock: float) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"street trees\")\n    trees = {s.name: model.add_variable(lb=0, name=f\"trees_{s.name}\") for s in streets}\n    model.add_linear_constraint(sum(trees.values()) <= stock, name=\"stock\")\n    model.maximize(sum(add_benefit(model, trees[s.name], s.xs, s.ys) for s in streets))\n    return model, trees\n\n\nif __name__ == \"__main__\":\n    elm = Street(\"Elm St\", (0, 10, 25, 40), (0, 30, 51, 57))\n    model, trees = build([elm], 20)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    print(result.objective_value())\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-01/practice-2/street_trees.py",
     "test_path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-01/practice-2/test_street_trees.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-01/practice-2/street_trees.py"
+      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -157,6 +175,10 @@
     },
     "concepts": [
       "a concave value that the objective pushes up, written without binaries"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-01/practice-2/try_it.py"
   }
 }

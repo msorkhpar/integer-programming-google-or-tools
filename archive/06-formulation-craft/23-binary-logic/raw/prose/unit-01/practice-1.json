@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Streetlight retrofits by ward",
   "blocks": [
     {
@@ -64,6 +64,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Retrofit:\n    rid: str\n    ward: str\n    cost: int        # $k\n\n\ndef add_ward_rules(model: mathopt.Model, x: dict, retrofits: list[Retrofit],\n                   yard_cap: dict[str, int], max_share: float) -> None:\n    \"\"\"Each ward's yard stages at most yard_cap[ward] retrofits; no ward takes more than max_share of the plan.\"\"\"\n    funded = sum(x.values())\n    for ward in sorted({r.ward for r in retrofits}):\n        in_ward = sum(x[r.rid] for r in retrofits if r.ward == ward)\n        if ward in yard_cap:\n            model.add_linear_constraint(in_ward <= yard_cap[ward], name=f\"yard_{ward}\")\n        model.add_linear_constraint(in_ward <= max_share * funded, name=f\"share_{ward}\")\n\n\ndef build(retrofits: list[Retrofit], budget: int, yard_cap: dict[str, int],\n          max_share: float) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"streetlights\")\n    x = {r.rid: model.add_binary_variable(name=f\"x_{r.rid}\") for r in retrofits}\n    model.add_linear_constraint(sum(r.cost * x[r.rid] for r in retrofits) <= budget, name=\"budget\")\n    add_ward_rules(model, x, retrofits, yard_cap, max_share)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    blocks = [Retrofit(\"N1\", \"North\", 40), Retrofit(\"N2\", \"North\", 35), Retrofit(\"S1\", \"South\", 50)]\n    model, x = build(blocks, 200, {\"North\": 1}, 0.5)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom retrofits import Retrofit, build\n\n# Streetlight blocks in four wards: id, ward, cost.\nblocks = ([Retrofit(f\"A{k}\", \"Alder\", 20 + k) for k in range(1, 5)]\n          + [Retrofit(f\"B{k}\", \"Birch\", 30 + k) for k in range(1, 4)]\n          + [Retrofit(f\"C{k}\", \"Cedar\", 15 + k) for k in range(1, 4)])\nyards = {\"Alder\": 3, \"Birch\": 2}   # Cedar is not listed\n\n\ndef allowed(plan, share):\n    model, x = build(blocks, 5_000, yards, share)\n    for rid, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if rid in plan else 0.0\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"A1 A2 B1 C1 at share 0.5:\", allowed({\"A1\", \"A2\", \"B1\", \"C1\"}, 0.5))\nprint(\"A1 A2 A3 A4 B1 B2 C1 C2 at share 0.5:\", allowed({\"A1\", \"A2\", \"A3\", \"A4\", \"B1\", \"B2\", \"C1\", \"C2\"}, 0.5))\nprint(\"A1 A2 B1 at share 0.5:\", allowed({\"A1\", \"A2\", \"B1\"}, 0.5))\nprint(\"C1 C2 C3 A1 B1 at share 0.6:\", allowed({\"C1\", \"C2\", \"C3\", \"A1\", \"B1\"}, 0.6))\nprint(\"C1 C2 C3 A1 B1 at share 0.4:\", allowed({\"C1\", \"C2\", \"C3\", \"A1\", \"B1\"}, 0.4))\n"
         }
       ]
     },
@@ -76,6 +85,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Retrofit:\n    rid: str\n    ward: str\n    cost: int        # $k\n\n\ndef add_ward_rules(model: mathopt.Model, x: dict, retrofits: list[Retrofit],\n                   yard_cap: dict[str, int], max_share: float) -> None:\n    \"\"\"Each ward's yard stages at most yard_cap[ward] retrofits; no ward takes more than max_share of the plan.\"\"\"\n    # TODO: the yard rows and the fair-share rows.\n    return None\n\n\ndef build(retrofits: list[Retrofit], budget: int, yard_cap: dict[str, int],\n          max_share: float) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"streetlights\")\n    x = {r.rid: model.add_binary_variable(name=f\"x_{r.rid}\") for r in retrofits}\n    model.add_linear_constraint(sum(r.cost * x[r.rid] for r in retrofits) <= budget, name=\"budget\")\n    add_ward_rules(model, x, retrofits, yard_cap, max_share)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    blocks = [Retrofit(\"N1\", \"North\", 40), Retrofit(\"N2\", \"North\", 35), Retrofit(\"S1\", \"South\", 50)]\n    model, x = build(blocks, 200, {\"North\": 1}, 0.5)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom retrofits import Retrofit, build\n\n# Streetlight blocks in four wards: id, ward, cost.\nblocks = ([Retrofit(f\"A{k}\", \"Alder\", 20 + k) for k in range(1, 5)]\n          + [Retrofit(f\"B{k}\", \"Birch\", 30 + k) for k in range(1, 4)]\n          + [Retrofit(f\"C{k}\", \"Cedar\", 15 + k) for k in range(1, 4)])\nyards = {\"Alder\": 3, \"Birch\": 2}   # Cedar is not listed\n\n\ndef allowed(plan, share):\n    model, x = build(blocks, 5_000, yards, share)\n    for rid, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if rid in plan else 0.0\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"A1 A2 B1 C1 at share 0.5:\", allowed({\"A1\", \"A2\", \"B1\", \"C1\"}, 0.5))\nprint(\"A1 A2 A3 A4 B1 B2 C1 C2 at share 0.5:\", allowed({\"A1\", \"A2\", \"A3\", \"A4\", \"B1\", \"B2\", \"C1\", \"C2\"}, 0.5))\nprint(\"A1 A2 B1 at share 0.5:\", allowed({\"A1\", \"A2\", \"B1\"}, 0.5))\nprint(\"C1 C2 C3 A1 B1 at share 0.6:\", allowed({\"C1\", \"C2\", \"C3\", \"A1\", \"B1\"}, 0.6))\nprint(\"C1 C2 C3 A1 B1 at share 0.4:\", allowed({\"C1\", \"C2\", \"C3\", \"A1\", \"B1\"}, 0.4))\n"
     }
   ],
   "video": null,
@@ -83,8 +101,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -94,14 +112,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "7d092d84f4f40f48432e7cc9b114cf07e2947cbaea951f41d97f3202aed59cc9",
+  "content_sha256": "cc4d87b9d925daff9f9bf017e8c940a3714ac4c262890e77909736b9dc661e07",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Retrofit:\n    rid: str\n    ward: str\n    cost: int        # $k\n\n\ndef add_ward_rules(model: mathopt.Model, x: dict, retrofits: list[Retrofit],\n                   yard_cap: dict[str, int], max_share: float) -> None:\n    \"\"\"Each ward's yard stages at most yard_cap[ward] retrofits; no ward takes more than max_share of the plan.\"\"\"\n    # TODO: the yard rows and the fair-share rows.\n    return None\n\n\ndef build(retrofits: list[Retrofit], budget: int, yard_cap: dict[str, int],\n          max_share: float) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"streetlights\")\n    x = {r.rid: model.add_binary_variable(name=f\"x_{r.rid}\") for r in retrofits}\n    model.add_linear_constraint(sum(r.cost * x[r.rid] for r in retrofits) <= budget, name=\"budget\")\n    add_ward_rules(model, x, retrofits, yard_cap, max_share)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    blocks = [Retrofit(\"N1\", \"North\", 40), Retrofit(\"N2\", \"North\", 35), Retrofit(\"S1\", \"South\", 50)]\n    model, x = build(blocks, 200, {\"North\": 1}, 0.5)\n    print(len(list(model.linear_constraints())), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-1/retrofits.py",
     "test_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-1/test_retrofits.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-1/retrofits.py"
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -148,6 +166,10 @@
     "concepts": [
       "a cap on how many of a kind, and a share of the plan multiplied out, are rows on counts",
       "a sum of binaries over a set counts the funded members, and a weighted sum totals a quantity over them"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-1/try_it.py"
   }
 }

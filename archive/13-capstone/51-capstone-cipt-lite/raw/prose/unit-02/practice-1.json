@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Check a plan against every rule, without the model",
   "blocks": [
     {
@@ -117,6 +117,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\n\ndef spend_by_year(snap: dict, plan: dict[str, int]) -> dict[int, int]:\n    \"\"\"What the plan spends in each year of the horizon, $k: cost[k] lands in year start + k.\"\"\"\n    out = {y: 0 for y in snap[\"years\"]}\n    for pid, start in plan.items():\n        for k, amount in enumerate(snap[\"projects\"][pid][\"cost\"]):\n            if start + k in out:\n                out[start + k] += amount\n    return out\n\n\ndef broken(snap: dict, plan: dict[str, int]) -> list[str]:\n    \"\"\"The names of every row the plan breaks, sorted, read from the data alone.\"\"\"\n    projects, years = snap[\"projects\"], snap[\"years\"]\n    out = []\n    for pid, start in plan.items():\n        p = projects[pid]\n        if not p[\"earliest\"] <= start <= p[\"latest\"]:\n            out.append(f\"window_{pid}\")\n    out += [f\"must_{pid}\" for pid, p in projects.items() if p[\"must\"] and pid not in plan]\n    groups: dict[str, int] = {}\n    for pid in plan:\n        group = projects[pid][\"group\"]\n        if group is not None:\n            groups[group] = groups.get(group, 0) + 1\n    out += [f\"alt_{g}\" for g, n in groups.items() if n > 1]\n    for pid, start in plan.items():\n        parent, lag = projects[pid][\"parent\"], projects[pid][\"lag\"]\n        if parent is not None and (parent not in plan or plan[parent] + lag > start):\n            out.append(f\"after_{pid}_{start}\")\n    total = spend_by_year(snap, plan)\n    out += [f\"budget_{y}\" for y in years if total[y] > snap[\"budget\"][y]]\n    for region, limits in snap[\"region_budget\"].items():\n        mine = spend_by_year(snap, {i: t for i, t in plan.items() if projects[i][\"region\"] == region})\n        out += [f\"region_{region}_{y}\" for y in years if mine[y] > limits[y]]\n    for program, limits in snap[\"crews\"].items():\n        use = {y: 0 for y in years}\n        for pid, start in plan.items():\n            p = projects[pid]\n            if p[\"program\"] == program:\n                for y in range(start, start + len(p[\"cost\"])):\n                    if y in use:\n                        use[y] += p[\"crews\"]\n        out += [f\"crews_{program}_{y}\" for y in years if use[y] > limits[y]]\n    for region, floor in snap[\"floor\"].items():\n        funded = sum(sum(projects[i][\"cost\"]) for i in plan if projects[i][\"region\"] == region)\n        if funded < floor:\n            out.append(f\"floor_{region}\")\n    return sorted(out)\n\n\nif __name__ == \"__main__\":\n    snap = {\"years\": [2027, 2028], \"rate\": 0.05, \"budget\": {2027: 100, 2028: 100},\n            \"region_budget\": {\"North\": {2027: 100, 2028: 100}}, \"crews\": {\"lines\": {2027: 1, 2028: 1}},\n            \"floor\": {\"North\": 0},\n            \"projects\": {\"J1\": {\"program\": \"lines\", \"region\": \"North\", \"cost\": [80, 40], \"earliest\": 2027,\n                                \"latest\": 2027, \"must\": True, \"parent\": None, \"lag\": 0, \"group\": None,\n                                \"crews\": 1, \"npv\": {2027: 30}}}}\n    print(broken(snap, {\"J1\": 2027}), broken(snap, {}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom checker import broken\n\ndef project(program, region, cost, first, last, npv, must=False, parent=None, lag=0, group=None, crews=1):\n    return {\"program\": program, \"region\": region, \"cost\": cost, \"earliest\": first, \"latest\": last,\n            \"must\": must, \"parent\": parent, \"lag\": lag, \"group\": group, \"crews\": crews, \"npv\": npv}\n\n\n# Four invented feeder projects over two years. Money in $k.\nsnap = {\n    \"years\": [2030, 2031], \"rate\": 0.04,\n    \"budget\": {2030: 200, 2031: 150},\n    \"region_budget\": {\"East\": {2030: 200, 2031: 200}, \"West\": {2030: 120, 2031: 120}},\n    \"crews\": {\"lines\": {2030: 2, 2031: 2}, \"poles\": {2030: 2, 2031: 2}},\n    \"floor\": {\"East\": 50, \"West\": 0},\n    \"projects\": {\n        \"F1\": project(\"lines\", \"East\", [100, 30], 2030, 2030, {2030: 60}, must=True),\n        \"F2\": project(\"lines\", \"East\", [70], 2030, 2031, {2030: 35, 2031: 32}, parent=\"F1\", lag=1),\n        \"F3\": project(\"poles\", \"West\", [90], 2030, 2031, {2030: 40, 2031: 38}, group=\"A\"),\n        \"F4\": project(\"poles\", \"West\", [60], 2030, 2031, {2030: 30, 2031: 27}, group=\"A\"),\n    },\n}\n\nprint(\"F1 2030, F2 2031:\", broken(snap, {\"F1\": 2030, \"F2\": 2031}))\nprint(\"F1 2030, F2 2030:\", broken(snap, {\"F1\": 2030, \"F2\": 2030}))\nprint(\"F1 2030, F3 2030, F4 2031:\", broken(snap, {\"F1\": 2030, \"F3\": 2030, \"F4\": 2031}))\nprint(\"F1 2031, F3 2030:\", broken(snap, {\"F1\": 2031, \"F3\": 2030}))\nprint(\"F3 2030 alone:\", broken(snap, {\"F3\": 2030}))\n"
         }
       ]
     },
@@ -129,6 +138,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\n\ndef spend_by_year(snap: dict, plan: dict[str, int]) -> dict[int, int]:\n    \"\"\"What the plan spends in each year of the horizon, $k: cost[k] lands in year start + k.\"\"\"\n    # TODO\n    return {y: 0 for y in snap[\"years\"]}\n\n\ndef broken(snap: dict, plan: dict[str, int]) -> list[str]:\n    \"\"\"The names of every row the plan breaks, sorted, read from the data alone.\"\"\"\n    # TODO: window, must, alt, after, budget, region, crews and floor.\n    return [\"not checked\"]\n\n\nif __name__ == \"__main__\":\n    snap = {\"years\": [2027, 2028], \"rate\": 0.05, \"budget\": {2027: 100, 2028: 100},\n            \"region_budget\": {\"North\": {2027: 100, 2028: 100}}, \"crews\": {\"lines\": {2027: 1, 2028: 1}},\n            \"floor\": {\"North\": 0},\n            \"projects\": {\"J1\": {\"program\": \"lines\", \"region\": \"North\", \"cost\": [80, 40], \"earliest\": 2027,\n                                \"latest\": 2027, \"must\": True, \"parent\": None, \"lag\": 0, \"group\": None,\n                                \"crews\": 1, \"npv\": {2027: 30}}}}\n    print(broken(snap, {\"J1\": 2027}), broken(snap, {}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom checker import broken\n\ndef project(program, region, cost, first, last, npv, must=False, parent=None, lag=0, group=None, crews=1):\n    return {\"program\": program, \"region\": region, \"cost\": cost, \"earliest\": first, \"latest\": last,\n            \"must\": must, \"parent\": parent, \"lag\": lag, \"group\": group, \"crews\": crews, \"npv\": npv}\n\n\n# Four invented feeder projects over two years. Money in $k.\nsnap = {\n    \"years\": [2030, 2031], \"rate\": 0.04,\n    \"budget\": {2030: 200, 2031: 150},\n    \"region_budget\": {\"East\": {2030: 200, 2031: 200}, \"West\": {2030: 120, 2031: 120}},\n    \"crews\": {\"lines\": {2030: 2, 2031: 2}, \"poles\": {2030: 2, 2031: 2}},\n    \"floor\": {\"East\": 50, \"West\": 0},\n    \"projects\": {\n        \"F1\": project(\"lines\", \"East\", [100, 30], 2030, 2030, {2030: 60}, must=True),\n        \"F2\": project(\"lines\", \"East\", [70], 2030, 2031, {2030: 35, 2031: 32}, parent=\"F1\", lag=1),\n        \"F3\": project(\"poles\", \"West\", [90], 2030, 2031, {2030: 40, 2031: 38}, group=\"A\"),\n        \"F4\": project(\"poles\", \"West\", [60], 2030, 2031, {2030: 30, 2031: 27}, group=\"A\"),\n    },\n}\n\nprint(\"F1 2030, F2 2031:\", broken(snap, {\"F1\": 2030, \"F2\": 2031}))\nprint(\"F1 2030, F2 2030:\", broken(snap, {\"F1\": 2030, \"F2\": 2030}))\nprint(\"F1 2030, F3 2030, F4 2031:\", broken(snap, {\"F1\": 2030, \"F3\": 2030, \"F4\": 2031}))\nprint(\"F1 2031, F3 2030:\", broken(snap, {\"F1\": 2031, \"F3\": 2030}))\nprint(\"F3 2030 alone:\", broken(snap, {\"F3\": 2030}))\n"
     }
   ],
   "video": null,
@@ -136,8 +154,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 2,
     "lists": 0,
     "images": 0,
@@ -147,14 +165,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "c017b811177a2cb6b48fa9c26b692aead4f12f9cec76c45e52f9422e9edc9979",
+  "content_sha256": "09b906c8e269e310bef70c3253c1157a4e4e77bd1963cddcfd5eda066ec6b860",
   "starting_code": "from __future__ import annotations\n\n\ndef spend_by_year(snap: dict, plan: dict[str, int]) -> dict[int, int]:\n    \"\"\"What the plan spends in each year of the horizon, $k: cost[k] lands in year start + k.\"\"\"\n    # TODO\n    return {y: 0 for y in snap[\"years\"]}\n\n\ndef broken(snap: dict, plan: dict[str, int]) -> list[str]:\n    \"\"\"The names of every row the plan breaks, sorted, read from the data alone.\"\"\"\n    # TODO: window, must, alt, after, budget, region, crews and floor.\n    return [\"not checked\"]\n\n\nif __name__ == \"__main__\":\n    snap = {\"years\": [2027, 2028], \"rate\": 0.05, \"budget\": {2027: 100, 2028: 100},\n            \"region_budget\": {\"North\": {2027: 100, 2028: 100}}, \"crews\": {\"lines\": {2027: 1, 2028: 1}},\n            \"floor\": {\"North\": 0},\n            \"projects\": {\"J1\": {\"program\": \"lines\", \"region\": \"North\", \"cost\": [80, 40], \"earliest\": 2027,\n                                \"latest\": 2027, \"must\": True, \"parent\": None, \"lag\": 0, \"group\": None,\n                                \"crews\": 1, \"npv\": {2027: 30}}}}\n    print(broken(snap, {\"J1\": 2027}), broken(snap, {}))\n",
   "exercise": {
     "main_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-02/practice-1/checker.py",
     "test_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-02/practice-1/test_checker.py",
     "run_command": [
       "python3",
-      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-02/practice-1/checker.py"
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -220,6 +238,10 @@
     },
     "concepts": [
       "a checker that reads only the snapshot and a plan and names every row the plan breaks, with no model and no solver"
-    ]
+    ],
+    "files": [
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-02/practice-1/try_it.py"
   }
 }

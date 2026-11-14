@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "The price of one more megawatt",
   "blocks": [
     {
@@ -48,6 +48,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pyomo.environ as pyo\n\n\n@dataclass(frozen=True)\nclass Unit:\n    low: float        # MW when on\n    high: float       # MW at most\n    fixed: float      # $ per hour while on\n    marginal: float   # $ per MWh\n\n\ndef commit(units: dict[str, Unit], demand: float, integer: bool = True) -> pyo.ConcreteModel:\n    m = pyo.ConcreteModel()\n    m.U = pyo.Set(initialize=list(units))\n    m.on = pyo.Var(m.U, domain=pyo.Binary if integer else pyo.UnitInterval)\n    m.mw = pyo.Var(m.U, bounds=lambda m, u: (0, units[u].high))\n    m.low = pyo.Constraint(m.U, rule=lambda m, u: m.mw[u] >= units[u].low * m.on[u])\n    m.high = pyo.Constraint(m.U, rule=lambda m, u: m.mw[u] <= units[u].high * m.on[u])\n    m.demand = pyo.Constraint(expr=sum(m.mw[u] for u in m.U) == demand)\n    m.cost = pyo.Objective(expr=sum(units[u].fixed * m.on[u] + units[u].marginal * m.mw[u] for u in m.U))\n    return m\n\n\ndef price(units: dict[str, Unit], demand: float) -> tuple[float, float]:\n    \"\"\"The cheapest hourly cost, and the price of one more MW once the commitment is fixed.\"\"\"\n    solver = pyo.SolverFactory(\"appsi_highs\")\n    solver.config.mip_gap = 0.0\n    m = commit(units, demand)\n    solver.solve(m)\n    cost = pyo.value(m.cost)\n    for u in m.U:\n        m.on[u].fix(round(m.on[u].value))\n    pyo.TransformationFactory(\"core.relax_integer_vars\").apply_to(m)\n    m.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT)\n    solver.solve(m)\n    return cost, m.dual[m.demand]\n\n\nif __name__ == \"__main__\":\n    fleet = {\"hydro\": Unit(10, 60, 100, 5), \"gas\": Unit(40, 120, 900, 30), \"peaker\": Unit(5, 50, 300, 80)}\n    print(price(fleet, 150))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\n# Pyomo logs every set it builds and the whole solver log; keep its own logger to warnings.\nlogging.getLogger(\"pyomo\").setLevel(logging.WARNING)\n\nfrom prices import Unit, price\n\n# Unit(MW when on, MW at most, $ per hour while on, $ per MWh)\nfleet = {\"wind\": Unit(0, 40, 50, 2), \"coal\": Unit(50, 150, 1200, 25), \"diesel\": Unit(5, 40, 200, 90)}\nfor demand in (35, 120, 200):\n    cost, unit_price = price(fleet, demand)\n    print(f\"demand {demand} MW: cost {round(cost, 2)}, price {round(unit_price, 2)}\")\n"
         }
       ]
     },
@@ -60,6 +69,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pyomo.environ as pyo\n\n\n@dataclass(frozen=True)\nclass Unit:\n    low: float        # MW when on\n    high: float       # MW at most\n    fixed: float      # $ per hour while on\n    marginal: float   # $ per MWh\n\n\ndef commit(units: dict[str, Unit], demand: float, integer: bool = True) -> pyo.ConcreteModel:\n    m = pyo.ConcreteModel()\n    m.U = pyo.Set(initialize=list(units))\n    m.on = pyo.Var(m.U, domain=pyo.Binary if integer else pyo.UnitInterval)\n    m.mw = pyo.Var(m.U, bounds=lambda m, u: (0, units[u].high))\n    m.low = pyo.Constraint(m.U, rule=lambda m, u: m.mw[u] >= units[u].low * m.on[u])\n    m.high = pyo.Constraint(m.U, rule=lambda m, u: m.mw[u] <= units[u].high * m.on[u])\n    m.demand = pyo.Constraint(expr=sum(m.mw[u] for u in m.U) == demand)\n    m.cost = pyo.Objective(expr=sum(units[u].fixed * m.on[u] + units[u].marginal * m.mw[u] for u in m.U))\n    return m\n\n\ndef price(units: dict[str, Unit], demand: float) -> tuple[float, float]:\n    \"\"\"The cheapest hourly cost, and the price of one more MW once the commitment is fixed.\"\"\"\n    # TODO: solve the MILP from commit(); fix each unit's on/off at its value; relax integrality;\n    #       declare a dual Suffix; re-solve; read the demand row's dual.\n    return 0.0, 0.0\n\n\nif __name__ == \"__main__\":\n    fleet = {\"hydro\": Unit(10, 60, 100, 5), \"gas\": Unit(40, 120, 900, 30), \"peaker\": Unit(5, 50, 300, 80)}\n    print(price(fleet, 150))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\n# Pyomo logs every set it builds and the whole solver log; keep its own logger to warnings.\nlogging.getLogger(\"pyomo\").setLevel(logging.WARNING)\n\nfrom prices import Unit, price\n\n# Unit(MW when on, MW at most, $ per hour while on, $ per MWh)\nfleet = {\"wind\": Unit(0, 40, 50, 2), \"coal\": Unit(50, 150, 1200, 25), \"diesel\": Unit(5, 40, 200, 90)}\nfor demand in (35, 120, 200):\n    cost, unit_price = price(fleet, demand)\n    print(f\"demand {demand} MW: cost {round(cost, 2)}, price {round(unit_price, 2)}\")\n"
     }
   ],
   "video": null,
@@ -67,8 +85,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 2,
+    "paras": 4,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -78,14 +96,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "75a0f10f3474221ab584e9cb41106e5d08e822bdea9a97b7dd72eb77090ec923",
+  "content_sha256": "25138a621e93f97c7cf55ccedc13a11572b5bec03384a3a1b5aa9e5c5b9681d7",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pyomo.environ as pyo\n\n\n@dataclass(frozen=True)\nclass Unit:\n    low: float        # MW when on\n    high: float       # MW at most\n    fixed: float      # $ per hour while on\n    marginal: float   # $ per MWh\n\n\ndef commit(units: dict[str, Unit], demand: float, integer: bool = True) -> pyo.ConcreteModel:\n    m = pyo.ConcreteModel()\n    m.U = pyo.Set(initialize=list(units))\n    m.on = pyo.Var(m.U, domain=pyo.Binary if integer else pyo.UnitInterval)\n    m.mw = pyo.Var(m.U, bounds=lambda m, u: (0, units[u].high))\n    m.low = pyo.Constraint(m.U, rule=lambda m, u: m.mw[u] >= units[u].low * m.on[u])\n    m.high = pyo.Constraint(m.U, rule=lambda m, u: m.mw[u] <= units[u].high * m.on[u])\n    m.demand = pyo.Constraint(expr=sum(m.mw[u] for u in m.U) == demand)\n    m.cost = pyo.Objective(expr=sum(units[u].fixed * m.on[u] + units[u].marginal * m.mw[u] for u in m.U))\n    return m\n\n\ndef price(units: dict[str, Unit], demand: float) -> tuple[float, float]:\n    \"\"\"The cheapest hourly cost, and the price of one more MW once the commitment is fixed.\"\"\"\n    # TODO: solve the MILP from commit(); fix each unit's on/off at its value; relax integrality;\n    #       declare a dual Suffix; re-solve; read the demand row's dual.\n    return 0.0, 0.0\n\n\nif __name__ == \"__main__\":\n    fleet = {\"hydro\": Unit(10, 60, 100, 5), \"gas\": Unit(40, 120, 900, 30), \"peaker\": Unit(5, 50, 300, 80)}\n    print(price(fleet, 150))\n",
   "exercise": {
     "main_path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-02/practice-2/prices.py",
     "test_path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-02/practice-2/test_prices.py",
     "run_command": [
       "python3",
-      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-02/practice-2/prices.py"
+      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -127,6 +145,10 @@
     "concepts": [
       "prices for a MILP's plan",
       "the SolverResults object of inherited code"
-    ]
+    ],
+    "files": [
+      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-02/practice-2/try_it.py"
   }
 }

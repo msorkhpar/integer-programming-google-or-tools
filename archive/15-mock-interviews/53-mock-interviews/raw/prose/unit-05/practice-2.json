@@ -9,7 +9,7 @@
   "unit": 5,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Planner overrides as bounds",
   "blocks": [
     {
@@ -65,6 +65,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project]) -> dict:\n    \"\"\"Given: x[(pid, year)] for every allowed start year, and each project starts at most once.\"\"\"\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    return x\n\n\ndef apply_overrides(model: mathopt.Model, x: dict, projects: list[Project], overrides: list[tuple]) -> None:\n    \"\"\"Each override is (\"start_in\", pid, year), (\"never\", pid), (\"not_before\", pid, year) or (\"fund\", pid).\"\"\"\n    starts = {p.pid: p.starts for p in projects}\n    for override in overrides:\n        kind, pid = override[0], override[1]\n        if kind == \"start_in\":\n            if override[2] not in starts[pid]:\n                raise ValueError(f\"{override}: {override[2]} is outside the window of {pid}\")\n            x[pid, override[2]].lower_bound = 1\n        elif kind == \"never\":\n            for t in starts[pid]:\n                x[pid, t].upper_bound = 0\n        elif kind == \"not_before\":\n            for t in starts[pid]:\n                if t < override[2]:\n                    x[pid, t].upper_bound = 0\n        elif kind == \"fund\":\n            model.add_linear_constraint(sum(x[pid, t] for t in starts[pid]) == 1, name=f\"fund_{pid}\")\n    for var in x.values():\n        if var.lower_bound > var.upper_bound:\n            raise ValueError(f\"overrides contradict each other on {var.name}\")\n\n\ndef build(projects: list[Project], overrides: list[tuple]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"overrides\")\n    x = start_variables(model, projects)\n    apply_overrides(model, x, projects, overrides)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Project(\"P1\", (2027, 2028))], [(\"not_before\", \"P1\", 2028)])\n    print({k: (v.lower_bound, v.upper_bound) for k, v in x.items()})\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom overrides import Project, build\n\nprojects = [Project(\"D1\", (2031, 2032, 2033)), Project(\"D2\", (2031, 2032)), Project(\"D3\", (2032, 2033))]\n\n\ndef bounds(overrides):\n    try:\n        model, x = build(projects, overrides)\n    except ValueError as error:\n        return f\"refused: {error}\"\n    rows = [c.name for c in model.linear_constraints()]\n    return {f\"{p} {t}\": (v.lower_bound, v.upper_bound) for (p, t), v in x.items()}, rows\n\n\nprint(\"start_in D1 2032, never D2:\", bounds([(\"start_in\", \"D1\", 2032), (\"never\", \"D2\")]))\nprint(\"not_before D1 2033, fund D3:\", bounds([(\"not_before\", \"D1\", 2033), (\"fund\", \"D3\")]))\nprint(\"start_in D2 2033:\", bounds([(\"start_in\", \"D2\", 2033)]))\nprint(\"start_in D3 2032, never D3:\", bounds([(\"start_in\", \"D3\", 2032), (\"never\", \"D3\")]))\n"
         }
       ]
     },
@@ -77,6 +86,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project]) -> dict:\n    \"\"\"Given: x[(pid, year)] for every allowed start year, and each project starts at most once.\"\"\"\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    return x\n\n\ndef apply_overrides(model: mathopt.Model, x: dict, projects: list[Project], overrides: list[tuple]) -> None:\n    \"\"\"Each override is (\"start_in\", pid, year), (\"never\", pid), (\"not_before\", pid, year) or (\"fund\", pid).\"\"\"\n    # TODO: turn each override into bounds, or a row where no bound can say it.\n    return None\n\n\ndef build(projects: list[Project], overrides: list[tuple]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"overrides\")\n    x = start_variables(model, projects)\n    apply_overrides(model, x, projects, overrides)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Project(\"P1\", (2027, 2028))], [(\"not_before\", \"P1\", 2028)])\n    print({k: (v.lower_bound, v.upper_bound) for k, v in x.items()})\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom overrides import Project, build\n\nprojects = [Project(\"D1\", (2031, 2032, 2033)), Project(\"D2\", (2031, 2032)), Project(\"D3\", (2032, 2033))]\n\n\ndef bounds(overrides):\n    try:\n        model, x = build(projects, overrides)\n    except ValueError as error:\n        return f\"refused: {error}\"\n    rows = [c.name for c in model.linear_constraints()]\n    return {f\"{p} {t}\": (v.lower_bound, v.upper_bound) for (p, t), v in x.items()}, rows\n\n\nprint(\"start_in D1 2032, never D2:\", bounds([(\"start_in\", \"D1\", 2032), (\"never\", \"D2\")]))\nprint(\"not_before D1 2033, fund D3:\", bounds([(\"not_before\", \"D1\", 2033), (\"fund\", \"D3\")]))\nprint(\"start_in D2 2033:\", bounds([(\"start_in\", \"D2\", 2033)]))\nprint(\"start_in D3 2032, never D3:\", bounds([(\"start_in\", \"D3\", 2032), (\"never\", \"D3\")]))\n"
     }
   ],
   "video": null,
@@ -84,8 +102,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 0,
     "lists": 2,
     "images": 0,
@@ -95,14 +113,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "5ab687c80d327961b074e6c6755d43ba644cd5aec3e34b1454776eb6bcbe0dda",
+  "content_sha256": "fa8424221c3ed37db08eed022092bf1c1993344244d34266bd8cd0346f09993d",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project]) -> dict:\n    \"\"\"Given: x[(pid, year)] for every allowed start year, and each project starts at most once.\"\"\"\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    return x\n\n\ndef apply_overrides(model: mathopt.Model, x: dict, projects: list[Project], overrides: list[tuple]) -> None:\n    \"\"\"Each override is (\"start_in\", pid, year), (\"never\", pid), (\"not_before\", pid, year) or (\"fund\", pid).\"\"\"\n    # TODO: turn each override into bounds, or a row where no bound can say it.\n    return None\n\n\ndef build(projects: list[Project], overrides: list[tuple]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"overrides\")\n    x = start_variables(model, projects)\n    apply_overrides(model, x, projects, overrides)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Project(\"P1\", (2027, 2028))], [(\"not_before\", \"P1\", 2028)])\n    print({k: (v.lower_bound, v.upper_bound) for k, v in x.items()})\n",
   "exercise": {
     "main_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-05/practice-2/overrides.py",
     "test_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-05/practice-2/test_overrides.py",
     "run_command": [
       "python3",
-      "practice/15-mock-interviews/53-mock-interviews/prose/unit-05/practice-2/overrides.py"
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-05/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -173,6 +191,10 @@
     },
     "concepts": [
       "turn planner overrides into variable bounds and one row, and refuse overrides that cannot hold"
-    ]
+    ],
+    "files": [
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-05/practice-2/try_it.py"
+    ],
+    "try_file": "practice/15-mock-interviews/53-mock-interviews/prose/unit-05/practice-2/try_it.py"
   }
 }

@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A bonus for a fully commissioned substation",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_commissioning(model: mathopt.Model, x: dict, z: dict, jobs_of: dict) -> None:\n    \"\"\"A substation is commissioned (z = 1) only if every one of its jobs is funded.\"\"\"\n    for s, jobs in jobs_of.items():\n        for j in jobs:\n            model.add_linear_constraint(z[s] <= x[j], name=f\"needs_{s}_{j}\")\n\n\ndef build(cost: dict, value: dict, budget: int, bonus: dict, jobs_of: dict,\n          *, integer: bool = True) -> tuple[mathopt.Model, dict, dict]:\n    \"\"\"Fund jobs within the budget; a commissioned substation earns its bonus.\"\"\"\n    model = mathopt.Model(name=\"commissioning\")\n    x = {j: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{j}\") for j in cost}\n    z = {s: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"z_{s}\") for s in jobs_of}\n    model.add_linear_constraint(sum(cost[j] * x[j] for j in cost) <= budget, name=\"budget\")\n    add_commissioning(model, x, z, jobs_of)\n    model.maximize(sum(value[j] * x[j] for j in cost) + sum(bonus[s] * z[s] for s in jobs_of))\n    return model, x, z\n\n\ndef add_colleague_rows(model: mathopt.Model, x: dict, z: dict, jobs_of: dict) -> None:\n    \"\"\"The colleague's version: one row per substation, |J_s| z_s <= sum of its jobs.\"\"\"\n    for s, jobs in jobs_of.items():\n        model.add_linear_constraint(len(jobs) * z[s] <= sum(x[j] for j in jobs), name=f\"needs_{s}\")\n\n\nif __name__ == \"__main__\":\n    cost = {\"T1\": 4, \"T2\": 3, \"B1\": 2}\n    model, x, z = build(cost, {\"T1\": 1, \"T2\": 1, \"B1\": 1}, 7, {\"North\": 6}, {\"North\": [\"T1\", \"T2\", \"B1\"]},\n                        integer=False)\n    print(mathopt.solve(model, mathopt.SolverType.GLOP).objective_value())\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom bonus import build\n\n# Jobs at two substations: cost and value; bonus per substation.\ncost = {\"W1\": 3, \"W2\": 2, \"W3\": 4, \"S1\": 5}\nvalue = {\"W1\": 1, \"W2\": 2, \"W3\": 1, \"S1\": 2}\njobs = {\"West\": [\"W1\", \"W2\", \"W3\"], \"South\": [\"S1\"]}\nbonus = {\"West\": 8, \"South\": 5}\n\nfor budget in (9, 12):\n    lp, _, _ = build(cost, value, budget, bonus, jobs, integer=False)\n    milp, _, _ = build(cost, value, budget, bonus, jobs)\n    print(f\"LP bound at budget {budget}:\", round(mathopt.solve(lp, mathopt.SolverType.GLOP).objective_value(), 3))\n    print(f\"best plan at budget {budget}:\", round(mathopt.solve(milp, mathopt.SolverType.HIGHS).objective_value(), 3))\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_commissioning(model: mathopt.Model, x: dict, z: dict, jobs_of: dict) -> None:\n    \"\"\"A substation is commissioned (z = 1) only if every one of its jobs is funded.\"\"\"\n    # TODO: the rows that say \"commissioned only if every job is funded\".\n    return None\n\n\ndef build(cost: dict, value: dict, budget: int, bonus: dict, jobs_of: dict,\n          *, integer: bool = True) -> tuple[mathopt.Model, dict, dict]:\n    \"\"\"Fund jobs within the budget; a commissioned substation earns its bonus.\"\"\"\n    model = mathopt.Model(name=\"commissioning\")\n    x = {j: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{j}\") for j in cost}\n    z = {s: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"z_{s}\") for s in jobs_of}\n    model.add_linear_constraint(sum(cost[j] * x[j] for j in cost) <= budget, name=\"budget\")\n    add_commissioning(model, x, z, jobs_of)\n    model.maximize(sum(value[j] * x[j] for j in cost) + sum(bonus[s] * z[s] for s in jobs_of))\n    return model, x, z\n\n\ndef add_colleague_rows(model: mathopt.Model, x: dict, z: dict, jobs_of: dict) -> None:\n    \"\"\"The colleague's version: one row per substation, |J_s| z_s <= sum of its jobs.\"\"\"\n    for s, jobs in jobs_of.items():\n        model.add_linear_constraint(len(jobs) * z[s] <= sum(x[j] for j in jobs), name=f\"needs_{s}\")\n\n\nif __name__ == \"__main__\":\n    cost = {\"T1\": 4, \"T2\": 3, \"B1\": 2}\n    model, x, z = build(cost, {\"T1\": 1, \"T2\": 1, \"B1\": 1}, 7, {\"North\": 6}, {\"North\": [\"T1\", \"T2\", \"B1\"]},\n                        integer=False)\n    print(mathopt.solve(model, mathopt.SolverType.GLOP).objective_value())\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom bonus import build\n\n# Jobs at two substations: cost and value; bonus per substation.\ncost = {\"W1\": 3, \"W2\": 2, \"W3\": 4, \"S1\": 5}\nvalue = {\"W1\": 1, \"W2\": 2, \"W3\": 1, \"S1\": 2}\njobs = {\"West\": [\"W1\", \"W2\", \"W3\"], \"South\": [\"S1\"]}\nbonus = {\"West\": 8, \"South\": 5}\n\nfor budget in (9, 12):\n    lp, _, _ = build(cost, value, budget, bonus, jobs, integer=False)\n    milp, _, _ = build(cost, value, budget, bonus, jobs)\n    print(f\"LP bound at budget {budget}:\", round(mathopt.solve(lp, mathopt.SolverType.GLOP).objective_value(), 3))\n    print(f\"best plan at budget {budget}:\", round(mathopt.solve(milp, mathopt.SolverType.HIGHS).objective_value(), 3))\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "25cfdb5d14bbc6bc4079feac3f0862627b5fd52c933d546a08ac97a195f5cd43",
+  "content_sha256": "368d55a4d6a56dafb0acdc58ae16078f8b8c2fd39a07678d25ac1b5fc22e05cc",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_commissioning(model: mathopt.Model, x: dict, z: dict, jobs_of: dict) -> None:\n    \"\"\"A substation is commissioned (z = 1) only if every one of its jobs is funded.\"\"\"\n    # TODO: the rows that say \"commissioned only if every job is funded\".\n    return None\n\n\ndef build(cost: dict, value: dict, budget: int, bonus: dict, jobs_of: dict,\n          *, integer: bool = True) -> tuple[mathopt.Model, dict, dict]:\n    \"\"\"Fund jobs within the budget; a commissioned substation earns its bonus.\"\"\"\n    model = mathopt.Model(name=\"commissioning\")\n    x = {j: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{j}\") for j in cost}\n    z = {s: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"z_{s}\") for s in jobs_of}\n    model.add_linear_constraint(sum(cost[j] * x[j] for j in cost) <= budget, name=\"budget\")\n    add_commissioning(model, x, z, jobs_of)\n    model.maximize(sum(value[j] * x[j] for j in cost) + sum(bonus[s] * z[s] for s in jobs_of))\n    return model, x, z\n\n\ndef add_colleague_rows(model: mathopt.Model, x: dict, z: dict, jobs_of: dict) -> None:\n    \"\"\"The colleague's version: one row per substation, |J_s| z_s <= sum of its jobs.\"\"\"\n    for s, jobs in jobs_of.items():\n        model.add_linear_constraint(len(jobs) * z[s] <= sum(x[j] for j in jobs), name=f\"needs_{s}\")\n\n\nif __name__ == \"__main__\":\n    cost = {\"T1\": 4, \"T2\": 3, \"B1\": 2}\n    model, x, z = build(cost, {\"T1\": 1, \"T2\": 1, \"B1\": 1}, 7, {\"North\": 6}, {\"North\": [\"T1\", \"T2\", \"B1\"]},\n                        integer=False)\n    print(mathopt.solve(model, mathopt.SolverType.GLOP).objective_value())\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-01/practice-1/bonus.py",
     "test_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-01/practice-1/test_bonus.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/29-strong-formulations/prose/unit-01/practice-1/bonus.py"
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-01/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -135,6 +153,10 @@
     "concepts": [
       "a formulation is stronger when its LP relaxation allows fewer points with the same 0/1 plans",
       "one fractional point the weak relaxation allows and the strong one refuses shows the regions differ"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-01/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/29-strong-formulations/prose/unit-01/practice-1/try_it.py"
   }
 }

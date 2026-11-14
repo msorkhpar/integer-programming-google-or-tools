@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A district spending floor with a waiver",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef spend_variables(model: mathopt.Model, items: dict[str, tuple[float, float]]) -> dict:\n    \"\"\"One continuous spend variable per work order, with its (lowest, highest) spend in $k.\"\"\"\n    return {name: model.add_variable(lb=lo, ub=hi, name=f\"spend_{name}\") for name, (lo, hi) in items.items()}\n\n\ndef add_floor(model: mathopt.Model, spend: dict, floor: float, waiver: mathopt.Variable) -> None:\n    \"\"\"The district's total spend is at least `floor`, unless `waiver` is 1.\"\"\"\n    lowest = sum(v.lower_bound for v in spend.values())\n    big = max(0.0, floor - lowest)\n    model.add_linear_constraint(sum(spend.values()) >= floor - big * waiver, name=\"district_floor\")\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    spend = spend_variables(model, {\"trim\": (0, 60), \"poles\": (20, 80)})\n    waiver = model.add_binary_variable(name=\"waiver\")\n    add_floor(model, spend, 100, waiver)\n    print(model.get_num_linear_constraints(), \"row\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom floor import add_floor, spend_variables\n\n# Two spend lines with (lowest, highest) amounts; the district floor is 70.\norders = {\"paving\": (10, 50), \"signs\": (5, 40)}\n\n\ndef allowed(values, waiver, floor=70):\n    model = mathopt.Model()\n    spend = spend_variables(model, orders)\n    w = model.add_binary_variable(name=\"waiver\")\n    add_floor(model, spend, floor, w)\n    for name, var in spend.items():\n        var.lower_bound = var.upper_bound = values[name]\n    w.lower_bound = w.upper_bound = waiver\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"paving 40, signs 35, no waiver:\", allowed({\"paving\": 40, \"signs\": 35}, 0))\nprint(\"paving 30, signs 20, no waiver:\", allowed({\"paving\": 30, \"signs\": 20}, 0))\nprint(\"paving 10, signs 5, waiver:\", allowed({\"paving\": 10, \"signs\": 5}, 1))\nprint(\"paving 10, signs 5, no waiver:\", allowed({\"paving\": 10, \"signs\": 5}, 0))\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef spend_variables(model: mathopt.Model, items: dict[str, tuple[float, float]]) -> dict:\n    \"\"\"One continuous spend variable per work order, with its (lowest, highest) spend in $k.\"\"\"\n    return {name: model.add_variable(lb=lo, ub=hi, name=f\"spend_{name}\") for name, (lo, hi) in items.items()}\n\n\ndef add_floor(model: mathopt.Model, spend: dict, floor: float, waiver: mathopt.Variable) -> None:\n    \"\"\"The district's total spend is at least `floor`, unless `waiver` is 1.\"\"\"\n    # TODO: your row, with the smallest M the variables' bounds allow.\n    return None\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    spend = spend_variables(model, {\"trim\": (0, 60), \"poles\": (20, 80)})\n    waiver = model.add_binary_variable(name=\"waiver\")\n    add_floor(model, spend, 100, waiver)\n    print(model.get_num_linear_constraints(), \"row\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom floor import add_floor, spend_variables\n\n# Two spend lines with (lowest, highest) amounts; the district floor is 70.\norders = {\"paving\": (10, 50), \"signs\": (5, 40)}\n\n\ndef allowed(values, waiver, floor=70):\n    model = mathopt.Model()\n    spend = spend_variables(model, orders)\n    w = model.add_binary_variable(name=\"waiver\")\n    add_floor(model, spend, floor, w)\n    for name, var in spend.items():\n        var.lower_bound = var.upper_bound = values[name]\n    w.lower_bound = w.upper_bound = waiver\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"paving 40, signs 35, no waiver:\", allowed({\"paving\": 40, \"signs\": 35}, 0))\nprint(\"paving 30, signs 20, no waiver:\", allowed({\"paving\": 30, \"signs\": 20}, 0))\nprint(\"paving 10, signs 5, waiver:\", allowed({\"paving\": 10, \"signs\": 5}, 1))\nprint(\"paving 10, signs 5, no waiver:\", allowed({\"paving\": 10, \"signs\": 5}, 0))\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "b7c7b99f23685ba4faee0ef1fb1a17edd473bd5bfde0daa0efe0cbed501cb6e0",
+  "content_sha256": "62289769af9bc1d3725cc1dc2195c760400322df710b3dc88577d796ff149417",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef spend_variables(model: mathopt.Model, items: dict[str, tuple[float, float]]) -> dict:\n    \"\"\"One continuous spend variable per work order, with its (lowest, highest) spend in $k.\"\"\"\n    return {name: model.add_variable(lb=lo, ub=hi, name=f\"spend_{name}\") for name, (lo, hi) in items.items()}\n\n\ndef add_floor(model: mathopt.Model, spend: dict, floor: float, waiver: mathopt.Variable) -> None:\n    \"\"\"The district's total spend is at least `floor`, unless `waiver` is 1.\"\"\"\n    # TODO: your row, with the smallest M the variables' bounds allow.\n    return None\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    spend = spend_variables(model, {\"trim\": (0, 60), \"poles\": (20, 80)})\n    waiver = model.add_binary_variable(name=\"waiver\")\n    add_floor(model, spend, 100, waiver)\n    print(model.get_num_linear_constraints(), \"row\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-1/floor.py",
     "test_path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-1/test_floor.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-1/floor.py"
+      "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -140,6 +158,10 @@
     "concepts": [
       "a safe M comes from each variable's bounds, with positive coefficients at upper and negative ones at lower bounds, mirrored for a floor",
       "a binary times a constant M switches a row off, and M must cover the most the left side can exceed the right side"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-1/try_it.py"
   }
 }

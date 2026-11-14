@@ -9,7 +9,7 @@
   "unit": 5,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "One LNS step on a pipe plan",
   "blocks": [
     {
@@ -43,6 +43,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef build(projects: dict, budgets: dict[int, float]):\n    \"\"\"The whole plan: at most one start per project, spend within every year's budget.\"\"\"\n    model = mathopt.Model(name=\"fleet plan\")\n    x = {(n, t): model.add_binary_variable(name=f\"x_{n}_{t}\") for n, p in projects.items() for t in p[\"value\"]}\n    for n, p in projects.items():\n        model.add_linear_constraint(sum(x[n, t] for t in p[\"value\"]) <= 1, name=f\"once_{n}\")\n    for y, b in budgets.items():\n        spend = mathopt.LinearExpression()\n        for (n, t), var in x.items():\n            for k, c in enumerate(projects[n][\"cost\"]):\n                if t + k == y:\n                    spend += c * var\n        model.add_linear_constraint(spend <= b, name=f\"budget_{y}\")\n    model.maximize(sum(projects[n][\"value\"][t] * var for (n, t), var in x.items()))\n    return model, x\n\n\ndef lns_step(projects: dict, budgets: dict[int, float], plan: dict[str, int], free: set[str]) -> dict[str, int]:\n    \"\"\"Re-plan the projects in `free`, keep every other project as `plan` has it; never return worse.\"\"\"\n    model, x = build(projects, budgets)\n    for (n, t), var in x.items():\n        if n not in free:\n            var.lower_bound = var.upper_bound = 1 if plan.get(n) == t else 0\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    found = {n: t for (n, t), var in x.items() if result.variable_values(var) > 0.5}\n    worth = lambda p: sum(projects[n][\"value\"][t] for n, t in p.items())\n    return found if worth(found) > worth(plan) else dict(plan)\n\n\nif __name__ == \"__main__\":\n    projects = {\"main line\": {\"value\": {2027: 10, 2028: 12}, \"cost\": [10]}, \"valves\": {\"value\": {2027: 8}, \"cost\": [10]}}\n    print(lns_step(projects, {2027: 10, 2028: 10}, {\"valves\": 2027}, {\"main line\"}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom lns_step import lns_step\n\nprojects = {\n    \"sewer\": {\"value\": {2030: 12, 2031: 16}, \"cost\": [8]},\n    \"hydrants\": {\"value\": {2030: 9, 2031: 5}, \"cost\": [8]},\n    \"kiosk\": {\"value\": {2030: 6}, \"cost\": [4]},\n    \"signs\": {\"value\": {2031: 3}, \"cost\": [4]},\n}\nbudgets = {2030: 12, 2031: 12}\nstart = {\"sewer\": 2030}\n\nprint(\"start plan:\", start)\nprint(\"free hydrants, kiosk:\", lns_step(projects, budgets, start, {\"hydrants\", \"kiosk\"}))\nprint(\"free sewer, hydrants:\", lns_step(projects, budgets, start, {\"sewer\", \"hydrants\"}))\nprint(\"free everything:\", lns_step(projects, budgets, {}, set(projects)))\n"
         }
       ]
     },
@@ -55,6 +64,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef build(projects: dict, budgets: dict[int, float]):\n    \"\"\"The whole plan: at most one start per project, spend within every year's budget.\"\"\"\n    model = mathopt.Model(name=\"fleet plan\")\n    x = {(n, t): model.add_binary_variable(name=f\"x_{n}_{t}\") for n, p in projects.items() for t in p[\"value\"]}\n    for n, p in projects.items():\n        model.add_linear_constraint(sum(x[n, t] for t in p[\"value\"]) <= 1, name=f\"once_{n}\")\n    for y, b in budgets.items():\n        spend = mathopt.LinearExpression()\n        for (n, t), var in x.items():\n            for k, c in enumerate(projects[n][\"cost\"]):\n                if t + k == y:\n                    spend += c * var\n        model.add_linear_constraint(spend <= b, name=f\"budget_{y}\")\n    model.maximize(sum(projects[n][\"value\"][t] * var for (n, t), var in x.items()))\n    return model, x\n\n\ndef lns_step(projects: dict, budgets: dict[int, float], plan: dict[str, int], free: set[str]) -> dict[str, int]:\n    \"\"\"Re-plan the projects in `free`, keep every other project as `plan` has it; never return worse.\"\"\"\n    # TODO: write the step's model first: which variables are fixed, and to what.\n    return {}\n\n\nif __name__ == \"__main__\":\n    projects = {\"main line\": {\"value\": {2027: 10, 2028: 12}, \"cost\": [10]}, \"valves\": {\"value\": {2027: 8}, \"cost\": [10]}}\n    print(lns_step(projects, {2027: 10, 2028: 10}, {\"valves\": 2027}, {\"main line\"}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom lns_step import lns_step\n\nprojects = {\n    \"sewer\": {\"value\": {2030: 12, 2031: 16}, \"cost\": [8]},\n    \"hydrants\": {\"value\": {2030: 9, 2031: 5}, \"cost\": [8]},\n    \"kiosk\": {\"value\": {2030: 6}, \"cost\": [4]},\n    \"signs\": {\"value\": {2031: 3}, \"cost\": [4]},\n}\nbudgets = {2030: 12, 2031: 12}\nstart = {\"sewer\": 2030}\n\nprint(\"start plan:\", start)\nprint(\"free hydrants, kiosk:\", lns_step(projects, budgets, start, {\"hydrants\", \"kiosk\"}))\nprint(\"free sewer, hydrants:\", lns_step(projects, budgets, start, {\"sewer\", \"hydrants\"}))\nprint(\"free everything:\", lns_step(projects, budgets, {}, set(projects)))\n"
     }
   ],
   "video": null,
@@ -62,8 +80,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -73,14 +91,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "0774e12a34a2a6da9165373dc32cdeece9f0887d798cd42f4b7e5e5e7090db26",
+  "content_sha256": "3685595046bd9101dba3a0eb44c284d92536e7e1d655900b1c9dfbc2e019fb86",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef build(projects: dict, budgets: dict[int, float]):\n    \"\"\"The whole plan: at most one start per project, spend within every year's budget.\"\"\"\n    model = mathopt.Model(name=\"fleet plan\")\n    x = {(n, t): model.add_binary_variable(name=f\"x_{n}_{t}\") for n, p in projects.items() for t in p[\"value\"]}\n    for n, p in projects.items():\n        model.add_linear_constraint(sum(x[n, t] for t in p[\"value\"]) <= 1, name=f\"once_{n}\")\n    for y, b in budgets.items():\n        spend = mathopt.LinearExpression()\n        for (n, t), var in x.items():\n            for k, c in enumerate(projects[n][\"cost\"]):\n                if t + k == y:\n                    spend += c * var\n        model.add_linear_constraint(spend <= b, name=f\"budget_{y}\")\n    model.maximize(sum(projects[n][\"value\"][t] * var for (n, t), var in x.items()))\n    return model, x\n\n\ndef lns_step(projects: dict, budgets: dict[int, float], plan: dict[str, int], free: set[str]) -> dict[str, int]:\n    \"\"\"Re-plan the projects in `free`, keep every other project as `plan` has it; never return worse.\"\"\"\n    # TODO: write the step's model first: which variables are fixed, and to what.\n    return {}\n\n\nif __name__ == \"__main__\":\n    projects = {\"main line\": {\"value\": {2027: 10, 2028: 12}, \"cost\": [10]}, \"valves\": {\"value\": {2027: 8}, \"cost\": [10]}}\n    print(lns_step(projects, {2027: 10, 2028: 10}, {\"valves\": 2027}, {\"main line\"}))\n",
   "exercise": {
     "main_path": "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-05/practice-2/lns_step.py",
     "test_path": "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-05/practice-2/test_lns_step.py",
     "run_command": [
       "python3",
-      "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-05/practice-2/lns_step.py"
+      "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-05/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -122,6 +140,10 @@
     "concepts": [
       "one step fixes every project outside the neighborhood and re-solves the rest",
       "a neighborhood holds projects that compete for the same limits"
-    ]
+    ],
+    "files": [
+      "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-05/practice-2/try_it.py"
+    ],
+    "try_file": "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-05/practice-2/try_it.py"
   }
 }

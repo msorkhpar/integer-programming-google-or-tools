@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A transit agency's bus fleet",
   "blocks": [
     {
@@ -65,6 +65,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nOPTIONS = (\"keep\", \"refurbish\", \"diesel\", \"electric\")\n\n\n@dataclass(frozen=True)\nclass Bus:\n    bid: str\n    age: int\n\n\ndef add_fleet_rules(model: mathopt.Model, y: dict, buses: list[Bus], chargers: int, max_age: int) -> None:\n    \"\"\"One option per bus, electric buses within the chargers, no old bus kept.\"\"\"\n    for b in buses:\n        model.add_linear_constraint(sum(y[b.bid, o] for o in OPTIONS) == 1, name=f\"one_option_{b.bid}\")\n        if b.age > max_age:\n            y[b.bid, \"keep\"].upper_bound = 0\n    model.add_linear_constraint(sum(y[b.bid, \"electric\"] for b in buses) <= chargers, name=\"chargers\")\n\n\ndef build(buses: list[Bus], chargers: int, max_age: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"fleet\")\n    y = {(b.bid, o): model.add_binary_variable(name=f\"y_{b.bid}_{o}\") for b in buses for o in OPTIONS}\n    add_fleet_rules(model, y, buses, chargers, max_age)\n    return model, y\n\n\nif __name__ == \"__main__\":\n    model, y = build([Bus(\"B1\", 9), Bus(\"B2\", 18)], chargers=1, max_age=15)\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom fleet import Bus, build\n\nbuses = [Bus(\"V1\", 3), Bus(\"V2\", 12), Bus(\"V3\", 12), Bus(\"V4\", 19)]\n\ndef solve_ok(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(plan):\n    model, y = build(buses, 1, 12)\n    for (bid, option), var in y.items():\n        value = 1.0 if plan.get(bid) == option else 0.0\n        if value > var.upper_bound:\n            return False\n        var.lower_bound = var.upper_bound = value\n    return solve_ok(model)\n\n\nbase = {\"V1\": \"keep\", \"V2\": \"keep\", \"V3\": \"electric\", \"V4\": \"diesel\"}\nprint(\"V1 keep, V2 keep, V3 electric, V4 diesel:\", allowed(base))\nprint(\"same with V4 keep:\", allowed({**base, \"V4\": \"keep\"}))\nprint(\"same with V1 electric:\", allowed({**base, \"V1\": \"electric\"}))\nprint(\"same with V2 missing:\", allowed({b: o for b, o in base.items() if b != \"V2\"}))\n"
         }
       ]
     },
@@ -77,6 +86,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nOPTIONS = (\"keep\", \"refurbish\", \"diesel\", \"electric\")\n\n\n@dataclass(frozen=True)\nclass Bus:\n    bid: str\n    age: int\n\n\ndef add_fleet_rules(model: mathopt.Model, y: dict, buses: list[Bus], chargers: int, max_age: int) -> None:\n    \"\"\"One option per bus, electric buses within the chargers, no old bus kept.\"\"\"\n    # TODO: your rows.\n    return None\n\n\ndef build(buses: list[Bus], chargers: int, max_age: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"fleet\")\n    y = {(b.bid, o): model.add_binary_variable(name=f\"y_{b.bid}_{o}\") for b in buses for o in OPTIONS}\n    add_fleet_rules(model, y, buses, chargers, max_age)\n    return model, y\n\n\nif __name__ == \"__main__\":\n    model, y = build([Bus(\"B1\", 9), Bus(\"B2\", 18)], chargers=1, max_age=15)\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom fleet import Bus, build\n\nbuses = [Bus(\"V1\", 3), Bus(\"V2\", 12), Bus(\"V3\", 12), Bus(\"V4\", 19)]\n\ndef solve_ok(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(plan):\n    model, y = build(buses, 1, 12)\n    for (bid, option), var in y.items():\n        value = 1.0 if plan.get(bid) == option else 0.0\n        if value > var.upper_bound:\n            return False\n        var.lower_bound = var.upper_bound = value\n    return solve_ok(model)\n\n\nbase = {\"V1\": \"keep\", \"V2\": \"keep\", \"V3\": \"electric\", \"V4\": \"diesel\"}\nprint(\"V1 keep, V2 keep, V3 electric, V4 diesel:\", allowed(base))\nprint(\"same with V4 keep:\", allowed({**base, \"V4\": \"keep\"}))\nprint(\"same with V1 electric:\", allowed({**base, \"V1\": \"electric\"}))\nprint(\"same with V2 missing:\", allowed({b: o for b, o in base.items() if b != \"V2\"}))\n"
     }
   ],
   "video": null,
@@ -84,8 +102,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -95,14 +113,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "e35632dc805069a501ff3efe80f49cd5dc0b2291489ac5eee452aa407d3474e4",
+  "content_sha256": "f66fb49cfe2d40e162f070056b1ba43146b3ab601634a122185e105c79fdcfcb",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nOPTIONS = (\"keep\", \"refurbish\", \"diesel\", \"electric\")\n\n\n@dataclass(frozen=True)\nclass Bus:\n    bid: str\n    age: int\n\n\ndef add_fleet_rules(model: mathopt.Model, y: dict, buses: list[Bus], chargers: int, max_age: int) -> None:\n    \"\"\"One option per bus, electric buses within the chargers, no old bus kept.\"\"\"\n    # TODO: your rows.\n    return None\n\n\ndef build(buses: list[Bus], chargers: int, max_age: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"fleet\")\n    y = {(b.bid, o): model.add_binary_variable(name=f\"y_{b.bid}_{o}\") for b in buses for o in OPTIONS}\n    add_fleet_rules(model, y, buses, chargers, max_age)\n    return model, y\n\n\nif __name__ == \"__main__\":\n    model, y = build([Bus(\"B1\", 9), Bus(\"B2\", 18)], chargers=1, max_age=15)\n    print(model.get_num_linear_constraints(), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-03/practice-1/fleet.py",
     "test_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-03/practice-1/test_fleet.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-03/practice-1/fleet.py"
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-03/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -154,6 +172,10 @@
     "concepts": [
       "the options for one asset share one row over every start variable of every member",
       "an explicit keep variable turns the group row into an equality and carries the risk of leaving the asset"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-03/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-03/practice-1/try_it.py"
   }
 }

@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 3,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Two inspection teams share the jobs",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef split_work(jobs: dict[str, int], teams: list[str], away: dict[str, list[tuple[int, int]]],\n               horizon: int) -> dict[str, tuple[str, int]]:\n    \"\"\"(team, start day) for each job, so the last job ends as early as possible.\"\"\"\n    model = cp_model.CpModel()\n    start, does = {}, {}\n    on_team = {t: [] for t in teams}\n    for j, days in jobs.items():\n        start[j] = model.new_int_var(0, horizon - days, f\"start_{j}\")\n        for t in teams:\n            does[j, t] = model.new_bool_var(f\"{t}_does_{j}\")\n            on_team[t].append(model.new_optional_fixed_size_interval_var(start[j], days, does[j, t], f\"{j}_by_{t}\"))\n        model.add_exactly_one(does[j, t] for t in teams)\n    for t in teams:\n        for first, last in away.get(t, []):\n            on_team[t].append(model.new_fixed_size_interval_var(first, last - first + 1, f\"{t}_away_{first}\"))\n        model.add_no_overlap(on_team[t])\n\n    makespan = model.new_int_var(0, horizon, \"makespan\")\n    model.add_max_equality(makespan, [start[j] + days for j, days in jobs.items()])\n    model.minimize(makespan)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.solve(model)\n    return {j: (next(t for t in teams if solver.boolean_value(does[j, t])), solver.value(start[j])) for j in jobs}\n\n\nif __name__ == \"__main__\":\n    print(split_work({\"main_st\": 3, \"mill_rd\": 2, \"dam\": 4}, [\"red\", \"blue\"], {\"blue\": [(0, 1)]}, 20))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom teams import split_work\n\n# Three sewer jobs, two crews; green is away on days 0 to 2.\njobs = {\"canal_st\": 4, \"bridge\": 2, \"outfall\": 3}\naway = {\"green\": [(0, 2)]}\n\nplan = split_work(jobs, [\"amber\", \"green\"], away, 15)\nfor job, (team, start) in sorted(plan.items()):\n    print(f\"{job}: team {team}, start day {start}\")\nprint(\"last day of work ends at:\", max(s + jobs[j] for j, (_, s) in plan.items()))\nprint(\"one team only:\", split_work(jobs, [\"amber\"], {}, 15))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef split_work(jobs: dict[str, int], teams: list[str], away: dict[str, list[tuple[int, int]]],\n               horizon: int) -> dict[str, tuple[str, int]]:\n    \"\"\"(team, start day) for each job, so the last job ends as early as possible.\"\"\"\n    # TODO: a start per job, a Boolean and an optional interval per job and team, exactly one team\n    # per job, a NoOverlap per team with its absences, and minimize the latest end.\n    # Every pair below is a placeholder.\n    return {j: (\"nobody\", -1) for j in jobs}\n\n\nif __name__ == \"__main__\":\n    print(split_work({\"main_st\": 3, \"mill_rd\": 2, \"dam\": 4}, [\"red\", \"blue\"], {\"blue\": [(0, 1)]}, 20))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom teams import split_work\n\n# Three sewer jobs, two crews; green is away on days 0 to 2.\njobs = {\"canal_st\": 4, \"bridge\": 2, \"outfall\": 3}\naway = {\"green\": [(0, 2)]}\n\nplan = split_work(jobs, [\"amber\", \"green\"], away, 15)\nfor job, (team, start) in sorted(plan.items()):\n    print(f\"{job}: team {team}, start day {start}\")\nprint(\"last day of work ends at:\", max(s + jobs[j] for j, (_, s) in plan.items()))\nprint(\"one team only:\", split_work(jobs, [\"amber\"], {}, 15))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "695e2ede214bfbff821f26d3dc3f7ee54035124e9ee94cd6ad4c3d2eeed00773",
+  "content_sha256": "b0c56e9fa0469e2e7d8869e3561a9a1c0d081eaa7dff055ce6e947f5504f9cb7",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef split_work(jobs: dict[str, int], teams: list[str], away: dict[str, list[tuple[int, int]]],\n               horizon: int) -> dict[str, tuple[str, int]]:\n    \"\"\"(team, start day) for each job, so the last job ends as early as possible.\"\"\"\n    # TODO: a start per job, a Boolean and an optional interval per job and team, exactly one team\n    # per job, a NoOverlap per team with its absences, and minimize the latest end.\n    # Every pair below is a placeholder.\n    return {j: (\"nobody\", -1) for j in jobs}\n\n\nif __name__ == \"__main__\":\n    print(split_work({\"main_st\": 3, \"mill_rd\": 2, \"dam\": 4}, [\"red\", \"blue\"], {\"blue\": [(0, 1)]}, 20))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-3/teams.py",
     "test_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-3/test_teams.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-3/teams.py"
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-3/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -135,6 +153,10 @@
     },
     "concepts": [
       "one optional interval per crew with exactly one present lets a job choose its crew"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-3/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-3/try_it.py"
   }
 }

@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "CP-SAT statuses for the job service",
   "blocks": [
     {
@@ -76,6 +76,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef outcome(status: int, objective: float, bound: float, limit_s: float) -> dict:\n    \"\"\"Map a CP-SAT status of a maximization solve to the job service's status, value, gap and message.\n\n    `objective` and `bound` are `solver.objective_value` and `solver.best_objective_bound`; the\n    service sets only a time limit, so a FEASIBLE or UNKNOWN status means that limit stopped it.\n    \"\"\"\n    if status == cp_model.OPTIMAL:\n        return {\"status\": \"optimal\", \"value\": objective, \"gap\": 0.0,\n                \"message\": f\"Best roster found and proven: value {objective:g}.\"}\n    if status == cp_model.FEASIBLE:\n        gap = max(0.0, bound - objective) / max(abs(objective), 1.0)\n        return {\"status\": \"time_limit\", \"value\": objective, \"gap\": gap,\n                \"message\": f\"Stopped at the {limit_s:g} s limit with a roster worth {objective:g}; \"\n                           f\"none is worth more than {bound:g}.\"}\n    if status == cp_model.UNKNOWN:\n        return {\"status\": \"time_limit\", \"value\": None, \"gap\": None,\n                \"message\": f\"No roster found within the {limit_s:g} s limit; that does not mean none exists.\"}\n    if status == cp_model.INFEASIBLE:\n        return {\"status\": \"infeasible\", \"value\": None, \"gap\": None,\n                \"message\": \"No roster meets every rule.\"}\n    return {\"status\": \"failed\", \"value\": None, \"gap\": None,\n            \"message\": \"The solver refused the model; the request was not judged.\"}\n\n\nif __name__ == \"__main__\":\n    print(outcome(cp_model.FEASIBLE, 80.0, 100.0, 30))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.sat.python import cp_model\n\nfrom roster_outcome import outcome\n\n# Three crews, up to 4 weeks each; maximize 6 per week worked; `weeks` weeks needed in total.\nfor weeks in (9, 13):\n    model = cp_model.CpModel()\n    crews = [model.new_int_var(0, 4, f\"crew{k}\") for k in range(3)]\n    model.add(sum(crews) == weeks)\n    model.maximize(6 * sum(crews))\n    solver = cp_model.CpSolver()\n    solver.parameters.max_time_in_seconds = 5\n    status = solver.solve(model)\n    print(f\"{weeks} weeks needed:\", outcome(status, solver.objective_value, solver.best_objective_bound, 5))\n\nprint(\"FEASIBLE at 45 of bound 60:\", outcome(cp_model.FEASIBLE, 45.0, 60.0, 20))\nprint(\"UNKNOWN:\", outcome(cp_model.UNKNOWN, 0.0, 60.0, 20))\nprint(\"MODEL_INVALID:\", outcome(cp_model.MODEL_INVALID, 0.0, 0.0, 20)[\"status\"])\n"
         }
       ]
     },
@@ -88,6 +97,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model  # noqa: F401\n\n\ndef outcome(status: int, objective: float, bound: float, limit_s: float) -> dict:\n    \"\"\"Map a CP-SAT status of a maximization solve to the job service's status, value, gap and message.\n\n    `objective` and `bound` are `solver.objective_value` and `solver.best_objective_bound`; the\n    service sets only a time limit, so a FEASIBLE or UNKNOWN status means that limit stopped it.\n    \"\"\"\n    # TODO: one branch per CP-SAT status: OPTIMAL, FEASIBLE, UNKNOWN, INFEASIBLE, MODEL_INVALID.\n    return {\"status\": \"pending\", \"value\": None, \"gap\": None, \"message\": \"\"}\n\n\nif __name__ == \"__main__\":\n    print(outcome(cp_model.FEASIBLE, 80.0, 100.0, 30))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.sat.python import cp_model\n\nfrom roster_outcome import outcome\n\n# Three crews, up to 4 weeks each; maximize 6 per week worked; `weeks` weeks needed in total.\nfor weeks in (9, 13):\n    model = cp_model.CpModel()\n    crews = [model.new_int_var(0, 4, f\"crew{k}\") for k in range(3)]\n    model.add(sum(crews) == weeks)\n    model.maximize(6 * sum(crews))\n    solver = cp_model.CpSolver()\n    solver.parameters.max_time_in_seconds = 5\n    status = solver.solve(model)\n    print(f\"{weeks} weeks needed:\", outcome(status, solver.objective_value, solver.best_objective_bound, 5))\n\nprint(\"FEASIBLE at 45 of bound 60:\", outcome(cp_model.FEASIBLE, 45.0, 60.0, 20))\nprint(\"UNKNOWN:\", outcome(cp_model.UNKNOWN, 0.0, 60.0, 20))\nprint(\"MODEL_INVALID:\", outcome(cp_model.MODEL_INVALID, 0.0, 0.0, 20)[\"status\"])\n"
     }
   ],
   "video": null,
@@ -95,8 +113,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 1,
     "lists": 0,
     "images": 0,
@@ -106,14 +124,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "746b916bc6084264ae938003a45ac0c7f6659c0b329af28d106a91e96a519e44",
+  "content_sha256": "de65fee650cf499a28e12bbcd2bb3e2f927e70b5ca800dd146c74ab20ff2e618",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model  # noqa: F401\n\n\ndef outcome(status: int, objective: float, bound: float, limit_s: float) -> dict:\n    \"\"\"Map a CP-SAT status of a maximization solve to the job service's status, value, gap and message.\n\n    `objective` and `bound` are `solver.objective_value` and `solver.best_objective_bound`; the\n    service sets only a time limit, so a FEASIBLE or UNKNOWN status means that limit stopped it.\n    \"\"\"\n    # TODO: one branch per CP-SAT status: OPTIMAL, FEASIBLE, UNKNOWN, INFEASIBLE, MODEL_INVALID.\n    return {\"status\": \"pending\", \"value\": None, \"gap\": None, \"message\": \"\"}\n\n\nif __name__ == \"__main__\":\n    print(outcome(cp_model.FEASIBLE, 80.0, 100.0, 30))\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-02/practice-2/roster_outcome.py",
     "test_path": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-02/practice-2/test_roster_outcome.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-02/practice-2/roster_outcome.py"
+      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -169,6 +187,10 @@
     },
     "concepts": [
       "optimal, time limit, infeasible and failed each get their own status and message"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-02/practice-2/try_it.py"
   }
 }

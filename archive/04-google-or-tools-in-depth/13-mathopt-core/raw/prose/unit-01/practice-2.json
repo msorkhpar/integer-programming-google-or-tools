@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Print a model's rows for a review",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef terms_text(row: mathopt.LinearConstraint) -> str:\n    \"\"\"The row's terms, sorted by variable name, as '3 x_a - x_b + 2.5 y'.\"\"\"\n    parts = []\n    for term in sorted(row.terms(), key=lambda t: t.variable.name):\n        size = abs(term.coefficient)\n        body = term.variable.name if size == 1 else f\"{size:g} {term.variable.name}\"\n        if not parts:\n            parts.append((\"-\" if term.coefficient < 0 else \"\") + body)\n        else:\n            parts.append((\" - \" if term.coefficient < 0 else \" + \") + body)\n    return \"\".join(parts)\n\n\ndef describe(row: mathopt.LinearConstraint) -> str:\n    \"\"\"One line for one row: 'name: terms <= ub', '>= lb', '== value' or 'lb <= terms <= ub'.\"\"\"\n    lb, ub = row.lower_bound, row.upper_bound\n    text = terms_text(row)\n    if lb == ub:\n        body = f\"{text} == {lb:g}\"\n    elif math.isinf(lb):\n        body = f\"{text} <= {ub:g}\"\n    elif math.isinf(ub):\n        body = f\"{text} >= {lb:g}\"\n    else:\n        body = f\"{lb:g} <= {text} <= {ub:g}\"\n    return f\"{row.name}: {body}\"\n\n\ndef describe_model(model: mathopt.Model) -> list[str]:\n    \"\"\"Every row of the model, in creation order.\"\"\"\n    return [describe(row) for row in model.linear_constraints()]\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model(name=\"buses\")\n    a, b = model.add_binary_variable(name=\"x_a\"), model.add_binary_variable(name=\"x_b\")\n    model.add_linear_constraint(3 * a + 2 * b <= 10, name=\"budget\")\n    print(\"\\n\".join(describe_model(model)))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom rows import describe, describe_model\n\nmodel = mathopt.Model(name=\"ferries\")\nboat = model.add_integer_variable(lb=0, ub=10, name=\"boat\")\ncoach = model.add_integer_variable(lb=0, ub=20, name=\"coach\")\ntaxi = model.add_variable(lb=0, ub=40, name=\"taxi\")\n\nmodel.add_linear_constraint(1.5 * coach + 6 * boat <= 90, name=\"crew_hours\")\nmodel.add_linear_constraint(200 * boat + 50 * coach >= 1000, name=\"seats\")\nmodel.add_linear_constraint(taxi == 3 * coach, name=\"feeder\")\nranged = model.add_linear_constraint((5 <= boat - coach + 0.25 * taxi) <= 12, name=\"mix\")\n\nprint(\"one row:\", describe(ranged))\nfor line in describe_model(model):\n    print(\"row:\", line)\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef describe(row: mathopt.LinearConstraint) -> str:\n    \"\"\"One line for one row: 'name: terms <= ub', '>= lb', '== value' or 'lb <= terms <= ub'.\"\"\"\n    # TODO: read the row's name, bounds and terms.\n    return \"\"\n\n\ndef describe_model(model: mathopt.Model) -> list[str]:\n    \"\"\"Every row of the model, in creation order.\"\"\"\n    # TODO: one line per row.\n    return []\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model(name=\"buses\")\n    a, b = model.add_binary_variable(name=\"x_a\"), model.add_binary_variable(name=\"x_b\")\n    model.add_linear_constraint(3 * a + 2 * b <= 10, name=\"budget\")\n    print(\"\\n\".join(describe_model(model)))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom rows import describe, describe_model\n\nmodel = mathopt.Model(name=\"ferries\")\nboat = model.add_integer_variable(lb=0, ub=10, name=\"boat\")\ncoach = model.add_integer_variable(lb=0, ub=20, name=\"coach\")\ntaxi = model.add_variable(lb=0, ub=40, name=\"taxi\")\n\nmodel.add_linear_constraint(1.5 * coach + 6 * boat <= 90, name=\"crew_hours\")\nmodel.add_linear_constraint(200 * boat + 50 * coach >= 1000, name=\"seats\")\nmodel.add_linear_constraint(taxi == 3 * coach, name=\"feeder\")\nranged = model.add_linear_constraint((5 <= boat - coach + 0.25 * taxi) <= 12, name=\"mix\")\n\nprint(\"one row:\", describe(ranged))\nfor line in describe_model(model):\n    print(\"row:\", line)\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "501567cc9b5b8510f65708661f9493030ecc59df820e9c416e59412c3e19723e",
+  "content_sha256": "706cc792d966b744f95dc80a5293acafc034a2e6dce37a1a6e6ac2b3bc3aedba",
   "starting_code": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef describe(row: mathopt.LinearConstraint) -> str:\n    \"\"\"One line for one row: 'name: terms <= ub', '>= lb', '== value' or 'lb <= terms <= ub'.\"\"\"\n    # TODO: read the row's name, bounds and terms.\n    return \"\"\n\n\ndef describe_model(model: mathopt.Model) -> list[str]:\n    \"\"\"Every row of the model, in creation order.\"\"\"\n    # TODO: one line per row.\n    return []\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model(name=\"buses\")\n    a, b = model.add_binary_variable(name=\"x_a\"), model.add_binary_variable(name=\"x_b\")\n    model.add_linear_constraint(3 * a + 2 * b <= 10, name=\"budget\")\n    print(\"\\n\".join(describe_model(model)))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-01/practice-2/rows.py",
     "test_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-01/practice-2/test_rows.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-01/practice-2/rows.py"
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -149,6 +167,10 @@
     },
     "concepts": [
       "a built model is read back through its rows' names, bounds and terms"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-01/practice-2/try_it.py"
   }
 }

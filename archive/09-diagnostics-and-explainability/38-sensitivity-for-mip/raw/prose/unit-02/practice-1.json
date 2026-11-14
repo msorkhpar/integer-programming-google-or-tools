@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A row report that keeps slack and price apart",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef row_report(model: mathopt.Model, result: mathopt.SolveResult, tol: float = 1e-6) -> dict:\n    \"\"\"For each row of a solved LP: its slack, whether it binds, and its price.\"\"\"\n    report = {}\n    for row in model.linear_constraints():\n        activity = sum(t.coefficient * result.variable_values(t.variable) for t in row.terms())\n        slack = min(row.upper_bound - activity, activity - row.lower_bound)   # an infinite bound never wins\n        report[row.name] = {\"slack\": slack, \"binding\": abs(slack) <= tol, \"price\": result.dual_values(row)}\n    return report\n\n\nif __name__ == \"__main__\":\n    m = mathopt.Model()\n    x = m.add_variable(lb=0, name=\"chlorine\")\n    m.add_linear_constraint(x <= 40, name=\"stock\")\n    m.maximize(x)\n    print(row_report(m, mathopt.solve(m, mathopt.SolverType.GLOP)))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom rows import row_report\n\nm = mathopt.Model()\nlime = m.add_variable(lb=0, name=\"lime\")\nalum = m.add_variable(lb=0, name=\"alum\")\nm.add_linear_constraint(lime + alum <= 30, name=\"tank\")\nm.add_linear_constraint(2 * lime + alum <= 100, name=\"pump_hours\")\nm.maximize(4 * lime + 1 * alum)\nreport = row_report(m, mathopt.solve(m, mathopt.SolverType.GLOP))\nfor name, row in report.items():\n    print(f\"row {name}:\", {k: round(v, 3) if isinstance(v, float) else v for k, v in row.items()})\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef row_report(model: mathopt.Model, result: mathopt.SolveResult, tol: float = 1e-6) -> dict:\n    \"\"\"For each row of a solved LP: its slack, whether it binds, and its price.\"\"\"\n    # TODO: define \"binding\" from the row's two sides, then fill in each row's three entries.\n    return {row.name: {\"slack\": 0.0, \"binding\": False, \"price\": 0.0} for row in model.linear_constraints()}\n\n\nif __name__ == \"__main__\":\n    m = mathopt.Model()\n    x = m.add_variable(lb=0, name=\"chlorine\")\n    m.add_linear_constraint(x <= 40, name=\"stock\")\n    m.maximize(x)\n    print(row_report(m, mathopt.solve(m, mathopt.SolverType.GLOP)))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom rows import row_report\n\nm = mathopt.Model()\nlime = m.add_variable(lb=0, name=\"lime\")\nalum = m.add_variable(lb=0, name=\"alum\")\nm.add_linear_constraint(lime + alum <= 30, name=\"tank\")\nm.add_linear_constraint(2 * lime + alum <= 100, name=\"pump_hours\")\nm.maximize(4 * lime + 1 * alum)\nreport = row_report(m, mathopt.solve(m, mathopt.SolverType.GLOP))\nfor name, row in report.items():\n    print(f\"row {name}:\", {k: round(v, 3) if isinstance(v, float) else v for k, v in row.items()})\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "2eb51ff31df87d9f6c00ccd92640a6a9c6198873eedbb845136751ce6fb184f9",
+  "content_sha256": "59232e87dd725cb92f8aec93c50cf9a905ca76af6bc347acbed8f2494f7dc139",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef row_report(model: mathopt.Model, result: mathopt.SolveResult, tol: float = 1e-6) -> dict:\n    \"\"\"For each row of a solved LP: its slack, whether it binds, and its price.\"\"\"\n    # TODO: define \"binding\" from the row's two sides, then fill in each row's three entries.\n    return {row.name: {\"slack\": 0.0, \"binding\": False, \"price\": 0.0} for row in model.linear_constraints()}\n\n\nif __name__ == \"__main__\":\n    m = mathopt.Model()\n    x = m.add_variable(lb=0, name=\"chlorine\")\n    m.add_linear_constraint(x <= 40, name=\"stock\")\n    m.maximize(x)\n    print(row_report(m, mathopt.solve(m, mathopt.SolverType.GLOP)))\n",
   "exercise": {
     "main_path": "practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-1/rows.py",
     "test_path": "practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-1/test_rows.py",
     "run_command": [
       "python3",
-      "practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-1/rows.py"
+      "practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -139,6 +157,10 @@
     },
     "concepts": [
       "slack, binding and price reported for each row of an LP"
-    ]
+    ],
+    "files": [
+      "practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-1/try_it.py"
   }
 }

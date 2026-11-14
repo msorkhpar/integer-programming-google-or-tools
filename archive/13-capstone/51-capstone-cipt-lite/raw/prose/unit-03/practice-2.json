@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Risk removed by start year, from each asset's RUL",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport math\n\n\ndef scale_from_rul(age: float, rul: float, beta: float) -> float:\n    \"\"\"The Weibull scale for which `rul` is the median remaining life at this age.\"\"\"\n    return (((age + rul) ** beta - age ** beta) / math.log(2)) ** (1 / beta)\n\n\ndef expected_failures(age: float, beta: float, eta: float) -> float:\n    \"\"\"Expected failures in the year from `age` to `age + 1`, failures repaired as they come.\"\"\"\n    return ((age + 1) / eta) ** beta - (age / eta) ** beta\n\n\ndef age_in(year: int, asset: dict, first_year: int, start: int | None, duration: int) -> float:\n    \"\"\"The asset's age in `year`: it ages until the work ends, then keeps `keep` of the age it reached.\"\"\"\n    grown = asset[\"age\"] + (year - first_year)\n    if start is None or year < start + duration:\n        return grown\n    done = start + duration\n    return asset[\"keep\"] * (asset[\"age\"] + (done - first_year)) + (year - done)\n\n\ndef risk_removed(asset: dict, start: int, duration: int, years: list[int], window: int, rate: float) -> float:\n    \"\"\"Discounted risk removed over `window` years from the first plan year `years[0]`, $k.\"\"\"\n    first_year = years[0]\n    eta = scale_from_rul(asset[\"age\"], asset[\"rul\"], asset[\"beta\"])\n    total = 0.0\n    for year in range(first_year, first_year + window):\n        without = expected_failures(age_in(year, asset, first_year, None, duration), asset[\"beta\"], eta)\n        with_work = expected_failures(age_in(year, asset, first_year, start, duration), asset[\"beta\"], eta)\n        total += asset[\"cof\"] * (without - with_work) / (1 + rate) ** (year - first_year)\n    return total\n\n\ndef risk_table(snapshot: dict, assets: dict, window: int) -> dict[tuple[str, int], float]:\n    \"\"\"{(project id, start year): risk removed in $k, rounded to 0.001}.\"\"\"\n    table = {}\n    for pid, project in snapshot[\"projects\"].items():\n        for t in range(project[\"earliest\"], project[\"latest\"] + 1):\n            value = risk_removed(assets[pid], t, len(project[\"cost\"]), snapshot[\"years\"], window,\n                                 snapshot[\"rate\"])\n            table[pid, t] = round(value, 3)\n    return table\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"years\": [2027, 2028, 2029], \"rate\": 0.05,\n                \"projects\": {\"J1\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2028}}}\n    assets = {\"J1\": {\"age\": 30, \"beta\": 3.0, \"rul\": 12, \"eta\": 40.0, \"cof\": 500, \"keep\": 0.0}}\n    print(risk_table(snapshot, assets, window=6))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom risk import risk_table, scale_from_rul\n\nsnapshot = {\"years\": [2031, 2032], \"rate\": 0.04,\n            \"projects\": {\"C1\": {\"cost\": [70], \"earliest\": 2031, \"latest\": 2032},\n                         \"C2\": {\"cost\": [40, 40], \"earliest\": 2031, \"latest\": 2031}}}\nassets = {\"C1\": {\"age\": 28, \"beta\": 2.5, \"rul\": 10, \"eta\": 50.0, \"cof\": 600, \"keep\": 0.0},\n          \"C2\": {\"age\": 15, \"beta\": 1.8, \"rul\": 18, \"eta\": 35.0, \"cof\": 250, \"keep\": 0.4}}\n\nprint(\"scale for age 28, rul 10, beta 2.5:\", round(scale_from_rul(28, 10, 2.5), 3))\ntable = risk_table(snapshot, assets, window=5)\nprint(\"starts in the table:\", len(table))\nfor key, value in table.items():\n    print(\"risk removed, window 5,\", key, \":\", value)\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport math\n\n\ndef scale_from_rul(age: float, rul: float, beta: float) -> float:\n    \"\"\"The Weibull scale for which `rul` is the median remaining life at this age.\"\"\"\n    # TODO: see the lesson \"Remaining useful life: what an ML model actually hands you\"\n    return 1.0\n\n\ndef expected_failures(age: float, beta: float, eta: float) -> float:\n    \"\"\"Expected failures in the year from `age` to `age + 1`, failures repaired as they come.\"\"\"\n    return ((age + 1) / eta) ** beta - (age / eta) ** beta\n\n\ndef age_in(year: int, asset: dict, first_year: int, start: int | None, duration: int) -> float:\n    \"\"\"The asset's age in `year`: it ages until the work ends, then keeps `keep` of the age it reached.\"\"\"\n    grown = asset[\"age\"] + (year - first_year)\n    if start is None or year < start + duration:\n        return grown\n    done = start + duration\n    return asset[\"keep\"] * (asset[\"age\"] + (done - first_year)) + (year - done)\n\n\ndef risk_removed(asset: dict, start: int, duration: int, years: list[int], window: int, rate: float) -> float:\n    \"\"\"Discounted risk removed over `window` years from the first plan year `years[0]`, $k.\"\"\"\n    # TODO: CoF times the expected failures removed in each window year, discounted to years[0].\n    return 0.0\n\n\ndef risk_table(snapshot: dict, assets: dict, window: int) -> dict[tuple[str, int], float]:\n    \"\"\"{(project id, start year): risk removed in $k, rounded to 0.001}.\"\"\"\n    # TODO: one entry per start year in each project's window, rounded to 0.001.\n    return {}\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"years\": [2027, 2028, 2029], \"rate\": 0.05,\n                \"projects\": {\"J1\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2028}}}\n    assets = {\"J1\": {\"age\": 30, \"beta\": 3.0, \"rul\": 12, \"eta\": 40.0, \"cof\": 500, \"keep\": 0.0}}\n    print(risk_table(snapshot, assets, window=6))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom risk import risk_table, scale_from_rul\n\nsnapshot = {\"years\": [2031, 2032], \"rate\": 0.04,\n            \"projects\": {\"C1\": {\"cost\": [70], \"earliest\": 2031, \"latest\": 2032},\n                         \"C2\": {\"cost\": [40, 40], \"earliest\": 2031, \"latest\": 2031}}}\nassets = {\"C1\": {\"age\": 28, \"beta\": 2.5, \"rul\": 10, \"eta\": 50.0, \"cof\": 600, \"keep\": 0.0},\n          \"C2\": {\"age\": 15, \"beta\": 1.8, \"rul\": 18, \"eta\": 35.0, \"cof\": 250, \"keep\": 0.4}}\n\nprint(\"scale for age 28, rul 10, beta 2.5:\", round(scale_from_rul(28, 10, 2.5), 3))\ntable = risk_table(snapshot, assets, window=5)\nprint(\"starts in the table:\", len(table))\nfor key, value in table.items():\n    print(\"risk removed, window 5,\", key, \":\", value)\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "908ebe41b95877c899a17cbe37abf4ebc15409a3766b3d25c000e4a84626df92",
+  "content_sha256": "2106ed9006a0bff81de897b4c9428e87bd8c833d04f97588fe48bfa32dff4f81",
   "starting_code": "from __future__ import annotations\n\nimport math\n\n\ndef scale_from_rul(age: float, rul: float, beta: float) -> float:\n    \"\"\"The Weibull scale for which `rul` is the median remaining life at this age.\"\"\"\n    # TODO: see the lesson \"Remaining useful life: what an ML model actually hands you\"\n    return 1.0\n\n\ndef expected_failures(age: float, beta: float, eta: float) -> float:\n    \"\"\"Expected failures in the year from `age` to `age + 1`, failures repaired as they come.\"\"\"\n    return ((age + 1) / eta) ** beta - (age / eta) ** beta\n\n\ndef age_in(year: int, asset: dict, first_year: int, start: int | None, duration: int) -> float:\n    \"\"\"The asset's age in `year`: it ages until the work ends, then keeps `keep` of the age it reached.\"\"\"\n    grown = asset[\"age\"] + (year - first_year)\n    if start is None or year < start + duration:\n        return grown\n    done = start + duration\n    return asset[\"keep\"] * (asset[\"age\"] + (done - first_year)) + (year - done)\n\n\ndef risk_removed(asset: dict, start: int, duration: int, years: list[int], window: int, rate: float) -> float:\n    \"\"\"Discounted risk removed over `window` years from the first plan year `years[0]`, $k.\"\"\"\n    # TODO: CoF times the expected failures removed in each window year, discounted to years[0].\n    return 0.0\n\n\ndef risk_table(snapshot: dict, assets: dict, window: int) -> dict[tuple[str, int], float]:\n    \"\"\"{(project id, start year): risk removed in $k, rounded to 0.001}.\"\"\"\n    # TODO: one entry per start year in each project's window, rounded to 0.001.\n    return {}\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"years\": [2027, 2028, 2029], \"rate\": 0.05,\n                \"projects\": {\"J1\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2028}}}\n    assets = {\"J1\": {\"age\": 30, \"beta\": 3.0, \"rul\": 12, \"eta\": 40.0, \"cof\": 500, \"keep\": 0.0}}\n    print(risk_table(snapshot, assets, window=6))\n",
   "exercise": {
     "main_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-03/practice-2/risk.py",
     "test_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-03/practice-2/test_risk.py",
     "run_command": [
       "python3",
-      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-03/practice-2/risk.py"
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-03/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -144,6 +162,10 @@
     },
     "concepts": [
       "risk removed by each start, from a Weibull curve anchored on the asset's predicted RUL, over a fixed window"
-    ]
+    ],
+    "files": [
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-03/practice-2/try_it.py"
+    ],
+    "try_file": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-03/practice-2/try_it.py"
   }
 }

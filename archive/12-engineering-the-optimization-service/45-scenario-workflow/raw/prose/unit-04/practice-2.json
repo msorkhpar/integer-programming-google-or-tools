@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Rules the database keeps for every writer",
   "blocks": [
     {
@@ -48,6 +48,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport sqlite3\n\nSCHEMA = \"\"\"\nCREATE TABLE budget_plan (\n    plan_id     TEXT PRIMARY KEY,\n    fiscal_year INTEGER NOT NULL,\n    status      TEXT NOT NULL CHECK (status IN ('draft', 'approved')),\n    amount      INTEGER NOT NULL\n) STRICT;\n\"\"\"\n\nGUARDS = \"\"\"\nCREATE UNIQUE INDEX one_approved_per_year ON budget_plan (fiscal_year) WHERE status = 'approved';\nCREATE TRIGGER approved_is_frozen BEFORE UPDATE ON budget_plan WHEN OLD.status = 'approved'\nBEGIN SELECT RAISE(ABORT, 'approved plans cannot change'); END;\nCREATE TRIGGER approved_is_kept BEFORE DELETE ON budget_plan WHEN OLD.status = 'approved'\nBEGIN SELECT RAISE(ABORT, 'approved plans cannot be deleted'); END;\n\"\"\"\n\n\ndef open_db() -> sqlite3.Connection:\n    conn = sqlite3.connect(\":memory:\", autocommit=True)\n    conn.executescript(SCHEMA + GUARDS)\n    return conn\n\n\nif __name__ == \"__main__\":\n    conn = open_db()\n    conn.execute(\"INSERT INTO budget_plan VALUES ('B-1', 2028, 'approved', 4200)\")\n    print(conn.execute(\"SELECT * FROM budget_plan\").fetchall())\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport sqlite3\n\nfrom guards import open_db\n\nconn = open_db()\n\n\ndef attempt(sql):\n    try:\n        conn.execute(sql)\n        return \"accepted\"\n    except sqlite3.IntegrityError as e:\n        return f\"refused ({e})\"\n\n\nprint(\"insert P-1 2031 approved:\", attempt(\"INSERT INTO budget_plan VALUES ('P-1', 2031, 'approved', 5100)\"))\nprint(\"insert P-2 2031 draft:\", attempt(\"INSERT INTO budget_plan VALUES ('P-2', 2031, 'draft', 5000)\"))\nprint(\"insert P-3 2031 approved:\", attempt(\"INSERT INTO budget_plan VALUES ('P-3', 2031, 'approved', 4800)\"))\nprint(\"edit P-2 amount:\", attempt(\"UPDATE budget_plan SET amount = 4950 WHERE plan_id = 'P-2'\"))\nprint(\"edit P-1 amount:\", attempt(\"UPDATE budget_plan SET amount = 5200 WHERE plan_id = 'P-1'\"))\nprint(\"delete P-1:\", attempt(\"DELETE FROM budget_plan WHERE plan_id = 'P-1'\"))\nprint(\"rows:\", conn.execute(\"SELECT * FROM budget_plan ORDER BY plan_id\").fetchall())\n"
         }
       ]
     },
@@ -60,6 +69,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport sqlite3\n\nSCHEMA = \"\"\"\nCREATE TABLE budget_plan (\n    plan_id     TEXT PRIMARY KEY,\n    fiscal_year INTEGER NOT NULL,\n    status      TEXT NOT NULL CHECK (status IN ('draft', 'approved')),\n    amount      INTEGER NOT NULL\n) STRICT;\n\"\"\"\n\nGUARDS = \"\"\"\n-- TODO: the index and triggers that keep the rules.\n\"\"\"\n\n\ndef open_db() -> sqlite3.Connection:\n    conn = sqlite3.connect(\":memory:\", autocommit=True)\n    conn.executescript(SCHEMA + GUARDS)\n    return conn\n\n\nif __name__ == \"__main__\":\n    conn = open_db()\n    conn.execute(\"INSERT INTO budget_plan VALUES ('B-1', 2028, 'approved', 4200)\")\n    print(conn.execute(\"SELECT * FROM budget_plan\").fetchall())\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport sqlite3\n\nfrom guards import open_db\n\nconn = open_db()\n\n\ndef attempt(sql):\n    try:\n        conn.execute(sql)\n        return \"accepted\"\n    except sqlite3.IntegrityError as e:\n        return f\"refused ({e})\"\n\n\nprint(\"insert P-1 2031 approved:\", attempt(\"INSERT INTO budget_plan VALUES ('P-1', 2031, 'approved', 5100)\"))\nprint(\"insert P-2 2031 draft:\", attempt(\"INSERT INTO budget_plan VALUES ('P-2', 2031, 'draft', 5000)\"))\nprint(\"insert P-3 2031 approved:\", attempt(\"INSERT INTO budget_plan VALUES ('P-3', 2031, 'approved', 4800)\"))\nprint(\"edit P-2 amount:\", attempt(\"UPDATE budget_plan SET amount = 4950 WHERE plan_id = 'P-2'\"))\nprint(\"edit P-1 amount:\", attempt(\"UPDATE budget_plan SET amount = 5200 WHERE plan_id = 'P-1'\"))\nprint(\"delete P-1:\", attempt(\"DELETE FROM budget_plan WHERE plan_id = 'P-1'\"))\nprint(\"rows:\", conn.execute(\"SELECT * FROM budget_plan ORDER BY plan_id\").fetchall())\n"
     }
   ],
   "video": null,
@@ -67,8 +85,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 2,
-    "code": 1,
+    "paras": 3,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -78,14 +96,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "ce3a7f4c29fa7d4fbfb6a919b4a112b11dde615248ba0ce52c4f1121d70e6961",
+  "content_sha256": "a45a9b7f16d0560519ecbb25654be6bdcf420db0a9f7fae0f91bd0b7a4d68182",
   "starting_code": "from __future__ import annotations\n\nimport sqlite3\n\nSCHEMA = \"\"\"\nCREATE TABLE budget_plan (\n    plan_id     TEXT PRIMARY KEY,\n    fiscal_year INTEGER NOT NULL,\n    status      TEXT NOT NULL CHECK (status IN ('draft', 'approved')),\n    amount      INTEGER NOT NULL\n) STRICT;\n\"\"\"\n\nGUARDS = \"\"\"\n-- TODO: the index and triggers that keep the rules.\n\"\"\"\n\n\ndef open_db() -> sqlite3.Connection:\n    conn = sqlite3.connect(\":memory:\", autocommit=True)\n    conn.executescript(SCHEMA + GUARDS)\n    return conn\n\n\nif __name__ == \"__main__\":\n    conn = open_db()\n    conn.execute(\"INSERT INTO budget_plan VALUES ('B-1', 2028, 'approved', 4200)\")\n    print(conn.execute(\"SELECT * FROM budget_plan\").fetchall())\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-2/guards.py",
     "test_path": "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-2/test_guards.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-2/guards.py"
+      "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -131,6 +149,10 @@
     },
     "concepts": [
       "triggers and a partial unique index keep rules for every writer"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-2/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-2/try_it.py"
   }
 }

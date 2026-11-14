@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A selection endpoint for trim crews",
   "blocks": [
     {
@@ -53,6 +53,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom typing import Literal\n\nfrom fastapi import FastAPI, HTTPException\nfrom ortools.math_opt.python import mathopt\nfrom pydantic import BaseModel, ConfigDict, Field\n\n\nclass Circuit(BaseModel):\n    circuit_id: str\n    cost: int = Field(ge=0)              # $k\n    risk_reduction: float = Field(ge=0)  # expected outage-minutes avoided per year\n\n\nclass SelectionRequest(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\")\n\n    budget: int = Field(ge=0)\n    circuits: list[Circuit] = Field(min_length=1)\n    must_trim: list[str] = Field(default_factory=list)\n\n\nclass Selection(BaseModel):\n    status: Literal[\"optimal\", \"infeasible\"]\n    chosen: list[str]\n    cost: int\n    risk_reduction: float\n\n\napp = FastAPI(title=\"Trim selection API\")\n\n\n@app.post(\"/selections\")\ndef select(request: SelectionRequest) -> Selection:\n    known = {c.circuit_id for c in request.circuits}\n    if len(known) < len(request.circuits):\n        raise HTTPException(status_code=422, detail=\"circuit ids must be unique\")\n    unknown = sorted(set(request.must_trim) - known)\n    if unknown:\n        raise HTTPException(status_code=422, detail=f\"must_trim names unknown circuits {unknown}\")\n    model = mathopt.Model(name=\"trim selection\")\n    y = {c.circuit_id: model.add_binary_variable(name=f\"y_{c.circuit_id}\") for c in request.circuits}\n    model.add_linear_constraint(sum(c.cost * y[c.circuit_id] for c in request.circuits) <= request.budget,\n                                name=\"budget\")\n    for cid in request.must_trim:\n        model.add_linear_constraint(y[cid] == 1, name=f\"must_{cid}\")\n    model.maximize(sum(c.risk_reduction * y[c.circuit_id] for c in request.circuits))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    if result.termination.reason == mathopt.TerminationReason.INFEASIBLE:\n        return Selection(status=\"infeasible\", chosen=[], cost=0, risk_reduction=0.0)\n    values = result.variable_values()\n    chosen = sorted(cid for cid, var in y.items() if values[var] > 0.5)\n    by_id = {c.circuit_id: c for c in request.circuits}\n    return Selection(status=\"optimal\", chosen=chosen, cost=sum(by_id[c].cost for c in chosen),\n                     risk_reduction=sum(by_id[c].risk_reduction for c in chosen))\n\n\nif __name__ == \"__main__\":\n    print(sorted(app.openapi()[\"paths\"]))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport warnings\n\nwith warnings.catch_warnings():\n    warnings.simplefilter(\"ignore\")\n    from fastapi.testclient import TestClient\n\nfrom trim_select import app\n\nclient = TestClient(app)\nfor noisy in (\"httpx\", \"asyncio\"):\n    logging.getLogger(noisy).setLevel(logging.WARNING)\ncircuits = [\n    {\"circuit_id\": \"F-7\", \"cost\": 250, \"risk_reduction\": 60.0},\n    {\"circuit_id\": \"F-8\", \"cost\": 200, \"risk_reduction\": 55.0},\n    {\"circuit_id\": \"F-9\", \"cost\": 150, \"risk_reduction\": 30.0},\n]\n\n\ndef post(budget, must_trim=()):\n    r = client.post(\"/selections\", json={\"budget\": budget, \"circuits\": circuits, \"must_trim\": list(must_trim)})\n    return r.status_code, r.json()\n\n\nprint(\"budget 400:\", post(400))\nprint(\"budget 400, must trim F-9:\", post(400, [\"F-9\"]))\nprint(\"budget 300, must trim F-7 and F-8:\", post(300, [\"F-7\", \"F-8\"]))\nprint(\"budget 400, must trim F-1:\", post(400, [\"F-1\"])[0])\n"
         }
       ]
     },
@@ -65,6 +74,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom typing import Literal\n\nfrom fastapi import FastAPI, HTTPException  # noqa: F401\nfrom ortools.math_opt.python import mathopt  # noqa: F401\nfrom pydantic import BaseModel, ConfigDict, Field\n\n\nclass Circuit(BaseModel):\n    circuit_id: str\n    cost: int = Field(ge=0)              # $k\n    risk_reduction: float = Field(ge=0)  # expected outage-minutes avoided per year\n\n\nclass SelectionRequest(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\")\n\n    budget: int = Field(ge=0)\n    circuits: list[Circuit] = Field(min_length=1)\n    must_trim: list[str] = Field(default_factory=list)\n\n\nclass Selection(BaseModel):\n    status: Literal[\"optimal\", \"infeasible\"]\n    chosen: list[str]\n    cost: int\n    risk_reduction: float\n\n\napp = FastAPI(title=\"Trim selection API\")\n\n\n@app.post(\"/selections\")\ndef select(request: SelectionRequest) -> Selection:\n    # TODO: write the model (formulation first), solve it with HiGHS through MathOpt, and answer.\n    # An infeasible request is still answered with 200; a must_trim id that names no circuit is not.\n    return Selection(status=\"optimal\", chosen=[], cost=0, risk_reduction=0.0)\n\n\nif __name__ == \"__main__\":\n    print(sorted(app.openapi()[\"paths\"]))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport warnings\n\nwith warnings.catch_warnings():\n    warnings.simplefilter(\"ignore\")\n    from fastapi.testclient import TestClient\n\nfrom trim_select import app\n\nclient = TestClient(app)\nfor noisy in (\"httpx\", \"asyncio\"):\n    logging.getLogger(noisy).setLevel(logging.WARNING)\ncircuits = [\n    {\"circuit_id\": \"F-7\", \"cost\": 250, \"risk_reduction\": 60.0},\n    {\"circuit_id\": \"F-8\", \"cost\": 200, \"risk_reduction\": 55.0},\n    {\"circuit_id\": \"F-9\", \"cost\": 150, \"risk_reduction\": 30.0},\n]\n\n\ndef post(budget, must_trim=()):\n    r = client.post(\"/selections\", json={\"budget\": budget, \"circuits\": circuits, \"must_trim\": list(must_trim)})\n    return r.status_code, r.json()\n\n\nprint(\"budget 400:\", post(400))\nprint(\"budget 400, must trim F-9:\", post(400, [\"F-9\"]))\nprint(\"budget 300, must trim F-7 and F-8:\", post(300, [\"F-7\", \"F-8\"]))\nprint(\"budget 400, must trim F-1:\", post(400, [\"F-1\"])[0])\n"
     }
   ],
   "video": null,
@@ -72,8 +90,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -83,14 +101,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "cbdc336c2dda07947dd883758048e078c798c77ee2d8ed016450140ed163f44f",
+  "content_sha256": "914e9c11984d5147f54f1c9587cb75161b4fb69cda062378ab72a660ae109852",
   "starting_code": "from __future__ import annotations\n\nfrom typing import Literal\n\nfrom fastapi import FastAPI, HTTPException  # noqa: F401\nfrom ortools.math_opt.python import mathopt  # noqa: F401\nfrom pydantic import BaseModel, ConfigDict, Field\n\n\nclass Circuit(BaseModel):\n    circuit_id: str\n    cost: int = Field(ge=0)              # $k\n    risk_reduction: float = Field(ge=0)  # expected outage-minutes avoided per year\n\n\nclass SelectionRequest(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\")\n\n    budget: int = Field(ge=0)\n    circuits: list[Circuit] = Field(min_length=1)\n    must_trim: list[str] = Field(default_factory=list)\n\n\nclass Selection(BaseModel):\n    status: Literal[\"optimal\", \"infeasible\"]\n    chosen: list[str]\n    cost: int\n    risk_reduction: float\n\n\napp = FastAPI(title=\"Trim selection API\")\n\n\n@app.post(\"/selections\")\ndef select(request: SelectionRequest) -> Selection:\n    # TODO: write the model (formulation first), solve it with HiGHS through MathOpt, and answer.\n    # An infeasible request is still answered with 200; a must_trim id that names no circuit is not.\n    return Selection(status=\"optimal\", chosen=[], cost=0, risk_reduction=0.0)\n\n\nif __name__ == \"__main__\":\n    print(sorted(app.openapi()[\"paths\"]))\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-01/practice-2/trim_select.py",
     "test_path": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-01/practice-2/test_trim_select.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-01/practice-2/trim_select.py"
+      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -142,6 +160,10 @@
     "concepts": [
       "a well-formed request whose model has no plan gets 200 with a status, and only a bad request gets a 4xx",
       "an endpoint builds its model from the request, solves it, and answers in the response model"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-01/practice-2/try_it.py"
   }
 }

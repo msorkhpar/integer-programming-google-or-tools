@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Port a depot staffing script",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.linear_solver import pywraplp\nfrom ortools.math_opt.python import mathopt\n\n\ndef legacy_plan(data: dict):\n    \"\"\"The old pywraplp script: returns (status name, cost, {variable name: value}) or (status name, None, None).\"\"\"\n    solver = pywraplp.Solver.CreateSolver(\"SCIP\")\n    crews = {}\n    for kind, (hours, cost, most, least) in data[\"crews\"].items():\n        crews[kind] = solver.IntVar(0, most, \"crews_\" + kind)\n        crews[kind].SetBounds(least, most)                       # the union's minimum\n    overtime = solver.NumVar(0, data[\"overtime_max\"], \"overtime\")\n\n    cover = solver.RowConstraint(data[\"need_low\"], data[\"need_high\"], \"cover\")\n    for kind, (hours, cost, most, least) in data[\"crews\"].items():\n        cover.SetCoefficient(crews[kind], hours)\n    cover.SetCoefficient(overtime, 1)\n\n    spend = sum(cost * crews[k] for k, (hours, cost, most, least) in data[\"crews\"].items())\n    solver.Minimize(spend + data[\"overtime_rate\"] * overtime)\n\n    status = solver.Solve()\n    names = {pywraplp.Solver.OPTIMAL: \"OPTIMAL\", pywraplp.Solver.FEASIBLE: \"FEASIBLE\",\n             pywraplp.Solver.INFEASIBLE: \"INFEASIBLE\", pywraplp.Solver.UNBOUNDED: \"UNBOUNDED\"}\n    if status != pywraplp.Solver.OPTIMAL:\n        return names.get(status, \"OTHER\"), None, None\n    plan = {v.name(): v.solution_value() for v in solver.variables()}\n    return \"OPTIMAL\", solver.Objective().Value(), plan\n\n\ndef mathopt_plan(data: dict):\n    \"\"\"The same model in MathOpt, solved by SCIP; returns what legacy_plan returns.\"\"\"\n    model = mathopt.Model(name=\"staffing\")\n    crews = {}\n    for kind, (hours, cost, most, least) in data[\"crews\"].items():\n        crews[kind] = model.add_integer_variable(lb=least, ub=most, name=\"crews_\" + kind)\n    overtime = model.add_variable(lb=0, ub=data[\"overtime_max\"], name=\"overtime\")\n\n    cover = sum(hours * crews[k] for k, (hours, cost, most, least) in data[\"crews\"].items()) + overtime\n    model.add_linear_constraint(lb=data[\"need_low\"], ub=data[\"need_high\"], expr=cover, name=\"cover\")\n\n    spend = sum(cost * crews[k] for k, (hours, cost, most, least) in data[\"crews\"].items())\n    model.minimize(spend + data[\"overtime_rate\"] * overtime)\n\n    result = mathopt.solve(model, mathopt.SolverType.GSCIP)\n    reason = result.termination.reason\n    if reason != mathopt.TerminationReason.OPTIMAL:\n        return reason.name, None, None\n    plan = {v.name: result.variable_values(v) for v in model.variables()}\n    return \"OPTIMAL\", result.objective_value(), plan\n\n\nif __name__ == \"__main__\":\n    depot = {\"crews\": {\"line\": (40, 30, 6, 1), \"tree\": (30, 20, 6, 0), \"contract\": (50, 45, 4, 0)},\n             \"need_low\": 200, \"need_high\": 240, \"overtime_max\": 40, \"overtime_rate\": 0.5}\n    print(legacy_plan(depot))\n    print(mathopt_plan(depot))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom staffing import legacy_plan, mathopt_plan\n\n# kind -> (hours a crew covers, cost of a crew, most crews, union minimum)\nyard = {\"crews\": {\"dock\": (35, 25, 5, 1), \"crane\": (45, 40, 3, 0), \"temp\": (20, 18, 6, 0)},\n        \"need_low\": 150, \"need_high\": 190, \"overtime_max\": 30, \"overtime_rate\": 0.8}\nprint(\"legacy:\", legacy_plan(yard))\nprint(\"mathopt:\", mathopt_plan(yard))\ntight = dict(yard, crews=dict(yard[\"crews\"], dock=(35, 25, 5, 4), crane=(45, 40, 3, 2)))\nprint(\"legacy, minimums dock 4, crane 2:\", legacy_plan(tight))\nprint(\"mathopt, minimums dock 4, crane 2:\", mathopt_plan(tight))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.linear_solver import pywraplp\nfrom ortools.math_opt.python import mathopt\n\n\ndef legacy_plan(data: dict):\n    \"\"\"The old pywraplp script: returns (status name, cost, {variable name: value}) or (status name, None, None).\"\"\"\n    solver = pywraplp.Solver.CreateSolver(\"SCIP\")\n    crews = {}\n    for kind, (hours, cost, most, least) in data[\"crews\"].items():\n        crews[kind] = solver.IntVar(0, most, \"crews_\" + kind)\n        crews[kind].SetBounds(least, most)                       # the union's minimum\n    overtime = solver.NumVar(0, data[\"overtime_max\"], \"overtime\")\n\n    cover = solver.RowConstraint(data[\"need_low\"], data[\"need_high\"], \"cover\")\n    for kind, (hours, cost, most, least) in data[\"crews\"].items():\n        cover.SetCoefficient(crews[kind], hours)\n    cover.SetCoefficient(overtime, 1)\n\n    spend = sum(cost * crews[k] for k, (hours, cost, most, least) in data[\"crews\"].items())\n    solver.Minimize(spend + data[\"overtime_rate\"] * overtime)\n\n    status = solver.Solve()\n    names = {pywraplp.Solver.OPTIMAL: \"OPTIMAL\", pywraplp.Solver.FEASIBLE: \"FEASIBLE\",\n             pywraplp.Solver.INFEASIBLE: \"INFEASIBLE\", pywraplp.Solver.UNBOUNDED: \"UNBOUNDED\"}\n    if status != pywraplp.Solver.OPTIMAL:\n        return names.get(status, \"OTHER\"), None, None\n    plan = {v.name(): v.solution_value() for v in solver.variables()}\n    return \"OPTIMAL\", solver.Objective().Value(), plan\n\n\ndef mathopt_plan(data: dict):\n    \"\"\"The same model in MathOpt, solved by SCIP; returns what legacy_plan returns.\"\"\"\n    # TODO: build the model of legacy_plan in MathOpt, solve it with SCIP, and return the same shape.\n    return \"\", None, None\n\n\nif __name__ == \"__main__\":\n    depot = {\"crews\": {\"line\": (40, 30, 6, 1), \"tree\": (30, 20, 6, 0), \"contract\": (50, 45, 4, 0)},\n             \"need_low\": 200, \"need_high\": 240, \"overtime_max\": 40, \"overtime_rate\": 0.5}\n    print(legacy_plan(depot))\n    print(mathopt_plan(depot))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom staffing import legacy_plan, mathopt_plan\n\n# kind -> (hours a crew covers, cost of a crew, most crews, union minimum)\nyard = {\"crews\": {\"dock\": (35, 25, 5, 1), \"crane\": (45, 40, 3, 0), \"temp\": (20, 18, 6, 0)},\n        \"need_low\": 150, \"need_high\": 190, \"overtime_max\": 30, \"overtime_rate\": 0.8}\nprint(\"legacy:\", legacy_plan(yard))\nprint(\"mathopt:\", mathopt_plan(yard))\ntight = dict(yard, crews=dict(yard[\"crews\"], dock=(35, 25, 5, 4), crane=(45, 40, 3, 2)))\nprint(\"legacy, minimums dock 4, crane 2:\", legacy_plan(tight))\nprint(\"mathopt, minimums dock 4, crane 2:\", mathopt_plan(tight))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "827fae26f2395634891ad96851dfd11b172811f84b43c537bfee03625f9cbffa",
+  "content_sha256": "9e33dcc84147053b38fb2a43b1fe243961c52fd8483780987d657674bc0aed20",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.linear_solver import pywraplp\nfrom ortools.math_opt.python import mathopt\n\n\ndef legacy_plan(data: dict):\n    \"\"\"The old pywraplp script: returns (status name, cost, {variable name: value}) or (status name, None, None).\"\"\"\n    solver = pywraplp.Solver.CreateSolver(\"SCIP\")\n    crews = {}\n    for kind, (hours, cost, most, least) in data[\"crews\"].items():\n        crews[kind] = solver.IntVar(0, most, \"crews_\" + kind)\n        crews[kind].SetBounds(least, most)                       # the union's minimum\n    overtime = solver.NumVar(0, data[\"overtime_max\"], \"overtime\")\n\n    cover = solver.RowConstraint(data[\"need_low\"], data[\"need_high\"], \"cover\")\n    for kind, (hours, cost, most, least) in data[\"crews\"].items():\n        cover.SetCoefficient(crews[kind], hours)\n    cover.SetCoefficient(overtime, 1)\n\n    spend = sum(cost * crews[k] for k, (hours, cost, most, least) in data[\"crews\"].items())\n    solver.Minimize(spend + data[\"overtime_rate\"] * overtime)\n\n    status = solver.Solve()\n    names = {pywraplp.Solver.OPTIMAL: \"OPTIMAL\", pywraplp.Solver.FEASIBLE: \"FEASIBLE\",\n             pywraplp.Solver.INFEASIBLE: \"INFEASIBLE\", pywraplp.Solver.UNBOUNDED: \"UNBOUNDED\"}\n    if status != pywraplp.Solver.OPTIMAL:\n        return names.get(status, \"OTHER\"), None, None\n    plan = {v.name(): v.solution_value() for v in solver.variables()}\n    return \"OPTIMAL\", solver.Objective().Value(), plan\n\n\ndef mathopt_plan(data: dict):\n    \"\"\"The same model in MathOpt, solved by SCIP; returns what legacy_plan returns.\"\"\"\n    # TODO: build the model of legacy_plan in MathOpt, solve it with SCIP, and return the same shape.\n    return \"\", None, None\n\n\nif __name__ == \"__main__\":\n    depot = {\"crews\": {\"line\": (40, 30, 6, 1), \"tree\": (30, 20, 6, 0), \"contract\": (50, 45, 4, 0)},\n             \"need_low\": 200, \"need_high\": 240, \"overtime_max\": 40, \"overtime_rate\": 0.5}\n    print(legacy_plan(depot))\n    print(mathopt_plan(depot))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-02/practice-1/staffing.py",
     "test_path": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-02/practice-1/test_staffing.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-02/practice-1/staffing.py"
+      "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -140,6 +158,10 @@
     },
     "concepts": [
       "each pywraplp call, bound and status has a MathOpt counterpart, and bounds left out of a MathOpt variable are infinite"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-02/practice-1/try_it.py"
   }
 }

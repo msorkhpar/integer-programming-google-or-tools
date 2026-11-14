@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Two ways to upgrade a feeder, as big-M rows",
   "blocks": [
     {
@@ -60,6 +60,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nLINE_CREW = (10, 30)      # $k a line-crew upgrade may spend; its capacity gain is at most half the spend\nREBUILD = (60, 100)       # $k a rebuild may spend; its gain is at most 40 (the gain variable's bound)\nGAIN_PER_DOLLAR = 0.5\n\n\ndef mode_variables(model: mathopt.Model, integer: bool = True):\n    \"\"\"Spend s, capacity gain g, and r = 1 if the feeder is rebuilt, 0 if a line crew upgrades it.\"\"\"\n    s = model.add_variable(lb=LINE_CREW[0], ub=REBUILD[1], name=\"spend\")\n    g = model.add_variable(lb=0, ub=40, name=\"gain\")\n    r = model.add_variable(lb=0, ub=1, is_integer=integer, name=\"rebuild\")\n    return s, g, r\n\n\ndef add_bigm_modes(model: mathopt.Model, s, g, r) -> None:\n    \"\"\"Line crew (r = 0) or rebuild (r = 1), as big-M rows with M from the variables' bounds.\"\"\"\n    m_cap = s.upper_bound - LINE_CREW[1]\n    m_gain = g.upper_bound - GAIN_PER_DOLLAR * s.lower_bound\n    m_floor = REBUILD[0] - s.lower_bound\n    model.add_linear_constraint(s <= LINE_CREW[1] + m_cap * r, name=\"line_spend_cap\")\n    model.add_linear_constraint(g <= GAIN_PER_DOLLAR * s + m_gain * r, name=\"line_gain\")\n    model.add_linear_constraint(s >= REBUILD[0] - m_floor * (1 - r), name=\"rebuild_spend_floor\")\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    s, g, r = mode_variables(model)\n    add_bigm_modes(model, s, g, r)\n    model.maximize(3 * g - s)\n    print(mathopt.solve(model, mathopt.SolverType.HIGHS).objective_value())\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom upgrade import add_bigm_modes, mode_variables\n\n\ndef allowed(spend, gain, rebuild):\n    model = mathopt.Model()\n    s, g, r = mode_variables(model)\n    add_bigm_modes(model, s, g, r)\n    for var, value in ((s, spend), (g, gain), (r, rebuild)):\n        var.lower_bound = var.upper_bound = value\n    return mathopt.solve(model, mathopt.SolverType.HIGHS).termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"line crew, spend 24, gain 12:\", allowed(24, 12, 0))\nprint(\"line crew, spend 24, gain 13:\", allowed(24, 13, 0))\nprint(\"line crew, spend 35, gain 10:\", allowed(35, 10, 0))\nprint(\"rebuild, spend 70, gain 38:\", allowed(70, 38, 1))\nprint(\"rebuild, spend 55, gain 30:\", allowed(55, 30, 1))\n\nmodel = mathopt.Model()\ns, g, r = mode_variables(model, integer=False)\nadd_bigm_modes(model, s, g, r)\nmodel.maximize(3 * g - s)\nprint(\"LP bound of 3g - s:\", round(mathopt.solve(model, mathopt.SolverType.GLOP).objective_value(), 3))\n"
         }
       ]
     },
@@ -72,6 +81,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nLINE_CREW = (10, 30)      # $k a line-crew upgrade may spend; its capacity gain is at most half the spend\nREBUILD = (60, 100)       # $k a rebuild may spend; its gain is at most 40 (the gain variable's bound)\nGAIN_PER_DOLLAR = 0.5\n\n\ndef mode_variables(model: mathopt.Model, integer: bool = True):\n    \"\"\"Spend s, capacity gain g, and r = 1 if the feeder is rebuilt, 0 if a line crew upgrades it.\"\"\"\n    s = model.add_variable(lb=LINE_CREW[0], ub=REBUILD[1], name=\"spend\")\n    g = model.add_variable(lb=0, ub=40, name=\"gain\")\n    r = model.add_variable(lb=0, ub=1, is_integer=integer, name=\"rebuild\")\n    return s, g, r\n\n\ndef add_bigm_modes(model: mathopt.Model, s, g, r) -> None:\n    \"\"\"Line crew (r = 0) or rebuild (r = 1), as big-M rows with M from the variables' bounds.\"\"\"\n    # TODO: your rows, with each M derived from the bounds.\n    return None\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    s, g, r = mode_variables(model)\n    add_bigm_modes(model, s, g, r)\n    model.maximize(3 * g - s)\n    print(mathopt.solve(model, mathopt.SolverType.HIGHS).objective_value())\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom upgrade import add_bigm_modes, mode_variables\n\n\ndef allowed(spend, gain, rebuild):\n    model = mathopt.Model()\n    s, g, r = mode_variables(model)\n    add_bigm_modes(model, s, g, r)\n    for var, value in ((s, spend), (g, gain), (r, rebuild)):\n        var.lower_bound = var.upper_bound = value\n    return mathopt.solve(model, mathopt.SolverType.HIGHS).termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"line crew, spend 24, gain 12:\", allowed(24, 12, 0))\nprint(\"line crew, spend 24, gain 13:\", allowed(24, 13, 0))\nprint(\"line crew, spend 35, gain 10:\", allowed(35, 10, 0))\nprint(\"rebuild, spend 70, gain 38:\", allowed(70, 38, 1))\nprint(\"rebuild, spend 55, gain 30:\", allowed(55, 30, 1))\n\nmodel = mathopt.Model()\ns, g, r = mode_variables(model, integer=False)\nadd_bigm_modes(model, s, g, r)\nmodel.maximize(3 * g - s)\nprint(\"LP bound of 3g - s:\", round(mathopt.solve(model, mathopt.SolverType.GLOP).objective_value(), 3))\n"
     }
   ],
   "video": null,
@@ -79,8 +97,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 6,
-    "code": 2,
+    "paras": 7,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -90,14 +108,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "a69c27e72ac505b8d93cc671cd304120125107c81bd498b62c464d45c1366699",
+  "content_sha256": "df20e3dd350706d4584b2e026449d404d45c2b2aa6c2987796000b746c0573e0",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nLINE_CREW = (10, 30)      # $k a line-crew upgrade may spend; its capacity gain is at most half the spend\nREBUILD = (60, 100)       # $k a rebuild may spend; its gain is at most 40 (the gain variable's bound)\nGAIN_PER_DOLLAR = 0.5\n\n\ndef mode_variables(model: mathopt.Model, integer: bool = True):\n    \"\"\"Spend s, capacity gain g, and r = 1 if the feeder is rebuilt, 0 if a line crew upgrades it.\"\"\"\n    s = model.add_variable(lb=LINE_CREW[0], ub=REBUILD[1], name=\"spend\")\n    g = model.add_variable(lb=0, ub=40, name=\"gain\")\n    r = model.add_variable(lb=0, ub=1, is_integer=integer, name=\"rebuild\")\n    return s, g, r\n\n\ndef add_bigm_modes(model: mathopt.Model, s, g, r) -> None:\n    \"\"\"Line crew (r = 0) or rebuild (r = 1), as big-M rows with M from the variables' bounds.\"\"\"\n    # TODO: your rows, with each M derived from the bounds.\n    return None\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    s, g, r = mode_variables(model)\n    add_bigm_modes(model, s, g, r)\n    model.maximize(3 * g - s)\n    print(mathopt.solve(model, mathopt.SolverType.HIGHS).objective_value())\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-04/practice-1/upgrade.py",
     "test_path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-04/practice-1/test_upgrade.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-04/practice-1/upgrade.py"
+      "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-04/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -149,6 +167,10 @@
     "concepts": [
       "each disjunct of an either-or rule gets a switch, and each row's M comes from the bounds",
       "a disjunct's row that the variables' bounds already imply needs no switched row"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-04/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-04/practice-1/try_it.py"
   }
 }

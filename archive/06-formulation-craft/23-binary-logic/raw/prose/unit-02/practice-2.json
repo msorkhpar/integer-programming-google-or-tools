@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Permits and bundle discounts",
   "blocks": [
     {
@@ -64,6 +64,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Upgrade:\n    pid: str\n    cost: int        # $k\n\n\ndef add_fee_rules(model: mathopt.Model, x: dict, projects: list[Upgrade],\n                  permits: dict[str, tuple[int, list[str]]], bundles: list[tuple[str, str, int]],\n                  budget: int) -> None:\n    \"\"\"Costs plus each needed permit's fee, once, minus each complete bundle's discount, within budget.\"\"\"\n    charged = []\n    for name, (fee, members) in permits.items():\n        paid = model.add_binary_variable(name=f\"permit_{name}\")\n        for i in members:\n            model.add_linear_constraint(paid >= x[i], name=f\"permit_{name}_{i}\")\n        charged.append(fee * paid)\n    for tower, backhaul, discount in bundles:\n        both = model.add_binary_variable(name=f\"bundle_{tower}_{backhaul}\")\n        model.add_linear_constraint(both <= x[tower], name=f\"bundle_{tower}_{backhaul}_t\")\n        model.add_linear_constraint(both <= x[backhaul], name=f\"bundle_{tower}_{backhaul}_b\")\n        charged.append(-discount * both)\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in projects) + sum(charged) <= budget,\n                                name=\"budget\")\n\n\ndef build(projects: list[Upgrade], permits: dict[str, tuple[int, list[str]]],\n          bundles: list[tuple[str, str, int]], budget: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"tower-upgrades\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    add_fee_rules(model, x, projects, permits, bundles, budget)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    upgrades = [Upgrade(\"T1\", 100), Upgrade(\"B1\", 60), Upgrade(\"C1\", 50)]\n    model, x = build(upgrades, {\"river\": (25, [\"C1\"])}, [(\"T1\", \"B1\", 40)], 200)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom towers import Upgrade, build\n\n# Broadband upgrades: id, cost ($k). One ferry permit, one radio-plus-mast bundle.\nupgrades = [Upgrade(\"R1\", 90), Upgrade(\"M1\", 50), Upgrade(\"F1\", 45), Upgrade(\"F2\", 30), Upgrade(\"Q1\", 20)]\npermits = {\"ferry\": (15, [\"F1\", \"F2\"])}\nbundles = [(\"R1\", \"M1\", 30)]\n\n\ndef solved(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef fix(variables, plan):\n    for key, var in variables.items():\n        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0\n\n\ndef allowed(plan, budget):\n    model, x = build(upgrades, permits, bundles, budget)\n    fix(x, plan)\n    return solved(model)\n\n\nprint(\"F1 at budget 60:\", allowed({\"F1\"}, 60))\nprint(\"F1 at budget 55:\", allowed({\"F1\"}, 55))\nprint(\"F1+F2 at budget 90:\", allowed({\"F1\", \"F2\"}, 90))\nprint(\"R1+M1 at budget 110:\", allowed({\"R1\", \"M1\"}, 110))\nprint(\"R1+M1 at budget 105:\", allowed({\"R1\", \"M1\"}, 105))\nprint(\"R1 alone at budget 95:\", allowed({\"R1\"}, 95))\nprint(\"Q1 at budget 20:\", allowed({\"Q1\"}, 20))\n"
         }
       ]
     },
@@ -76,6 +85,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Upgrade:\n    pid: str\n    cost: int        # $k\n\n\ndef add_fee_rules(model: mathopt.Model, x: dict, projects: list[Upgrade],\n                  permits: dict[str, tuple[int, list[str]]], bundles: list[tuple[str, str, int]],\n                  budget: int) -> None:\n    \"\"\"Costs plus each needed permit's fee, once, minus each complete bundle's discount, within budget.\"\"\"\n    # TODO: a variable per permit and per bundle, their rows, and the budget row.\n    return None\n\n\ndef build(projects: list[Upgrade], permits: dict[str, tuple[int, list[str]]],\n          bundles: list[tuple[str, str, int]], budget: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"tower-upgrades\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    add_fee_rules(model, x, projects, permits, bundles, budget)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    upgrades = [Upgrade(\"T1\", 100), Upgrade(\"B1\", 60), Upgrade(\"C1\", 50)]\n    model, x = build(upgrades, {\"river\": (25, [\"C1\"])}, [(\"T1\", \"B1\", 40)], 200)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom towers import Upgrade, build\n\n# Broadband upgrades: id, cost ($k). One ferry permit, one radio-plus-mast bundle.\nupgrades = [Upgrade(\"R1\", 90), Upgrade(\"M1\", 50), Upgrade(\"F1\", 45), Upgrade(\"F2\", 30), Upgrade(\"Q1\", 20)]\npermits = {\"ferry\": (15, [\"F1\", \"F2\"])}\nbundles = [(\"R1\", \"M1\", 30)]\n\n\ndef solved(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef fix(variables, plan):\n    for key, var in variables.items():\n        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0\n\n\ndef allowed(plan, budget):\n    model, x = build(upgrades, permits, bundles, budget)\n    fix(x, plan)\n    return solved(model)\n\n\nprint(\"F1 at budget 60:\", allowed({\"F1\"}, 60))\nprint(\"F1 at budget 55:\", allowed({\"F1\"}, 55))\nprint(\"F1+F2 at budget 90:\", allowed({\"F1\", \"F2\"}, 90))\nprint(\"R1+M1 at budget 110:\", allowed({\"R1\", \"M1\"}, 110))\nprint(\"R1+M1 at budget 105:\", allowed({\"R1\", \"M1\"}, 105))\nprint(\"R1 alone at budget 95:\", allowed({\"R1\"}, 95))\nprint(\"Q1 at budget 20:\", allowed({\"Q1\"}, 20))\n"
     }
   ],
   "video": null,
@@ -83,8 +101,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -94,14 +112,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "5edc8cf76ac80a3f42288c15e1f54494ea872aaabcf9a843c7b1ee1a0e8ff24f",
+  "content_sha256": "8717b2c5736a6778a11faacfaae3cde722f635b728394bdc8f9f1972f7b31e12",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Upgrade:\n    pid: str\n    cost: int        # $k\n\n\ndef add_fee_rules(model: mathopt.Model, x: dict, projects: list[Upgrade],\n                  permits: dict[str, tuple[int, list[str]]], bundles: list[tuple[str, str, int]],\n                  budget: int) -> None:\n    \"\"\"Costs plus each needed permit's fee, once, minus each complete bundle's discount, within budget.\"\"\"\n    # TODO: a variable per permit and per bundle, their rows, and the budget row.\n    return None\n\n\ndef build(projects: list[Upgrade], permits: dict[str, tuple[int, list[str]]],\n          bundles: list[tuple[str, str, int]], budget: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"tower-upgrades\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    add_fee_rules(model, x, projects, permits, bundles, budget)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    upgrades = [Upgrade(\"T1\", 100), Upgrade(\"B1\", 60), Upgrade(\"C1\", 50)]\n    model, x = build(upgrades, {\"river\": (25, [\"C1\"])}, [(\"T1\", \"B1\", 40)], 200)\n    print(len(list(model.linear_constraints())), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-2/towers.py",
     "test_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-2/test_towers.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-2/towers.py"
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -153,6 +171,10 @@
     "concepts": [
       "a conjunction or disjunction used as a value is a new binary with rows bounding it from above and below",
       "the direction the solver wants to move a logic variable decides which of its rows are essential"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-2/try_it.py"
   }
 }

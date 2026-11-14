@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Big-M and hull bounds of one disjunctive model",
   "blocks": [
     {
@@ -43,6 +43,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pyomo.environ as pyo\nfrom pyomo.gdp import Disjunction\n\n\n@dataclass(frozen=True)\nclass Asset:\n    repair: float       # cost of a repair, $k\n    replace: float      # cost of a replacement, $k\n    repaired: float     # MVA it can carry after a repair\n    new: float          # MVA it can carry once replaced\n\n\ndef build(assets: dict[str, Asset], demand: float) -> pyo.ConcreteModel:\n    m = pyo.ConcreteModel()\n    m.A = pyo.Set(initialize=list(assets))\n    m.cost = pyo.Var(m.A, bounds=lambda m, i: (0, max(assets[i].repair, assets[i].replace)))\n    m.rating = pyo.Var(m.A, bounds=lambda m, i: (0, max(assets[i].repaired, assets[i].new)))\n\n    def choice(m, i):\n        a = assets[i]\n        return [[m.cost[i] >= a.repair, m.rating[i] <= a.repaired],      # disjunct 0: repair\n                [m.cost[i] >= a.replace, m.rating[i] <= a.new]]          # disjunct 1: replace\n    m.choice = Disjunction(m.A, rule=choice)\n    m.carry = pyo.Constraint(expr=sum(m.rating[i] for i in m.A) >= demand)\n    m.total = pyo.Objective(expr=sum(m.cost[i] for i in m.A))\n    return m\n\n\ndef lp_bound(assets: dict[str, Asset], demand: float, form: str) -> float:\n    \"\"\"The LP relaxation's optimum after `form` (\"gdp.bigm\" or \"gdp.hull\") writes the disjunctions.\"\"\"\n    m = build(assets, demand)\n    pyo.TransformationFactory(form).apply_to(m)\n    pyo.TransformationFactory(\"core.relax_integer_vars\").apply_to(m)\n    pyo.SolverFactory(\"appsi_highs\").solve(m)\n    return pyo.value(m.total)\n\n\ndef lp_bounds(assets: dict[str, Asset], demand: float) -> tuple[float, float]:\n    \"\"\"The big-M and the hull LP bounds of the same repair-or-replace model.\"\"\"\n    return lp_bound(assets, demand, \"gdp.bigm\"), lp_bound(assets, demand, \"gdp.hull\")\n\n\nif __name__ == \"__main__\":\n    fleet = {\"T1\": Asset(120, 400, 30, 60), \"T2\": Asset(90, 350, 25, 50)}\n    print(lp_bounds(fleet, 80))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\n# Pyomo logs every set it builds and the whole solver log; keep its own logger to warnings.\nlogging.getLogger(\"pyomo\").setLevel(logging.WARNING)\n\nfrom bounds import Asset, lp_bounds\n\n# Asset(repair $k, replace $k, MVA after repair, MVA once new)\nyard = {\"K1\": Asset(100, 380, 25, 55), \"K2\": Asset(70, 300, 20, 45), \"K3\": Asset(130, 450, 35, 70)}\nfor demand in (90, 130):\n    big_m, hull = lp_bounds(yard, demand)\n    print(f\"demand {demand} MVA: big-M bound {round(big_m, 3)}, hull bound {round(hull, 3)}\")\n"
         }
       ]
     },
@@ -55,6 +64,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pyomo.environ as pyo\nfrom pyomo.gdp import Disjunction\n\n\n@dataclass(frozen=True)\nclass Asset:\n    repair: float       # cost of a repair, $k\n    replace: float      # cost of a replacement, $k\n    repaired: float     # MVA it can carry after a repair\n    new: float          # MVA it can carry once replaced\n\n\ndef build(assets: dict[str, Asset], demand: float) -> pyo.ConcreteModel:\n    m = pyo.ConcreteModel()\n    m.A = pyo.Set(initialize=list(assets))\n    m.cost = pyo.Var(m.A, bounds=lambda m, i: (0, max(assets[i].repair, assets[i].replace)))\n    m.rating = pyo.Var(m.A, bounds=lambda m, i: (0, max(assets[i].repaired, assets[i].new)))\n\n    def choice(m, i):\n        a = assets[i]\n        return [[m.cost[i] >= a.repair, m.rating[i] <= a.repaired],      # disjunct 0: repair\n                [m.cost[i] >= a.replace, m.rating[i] <= a.new]]          # disjunct 1: replace\n    m.choice = Disjunction(m.A, rule=choice)\n    m.carry = pyo.Constraint(expr=sum(m.rating[i] for i in m.A) >= demand)\n    m.total = pyo.Objective(expr=sum(m.cost[i] for i in m.A))\n    return m\n\n\ndef lp_bound(assets: dict[str, Asset], demand: float, form: str) -> float:\n    \"\"\"The LP relaxation's optimum after `form` (\"gdp.bigm\" or \"gdp.hull\") writes the disjunctions.\"\"\"\n    # TODO: build, apply the GDP transformation, relax the binaries it created, solve, read m.total.\n    return 0.0\n\n\ndef lp_bounds(assets: dict[str, Asset], demand: float) -> tuple[float, float]:\n    \"\"\"The big-M and the hull LP bounds of the same repair-or-replace model.\"\"\"\n    return lp_bound(assets, demand, \"gdp.bigm\"), lp_bound(assets, demand, \"gdp.hull\")\n\n\nif __name__ == \"__main__\":\n    fleet = {\"T1\": Asset(120, 400, 30, 60), \"T2\": Asset(90, 350, 25, 50)}\n    print(lp_bounds(fleet, 80))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\n# Pyomo logs every set it builds and the whole solver log; keep its own logger to warnings.\nlogging.getLogger(\"pyomo\").setLevel(logging.WARNING)\n\nfrom bounds import Asset, lp_bounds\n\n# Asset(repair $k, replace $k, MVA after repair, MVA once new)\nyard = {\"K1\": Asset(100, 380, 25, 55), \"K2\": Asset(70, 300, 20, 45), \"K3\": Asset(130, 450, 35, 70)}\nfor demand in (90, 130):\n    big_m, hull = lp_bounds(yard, demand)\n    print(f\"demand {demand} MVA: big-M bound {round(big_m, 3)}, hull bound {round(hull, 3)}\")\n"
     }
   ],
   "video": null,
@@ -62,8 +80,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -73,14 +91,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "c7890065d740074a5a8c6af67a49e545e74ffae19af3f09ab8b1efa321fce50f",
+  "content_sha256": "4fc7d007ce79db1f4399472a40d38e474a82fbe4c3839e160a333b6e67d82fc9",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pyomo.environ as pyo\nfrom pyomo.gdp import Disjunction\n\n\n@dataclass(frozen=True)\nclass Asset:\n    repair: float       # cost of a repair, $k\n    replace: float      # cost of a replacement, $k\n    repaired: float     # MVA it can carry after a repair\n    new: float          # MVA it can carry once replaced\n\n\ndef build(assets: dict[str, Asset], demand: float) -> pyo.ConcreteModel:\n    m = pyo.ConcreteModel()\n    m.A = pyo.Set(initialize=list(assets))\n    m.cost = pyo.Var(m.A, bounds=lambda m, i: (0, max(assets[i].repair, assets[i].replace)))\n    m.rating = pyo.Var(m.A, bounds=lambda m, i: (0, max(assets[i].repaired, assets[i].new)))\n\n    def choice(m, i):\n        a = assets[i]\n        return [[m.cost[i] >= a.repair, m.rating[i] <= a.repaired],      # disjunct 0: repair\n                [m.cost[i] >= a.replace, m.rating[i] <= a.new]]          # disjunct 1: replace\n    m.choice = Disjunction(m.A, rule=choice)\n    m.carry = pyo.Constraint(expr=sum(m.rating[i] for i in m.A) >= demand)\n    m.total = pyo.Objective(expr=sum(m.cost[i] for i in m.A))\n    return m\n\n\ndef lp_bound(assets: dict[str, Asset], demand: float, form: str) -> float:\n    \"\"\"The LP relaxation's optimum after `form` (\"gdp.bigm\" or \"gdp.hull\") writes the disjunctions.\"\"\"\n    # TODO: build, apply the GDP transformation, relax the binaries it created, solve, read m.total.\n    return 0.0\n\n\ndef lp_bounds(assets: dict[str, Asset], demand: float) -> tuple[float, float]:\n    \"\"\"The big-M and the hull LP bounds of the same repair-or-replace model.\"\"\"\n    return lp_bound(assets, demand, \"gdp.bigm\"), lp_bound(assets, demand, \"gdp.hull\")\n\n\nif __name__ == \"__main__\":\n    fleet = {\"T1\": Asset(120, 400, 30, 60), \"T2\": Asset(90, 350, 25, 50)}\n    print(lp_bounds(fleet, 80))\n",
   "exercise": {
     "main_path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-03/practice-2/bounds.py",
     "test_path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-03/practice-2/test_bounds.py",
     "run_command": [
       "python3",
-      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-03/practice-2/bounds.py"
+      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-03/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -121,6 +139,10 @@
     },
     "concepts": [
       "the hull transformation and the LP bound it gives"
-    ]
+    ],
+    "files": [
+      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-03/practice-2/try_it.py"
+    ],
+    "try_file": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-03/practice-2/try_it.py"
   }
 }

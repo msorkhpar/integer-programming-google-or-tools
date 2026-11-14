@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Find the best allowed plan",
   "blocks": [
     {
@@ -43,6 +43,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\nfrom itertools import combinations\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    must_do: bool = False\n    parent: str | None = None\n    group: str | None = None\n\n\ndef evaluate_plan(projects: list[Project], budget: int, plan: set[str]) -> tuple[int, list[str]]:\n    \"\"\"Return the plan's total value and one problem string per rule it breaks.\"\"\"\n    by_id = {p.pid: p for p in projects}\n    chosen = [by_id[pid] for pid in plan]\n    problems = []\n    if sum(p.cost for p in chosen) > budget:\n        problems.append(\"budget\")\n    problems += [f\"must-do:{p.pid}\" for p in projects if p.must_do and p.pid not in plan]\n    problems += [f\"parent:{p.pid}\" for p in chosen if p.parent and p.parent not in plan]\n    groups = [p.group for p in chosen if p.group]\n    problems += [f\"alternatives:{g}\" for g in sorted(set(groups)) if groups.count(g) > 1]\n    return sum(p.value for p in chosen), problems\n\n\ndef cost(projects: list[Project], plan) -> int:\n    return sum(p.cost for p in projects if p.pid in plan)\n\n\ndef best_plan(projects: list[Project], budget: int) -> tuple[int, frozenset[str]] | None:\n    \"\"\"The most valuable allowed plan, the cheaper one on a tie, or None if no plan is allowed.\"\"\"\n    best = None\n    ids = [p.pid for p in projects]\n    for k in range(len(ids) + 1):\n        for combo in combinations(ids, k):\n            plan = frozenset(combo)\n            value, problems = evaluate_plan(projects, budget, plan)\n            if problems:\n                continue\n            key = (value, -cost(projects, plan))\n            if best is None or key > best[0]:\n                best = (key, value, plan)\n    return None if best is None else (best[1], best[2])\n\n\nif __name__ == \"__main__\":\n    demo = [Project(\"A\", 50, 80, must_do=True), Project(\"B\", 30, 40), Project(\"C\", 20, 35, parent=\"B\")]\n    print(best_plan(demo, 90))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom best import Project, best_plan\n\n# Five bridge repairs; B2 is ordered by the inspector.\nbridges = [\n    Project(\"B1\", 70, 90),\n    Project(\"B2\", 50, 60, must_do=True),\n    Project(\"B3\", 40, 75),\n    Project(\"B4\", 30, 45, parent=\"B3\"),\n    Project(\"B5\", 35, 50, group=\"deck\"),\n    Project(\"B6\", 25, 38, group=\"deck\"),\n]\n\nprint(\"best plan at budget 200:\", best_plan(bridges, 200))\nprint(\"best plan at budget 120:\", best_plan(bridges, 120))\nprint(\"best plan at budget 40:\", best_plan(bridges, 40))\n"
         }
       ]
     },
@@ -55,6 +64,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\nfrom itertools import combinations\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    must_do: bool = False\n    parent: str | None = None\n    group: str | None = None\n\n\ndef evaluate_plan(projects: list[Project], budget: int, plan: set[str]) -> tuple[int, list[str]]:\n    \"\"\"Return the plan's total value and one problem string per rule it breaks.\"\"\"\n    # TODO: paste your evaluate_plan from the previous practice here, or write the checks again.\n    return 0, [\"not written yet\"]\n\n\ndef cost(projects: list[Project], plan) -> int:\n    return sum(p.cost for p in projects if p.pid in plan)\n\n\ndef best_plan(projects: list[Project], budget: int) -> tuple[int, frozenset[str]] | None:\n    \"\"\"The most valuable allowed plan, the cheaper one on a tie, or None if no plan is allowed.\"\"\"\n    # TODO: check every subset of the projects and keep the best allowed one.\n    return (0, frozenset())\n\n\nif __name__ == \"__main__\":\n    demo = [Project(\"A\", 50, 80, must_do=True), Project(\"B\", 30, 40), Project(\"C\", 20, 35, parent=\"B\")]\n    print(best_plan(demo, 90))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom best import Project, best_plan\n\n# Five bridge repairs; B2 is ordered by the inspector.\nbridges = [\n    Project(\"B1\", 70, 90),\n    Project(\"B2\", 50, 60, must_do=True),\n    Project(\"B3\", 40, 75),\n    Project(\"B4\", 30, 45, parent=\"B3\"),\n    Project(\"B5\", 35, 50, group=\"deck\"),\n    Project(\"B6\", 25, 38, group=\"deck\"),\n]\n\nprint(\"best plan at budget 200:\", best_plan(bridges, 200))\nprint(\"best plan at budget 120:\", best_plan(bridges, 120))\nprint(\"best plan at budget 40:\", best_plan(bridges, 40))\n"
     }
   ],
   "video": null,
@@ -62,8 +80,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -73,14 +91,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "90c0d2f2fa7b8ff64e3ecfd424d65ee395dac6d93fce5f42e939ee7e4d7ddc15",
+  "content_sha256": "17a63d7690dfa6834b414558523aaa926f6a28088ef86ed30a0630c85cab8984",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\nfrom itertools import combinations\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    must_do: bool = False\n    parent: str | None = None\n    group: str | None = None\n\n\ndef evaluate_plan(projects: list[Project], budget: int, plan: set[str]) -> tuple[int, list[str]]:\n    \"\"\"Return the plan's total value and one problem string per rule it breaks.\"\"\"\n    # TODO: paste your evaluate_plan from the previous practice here, or write the checks again.\n    return 0, [\"not written yet\"]\n\n\ndef cost(projects: list[Project], plan) -> int:\n    return sum(p.cost for p in projects if p.pid in plan)\n\n\ndef best_plan(projects: list[Project], budget: int) -> tuple[int, frozenset[str]] | None:\n    \"\"\"The most valuable allowed plan, the cheaper one on a tie, or None if no plan is allowed.\"\"\"\n    # TODO: check every subset of the projects and keep the best allowed one.\n    return (0, frozenset())\n\n\nif __name__ == \"__main__\":\n    demo = [Project(\"A\", 50, 80, must_do=True), Project(\"B\", 30, 40), Project(\"C\", 20, 35, parent=\"B\")]\n    print(best_plan(demo, 90))\n",
   "exercise": {
     "main_path": "practice/01-foundations/01-optimization-mindset/prose/unit-01/practice-2/best.py",
     "test_path": "practice/01-foundations/01-optimization-mindset/prose/unit-01/practice-2/test_best.py",
     "run_command": [
       "python3",
-      "practice/01-foundations/01-optimization-mindset/prose/unit-01/practice-2/best.py"
+      "practice/01-foundations/01-optimization-mindset/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -131,6 +149,10 @@
     },
     "concepts": [
       "the best plan is the most valuable feasible plan, found by checking every allowed plan, not by ranking projects one by one"
-    ]
+    ],
+    "files": [
+      "practice/01-foundations/01-optimization-mindset/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/01-foundations/01-optimization-mindset/prose/unit-01/practice-2/try_it.py"
   }
 }

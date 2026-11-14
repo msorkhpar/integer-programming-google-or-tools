@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 3,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Every best programme for a conference",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\nclass PlanCollector(cp_model.CpSolverSolutionCallback):\n    \"\"\"Keep the names whose Boolean is true, for every solution reported.\"\"\"\n\n    def __init__(self, x: dict):\n        cp_model.CpSolverSolutionCallback.__init__(self)\n        self.x = x\n        self.plans: list[tuple[str, ...]] = []\n\n    def on_solution_callback(self) -> None:\n        self.plans.append(tuple(sorted(name for name, v in self.x.items() if self.boolean_value(v))))\n\n\ndef all_best(model: cp_model.CpModel, x: dict, objective) -> tuple[int | None, list[tuple[str, ...]]]:\n    \"\"\"The best value of `objective` (maximized) and every distinct plan that reaches it, sorted.\"\"\"\n    model.maximize(objective)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    if solver.solve(model) != cp_model.OPTIMAL:\n        return None, []\n    best = round(solver.objective_value)\n\n    model.add(objective == best)\n    model.clear_objective()\n    collector = PlanCollector(x)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.parameters.enumerate_all_solutions = True\n    solver.solve(model, collector)\n    return best, sorted(set(collector.plans))\n\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = {t: model.new_bool_var(t) for t in (\"A\", \"B\", \"C\")}\n    model.add(sum(x.values()) <= 2)\n    print(all_best(model, x, x[\"A\"] + x[\"B\"] + x[\"C\"]))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.sat.python import cp_model\n\nfrom best_plans import all_best\n\n# Workshop talks: score, minutes, track.\ntalks = {\"W1\": (3, 20, \"ml\"), \"W2\": (2, 10, \"ml\"), \"W3\": (3, 20, \"db\"), \"W4\": (1, 10, \"db\"), \"W5\": (2, 10, \"ui\")}\n\n\ndef session(minutes):\n    model = cp_model.CpModel()\n    x = {t: model.new_bool_var(t) for t in talks}\n    model.add(sum(m * x[t] for t, (_, m, _) in talks.items()) <= minutes)\n    for track in {k for _, _, k in talks.values()}:\n        model.add_at_most_one(x[t] for t, (_, _, k) in talks.items() if k == track)\n    return model, x, sum(s * x[t] for t, (s, _, _) in talks.items())\n\n\nfor minutes in (30, 40, 50):\n    best, plans = all_best(*session(minutes))\n    print(f\"best score in {minutes} minutes:\", best)\n    print(f\"  plans in {minutes} minutes:\", plans)\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\nclass PlanCollector(cp_model.CpSolverSolutionCallback):\n    \"\"\"Keep the names whose Boolean is true, for every solution reported.\"\"\"\n\n    def __init__(self, x: dict):\n        cp_model.CpSolverSolutionCallback.__init__(self)\n        self.x = x\n        self.plans: list[tuple[str, ...]] = []\n\n    def on_solution_callback(self) -> None:\n        self.plans.append(tuple(sorted(name for name, v in self.x.items() if self.boolean_value(v))))\n\n\ndef all_best(model: cp_model.CpModel, x: dict, objective) -> tuple[int | None, list[tuple[str, ...]]]:\n    \"\"\"The best value of `objective` (maximized) and every distinct plan that reaches it, sorted.\"\"\"\n    # TODO: find the best value, then every plan that reaches it.\n    return None, []\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = {t: model.new_bool_var(t) for t in (\"A\", \"B\", \"C\")}\n    model.add(sum(x.values()) <= 2)\n    print(all_best(model, x, x[\"A\"] + x[\"B\"] + x[\"C\"]))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.sat.python import cp_model\n\nfrom best_plans import all_best\n\n# Workshop talks: score, minutes, track.\ntalks = {\"W1\": (3, 20, \"ml\"), \"W2\": (2, 10, \"ml\"), \"W3\": (3, 20, \"db\"), \"W4\": (1, 10, \"db\"), \"W5\": (2, 10, \"ui\")}\n\n\ndef session(minutes):\n    model = cp_model.CpModel()\n    x = {t: model.new_bool_var(t) for t in talks}\n    model.add(sum(m * x[t] for t, (_, m, _) in talks.items()) <= minutes)\n    for track in {k for _, _, k in talks.values()}:\n        model.add_at_most_one(x[t] for t, (_, _, k) in talks.items() if k == track)\n    return model, x, sum(s * x[t] for t, (s, _, _) in talks.items())\n\n\nfor minutes in (30, 40, 50):\n    best, plans = all_best(*session(minutes))\n    print(f\"best score in {minutes} minutes:\", best)\n    print(f\"  plans in {minutes} minutes:\", plans)\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "68437801704d57f128784a7c77ac11b78fd85d25e065a842f9f33f2ff59f5e25",
+  "content_sha256": "de7d19f376b0a3031353ba026e1640d4b1ee253c89b97104d875695d44e14f4f",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\nclass PlanCollector(cp_model.CpSolverSolutionCallback):\n    \"\"\"Keep the names whose Boolean is true, for every solution reported.\"\"\"\n\n    def __init__(self, x: dict):\n        cp_model.CpSolverSolutionCallback.__init__(self)\n        self.x = x\n        self.plans: list[tuple[str, ...]] = []\n\n    def on_solution_callback(self) -> None:\n        self.plans.append(tuple(sorted(name for name, v in self.x.items() if self.boolean_value(v))))\n\n\ndef all_best(model: cp_model.CpModel, x: dict, objective) -> tuple[int | None, list[tuple[str, ...]]]:\n    \"\"\"The best value of `objective` (maximized) and every distinct plan that reaches it, sorted.\"\"\"\n    # TODO: find the best value, then every plan that reaches it.\n    return None, []\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = {t: model.new_bool_var(t) for t in (\"A\", \"B\", \"C\")}\n    model.add(sum(x.values()) <= 2)\n    print(all_best(model, x, x[\"A\"] + x[\"B\"] + x[\"C\"]))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-3/best_plans.py",
     "test_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-3/test_best_plans.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-3/best_plans.py"
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-3/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -135,6 +153,10 @@
     },
     "concepts": [
       "every optimal plan comes from fixing the objective at its optimum, removing it, and enumerating"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-3/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-3/try_it.py"
   }
 }

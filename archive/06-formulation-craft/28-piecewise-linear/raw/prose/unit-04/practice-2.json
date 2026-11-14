@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Refurbishing a pump fleet on value curves, checked against Pyomo",
   "blocks": [
     {
@@ -60,6 +60,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nDEPTHS = (0.0, 0.25, 0.5, 0.75, 1.0)\n\n\n@dataclass(frozen=True)\nclass Pump:\n    pid: str\n    age: float\n    beta: float\n    eta: float\n    cof: float      # $k per failure\n    capex: float    # $k for a full refurbishment\n\n\ndef value_points(pump: Pump, horizon: float) -> list[float]:\n    \"\"\"The failure cost avoided over `horizon` years at each depth of DEPTHS, in $k.\"\"\"\n    def failures(age: float) -> float:\n        return ((age + horizon) / pump.eta) ** pump.beta - (age / pump.eta) ** pump.beta\n\n    return [pump.cof * (failures(pump.age) - failures((1 - d) * pump.age)) for d in DEPTHS]\n\n\ndef plan(pumps: list[Pump], fund: float, horizon: float) -> tuple[float, dict[str, float]]:\n    \"\"\"The best total value within the fund, and the depth chosen for each pump.\"\"\"\n    model = mathopt.Model(name=\"refurbishment\")\n    depth, worth = {}, {}\n    for p in pumps:\n        v = value_points(p, horizon)\n        rises = [v[k + 1] - v[k] for k in range(len(v) - 1)]\n        if all(a >= b for a, b in zip(rises, rises[1:])):          # concave and pushed up: lines suffice\n            d = model.add_variable(lb=0, ub=1, name=f\"d_{p.pid}\")\n            y = model.add_variable(lb=0, name=f\"v_{p.pid}\")\n            for k, rise in enumerate(rises):\n                model.add_linear_constraint(y <= v[k] + rise / 0.25 * (d - DEPTHS[k]), name=f\"below_{p.pid}_{k}\")\n            depth[p.pid], worth[p.pid] = d, y\n        else:                                                      # quarters used strictly in order\n            used = [model.add_variable(lb=0, ub=1, name=f\"used_{p.pid}_{k}\") for k in range(len(rises))]\n            for k in range(len(rises) - 1):\n                done = model.add_binary_variable(name=f\"done_{p.pid}_{k}\")\n                model.add_linear_constraint(used[k + 1] <= done, name=f\"then_{p.pid}_{k}\")\n                model.add_linear_constraint(done <= used[k], name=f\"done_{p.pid}_{k}\")\n            depth[p.pid] = 0.25 * sum(used)\n            worth[p.pid] = sum(rise * u for rise, u in zip(rises, used))\n    model.add_linear_constraint(sum(p.capex * depth[p.pid] for p in pumps) <= fund, name=\"fund\")\n    model.maximize(sum(worth.values()))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS,\n                           params=mathopt.SolveParameters(relative_gap_tolerance=0.0))\n    chosen = {pid: mathopt.evaluate_expression(d + 0, result.variable_values()) for pid, d in depth.items()}\n    return result.objective_value(), chosen\n\n\nif __name__ == \"__main__\":\n    fleet = [Pump(\"North\", 30, 3.2, 40, 500, 400), Pump(\"South\", 35, 1.4, 45, 900, 500)]\n    print([round(v, 1) for v in value_points(fleet[0], 3)])\n    print(plan(fleet, 500, 3))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom refurbish import Pump, plan, value_points\n\n# Booster pumps: id, age, Weibull beta, eta, cost per failure, full refurbishment cost.\nfleet = [Pump(\"K1\", 25, 3.0, 35, 600, 450), Pump(\"K2\", 45, 2.2, 55, 900, 500),\n         Pump(\"K3\", 18, 1.5, 40, 1500, 250)]\n\nprint(\"K1 values over 4 years:\", [round(v, 1) for v in value_points(fleet[0], 4)])\nprint(\"K3 values over 4 years:\", [round(v, 1) for v in value_points(fleet[2], 4)])\nvalue, depths = plan(fleet, 600, 4)\nprint(\"value at fund 600:\", round(value, 2))\nprint(\"depths at fund 600:\", {k: round(d, 3) for k, d in depths.items()})\n"
         }
       ]
     },
@@ -72,6 +81,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nDEPTHS = (0.0, 0.25, 0.5, 0.75, 1.0)\n\n\n@dataclass(frozen=True)\nclass Pump:\n    pid: str\n    age: float\n    beta: float\n    eta: float\n    cof: float      # $k per failure\n    capex: float    # $k for a full refurbishment\n\n\ndef value_points(pump: Pump, horizon: float) -> list[float]:\n    \"\"\"The failure cost avoided over `horizon` years at each depth of DEPTHS, in $k.\"\"\"\n    # TODO: expected failures before and after the refurbishment, times the cost per failure.\n    return [0.0] * len(DEPTHS)\n\n\ndef plan(pumps: list[Pump], fund: float, horizon: float) -> tuple[float, dict[str, float]]:\n    \"\"\"The best total value within the fund, and the depth chosen for each pump.\"\"\"\n    # TODO: a depth and a value per pump on its five-point curve, the fund row, and the solve.\n    return 0.0, {}\n\n\nif __name__ == \"__main__\":\n    fleet = [Pump(\"North\", 30, 3.2, 40, 500, 400), Pump(\"South\", 35, 1.4, 45, 900, 500)]\n    print([round(v, 1) for v in value_points(fleet[0], 3)])\n    print(plan(fleet, 500, 3))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom refurbish import Pump, plan, value_points\n\n# Booster pumps: id, age, Weibull beta, eta, cost per failure, full refurbishment cost.\nfleet = [Pump(\"K1\", 25, 3.0, 35, 600, 450), Pump(\"K2\", 45, 2.2, 55, 900, 500),\n         Pump(\"K3\", 18, 1.5, 40, 1500, 250)]\n\nprint(\"K1 values over 4 years:\", [round(v, 1) for v in value_points(fleet[0], 4)])\nprint(\"K3 values over 4 years:\", [round(v, 1) for v in value_points(fleet[2], 4)])\nvalue, depths = plan(fleet, 600, 4)\nprint(\"value at fund 600:\", round(value, 2))\nprint(\"depths at fund 600:\", {k: round(d, 3) for k, d in depths.items()})\n"
     }
   ],
   "video": null,
@@ -79,8 +97,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -90,14 +108,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "4f915d94440fc388f01ffd6519dac3841f46129fcfa2da28a146821462d522dd",
+  "content_sha256": "8db157a2a01e89cc9a495401490dbd3f810f03b8596ba2f74d29bc9c2c96128e",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nDEPTHS = (0.0, 0.25, 0.5, 0.75, 1.0)\n\n\n@dataclass(frozen=True)\nclass Pump:\n    pid: str\n    age: float\n    beta: float\n    eta: float\n    cof: float      # $k per failure\n    capex: float    # $k for a full refurbishment\n\n\ndef value_points(pump: Pump, horizon: float) -> list[float]:\n    \"\"\"The failure cost avoided over `horizon` years at each depth of DEPTHS, in $k.\"\"\"\n    # TODO: expected failures before and after the refurbishment, times the cost per failure.\n    return [0.0] * len(DEPTHS)\n\n\ndef plan(pumps: list[Pump], fund: float, horizon: float) -> tuple[float, dict[str, float]]:\n    \"\"\"The best total value within the fund, and the depth chosen for each pump.\"\"\"\n    # TODO: a depth and a value per pump on its five-point curve, the fund row, and the solve.\n    return 0.0, {}\n\n\nif __name__ == \"__main__\":\n    fleet = [Pump(\"North\", 30, 3.2, 40, 500, 400), Pump(\"South\", 35, 1.4, 45, 900, 500)]\n    print([round(v, 1) for v in value_points(fleet[0], 3)])\n    print(plan(fleet, 500, 3))\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-04/practice-2/refurbish.py",
     "test_path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-04/practice-2/test_refurbish.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-04/practice-2/refurbish.py"
+      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-04/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -141,6 +159,10 @@
       "one exact formulation per curve, the cheapest its shape allows",
       "an independent model built by another tool confirms the optimum",
       "the Weibull shape sorts value curves into concave and convex ones"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-04/practice-2/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-04/practice-2/try_it.py"
   }
 }

@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Price the rows that hold a plan back",
   "blocks": [
     {
@@ -51,6 +51,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef activity(row: mathopt.LinearConstraint, result: mathopt.SolveResult) -> float:\n    \"\"\"sum of coefficient * value over the row's terms, at the result's best plan.\"\"\"\n    return sum(t.coefficient * result.variable_values(t.variable) for t in row.terms())\n\n\ndef binding_prices(result: mathopt.SolveResult, rows: list[mathopt.LinearConstraint],\n                   tol: float = 1e-6) -> dict[str, float] | None:\n    \"\"\"Row name -> dual value for every binding row, or None when the result has no duals.\"\"\"\n    if not result.has_dual_feasible_solution():\n        return None\n    prices = {}\n    for row in rows:\n        level = activity(row, result)\n        bounds = [b for b in (row.lower_bound, row.upper_bound) if not math.isinf(b)]\n        if any(abs(level - b) <= tol for b in bounds):\n            prices[row.name] = result.dual_values(row)\n    return prices\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_variable(lb=0, ub=10, name=\"x\")\n    row = model.add_linear_constraint(x <= 4, name=\"cap\")\n    model.maximize(x)\n    print(binding_prices(mathopt.solve(model, mathopt.SolverType.GLOP), [row]))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom prices import binding_prices\n\n# A bakery's week: trays of bread and cake under oven hours and flour.\nmodel = mathopt.Model(name=\"bakery\")\nbread = model.add_variable(lb=0, ub=40, name=\"bread\")\ncake = model.add_variable(lb=0, ub=40, name=\"cake\")\nrows = [\n    model.add_linear_constraint(2 * bread + 3 * cake <= 60, name=\"oven\"),\n    model.add_linear_constraint(bread + cake <= 25, name=\"flour\"),\n    model.add_linear_constraint(cake <= 30, name=\"boxes\"),\n]\nmodel.maximize(5 * bread + 6 * cake)\n\nprices = binding_prices(mathopt.solve(model, mathopt.SolverType.GLOP), rows)\nprint(\"prices from GLOP:\", None if prices is None else {k: round(v, 6) for k, v in prices.items()})\nbread.integer = True\nprint(\"prices from HiGHS with whole trays:\", binding_prices(mathopt.solve(model, mathopt.SolverType.HIGHS), rows))\n"
         }
       ]
     },
@@ -63,6 +72,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef binding_prices(result: mathopt.SolveResult, rows: list[mathopt.LinearConstraint],\n                   tol: float = 1e-6) -> dict[str, float] | None:\n    \"\"\"Row name -> dual value for every binding row, or None when the result has no duals.\"\"\"\n    # TODO: None without duals; otherwise the dual value of each row whose activity sits on a finite bound.\n    return {}\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_variable(lb=0, ub=10, name=\"x\")\n    row = model.add_linear_constraint(x <= 4, name=\"cap\")\n    model.maximize(x)\n    print(binding_prices(mathopt.solve(model, mathopt.SolverType.GLOP), [row]))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom prices import binding_prices\n\n# A bakery's week: trays of bread and cake under oven hours and flour.\nmodel = mathopt.Model(name=\"bakery\")\nbread = model.add_variable(lb=0, ub=40, name=\"bread\")\ncake = model.add_variable(lb=0, ub=40, name=\"cake\")\nrows = [\n    model.add_linear_constraint(2 * bread + 3 * cake <= 60, name=\"oven\"),\n    model.add_linear_constraint(bread + cake <= 25, name=\"flour\"),\n    model.add_linear_constraint(cake <= 30, name=\"boxes\"),\n]\nmodel.maximize(5 * bread + 6 * cake)\n\nprices = binding_prices(mathopt.solve(model, mathopt.SolverType.GLOP), rows)\nprint(\"prices from GLOP:\", None if prices is None else {k: round(v, 6) for k, v in prices.items()})\nbread.integer = True\nprint(\"prices from HiGHS with whole trays:\", binding_prices(mathopt.solve(model, mathopt.SolverType.HIGHS), rows))\n"
     }
   ],
   "video": null,
@@ -70,8 +88,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -81,14 +99,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "7d0b3cd6fb153387a96f14b46a6f4f312eb0d486d98a148d3969febff268663d",
+  "content_sha256": "8e37cf405ab5660ef7f29a9261bb7b6a190b59e1f3d1d65dbf34fc1a6f6984a8",
   "starting_code": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef binding_prices(result: mathopt.SolveResult, rows: list[mathopt.LinearConstraint],\n                   tol: float = 1e-6) -> dict[str, float] | None:\n    \"\"\"Row name -> dual value for every binding row, or None when the result has no duals.\"\"\"\n    # TODO: None without duals; otherwise the dual value of each row whose activity sits on a finite bound.\n    return {}\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_variable(lb=0, ub=10, name=\"x\")\n    row = model.add_linear_constraint(x <= 4, name=\"cap\")\n    model.maximize(x)\n    print(binding_prices(mathopt.solve(model, mathopt.SolverType.GLOP), [row]))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-2/prices.py",
     "test_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-2/test_prices.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-2/prices.py"
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -134,6 +152,10 @@
     },
     "concepts": [
       "dual values, reduced costs and a basis come only from an LP solve, and are checked for before they are read"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-2/try_it.py"
   }
 }

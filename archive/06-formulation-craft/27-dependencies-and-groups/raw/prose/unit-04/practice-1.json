@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Resurfacing after the water mains settle",
   "blocks": [
     {
@@ -60,6 +60,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n    duration: int = 1\n\n\ndef add_after_rules(model: mathopt.Model, x: dict, projects: list[Project],\n                    after: dict[str, tuple[str, int]]) -> None:\n    \"\"\"Each resurfacing starts only once its water main is finished and the trench has settled.\"\"\"\n    by_id = {p.pid: p for p in projects}\n    for street, (main, settle) in after.items():\n        gap = by_id[main].duration + settle\n        for t in by_id[street].starts:\n            paved_by = sum(x[street, u] for u in by_id[street].starts if u <= t)\n            ready_by = sum(x[main, s] for s in by_id[main].starts if s + gap <= t)\n            model.add_linear_constraint(paved_by <= ready_by, name=f\"settled_{street}_{t}\")\n\n\ndef build(projects: list[Project], after: dict[str, tuple[str, int]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"streets\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_after_rules(model, x, projects, after)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"MAIN\", (2027, 2028), 2), Project(\"PAVE\", (2029, 2030, 2031))]\n    model, x = build(projects, {\"PAVE\": (\"MAIN\", 1)})\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom streets import Project, build\n\n# Two mains and three streets above or beside them, 2027 to 2033.\nyears = tuple(range(2027, 2034))\nprojects = [Project(\"MAIN-PINE\", (2027, 2028), 1), Project(\"MAIN-BAY\", (2027, 2028, 2029), 2),\n            Project(\"PAVE-PINE\", years), Project(\"PAVE-BAY\", years), Project(\"PAVE-HILL\", years)]\nafter = {\"PAVE-PINE\": (\"MAIN-PINE\", 2), \"PAVE-BAY\": (\"MAIN-BAY\", 0)}\n\ndef accepted(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(plan):\n    model, x = build(projects, after)\n    for key, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0\n    return accepted(model)\n\n\nprint(\"MAIN-PINE 2027, PAVE-PINE 2030:\", allowed({(\"MAIN-PINE\", 2027), (\"PAVE-PINE\", 2030)}))\nprint(\"MAIN-PINE 2027, PAVE-PINE 2029:\", allowed({(\"MAIN-PINE\", 2027), (\"PAVE-PINE\", 2029)}))\nprint(\"PAVE-PINE 2031 alone:\", allowed({(\"PAVE-PINE\", 2031)}))\nprint(\"MAIN-BAY 2029, PAVE-BAY 2031:\", allowed({(\"MAIN-BAY\", 2029), (\"PAVE-BAY\", 2031)}))\nprint(\"MAIN-BAY 2029, PAVE-BAY 2030:\", allowed({(\"MAIN-BAY\", 2029), (\"PAVE-BAY\", 2030)}))\nprint(\"PAVE-HILL 2027 alone:\", allowed({(\"PAVE-HILL\", 2027)}))\n"
         }
       ]
     },
@@ -72,6 +81,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n    duration: int = 1\n\n\ndef add_after_rules(model: mathopt.Model, x: dict, projects: list[Project],\n                    after: dict[str, tuple[str, int]]) -> None:\n    \"\"\"Each resurfacing starts only once its water main is finished and the trench has settled.\"\"\"\n    # TODO: one row per resurfacing project and year.\n    return None\n\n\ndef build(projects: list[Project], after: dict[str, tuple[str, int]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"streets\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_after_rules(model, x, projects, after)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"MAIN\", (2027, 2028), 2), Project(\"PAVE\", (2029, 2030, 2031))]\n    model, x = build(projects, {\"PAVE\": (\"MAIN\", 1)})\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom streets import Project, build\n\n# Two mains and three streets above or beside them, 2027 to 2033.\nyears = tuple(range(2027, 2034))\nprojects = [Project(\"MAIN-PINE\", (2027, 2028), 1), Project(\"MAIN-BAY\", (2027, 2028, 2029), 2),\n            Project(\"PAVE-PINE\", years), Project(\"PAVE-BAY\", years), Project(\"PAVE-HILL\", years)]\nafter = {\"PAVE-PINE\": (\"MAIN-PINE\", 2), \"PAVE-BAY\": (\"MAIN-BAY\", 0)}\n\ndef accepted(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(plan):\n    model, x = build(projects, after)\n    for key, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0\n    return accepted(model)\n\n\nprint(\"MAIN-PINE 2027, PAVE-PINE 2030:\", allowed({(\"MAIN-PINE\", 2027), (\"PAVE-PINE\", 2030)}))\nprint(\"MAIN-PINE 2027, PAVE-PINE 2029:\", allowed({(\"MAIN-PINE\", 2027), (\"PAVE-PINE\", 2029)}))\nprint(\"PAVE-PINE 2031 alone:\", allowed({(\"PAVE-PINE\", 2031)}))\nprint(\"MAIN-BAY 2029, PAVE-BAY 2031:\", allowed({(\"MAIN-BAY\", 2029), (\"PAVE-BAY\", 2031)}))\nprint(\"MAIN-BAY 2029, PAVE-BAY 2030:\", allowed({(\"MAIN-BAY\", 2029), (\"PAVE-BAY\", 2030)}))\nprint(\"PAVE-HILL 2027 alone:\", allowed({(\"PAVE-HILL\", 2027)}))\n"
     }
   ],
   "video": null,
@@ -79,8 +97,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 6,
-    "code": 2,
+    "paras": 7,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -90,14 +108,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "16dead1f4b6ff26755fd9b48509536c90615e221451116f14d093b025ecdbbdc",
+  "content_sha256": "056cb85021f6cce788b9064fbf1fbc233a19e9e786cdea601aaaf953c65a462f",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n    duration: int = 1\n\n\ndef add_after_rules(model: mathopt.Model, x: dict, projects: list[Project],\n                    after: dict[str, tuple[str, int]]) -> None:\n    \"\"\"Each resurfacing starts only once its water main is finished and the trench has settled.\"\"\"\n    # TODO: one row per resurfacing project and year.\n    return None\n\n\ndef build(projects: list[Project], after: dict[str, tuple[str, int]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"streets\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_after_rules(model, x, projects, after)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"MAIN\", (2027, 2028), 2), Project(\"PAVE\", (2029, 2030, 2031))]\n    model, x = build(projects, {\"PAVE\": (\"MAIN\", 1)})\n    print(model.get_num_linear_constraints(), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-1/streets.py",
     "test_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-1/test_streets.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-1/streets.py"
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -148,6 +166,10 @@
     },
     "concepts": [
       "every lag is turned into a least distance between two starts before a row is written"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-1/try_it.py"
   }
 }

@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 3,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Try solvers in order and keep each refusal's real reason",
   "blocks": [
     {
@@ -51,6 +51,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef solve_first(model: mathopt.Model, solvers: list[mathopt.SolverType]):\n    \"\"\"(the first solver that accepts the model, its result, {refusing solver name: its reason}).\"\"\"\n    reasons: dict[str, str] = {}\n    for solver in solvers:\n        try:\n            return solver, mathopt.solve(model, solver), reasons\n        except Exception as error:\n            inner = error.__context__ or error.__cause__\n            reasons[solver.name] = str(inner if inner is not None else error)\n    return None, None, reasons\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    z, y = model.add_binary_variable(name=\"z\"), model.add_variable(lb=0, ub=10, name=\"y\")\n    model.add_indicator_constraint(indicator=z, implied_constraint=y <= 3)\n    model.maximize(y + z)\n    print(solve_first(model, [mathopt.SolverType.HIGHS, mathopt.SolverType.GSCIP]))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom fallback import solve_first\n\nS = mathopt.SolverType\n\n# A cold room: when the chiller is off, the stock held is at most 15.\nmodel = mathopt.Model(name=\"cold-room\")\nchiller = model.add_binary_variable(name=\"chiller\")\nstock = model.add_variable(lb=0, ub=70, name=\"stock\")\nmodel.add_indicator_constraint(indicator=chiller, activate_on_zero=True, implied_constraint=stock <= 15)\nmodel.maximize(stock - 40 * chiller)\n\nfor order in ([S.HIGHS, S.GSCIP], [S.GSCIP, S.HIGHS], [S.CP_SAT, S.GLOP]):\n    solver, result, reasons = solve_first(model, order)\n    names = [s.name for s in order]\n    print(f\"order {names}: solver\", solver and solver.name,\n          \"value\", result and round(result.objective_value(), 3))\n    print(f\"  refusals for {names}:\", {k: v[:70] for k, v in reasons.items()})\n"
         }
       ]
     },
@@ -63,6 +72,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef solve_first(model: mathopt.Model, solvers: list[mathopt.SolverType]):\n    \"\"\"(the first solver that accepts the model, its result, {refusing solver name: its reason}).\"\"\"\n    reasons: dict[str, str] = {}\n    # TODO: try each solver in order; record each refusal's real reason.\n    return None, None, reasons\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    z, y = model.add_binary_variable(name=\"z\"), model.add_variable(lb=0, ub=10, name=\"y\")\n    model.add_indicator_constraint(indicator=z, implied_constraint=y <= 3)\n    model.maximize(y + z)\n    print(solve_first(model, [mathopt.SolverType.HIGHS, mathopt.SolverType.GSCIP]))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom fallback import solve_first\n\nS = mathopt.SolverType\n\n# A cold room: when the chiller is off, the stock held is at most 15.\nmodel = mathopt.Model(name=\"cold-room\")\nchiller = model.add_binary_variable(name=\"chiller\")\nstock = model.add_variable(lb=0, ub=70, name=\"stock\")\nmodel.add_indicator_constraint(indicator=chiller, activate_on_zero=True, implied_constraint=stock <= 15)\nmodel.maximize(stock - 40 * chiller)\n\nfor order in ([S.HIGHS, S.GSCIP], [S.GSCIP, S.HIGHS], [S.CP_SAT, S.GLOP]):\n    solver, result, reasons = solve_first(model, order)\n    names = [s.name for s in order]\n    print(f\"order {names}: solver\", solver and solver.name,\n          \"value\", result and round(result.objective_value(), 3))\n    print(f\"  refusals for {names}:\", {k: v[:70] for k, v in reasons.items()})\n"
     }
   ],
   "video": null,
@@ -70,8 +88,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -81,14 +99,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "a9cb64f32cf4945ed5f33d614ece41f6d073ccffba73ca84d96af6ac29ac9176",
+  "content_sha256": "5b8e845ab5673a549a1a94670a3db6123cbf76d809859880a05546cfab6fd50e",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef solve_first(model: mathopt.Model, solvers: list[mathopt.SolverType]):\n    \"\"\"(the first solver that accepts the model, its result, {refusing solver name: its reason}).\"\"\"\n    reasons: dict[str, str] = {}\n    # TODO: try each solver in order; record each refusal's real reason.\n    return None, None, reasons\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    z, y = model.add_binary_variable(name=\"z\"), model.add_variable(lb=0, ub=10, name=\"y\")\n    model.add_indicator_constraint(indicator=z, implied_constraint=y <= 3)\n    model.maximize(y + z)\n    print(solve_first(model, [mathopt.SolverType.HIGHS, mathopt.SolverType.GSCIP]))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-3/fallback.py",
     "test_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-3/test_fallback.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-3/fallback.py"
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-3/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -134,6 +152,10 @@
     },
     "concepts": [
       "the real reason a solver refuses a model, read from the exception"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-3/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-3/try_it.py"
   }
 }

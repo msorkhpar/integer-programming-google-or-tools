@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A budget sweep on one model",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport pyomo.environ as pyo\n\n\ndef build(projects: dict[str, tuple[float, float]], budget: float) -> pyo.ConcreteModel:\n    \"\"\"Fund projects (name -> (cost, value)) within `budget`, maximizing value. The budget is a mutable Param.\"\"\"\n    m = pyo.ConcreteModel()\n    m.P = pyo.Set(initialize=list(projects))\n    m.cost = pyo.Param(m.P, initialize={p: c for p, (c, v) in projects.items()})\n    m.value = pyo.Param(m.P, initialize={p: v for p, (c, v) in projects.items()})\n    m.budget = pyo.Param(initialize=budget, mutable=True)\n    m.x = pyo.Var(m.P, domain=pyo.Binary)\n    m.spend = pyo.Constraint(expr=sum(m.cost[p] * m.x[p] for p in m.P) <= m.budget)\n    m.total = pyo.Objective(expr=sum(m.value[p] * m.x[p] for p in m.P), sense=pyo.maximize)\n    return m\n\n\ndef sweep(projects: dict[str, tuple[float, float]], budgets: list[float]) -> list[float]:\n    \"\"\"The best total value at each budget, from one model built once and re-solved.\"\"\"\n    solver = pyo.SolverFactory(\"appsi_highs\")\n    solver.config.mip_gap = 0.0\n    m = build(projects, budgets[0])\n    values = []\n    for b in budgets:\n        m.budget = b\n        solver.solve(m)\n        values.append(pyo.value(m.total))\n    return values\n\n\nif __name__ == \"__main__\":\n    print(sweep({\"A\": (4, 7), \"B\": (3, 5), \"C\": (2, 3)}, [3, 5, 9]))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\n# Pyomo logs every set it builds and the whole solver log; keep its own logger to warnings.\nlogging.getLogger(\"pyomo\").setLevel(logging.WARNING)\n\nfrom sweep import sweep\n\n# Sewer relinings: name -> (cost $k, value $k).\nsewers = {\"S1\": (35, 50), \"S2\": (25, 33), \"S3\": (20, 28), \"S4\": (10, 12)}\nbudgets = [10, 30, 55, 100, 45]\nfor budget, value in zip(budgets, sweep(sewers, budgets)):\n    print(f\"best value at budget {budget}:\", round(value, 2))\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport pyomo.environ as pyo\n\n\ndef build(projects: dict[str, tuple[float, float]], budget: float) -> pyo.ConcreteModel:\n    \"\"\"Fund projects (name -> (cost, value)) within `budget`, maximizing value. The budget is a mutable Param.\"\"\"\n    m = pyo.ConcreteModel()\n    # TODO: the set of projects, cost and value Params, a mutable budget Param, x, the spend row\n    #       and the objective, named m.total.\n    return m\n\n\ndef sweep(projects: dict[str, tuple[float, float]], budgets: list[float]) -> list[float]:\n    \"\"\"The best total value at each budget, from one model built once and re-solved.\"\"\"\n    # TODO: build once, then for each budget change m.budget, solve with appsi_highs and read m.total.\n    return [0.0 for _ in budgets]\n\n\nif __name__ == \"__main__\":\n    print(sweep({\"A\": (4, 7), \"B\": (3, 5), \"C\": (2, 3)}, [3, 5, 9]))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\n# Pyomo logs every set it builds and the whole solver log; keep its own logger to warnings.\nlogging.getLogger(\"pyomo\").setLevel(logging.WARNING)\n\nfrom sweep import sweep\n\n# Sewer relinings: name -> (cost $k, value $k).\nsewers = {\"S1\": (35, 50), \"S2\": (25, 33), \"S3\": (20, 28), \"S4\": (10, 12)}\nbudgets = [10, 30, 55, 100, 45]\nfor budget, value in zip(budgets, sweep(sewers, budgets)):\n    print(f\"best value at budget {budget}:\", round(value, 2))\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 2,
+    "paras": 4,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "7566777f69bec74f69074166f93f9a494f376bccfb09ddc994f5ce86a5ba9730",
+  "content_sha256": "322c475a7d3afe2dd65bf270b660b0e9b7ef048147ff158c8acb00b826b2c604",
   "starting_code": "from __future__ import annotations\n\nimport pyomo.environ as pyo\n\n\ndef build(projects: dict[str, tuple[float, float]], budget: float) -> pyo.ConcreteModel:\n    \"\"\"Fund projects (name -> (cost, value)) within `budget`, maximizing value. The budget is a mutable Param.\"\"\"\n    m = pyo.ConcreteModel()\n    # TODO: the set of projects, cost and value Params, a mutable budget Param, x, the spend row\n    #       and the objective, named m.total.\n    return m\n\n\ndef sweep(projects: dict[str, tuple[float, float]], budgets: list[float]) -> list[float]:\n    \"\"\"The best total value at each budget, from one model built once and re-solved.\"\"\"\n    # TODO: build once, then for each budget change m.budget, solve with appsi_highs and read m.total.\n    return [0.0 for _ in budgets]\n\n\nif __name__ == \"__main__\":\n    print(sweep({\"A\": (4, 7), \"B\": (3, 5), \"C\": (2, 3)}, [3, 5, 9]))\n",
   "exercise": {
     "main_path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-1/sweep.py",
     "test_path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-1/test_sweep.py",
     "run_command": [
       "python3",
-      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-1/sweep.py"
+      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -136,6 +154,10 @@
       "a Pyomo model built at once from data already in Python",
       "data that can change between solves of one model",
       "solving with HiGHS and changing a one-number Param between solves"
-    ]
+    ],
+    "files": [
+      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-1/try_it.py"
+    ],
+    "try_file": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-1/try_it.py"
   }
 }

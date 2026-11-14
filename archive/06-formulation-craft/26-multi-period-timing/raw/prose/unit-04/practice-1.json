@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A covenant on every run of years",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_plan_cap(model: mathopt.Model, spend: dict, years: list[int], cap: int) -> None:\n    \"\"\"The old rule: the whole plan's spend within one cap.\"\"\"\n    model.add_linear_constraint(sum(spend[y] for y in years) <= cap, name=\"plan_cap\")\n\n\ndef add_rolling_caps(model: mathopt.Model, spend: dict, years: list[int], k: int, cap: int) -> dict:\n    \"\"\"Hold the spend of every `k` consecutive years of the plan to `cap`.\"\"\"\n    rows = {}\n    for i in range(len(years) - k + 1):\n        window = years[i:i + k]\n        rows[window[0]] = model.add_linear_constraint(\n            sum(spend[y] for y in window) <= cap, name=f\"rolling_{window[0]}\")\n    return rows\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_binary_variable(name=\"dredging\")\n    spend = {2027: 50 * x, 2028: 50 * x, 2029: 0 * x}\n    print(add_rolling_caps(model, spend, [2027, 2028, 2029], 2, 80))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom rolling import add_rolling_caps\n\nyears = [2031, 2032, 2033, 2034, 2035]\n# Spend by year, $k: a quay wall, a silo and a gate.\nwork = {\"quay\": {2031: 60, 2032: 60}, \"silo\": {2033: 90}, \"gate\": {2035: 50}}\n\ndef solve_ok(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(plan, k, cap):\n    model = mathopt.Model()\n    x = {name: model.add_binary_variable(name=name) for name in work}\n    spend = {y: sum(cost.get(y, 0) * x[n] for n, cost in work.items()) for y in years}\n    rows = add_rolling_caps(model, spend, years, k, cap)\n    for name, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if name in plan else 0.0\n    return sorted(rows), solve_ok(model)\n\n\nprint(\"quay+silo, k 2, cap 150:\", allowed({\"quay\", \"silo\"}, 2, 150))\nprint(\"quay+silo, k 3, cap 150:\", allowed({\"quay\", \"silo\"}, 3, 150))\nprint(\"silo+gate, k 3, cap 140:\", allowed({\"silo\", \"gate\"}, 3, 140))\nprint(\"quay, k 6, cap 10:\", allowed({\"quay\"}, 6, 10))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_plan_cap(model: mathopt.Model, spend: dict, years: list[int], cap: int) -> None:\n    \"\"\"The old rule: the whole plan's spend within one cap.\"\"\"\n    model.add_linear_constraint(sum(spend[y] for y in years) <= cap, name=\"plan_cap\")\n\n\ndef add_rolling_caps(model: mathopt.Model, spend: dict, years: list[int], k: int, cap: int) -> dict:\n    \"\"\"Hold the spend of every `k` consecutive years of the plan to `cap`.\"\"\"\n    # TODO: write the formulation first, then its rows. Return the rows in a dict by their first year.\n    return {}\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_binary_variable(name=\"dredging\")\n    spend = {2027: 50 * x, 2028: 50 * x, 2029: 0 * x}\n    print(add_rolling_caps(model, spend, [2027, 2028, 2029], 2, 80))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom rolling import add_rolling_caps\n\nyears = [2031, 2032, 2033, 2034, 2035]\n# Spend by year, $k: a quay wall, a silo and a gate.\nwork = {\"quay\": {2031: 60, 2032: 60}, \"silo\": {2033: 90}, \"gate\": {2035: 50}}\n\ndef solve_ok(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(plan, k, cap):\n    model = mathopt.Model()\n    x = {name: model.add_binary_variable(name=name) for name in work}\n    spend = {y: sum(cost.get(y, 0) * x[n] for n, cost in work.items()) for y in years}\n    rows = add_rolling_caps(model, spend, years, k, cap)\n    for name, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if name in plan else 0.0\n    return sorted(rows), solve_ok(model)\n\n\nprint(\"quay+silo, k 2, cap 150:\", allowed({\"quay\", \"silo\"}, 2, 150))\nprint(\"quay+silo, k 3, cap 150:\", allowed({\"quay\", \"silo\"}, 3, 150))\nprint(\"silo+gate, k 3, cap 140:\", allowed({\"silo\", \"gate\"}, 3, 140))\nprint(\"quay, k 6, cap 10:\", allowed({\"quay\"}, 6, 10))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "aac3d92c45218de27bab536745a95d38416167b1c49a94ec64e9284b5a6cce2b",
+  "content_sha256": "1d65f02dea92fa70d0d54f38b48f4939b5dedb43f647bef438409688d912b372",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_plan_cap(model: mathopt.Model, spend: dict, years: list[int], cap: int) -> None:\n    \"\"\"The old rule: the whole plan's spend within one cap.\"\"\"\n    model.add_linear_constraint(sum(spend[y] for y in years) <= cap, name=\"plan_cap\")\n\n\ndef add_rolling_caps(model: mathopt.Model, spend: dict, years: list[int], k: int, cap: int) -> dict:\n    \"\"\"Hold the spend of every `k` consecutive years of the plan to `cap`.\"\"\"\n    # TODO: write the formulation first, then its rows. Return the rows in a dict by their first year.\n    return {}\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_binary_variable(name=\"dredging\")\n    spend = {2027: 50 * x, 2028: 50 * x, 2029: 0 * x}\n    print(add_rolling_caps(model, spend, [2027, 2028, 2029], 2, 80))\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-04/practice-1/rolling.py",
     "test_path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-04/practice-1/test_rolling.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-04/practice-1/rolling.py"
+      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-04/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -135,6 +153,10 @@
     },
     "concepts": [
       "a carry-over cap and a multi-year cap are more rows on the same spend expressions and carry variables"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-04/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-04/practice-1/try_it.py"
   }
 }

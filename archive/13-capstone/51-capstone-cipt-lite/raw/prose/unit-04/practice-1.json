@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Pre-solve checks for a Budget Lock scenario",
   "blocks": [
     {
@@ -87,6 +87,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nFinding = tuple[str, str]                         # (rule, subject)\n\n\ndef starts(project: dict) -> list[int]:\n    return list(range(project[\"earliest\"], project[\"latest\"] + 1))\n\n\ndef spend(project: dict, start: int) -> dict[int, int]:\n    \"\"\"What the project spends in each calendar year if it starts in `start`.\"\"\"\n    return {start + k: amount for k, amount in enumerate(project[\"cost\"])}\n\n\ndef budgets(snapshot: dict, scenario: dict) -> dict[int, int]:\n    return {y: scenario.get(\"budget\", {}).get(y, snapshot[\"budget\"][y]) for y in snapshot[\"years\"]}\n\n\ndef crews(snapshot: dict, scenario: dict, program: str, year: int) -> int:\n    return scenario.get(\"crews\", {}).get(program, {}).get(year, snapshot[\"crews\"][program][year])\n\n\ndef required(snapshot: dict, scenario: dict) -> dict[str, list[int]]:\n    \"\"\"Every project each plan must fund, with the start years left to it.\"\"\"\n    need = {pid: starts(p) for pid, p in snapshot[\"projects\"].items()\n            if p[\"must\"] or pid in scenario.get(\"force_in\", [])}\n    for pid, year in scenario.get(\"fix_start\", {}).items():\n        need[pid] = [year]\n    return need\n\n\ndef checks(snapshot: dict, scenario: dict) -> list[Finding]:\n    projects, limit = snapshot[\"projects\"], budgets(snapshot, scenario)\n    need = required(snapshot, scenario)\n    found = []\n    for pid, years in sorted(need.items()):\n        p = projects[pid]\n        if pid in scenario.get(\"force_out\", []) or not set(years) <= set(starts(p)):\n            found.append((\"no-start\", pid))\n            continue\n        if not any(all(a <= limit[y] for y, a in spend(p, t).items()) for t in years):\n            found.append((\"alone-over-budget\", pid))\n        if not any(all(p[\"crews\"] <= crews(snapshot, scenario, p[\"program\"], y) for y in spend(p, t))\n                   for t in years):\n            found.append((\"alone-over-crews\", pid))\n    for y in snapshot[\"years\"]:\n        least = sum(min(spend(projects[pid], t).get(y, 0) for t in years)\n                    for pid, years in need.items() if set(years) <= set(starts(projects[pid])))\n        if least > limit[y]:\n            found.append((\"required-over-budget\", str(y)))\n    groups: dict[str, int] = {}\n    for pid in need:\n        if projects[pid][\"group\"]:\n            groups[projects[pid][\"group\"]] = groups.get(projects[pid][\"group\"], 0) + 1\n    found += [(\"required-alternatives\", g) for g, n in sorted(groups.items()) if n > 1]\n    for region, floor in sorted(snapshot[\"floor\"].items()):\n        most = sum(sum(p[\"cost\"]) for pid, p in projects.items()\n                   if p[\"region\"] == region and pid not in scenario.get(\"force_out\", []))\n        if most < floor:\n            found.append((\"floor-out-of-reach\", region))\n    return found\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"years\": [2027], \"budget\": {2027: 100}, \"crews\": {\"lines\": {2027: 2}}, \"floor\": {},\n                \"projects\": {\"J1\": {\"program\": \"lines\", \"region\": \"North\", \"cost\": [150], \"earliest\": 2027,\n                                    \"latest\": 2027, \"must\": True, \"group\": None, \"crews\": 1}}}\n    print(checks(snapshot, {\"name\": \"lock\"}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom checks import checks, required\n\nsnapshot = {\n    \"years\": [2031, 2032],\n    \"budget\": {2031: 300, 2032: 300},\n    \"crews\": {\"lines\": {2031: 3, 2032: 3}, \"poles\": {2031: 2, 2032: 2}},\n    \"floor\": {\"East\": 150, \"West\": 50},\n    \"projects\": {\n        \"P1\": {\"program\": \"lines\", \"region\": \"East\", \"cost\": [180], \"earliest\": 2031, \"latest\": 2032,\n               \"must\": True, \"group\": None, \"crews\": 2},\n        \"P2\": {\"program\": \"poles\", \"region\": \"West\", \"cost\": [90], \"earliest\": 2031, \"latest\": 2031,\n               \"must\": False, \"group\": \"A\", \"crews\": 1},\n        \"P3\": {\"program\": \"poles\", \"region\": \"West\", \"cost\": [70], \"earliest\": 2031, \"latest\": 2032,\n               \"must\": True, \"group\": \"A\", \"crews\": 1},\n    },\n}\n\nprint(\"required, plain lock:\", required(snapshot, {\"name\": \"lock\"}))\nprint(\"plain lock:\", checks(snapshot, {\"name\": \"lock\"}))\nprint(\"P2 forced in:\", checks(snapshot, {\"name\": \"lock\", \"force_in\": [\"P2\"]}))\nprint(\"budget 150 each year:\", checks(snapshot, {\"name\": \"lock\", \"budget\": {2031: 150, 2032: 150}}))\nprint(\"P1 forced out, P3 fixed 2033:\", checks(snapshot, {\"name\": \"lock\", \"force_out\": [\"P1\"], \"fix_start\": {\"P3\": 2033}}))\nprint(\"lines crews 1 in 2031 and 2032:\", checks(snapshot, {\"name\": \"lock\", \"crews\": {\"lines\": {2031: 1, 2032: 1}}}))\n"
         }
       ]
     },
@@ -99,6 +108,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nFinding = tuple[str, str]                         # (rule, subject)\n\n\ndef starts(project: dict) -> list[int]:\n    return list(range(project[\"earliest\"], project[\"latest\"] + 1))\n\n\ndef spend(project: dict, start: int) -> dict[int, int]:\n    \"\"\"What the project spends in each calendar year if it starts in `start`.\"\"\"\n    return {start + k: amount for k, amount in enumerate(project[\"cost\"])}\n\n\ndef budgets(snapshot: dict, scenario: dict) -> dict[int, int]:\n    return {y: scenario.get(\"budget\", {}).get(y, snapshot[\"budget\"][y]) for y in snapshot[\"years\"]}\n\n\ndef crews(snapshot: dict, scenario: dict, program: str, year: int) -> int:\n    return scenario.get(\"crews\", {}).get(program, {}).get(year, snapshot[\"crews\"][program][year])\n\n\ndef required(snapshot: dict, scenario: dict) -> dict[str, list[int]]:\n    \"\"\"Every project each plan must fund, with the start years left to it.\"\"\"\n    # TODO: must-dos and forced projects get their windows; a fixed start leaves one year.\n    return {}\n\n\ndef checks(snapshot: dict, scenario: dict) -> list[Finding]:\n    \"\"\"Every finding of the six rules, in the order the statement gives.\"\"\"\n    # TODO\n    return [(\"not checked\", \"\")]\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"years\": [2027], \"budget\": {2027: 100}, \"crews\": {\"lines\": {2027: 2}}, \"floor\": {},\n                \"projects\": {\"J1\": {\"program\": \"lines\", \"region\": \"North\", \"cost\": [150], \"earliest\": 2027,\n                                    \"latest\": 2027, \"must\": True, \"group\": None, \"crews\": 1}}}\n    print(checks(snapshot, {\"name\": \"lock\"}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom checks import checks, required\n\nsnapshot = {\n    \"years\": [2031, 2032],\n    \"budget\": {2031: 300, 2032: 300},\n    \"crews\": {\"lines\": {2031: 3, 2032: 3}, \"poles\": {2031: 2, 2032: 2}},\n    \"floor\": {\"East\": 150, \"West\": 50},\n    \"projects\": {\n        \"P1\": {\"program\": \"lines\", \"region\": \"East\", \"cost\": [180], \"earliest\": 2031, \"latest\": 2032,\n               \"must\": True, \"group\": None, \"crews\": 2},\n        \"P2\": {\"program\": \"poles\", \"region\": \"West\", \"cost\": [90], \"earliest\": 2031, \"latest\": 2031,\n               \"must\": False, \"group\": \"A\", \"crews\": 1},\n        \"P3\": {\"program\": \"poles\", \"region\": \"West\", \"cost\": [70], \"earliest\": 2031, \"latest\": 2032,\n               \"must\": True, \"group\": \"A\", \"crews\": 1},\n    },\n}\n\nprint(\"required, plain lock:\", required(snapshot, {\"name\": \"lock\"}))\nprint(\"plain lock:\", checks(snapshot, {\"name\": \"lock\"}))\nprint(\"P2 forced in:\", checks(snapshot, {\"name\": \"lock\", \"force_in\": [\"P2\"]}))\nprint(\"budget 150 each year:\", checks(snapshot, {\"name\": \"lock\", \"budget\": {2031: 150, 2032: 150}}))\nprint(\"P1 forced out, P3 fixed 2033:\", checks(snapshot, {\"name\": \"lock\", \"force_out\": [\"P1\"], \"fix_start\": {\"P3\": 2033}}))\nprint(\"lines crews 1 in 2031 and 2032:\", checks(snapshot, {\"name\": \"lock\", \"crews\": {\"lines\": {2031: 1, 2032: 1}}}))\n"
     }
   ],
   "video": null,
@@ -106,8 +124,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 1,
     "lists": 0,
     "images": 0,
@@ -117,14 +135,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "fb9f1d4b24a4f3a180e194504e165847c98f7c165b3a15b0de442b3925a0d6b8",
+  "content_sha256": "b5e62eccf2d869bb9dd041a358edfacbeb283a6f69d568e05c48259ed97f597d",
   "starting_code": "from __future__ import annotations\n\nFinding = tuple[str, str]                         # (rule, subject)\n\n\ndef starts(project: dict) -> list[int]:\n    return list(range(project[\"earliest\"], project[\"latest\"] + 1))\n\n\ndef spend(project: dict, start: int) -> dict[int, int]:\n    \"\"\"What the project spends in each calendar year if it starts in `start`.\"\"\"\n    return {start + k: amount for k, amount in enumerate(project[\"cost\"])}\n\n\ndef budgets(snapshot: dict, scenario: dict) -> dict[int, int]:\n    return {y: scenario.get(\"budget\", {}).get(y, snapshot[\"budget\"][y]) for y in snapshot[\"years\"]}\n\n\ndef crews(snapshot: dict, scenario: dict, program: str, year: int) -> int:\n    return scenario.get(\"crews\", {}).get(program, {}).get(year, snapshot[\"crews\"][program][year])\n\n\ndef required(snapshot: dict, scenario: dict) -> dict[str, list[int]]:\n    \"\"\"Every project each plan must fund, with the start years left to it.\"\"\"\n    # TODO: must-dos and forced projects get their windows; a fixed start leaves one year.\n    return {}\n\n\ndef checks(snapshot: dict, scenario: dict) -> list[Finding]:\n    \"\"\"Every finding of the six rules, in the order the statement gives.\"\"\"\n    # TODO\n    return [(\"not checked\", \"\")]\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"years\": [2027], \"budget\": {2027: 100}, \"crews\": {\"lines\": {2027: 2}}, \"floor\": {},\n                \"projects\": {\"J1\": {\"program\": \"lines\", \"region\": \"North\", \"cost\": [150], \"earliest\": 2027,\n                                    \"latest\": 2027, \"must\": True, \"group\": None, \"crews\": 1}}}\n    print(checks(snapshot, {\"name\": \"lock\"}))\n",
   "exercise": {
     "main_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-04/practice-1/checks.py",
     "test_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-04/practice-1/test_checks.py",
     "run_command": [
       "python3",
-      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-04/practice-1/checks.py"
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-04/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -180,6 +198,10 @@
     },
     "concepts": [
       "pre-solve checks that each compare one required project, group or region with one limit, and never refuse a scenario that has a plan"
-    ]
+    ],
+    "files": [
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-04/practice-1/try_it.py"
+    ],
+    "try_file": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-04/practice-1/try_it.py"
   }
 }

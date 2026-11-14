@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Shortlist the solvers a model can go to",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nS = mathopt.SolverType\nCANDIDATES = (S.GLOP, S.PDLP, S.HIGHS, S.GSCIP, S.CP_SAT)\nLP_ONLY = {S.GLOP, S.PDLP}\nGIVES_LP_DUALS = {S.GLOP, S.PDLP, S.HIGHS}\n\n\ndef shortlist(model: mathopt.Model, need_duals: bool = False) -> list[mathopt.SolverType]:\n    \"\"\"The candidate solvers that answer this model as written, in CANDIDATES order.\"\"\"\n    flags = [v.integer for v in model.variables()]\n    has_integer, has_continuous = any(flags), not all(flags)\n    if need_duals and has_integer:\n        return []\n    chosen = []\n    for solver in CANDIDATES:\n        if solver in LP_ONLY and has_integer:\n            continue\n        if solver == S.CP_SAT and has_continuous:\n            continue\n        if need_duals and solver not in GIVES_LP_DUALS:\n            continue\n        chosen.append(solver)\n    return chosen\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    model.add_binary_variable(name=\"ship\")\n    model.add_variable(lb=0, ub=40, name=\"tons\")\n    print([s.name for s in shortlist(model)])\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom shortlist import shortlist\n\n\ndef barges(trips_integer: bool, tonnes_integer: bool) -> mathopt.Model:\n    model = mathopt.Model(name=\"barges\")\n    trips = model.add_variable(lb=0, ub=5, is_integer=trips_integer, name=\"trips\")\n    tonnes = model.add_variable(lb=0, ub=200, is_integer=tonnes_integer, name=\"tonnes\")\n    model.add_linear_constraint(tonnes <= 45 * trips, name=\"load\")\n    model.maximize(3 * tonnes - 50 * trips)\n    return model\n\n\nprint(\"all continuous:\", [s.name for s in shortlist(barges(False, False))])\nprint(\"integer trips, continuous tonnes:\", [s.name for s in shortlist(barges(True, False))])\nprint(\"all integer:\", [s.name for s in shortlist(barges(True, True))])\nprint(\"all continuous, duals wanted:\", [s.name for s in shortlist(barges(False, False), need_duals=True)])\nprint(\"integer trips, duals wanted:\", [s.name for s in shortlist(barges(True, False), need_duals=True)])\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nS = mathopt.SolverType\nCANDIDATES = (S.GLOP, S.PDLP, S.HIGHS, S.GSCIP, S.CP_SAT)\n\n\ndef shortlist(model: mathopt.Model, need_duals: bool = False) -> list[mathopt.SolverType]:\n    \"\"\"The candidate solvers that answer this model as written, in CANDIDATES order.\"\"\"\n    # TODO: drop the solvers each rule of the statement rules out.\n    return list(CANDIDATES)\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    model.add_binary_variable(name=\"ship\")\n    model.add_variable(lb=0, ub=40, name=\"tons\")\n    print([s.name for s in shortlist(model)])\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom shortlist import shortlist\n\n\ndef barges(trips_integer: bool, tonnes_integer: bool) -> mathopt.Model:\n    model = mathopt.Model(name=\"barges\")\n    trips = model.add_variable(lb=0, ub=5, is_integer=trips_integer, name=\"trips\")\n    tonnes = model.add_variable(lb=0, ub=200, is_integer=tonnes_integer, name=\"tonnes\")\n    model.add_linear_constraint(tonnes <= 45 * trips, name=\"load\")\n    model.maximize(3 * tonnes - 50 * trips)\n    return model\n\n\nprint(\"all continuous:\", [s.name for s in shortlist(barges(False, False))])\nprint(\"integer trips, continuous tonnes:\", [s.name for s in shortlist(barges(True, False))])\nprint(\"all integer:\", [s.name for s in shortlist(barges(True, True))])\nprint(\"all continuous, duals wanted:\", [s.name for s in shortlist(barges(False, False), need_duals=True)])\nprint(\"integer trips, duals wanted:\", [s.name for s in shortlist(barges(True, False), need_duals=True)])\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "1a1ed598a0abaac170e635affb4399063d9a4ba8af302b4d959443c021b443c5",
+  "content_sha256": "ce7b42ad44a13363c2c094c164511d87dc40a7d69e34a53bd0aaf84fca0f2f77",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nS = mathopt.SolverType\nCANDIDATES = (S.GLOP, S.PDLP, S.HIGHS, S.GSCIP, S.CP_SAT)\n\n\ndef shortlist(model: mathopt.Model, need_duals: bool = False) -> list[mathopt.SolverType]:\n    \"\"\"The candidate solvers that answer this model as written, in CANDIDATES order.\"\"\"\n    # TODO: drop the solvers each rule of the statement rules out.\n    return list(CANDIDATES)\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    model.add_binary_variable(name=\"ship\")\n    model.add_variable(lb=0, ub=40, name=\"tons\")\n    print([s.name for s in shortlist(model)])\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-2/shortlist.py",
     "test_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-2/test_shortlist.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-2/shortlist.py"
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -146,6 +164,10 @@
     "concepts": [
       "CP-SAT rounds continuous variables and still reports OPTIMAL, so it gets all-integer models only",
       "GLOP and PDLP refuse integer variables, and only GLOP, PDLP and HiGHS return LP duals"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-2/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-2/try_it.py"
   }
 }

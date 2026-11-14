@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "What the scheduling service does with each answer",
   "blocks": [
     {
@@ -84,6 +84,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nR = mathopt.TerminationReason\n\n\ndef next_step(result: mathopt.SolveResult, max_gap: float) -> str:\n    \"\"\"What the scheduling service does with a solve: publish, rerun, conflict, model-bug, separate or escalate.\"\"\"\n    termination = result.termination\n    match termination.reason:\n        case R.OPTIMAL:\n            return \"publish\"\n        case R.FEASIBLE:\n            primal = termination.objective_bounds.primal_bound\n            dual = termination.objective_bounds.dual_bound\n            if primal == 0:\n                return \"publish\" if dual == primal else \"rerun\"\n            gap = abs(dual - primal) / abs(primal)\n            return \"publish\" if gap <= max_gap else \"rerun\"\n        case R.NO_SOLUTION_FOUND:\n            return \"rerun\"\n        case R.INFEASIBLE:\n            return \"conflict\"\n        case R.UNBOUNDED:\n            return \"model-bug\"\n        case R.INFEASIBLE_OR_UNBOUNDED:\n            return \"separate\"\n        case _:\n            return \"escalate\"\n\n\nif __name__ == \"__main__\":\n    done = mathopt.SolveResult(termination=mathopt.Termination(reason=R.OPTIMAL))\n    print(next_step(done, 0.01))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom guard import next_step\n\nR = mathopt.TerminationReason\n\n\ndef ended(reason, limit=None, primal=0.0, dual=0.0):\n    bounds = mathopt.ObjectiveBounds(primal_bound=primal, dual_bound=dual)\n    return mathopt.SolveResult(termination=mathopt.Termination(reason=reason, limit=limit, objective_bounds=bounds))\n\n\nprint(\"optimal at 310:\", next_step(ended(R.OPTIMAL, primal=310.0, dual=310.0), 0.02))\nprint(\"feasible 300 vs bound 303, max gap 2%:\", next_step(ended(R.FEASIBLE, mathopt.Limit.TIME, 300.0, 303.0), 0.02))\nprint(\"feasible 300 vs bound 330, max gap 2%:\", next_step(ended(R.FEASIBLE, mathopt.Limit.TIME, 300.0, 330.0), 0.02))\nprint(\"infeasible:\", next_step(ended(R.INFEASIBLE), 0.02))\nprint(\"infeasible or unbounded:\", next_step(ended(R.INFEASIBLE_OR_UNBOUNDED), 0.02))\nprint(\"no solution, node limit:\", next_step(ended(R.NO_SOLUTION_FOUND, mathopt.Limit.NODE), 0.02))\n"
         }
       ]
     },
@@ -96,6 +105,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nR = mathopt.TerminationReason\n\n\ndef next_step(result: mathopt.SolveResult, max_gap: float) -> str:\n    \"\"\"What the scheduling service does with a solve: publish, rerun, conflict, model-bug, separate or escalate.\"\"\"\n    # TODO: one case per termination reason, and the gap rule for a plan stopped by a limit.\n    return \"publish\"\n\n\nif __name__ == \"__main__\":\n    done = mathopt.SolveResult(termination=mathopt.Termination(reason=R.OPTIMAL))\n    print(next_step(done, 0.01))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom guard import next_step\n\nR = mathopt.TerminationReason\n\n\ndef ended(reason, limit=None, primal=0.0, dual=0.0):\n    bounds = mathopt.ObjectiveBounds(primal_bound=primal, dual_bound=dual)\n    return mathopt.SolveResult(termination=mathopt.Termination(reason=reason, limit=limit, objective_bounds=bounds))\n\n\nprint(\"optimal at 310:\", next_step(ended(R.OPTIMAL, primal=310.0, dual=310.0), 0.02))\nprint(\"feasible 300 vs bound 303, max gap 2%:\", next_step(ended(R.FEASIBLE, mathopt.Limit.TIME, 300.0, 303.0), 0.02))\nprint(\"feasible 300 vs bound 330, max gap 2%:\", next_step(ended(R.FEASIBLE, mathopt.Limit.TIME, 300.0, 330.0), 0.02))\nprint(\"infeasible:\", next_step(ended(R.INFEASIBLE), 0.02))\nprint(\"infeasible or unbounded:\", next_step(ended(R.INFEASIBLE_OR_UNBOUNDED), 0.02))\nprint(\"no solution, node limit:\", next_step(ended(R.NO_SOLUTION_FOUND, mathopt.Limit.NODE), 0.02))\n"
     }
   ],
   "video": null,
@@ -103,8 +121,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 1,
     "lists": 0,
     "images": 0,
@@ -114,14 +132,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "2e85e05504b98b500e6e65c62e6839e1cf38c51f2677165d0060ae99ecea52ab",
+  "content_sha256": "fe69a43b5a48d1af0536c64562778d3ada9fcd3977eb3b60e9b1777edfe7b67c",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nR = mathopt.TerminationReason\n\n\ndef next_step(result: mathopt.SolveResult, max_gap: float) -> str:\n    \"\"\"What the scheduling service does with a solve: publish, rerun, conflict, model-bug, separate or escalate.\"\"\"\n    # TODO: one case per termination reason, and the gap rule for a plan stopped by a limit.\n    return \"publish\"\n\n\nif __name__ == \"__main__\":\n    done = mathopt.SolveResult(termination=mathopt.Termination(reason=R.OPTIMAL))\n    print(next_step(done, 0.01))\n",
   "exercise": {
     "main_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-2/guard.py",
     "test_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-2/test_guard.py",
     "run_command": [
       "python3",
-      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-2/guard.py"
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -182,6 +200,10 @@
     },
     "concepts": [
       "each termination reason, and a plan's gap, leads the service to a different next step"
-    ]
+    ],
+    "files": [
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-2/try_it.py"
   }
 }

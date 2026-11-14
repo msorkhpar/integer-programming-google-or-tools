@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Refuse as few berthing requests as possible",
   "blocks": [
     {
@@ -43,6 +43,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef fewest_refusals(vessels: dict, berths: dict) -> tuple[list[str], dict[str, int]]:\n    \"\"\"Refuse as few berthing requests as possible; every vessel still berths once, inside its window.\"\"\"\n    model = mathopt.Model(name=\"port\")\n    at = {(v, d): model.add_binary_variable(name=f\"at_{v}_{d}\")\n          for v, (first, last, _) in vessels.items() for d in range(first, last + 1) if d in berths}\n    refuse = {v: model.add_binary_variable(name=f\"refuse_{v}\") for v in vessels}\n    for v, (first, last, wanted) in vessels.items():\n        model.add_linear_constraint(mathopt.fast_sum(x for (w, _), x in at.items() if w == v) == 1, name=f\"berth_{v}\")\n        model.add_linear_constraint(at.get((v, wanted), 0) + refuse[v] >= 1, name=f\"request_{v}\")\n    for d, count in berths.items():\n        model.add_linear_constraint(mathopt.fast_sum(x for (_, e), x in at.items() if e == d) <= count, name=f\"berths_{d}\")\n    model.minimize(mathopt.fast_sum(refuse.values()))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS,\n                            params=mathopt.SolveParameters(relative_gap_tolerance=0.0))\n    values = result.variable_values()\n    refused = sorted(v for v, r in refuse.items() if values[r] > 0.5)\n    schedule = {v: d for (v, d), x in at.items() if values[x] > 0.5}\n    return refused, schedule\n\n\nif __name__ == \"__main__\":\n    print(fewest_refusals({\"Aurora\": (1, 2, 1), \"Borealis\": (1, 2, 1)}, {1: 1, 2: 1}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom port import fewest_refusals\n\ndays = {1: 1, 2: 1, 3: 1, 4: 1}\ncalm = {\"Orion\": (1, 4, 2), \"Vega\": (1, 4, 3), \"Lyra\": (3, 4, 4)}\nbusy = {\"Orion\": (1, 4, 2), \"Vega\": (1, 4, 2), \"Lyra\": (2, 4, 2)}\n\nrefused, schedule = fewest_refusals(calm, days)\nprint(\"refused, three different days asked:\", refused)\nprint(\"schedule, three different days asked:\", schedule)\nrefused, schedule = fewest_refusals(busy, days)\nprint(\"refused, all three ask for day 2:\", refused)\nprint(\"schedule, all three ask for day 2:\", schedule)\n"
         }
       ]
     },
@@ -55,6 +64,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef fewest_refusals(vessels: dict, berths: dict) -> tuple[list[str], dict[str, int]]:\n    \"\"\"Refuse as few berthing requests as possible; every vessel still berths once, inside its window.\"\"\"\n    # TODO: write the formulation first, then build and solve it with HiGHS.\n    # Return the refused vessels (sorted) and the day each vessel berths.\n    return [], {v: wanted for v, (_, _, wanted) in vessels.items()}\n\n\nif __name__ == \"__main__\":\n    print(fewest_refusals({\"Aurora\": (1, 2, 1), \"Borealis\": (1, 2, 1)}, {1: 1, 2: 1}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom port import fewest_refusals\n\ndays = {1: 1, 2: 1, 3: 1, 4: 1}\ncalm = {\"Orion\": (1, 4, 2), \"Vega\": (1, 4, 3), \"Lyra\": (3, 4, 4)}\nbusy = {\"Orion\": (1, 4, 2), \"Vega\": (1, 4, 2), \"Lyra\": (2, 4, 2)}\n\nrefused, schedule = fewest_refusals(calm, days)\nprint(\"refused, three different days asked:\", refused)\nprint(\"schedule, three different days asked:\", schedule)\nrefused, schedule = fewest_refusals(busy, days)\nprint(\"refused, all three ask for day 2:\", refused)\nprint(\"schedule, all three ask for day 2:\", schedule)\n"
     }
   ],
   "video": null,
@@ -62,8 +80,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -73,14 +91,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "e26d2ba66c15c31fd0625aa9d0573f98298b6b492484e20716fe391ae28a34f5",
+  "content_sha256": "4dcc894b5834b87fed6bea2f01ae9d2b7ca333a96f09ddde9902aebea0824c61",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef fewest_refusals(vessels: dict, berths: dict) -> tuple[list[str], dict[str, int]]:\n    \"\"\"Refuse as few berthing requests as possible; every vessel still berths once, inside its window.\"\"\"\n    # TODO: write the formulation first, then build and solve it with HiGHS.\n    # Return the refused vessels (sorted) and the day each vessel berths.\n    return [], {v: wanted for v, (_, _, wanted) in vessels.items()}\n\n\nif __name__ == \"__main__\":\n    print(fewest_refusals({\"Aurora\": (1, 2, 1), \"Borealis\": (1, 2, 1)}, {1: 1, 2: 1}))\n",
   "exercise": {
     "main_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-04/practice-2/port.py",
     "test_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-04/practice-2/test_port.py",
     "run_command": [
       "python3",
-      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-04/practice-2/port.py"
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-04/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -121,6 +139,10 @@
     },
     "concepts": [
       "a 0/1 variable per soft rule, linked to its elastic, and an objective that counts them"
-    ]
+    ],
+    "files": [
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-04/practice-2/try_it.py"
+    ],
+    "try_file": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-04/practice-2/try_it.py"
   }
 }

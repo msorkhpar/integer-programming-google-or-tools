@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A deletion filter in Pyomo",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport pyomo.environ as pyo\nfrom pyomo.contrib.solver.common.factory import SolverFactory\nfrom pyomo.contrib.solver.common.results import TerminationCondition\n\n\ndef feasible(model: pyo.ConcreteModel) -> bool:\n    \"\"\"Whether the model's active rows and the variables' bounds have a common point.\"\"\"\n    results = SolverFactory(\"highs\").solve(model, raise_exception_on_nonoptimal_result=False,\n                                           load_solutions=False)\n    return results.termination_condition != TerminationCondition.provenInfeasible\n\n\ndef deletion_filter(model: pyo.ConcreteModel) -> list[str]:\n    \"\"\"Names of the rows of one irreducible infeasible subsystem of an infeasible model (bounds kept).\"\"\"\n    for objective in model.component_data_objects(pyo.Objective, active=True):\n        objective.deactivate()                     # feasibility is the only question\n    rows = list(model.component_data_objects(pyo.Constraint, active=True))\n    keep = []\n    for row in rows:\n        row.deactivate()\n        if feasible(model):                        # without this row the rest is feasible: it is needed\n            row.activate()\n            keep.append(row.name)\n    return sorted(keep)\n\n\nif __name__ == \"__main__\":\n    m = pyo.ConcreteModel()\n    m.x = pyo.Var(bounds=(0, 10))\n    m.y = pyo.Var(bounds=(0, 10))\n    m.a = pyo.Constraint(expr=m.x + m.y >= 12)\n    m.b = pyo.Constraint(expr=m.x <= 3)\n    m.c = pyo.Constraint(expr=m.y <= 4)\n    m.d = pyo.Constraint(expr=m.x - m.y <= 5)\n    print(deletion_filter(m))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\n# Pyomo logs every set it builds and the whole solver log; keep its own logger to warnings.\nlogging.getLogger(\"pyomo\").setLevel(logging.WARNING)\n\nimport pyomo.environ as pyo\n\nfrom iis import deletion_filter\n\n\ndef shifts(wage_cap, late_cap):\n    \"\"\"Drivers on early and late shifts.\"\"\"\n    m = pyo.ConcreteModel()\n    m.early = pyo.Var(bounds=(0, 6))\n    m.late = pyo.Var(bounds=(0, 6))\n    m.need = pyo.Constraint(expr=m.early + m.late >= 11)\n    m.late_cap = pyo.Constraint(expr=m.late <= late_cap)\n    m.wages = pyo.Constraint(expr=2 * m.early + 3 * m.late <= wage_cap)\n    m.balance = pyo.Constraint(expr=m.late - m.early <= 2)\n    m.cost = pyo.Objective(expr=2 * m.early + 3 * m.late)\n    return m\n\n\nprint(\"rows kept, wages <= 40, late <= 3:\", deletion_filter(shifts(40, 3)))\nprint(\"rows kept, wages <= 20, late <= 6:\", deletion_filter(shifts(20, 6)))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport pyomo.environ as pyo\nfrom pyomo.contrib.solver.common.factory import SolverFactory\nfrom pyomo.contrib.solver.common.results import TerminationCondition\n\n\ndef feasible(model: pyo.ConcreteModel) -> bool:\n    \"\"\"Whether the model's active rows and the variables' bounds have a common point.\"\"\"\n    results = SolverFactory(\"highs\").solve(model, raise_exception_on_nonoptimal_result=False,\n                                           load_solutions=False)\n    return results.termination_condition != TerminationCondition.provenInfeasible\n\n\ndef deletion_filter(model: pyo.ConcreteModel) -> list[str]:\n    \"\"\"Names of the rows of one irreducible infeasible subsystem of an infeasible model (bounds kept).\"\"\"\n    # TODO: deactivate the objective; take each active row in turn: drop it, and put it back only\n    #       if the model without it is feasible. The rows left active are the subsystem.\n    return []\n\n\nif __name__ == \"__main__\":\n    m = pyo.ConcreteModel()\n    m.x = pyo.Var(bounds=(0, 10))\n    m.y = pyo.Var(bounds=(0, 10))\n    m.a = pyo.Constraint(expr=m.x + m.y >= 12)\n    m.b = pyo.Constraint(expr=m.x <= 3)\n    m.c = pyo.Constraint(expr=m.y <= 4)\n    m.d = pyo.Constraint(expr=m.x - m.y <= 5)\n    print(deletion_filter(m))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\n# Pyomo logs every set it builds and the whole solver log; keep its own logger to warnings.\nlogging.getLogger(\"pyomo\").setLevel(logging.WARNING)\n\nimport pyomo.environ as pyo\n\nfrom iis import deletion_filter\n\n\ndef shifts(wage_cap, late_cap):\n    \"\"\"Drivers on early and late shifts.\"\"\"\n    m = pyo.ConcreteModel()\n    m.early = pyo.Var(bounds=(0, 6))\n    m.late = pyo.Var(bounds=(0, 6))\n    m.need = pyo.Constraint(expr=m.early + m.late >= 11)\n    m.late_cap = pyo.Constraint(expr=m.late <= late_cap)\n    m.wages = pyo.Constraint(expr=2 * m.early + 3 * m.late <= wage_cap)\n    m.balance = pyo.Constraint(expr=m.late - m.early <= 2)\n    m.cost = pyo.Objective(expr=2 * m.early + 3 * m.late)\n    return m\n\n\nprint(\"rows kept, wages <= 40, late <= 3:\", deletion_filter(shifts(40, 3)))\nprint(\"rows kept, wages <= 20, late <= 6:\", deletion_filter(shifts(20, 6)))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "4b78da74015a6af0aaca877627efe911c7509c9539a347c789519d803650d4c1",
+  "content_sha256": "a571c43011c11f16f3bb44e0e7e2af0944578774852cd21f509e8b55090f4244",
   "starting_code": "from __future__ import annotations\n\nimport pyomo.environ as pyo\nfrom pyomo.contrib.solver.common.factory import SolverFactory\nfrom pyomo.contrib.solver.common.results import TerminationCondition\n\n\ndef feasible(model: pyo.ConcreteModel) -> bool:\n    \"\"\"Whether the model's active rows and the variables' bounds have a common point.\"\"\"\n    results = SolverFactory(\"highs\").solve(model, raise_exception_on_nonoptimal_result=False,\n                                           load_solutions=False)\n    return results.termination_condition != TerminationCondition.provenInfeasible\n\n\ndef deletion_filter(model: pyo.ConcreteModel) -> list[str]:\n    \"\"\"Names of the rows of one irreducible infeasible subsystem of an infeasible model (bounds kept).\"\"\"\n    # TODO: deactivate the objective; take each active row in turn: drop it, and put it back only\n    #       if the model without it is feasible. The rows left active are the subsystem.\n    return []\n\n\nif __name__ == \"__main__\":\n    m = pyo.ConcreteModel()\n    m.x = pyo.Var(bounds=(0, 10))\n    m.y = pyo.Var(bounds=(0, 10))\n    m.a = pyo.Constraint(expr=m.x + m.y >= 12)\n    m.b = pyo.Constraint(expr=m.x <= 3)\n    m.c = pyo.Constraint(expr=m.y <= 4)\n    m.d = pyo.Constraint(expr=m.x - m.y <= 5)\n    print(deletion_filter(m))\n",
   "exercise": {
     "main_path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-04/practice-2/iis.py",
     "test_path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-04/practice-2/test_iis.py",
     "run_command": [
       "python3",
-      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-04/practice-2/iis.py"
+      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-04/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -130,6 +148,10 @@
     },
     "concepts": [
       "finding a conflicting set of rows with any solver"
-    ]
+    ],
+    "files": [
+      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-04/practice-2/try_it.py"
+    ],
+    "try_file": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-04/practice-2/try_it.py"
   }
 }

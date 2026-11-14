@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Name the reason a solve was refused",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport re\n\nCODE_NAMES = {3: \"INVALID_ARGUMENT\", 9: \"FAILED_PRECONDITION\", 12: \"UNIMPLEMENTED\", 13: \"INTERNAL\"}\nSUFFIX = re.compile(r\"^(?P<message>.*) \\(was C\\+\\+ (?P<code>[A-Z_]+)\\)$\", re.S)\n\n\ndef refusal(error: BaseException) -> tuple[str, str]:\n    \"\"\"(status code name, message) of a refused solve, whichever way OR-Tools raised it.\"\"\"\n    hidden = error.__context__\n    if hidden is not None and hasattr(hidden, \"code\") and hasattr(hidden, \"message\"):\n        return CODE_NAMES.get(hidden.code, \"UNKNOWN\"), hidden.message\n    match = SUFFIX.match(str(error))\n    if match:\n        return match[\"code\"], match[\"message\"]\n    return \"UNKNOWN\", str(error)\n\n\nif __name__ == \"__main__\":\n    print(refusal(ValueError(\"threads not supported (was C++ INVALID_ARGUMENT)\")))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom refusal import refusal\n\nS = mathopt.SolverType\n\n# Two cold stores, one yes/no each.\nmodel = mathopt.Model(name=\"stores\")\na, b = model.add_binary_variable(name=\"store_a\"), model.add_binary_variable(name=\"store_b\")\nmodel.add_linear_constraint(a + b >= 1, name=\"cover\")\nmodel.minimize(5 * a + 2 * b)\n\n\ndef caught(call):\n    try:\n        call()\n    except Exception as error:\n        return error\n    return RuntimeError(\"the solve was accepted\")\n\n\nprint(\"HiGHS with threads=2:\", refusal(caught(lambda: mathopt.solve(model, S.HIGHS, params=mathopt.SolveParameters(threads=2)))))\nprint(\"PDLP on binaries:\", refusal(caught(lambda: mathopt.solve(model, S.PDLP))))\nprint(\"a text with a suffix:\", refusal(ValueError(\"seed out of range (was C++ FAILED_PRECONDITION)\")))\nprint(\"a plain text:\", refusal(ValueError(\"license expired\")))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport re\n\nCODE_NAMES = {3: \"INVALID_ARGUMENT\", 9: \"FAILED_PRECONDITION\", 12: \"UNIMPLEMENTED\", 13: \"INTERNAL\"}\n\n\ndef refusal(error: BaseException) -> tuple[str, str]:\n    \"\"\"(status code name, message) of a refused solve, whichever way OR-Tools raised it.\"\"\"\n    # TODO: the hidden status first, then the '(was C++ ...)' suffix, then UNKNOWN.\n    return \"\", \"\"\n\n\nif __name__ == \"__main__\":\n    print(refusal(ValueError(\"threads not supported (was C++ INVALID_ARGUMENT)\")))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom refusal import refusal\n\nS = mathopt.SolverType\n\n# Two cold stores, one yes/no each.\nmodel = mathopt.Model(name=\"stores\")\na, b = model.add_binary_variable(name=\"store_a\"), model.add_binary_variable(name=\"store_b\")\nmodel.add_linear_constraint(a + b >= 1, name=\"cover\")\nmodel.minimize(5 * a + 2 * b)\n\n\ndef caught(call):\n    try:\n        call()\n    except Exception as error:\n        return error\n    return RuntimeError(\"the solve was accepted\")\n\n\nprint(\"HiGHS with threads=2:\", refusal(caught(lambda: mathopt.solve(model, S.HIGHS, params=mathopt.SolveParameters(threads=2)))))\nprint(\"PDLP on binaries:\", refusal(caught(lambda: mathopt.solve(model, S.PDLP))))\nprint(\"a text with a suffix:\", refusal(ValueError(\"seed out of range (was C++ FAILED_PRECONDITION)\")))\nprint(\"a plain text:\", refusal(ValueError(\"license expired\")))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "bd0e622aee9ebc43722a95d3ca5d87d421407ac63bcc00e77d2f2ab6530276d9",
+  "content_sha256": "3b5a41e435f28ebc2c31a3847943cfc97e18d0467cc73ae79ac4d058711d71d2",
   "starting_code": "from __future__ import annotations\n\nimport re\n\nCODE_NAMES = {3: \"INVALID_ARGUMENT\", 9: \"FAILED_PRECONDITION\", 12: \"UNIMPLEMENTED\", 13: \"INTERNAL\"}\n\n\ndef refusal(error: BaseException) -> tuple[str, str]:\n    \"\"\"(status code name, message) of a refused solve, whichever way OR-Tools raised it.\"\"\"\n    # TODO: the hidden status first, then the '(was C++ ...)' suffix, then UNKNOWN.\n    return \"\", \"\"\n\n\nif __name__ == \"__main__\":\n    print(refusal(ValueError(\"threads not supported (was C++ INVALID_ARGUMENT)\")))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-04/practice-2/refusal.py",
     "test_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-04/practice-2/test_refusal.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-04/practice-2/refusal.py"
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-04/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -140,6 +158,10 @@
     },
     "concepts": [
       "in OR-Tools 9.15 a refusal arrives as an AttributeError whose __context__ carries the status code and message"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-04/practice-2/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-04/practice-2/try_it.py"
   }
 }

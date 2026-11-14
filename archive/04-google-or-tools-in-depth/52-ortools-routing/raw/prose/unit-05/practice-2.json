@@ -9,7 +9,7 @@
   "unit": 5,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Start from yesterday's routes",
   "blocks": [
     {
@@ -51,6 +51,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp, routing_enums_pb2\n\n\ndef replan(routing, yesterday: list[list[int]], params):\n    \"\"\"Search from yesterday's routes when they still fit, from scratch when they do not.\n    Returns (yesterday's cost today, or None when the routes no longer fit; today's solution).\"\"\"\n    routing.CloseModelWithParameters(params)\n    initial = routing.ReadAssignmentFromRoutes(yesterday, True)\n    if initial is None:\n        return None, routing.SolveWithParameters(params)\n    return initial.ObjectiveValue(), routing.SolveFromAssignmentWithParameters(initial, params)\n\n\ndef build(distance: list[list[int]], demands: list[int], capacities: list[int]):\n    \"\"\"Given: routes from the depot (node 0) priced by distance, with a load limit per vehicle.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(distance), len(capacities), 0)\n    routing = pywrapcp.RoutingModel(manager)\n    arc = routing.RegisterTransitCallback(\n        lambda i, j: distance[manager.IndexToNode(i)][manager.IndexToNode(j)])\n    routing.SetArcCostEvaluatorOfAllVehicles(arc)\n    load = routing.RegisterUnaryTransitCallback(lambda i: demands[manager.IndexToNode(i)])\n    routing.AddDimensionWithVehicleCapacity(load, 0, capacities, True, \"Load\")\n    return manager, routing\n\n\ndef parameters():\n    \"\"\"Given: a fixed strategy, guided local search, and 50 solutions.\"\"\"\n    params = pywrapcp.DefaultRoutingSearchParameters()\n    params.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC\n    params.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH\n    params.solution_limit = 50\n    return params\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 4, 6], [4, 0, 3], [6, 3, 0]], [0, 1, 1], [2])\n    start, solution = replan(routing, [[2, 1]], parameters())\n    print(start, solution.ObjectiveValue() if solution else None)\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom warm import build, parameters, replan\n\n# A print shop's two vans and five offices.\ndistance = [\n    [0, 5, 8, 6, 9, 7],\n    [5, 0, 4, 9, 6, 10],\n    [8, 4, 0, 7, 3, 9],\n    [6, 9, 7, 0, 8, 2],\n    [9, 6, 3, 8, 0, 7],\n    [7, 10, 9, 2, 7, 0],\n]\nboxes = [0, 2, 3, 4, 2, 3]\n\nfor vans, yesterday in (([8, 8], [[1, 3, 4], [2, 5]]), ([6, 8], [[1, 3, 4], [2, 5]])):\n    manager, routing = build(distance, boxes, vans)\n    start, solution = replan(routing, yesterday, parameters())\n    print(f\"vans {vans}, yesterday {yesterday}: yesterday's cost {start},\"\n          f\" today's cost {None if solution is None else solution.ObjectiveValue()}\")\n"
         }
       ]
     },
@@ -63,6 +72,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp, routing_enums_pb2\n\n\ndef replan(routing, yesterday: list[list[int]], params):\n    \"\"\"Search from yesterday's routes when they still fit, from scratch when they do not.\n    Returns (yesterday's cost today, or None when the routes no longer fit; today's solution).\"\"\"\n    # TODO\n    return None, None\n\n\ndef build(distance: list[list[int]], demands: list[int], capacities: list[int]):\n    \"\"\"Given: routes from the depot (node 0) priced by distance, with a load limit per vehicle.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(distance), len(capacities), 0)\n    routing = pywrapcp.RoutingModel(manager)\n    arc = routing.RegisterTransitCallback(\n        lambda i, j: distance[manager.IndexToNode(i)][manager.IndexToNode(j)])\n    routing.SetArcCostEvaluatorOfAllVehicles(arc)\n    load = routing.RegisterUnaryTransitCallback(lambda i: demands[manager.IndexToNode(i)])\n    routing.AddDimensionWithVehicleCapacity(load, 0, capacities, True, \"Load\")\n    return manager, routing\n\n\ndef parameters():\n    \"\"\"Given: a fixed strategy, guided local search, and 50 solutions.\"\"\"\n    params = pywrapcp.DefaultRoutingSearchParameters()\n    params.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC\n    params.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH\n    params.solution_limit = 50\n    return params\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 4, 6], [4, 0, 3], [6, 3, 0]], [0, 1, 1], [2])\n    start, solution = replan(routing, [[2, 1]], parameters())\n    print(start, solution.ObjectiveValue() if solution else None)\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom warm import build, parameters, replan\n\n# A print shop's two vans and five offices.\ndistance = [\n    [0, 5, 8, 6, 9, 7],\n    [5, 0, 4, 9, 6, 10],\n    [8, 4, 0, 7, 3, 9],\n    [6, 9, 7, 0, 8, 2],\n    [9, 6, 3, 8, 0, 7],\n    [7, 10, 9, 2, 7, 0],\n]\nboxes = [0, 2, 3, 4, 2, 3]\n\nfor vans, yesterday in (([8, 8], [[1, 3, 4], [2, 5]]), ([6, 8], [[1, 3, 4], [2, 5]])):\n    manager, routing = build(distance, boxes, vans)\n    start, solution = replan(routing, yesterday, parameters())\n    print(f\"vans {vans}, yesterday {yesterday}: yesterday's cost {start},\"\n          f\" today's cost {None if solution is None else solution.ObjectiveValue()}\")\n"
     }
   ],
   "video": null,
@@ -70,8 +88,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -81,14 +99,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "89a942bae48c72896416b7316f34ebaa4d467c9c80ec6e687c2793325736732c",
+  "content_sha256": "65374b808f384701cbcb8fe6cbe72ca672dc9ae3c7974743d62fc9adeee6dd55",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp, routing_enums_pb2\n\n\ndef replan(routing, yesterday: list[list[int]], params):\n    \"\"\"Search from yesterday's routes when they still fit, from scratch when they do not.\n    Returns (yesterday's cost today, or None when the routes no longer fit; today's solution).\"\"\"\n    # TODO\n    return None, None\n\n\ndef build(distance: list[list[int]], demands: list[int], capacities: list[int]):\n    \"\"\"Given: routes from the depot (node 0) priced by distance, with a load limit per vehicle.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(distance), len(capacities), 0)\n    routing = pywrapcp.RoutingModel(manager)\n    arc = routing.RegisterTransitCallback(\n        lambda i, j: distance[manager.IndexToNode(i)][manager.IndexToNode(j)])\n    routing.SetArcCostEvaluatorOfAllVehicles(arc)\n    load = routing.RegisterUnaryTransitCallback(lambda i: demands[manager.IndexToNode(i)])\n    routing.AddDimensionWithVehicleCapacity(load, 0, capacities, True, \"Load\")\n    return manager, routing\n\n\ndef parameters():\n    \"\"\"Given: a fixed strategy, guided local search, and 50 solutions.\"\"\"\n    params = pywrapcp.DefaultRoutingSearchParameters()\n    params.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC\n    params.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH\n    params.solution_limit = 50\n    return params\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 4, 6], [4, 0, 3], [6, 3, 0]], [0, 1, 1], [2])\n    start, solution = replan(routing, [[2, 1]], parameters())\n    print(start, solution.ObjectiveValue() if solution else None)\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-05/practice-2/warm.py",
     "test_path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-05/practice-2/test_warm.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-05/practice-2/warm.py"
+      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-05/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -129,6 +147,10 @@
     },
     "concepts": [
       "a search can start from given routes after the model is closed with the same parameters, with a fallback when they no longer fit"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-05/practice-2/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-05/practice-2/try_it.py"
   }
 }

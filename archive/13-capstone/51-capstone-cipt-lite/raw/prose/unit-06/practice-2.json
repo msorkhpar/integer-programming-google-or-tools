@@ -9,7 +9,7 @@
   "unit": 6,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A planning job API with its states in SQLite",
   "blocks": [
     {
@@ -68,6 +68,15 @@
           "type": "code",
           "lang": "python",
           "text": "\"\"\"Milestone 6: the planning job API, with every job's state and result in a local SQLite file.\n\n`create_app(solve, db_path)` builds the app. `solve(budget)` is the planning run (milestone 2's model\nbehind it in the service); it takes {year: $k} overrides and returns a JSON-ready result dict with a\n\"status\". Jobs run on one worker thread; their state survives a restart because it is in the file.\nThe practice portfolio behind the solves is invented for a fictional utility.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nimport sqlite3\nimport threading\nimport uuid\nfrom concurrent.futures import ThreadPoolExecutor\n\nfrom fastapi import FastAPI, HTTPException, Response\nfrom pydantic import BaseModel, ConfigDict, Field\n\nFINISHED = (\"optimal\", \"infeasible\", \"failed\")\n\n\nclass PlanRequest(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\")\n    budget: dict[int, int] = Field(default_factory=dict)\n\n\nclass Jobs:\n    \"\"\"The job table in a SQLite file, one connection shared under a lock.\"\"\"\n\n    def __init__(self, path: str):\n        self.db = sqlite3.connect(path, check_same_thread=False, autocommit=True)\n        self.lock = threading.Lock()\n        self.db.execute(\"CREATE TABLE IF NOT EXISTS job (id TEXT PRIMARY KEY, request TEXT NOT NULL, \"\n                        \"state TEXT NOT NULL, result TEXT) STRICT\")\n\n    def add(self, job_id: str, request: str) -> None:\n        with self.lock:\n            self.db.execute(\"INSERT INTO job (id, request, state) VALUES (?, ?, 'queued')\", (job_id, request))\n\n    def finish(self, job_id: str, state: str, result: dict | None = None) -> None:\n        with self.lock:\n            self.db.execute(\"UPDATE job SET state = ?, result = ? WHERE id = ?\",\n                            (state, None if result is None else json.dumps(result), job_id))\n\n    def row(self, job_id: str) -> tuple[str, str | None] | None:\n        with self.lock:\n            return self.db.execute(\"SELECT state, result FROM job WHERE id = ?\", (job_id,)).fetchone()\n\n\ndef create_app(solve, db_path: str) -> FastAPI:\n    app = FastAPI(title=\"Practice planning jobs\")\n    jobs = Jobs(db_path)\n    pool = ThreadPoolExecutor(max_workers=1)\n\n    def work(job_id: str, request: PlanRequest) -> None:\n        jobs.finish(job_id, \"running\")\n        try:\n            result = solve(dict(request.budget))\n            jobs.finish(job_id, result[\"status\"], result)\n        except Exception as error:                     # one job fails; the service goes on\n            jobs.finish(job_id, \"failed\", {\"status\": \"failed\", \"error\": f\"{type(error).__name__}: {error}\"})\n\n    @app.post(\"/jobs\", status_code=202)\n    def submit(request: PlanRequest, response: Response) -> dict:\n        job_id = uuid.uuid4().hex\n        jobs.add(job_id, request.model_dump_json())\n        pool.submit(work, job_id, request)\n        response.headers[\"Location\"] = f\"/jobs/{job_id}\"\n        return {\"job_id\": job_id, \"poll\": f\"/jobs/{job_id}\", \"result\": f\"/jobs/{job_id}/result\"}\n\n    @app.get(\"/jobs/{job_id}\")\n    def poll(job_id: str) -> dict:\n        row = jobs.row(job_id)\n        if row is None:\n            raise HTTPException(status_code=404, detail=f\"no job {job_id}\")\n        return {\"job_id\": job_id, \"state\": row[0], \"finished\": row[0] in FINISHED}\n\n    @app.get(\"/jobs/{job_id}/result\")\n    def fetch(job_id: str) -> dict:\n        state = poll(job_id)[\"state\"]\n        if state not in FINISHED:\n            raise HTTPException(status_code=409, detail=f\"job {job_id} is {state}\")\n        return json.loads(jobs.row(job_id)[1])\n\n    return app\n\n\nif __name__ == \"__main__\":\n    print(sorted(r.path for r in create_app(lambda budget: {\"status\": \"optimal\"}, \":memory:\").routes))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nimport os\nimport tempfile\nimport time\nimport warnings\n\nwarnings.filterwarnings(\"ignore\", message=\"Using `httpx`\")\nfrom fastapi.testclient import TestClient  # noqa: E402\n\nfrom job_api import create_app  # noqa: E402\n\n\ndef solve(budget):\n    \"\"\"A stand-in planning run: no plan below $200k in any year.\"\"\"\n    if budget.get(2032) == 7:\n        raise ValueError(\"no prices for 2032\")\n    if any(amount < 200 for amount in budget.values()):\n        return {\"status\": \"infeasible\", \"npv\": None}\n    return {\"status\": \"optimal\", \"npv\": 410, \"starts\": {\"P2\": 2031}}\n\n\ndef finish(client, job_id):\n    for _ in range(300):\n        body = client.get(f\"/jobs/{job_id}\").json()\n        if body.get(\"finished\"):\n            break\n        time.sleep(0.01)\n    return client.get(f\"/jobs/{job_id}/result\").json()\n\n\nwith tempfile.TemporaryDirectory() as folder:\n    client = TestClient(create_app(solve, os.path.join(folder, \"jobs.sqlite\")))\n    for budget in ({\"2031\": 250}, {\"2031\": 150}, {\"2032\": 7}):\n        reply = client.post(\"/jobs\", json={\"budget\": budget})\n        print(f\"budget {budget}:\", reply.status_code, finish(client, reply.json().get(\"job_id\")))\n    print(\"poll of job 'unknown':\", client.get(\"/jobs/unknown\").status_code)\n"
         }
       ]
     },
@@ -80,6 +89,15 @@
       "type": "code",
       "lang": "python",
       "text": "\"\"\"Milestone 6: the planning job API, with every job's state and result in a local SQLite file.\n\n`create_app(solve, db_path)` builds the app. `solve(budget)` is the planning run (milestone 2's model\nbehind it in the service); it takes {year: $k} overrides and returns a JSON-ready result dict with a\n\"status\". Jobs run on one worker thread; their state survives a restart because it is in the file.\nThe practice portfolio behind the solves is invented for a fictional utility.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nimport sqlite3\nimport threading\nimport uuid\nfrom concurrent.futures import ThreadPoolExecutor\n\nfrom fastapi import FastAPI, HTTPException, Response\nfrom pydantic import BaseModel, ConfigDict, Field\n\nFINISHED = (\"optimal\", \"infeasible\", \"failed\")\n\n\nclass PlanRequest(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\")\n    budget: dict[int, int] = Field(default_factory=dict)\n\n\ndef create_app(solve, db_path: str) -> FastAPI:\n    app = FastAPI(title=\"Practice planning jobs\")\n    # TODO: the job table in the SQLite file at db_path, one worker thread, and the three endpoints.\n    return app\n\n\nif __name__ == \"__main__\":\n    print(sorted(r.path for r in create_app(lambda budget: {\"status\": \"optimal\"}, \":memory:\").routes))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nimport os\nimport tempfile\nimport time\nimport warnings\n\nwarnings.filterwarnings(\"ignore\", message=\"Using `httpx`\")\nfrom fastapi.testclient import TestClient  # noqa: E402\n\nfrom job_api import create_app  # noqa: E402\n\n\ndef solve(budget):\n    \"\"\"A stand-in planning run: no plan below $200k in any year.\"\"\"\n    if budget.get(2032) == 7:\n        raise ValueError(\"no prices for 2032\")\n    if any(amount < 200 for amount in budget.values()):\n        return {\"status\": \"infeasible\", \"npv\": None}\n    return {\"status\": \"optimal\", \"npv\": 410, \"starts\": {\"P2\": 2031}}\n\n\ndef finish(client, job_id):\n    for _ in range(300):\n        body = client.get(f\"/jobs/{job_id}\").json()\n        if body.get(\"finished\"):\n            break\n        time.sleep(0.01)\n    return client.get(f\"/jobs/{job_id}/result\").json()\n\n\nwith tempfile.TemporaryDirectory() as folder:\n    client = TestClient(create_app(solve, os.path.join(folder, \"jobs.sqlite\")))\n    for budget in ({\"2031\": 250}, {\"2031\": 150}, {\"2032\": 7}):\n        reply = client.post(\"/jobs\", json={\"budget\": budget})\n        print(f\"budget {budget}:\", reply.status_code, finish(client, reply.json().get(\"job_id\")))\n    print(\"poll of job 'unknown':\", client.get(\"/jobs/unknown\").status_code)\n"
     }
   ],
   "video": null,
@@ -87,8 +105,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 1,
     "lists": 0,
     "images": 0,
@@ -98,14 +116,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "7e6b64a69744008952275927326a9d5f9d04701d98626b3e22ce8a9a471d5fd9",
+  "content_sha256": "b8c6db38a9f107ecf2bbc9a23b80e25f71b6d674e292d0c2beb331e6595e4afa",
   "starting_code": "\"\"\"Milestone 6: the planning job API, with every job's state and result in a local SQLite file.\n\n`create_app(solve, db_path)` builds the app. `solve(budget)` is the planning run (milestone 2's model\nbehind it in the service); it takes {year: $k} overrides and returns a JSON-ready result dict with a\n\"status\". Jobs run on one worker thread; their state survives a restart because it is in the file.\nThe practice portfolio behind the solves is invented for a fictional utility.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nimport sqlite3\nimport threading\nimport uuid\nfrom concurrent.futures import ThreadPoolExecutor\n\nfrom fastapi import FastAPI, HTTPException, Response\nfrom pydantic import BaseModel, ConfigDict, Field\n\nFINISHED = (\"optimal\", \"infeasible\", \"failed\")\n\n\nclass PlanRequest(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\")\n    budget: dict[int, int] = Field(default_factory=dict)\n\n\ndef create_app(solve, db_path: str) -> FastAPI:\n    app = FastAPI(title=\"Practice planning jobs\")\n    # TODO: the job table in the SQLite file at db_path, one worker thread, and the three endpoints.\n    return app\n\n\nif __name__ == \"__main__\":\n    print(sorted(r.path for r in create_app(lambda budget: {\"status\": \"optimal\"}, \":memory:\").routes))\n",
   "exercise": {
     "main_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-2/job_api.py",
     "test_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-2/test_job_api.py",
     "run_command": [
       "python3",
-      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-2/job_api.py"
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -161,6 +179,10 @@
     },
     "concepts": [
       "submit, poll and fetch, with every job's state and result in a SQLite file that outlives the process"
-    ]
+    ],
+    "files": [
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-2/try_it.py"
+    ],
+    "try_file": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-2/try_it.py"
   }
 }

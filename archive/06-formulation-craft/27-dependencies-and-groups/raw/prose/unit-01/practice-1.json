@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A school district's deadlines",
   "blocks": [
     {
@@ -65,6 +65,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n\n\ndef add_mandates(model: mathopt.Model, x: dict, projects: list[Project], required: dict[str, int],\n                 access: dict[str, list[str]], targets: dict[str, tuple[int, int]]) -> None:\n    \"\"\"Each project at most once; required work by its deadline; each school's access target.\"\"\"\n    starts = {p.pid: p.starts for p in projects}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    for pid, deadline in required.items():\n        in_time = [x[pid, t] for t in starts[pid] if t <= deadline]\n        model.add_linear_constraint(sum(in_time) == 1, name=f\"required_{pid}\")\n    for school, (k, year) in targets.items():\n        done_by = [x[pid, t] for pid in access.get(school, []) for t in starts[pid] if t <= year]\n        model.add_linear_constraint(sum(done_by) >= k, name=f\"access_{school}\")\n\n\ndef build(projects: list[Project], required: dict[str, int], access: dict[str, list[str]],\n          targets: dict[str, tuple[int, int]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"school-works\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    add_mandates(model, x, projects, required, access, targets)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"ROOF\", (2027, 2028)), Project(\"RAMP\", (2028, 2029))]\n    model, x = build(projects, {\"ROOF\": 2027}, {\"Oak\": [\"RAMP\"]}, {\"Oak\": (1, 2029)})\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom schools import Project, build\n\nworks = [\n    Project(\"ROOF-E\", (2031, 2032, 2033)),\n    Project(\"RAMP-E\", (2031, 2032, 2033)),\n    Project(\"LIFT-E\", (2032, 2033)),\n    Project(\"PAINT-W\", (2031, 2032)),\n]\nrequired = {\"ROOF-E\": 2032}\naccess = {\"East\": [\"RAMP-E\", \"LIFT-E\"]}\ntargets = {\"East\": (1, 2032)}\n\ndef solve_ok(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(plan):\n    model, x = build(works, required, access, targets)\n    for key, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0\n    return solve_ok(model)\n\n\nprint(\"ROOF-E 2031, RAMP-E 2032:\", allowed({(\"ROOF-E\", 2031), (\"RAMP-E\", 2032)}))\nprint(\"ROOF-E 2033, RAMP-E 2032:\", allowed({(\"ROOF-E\", 2033), (\"RAMP-E\", 2032)}))\nprint(\"ROOF-E 2032, LIFT-E 2033:\", allowed({(\"ROOF-E\", 2032), (\"LIFT-E\", 2033)}))\nprint(\"RAMP-E 2031 only:\", allowed({(\"RAMP-E\", 2031)}))\nprint(\"ROOF-E 2031+2032, LIFT-E 2032:\", allowed({(\"ROOF-E\", 2031), (\"ROOF-E\", 2032), (\"LIFT-E\", 2032)}))\n"
         }
       ]
     },
@@ -77,6 +86,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n\n\ndef add_mandates(model: mathopt.Model, x: dict, projects: list[Project], required: dict[str, int],\n                 access: dict[str, list[str]], targets: dict[str, tuple[int, int]]) -> None:\n    \"\"\"Each project at most once; required work by its deadline; each school's access target.\"\"\"\n    # TODO: the once rows, the required rows and the access rows.\n    return None\n\n\ndef build(projects: list[Project], required: dict[str, int], access: dict[str, list[str]],\n          targets: dict[str, tuple[int, int]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"school-works\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    add_mandates(model, x, projects, required, access, targets)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"ROOF\", (2027, 2028)), Project(\"RAMP\", (2028, 2029))]\n    model, x = build(projects, {\"ROOF\": 2027}, {\"Oak\": [\"RAMP\"]}, {\"Oak\": (1, 2029)})\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom schools import Project, build\n\nworks = [\n    Project(\"ROOF-E\", (2031, 2032, 2033)),\n    Project(\"RAMP-E\", (2031, 2032, 2033)),\n    Project(\"LIFT-E\", (2032, 2033)),\n    Project(\"PAINT-W\", (2031, 2032)),\n]\nrequired = {\"ROOF-E\": 2032}\naccess = {\"East\": [\"RAMP-E\", \"LIFT-E\"]}\ntargets = {\"East\": (1, 2032)}\n\ndef solve_ok(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(plan):\n    model, x = build(works, required, access, targets)\n    for key, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0\n    return solve_ok(model)\n\n\nprint(\"ROOF-E 2031, RAMP-E 2032:\", allowed({(\"ROOF-E\", 2031), (\"RAMP-E\", 2032)}))\nprint(\"ROOF-E 2033, RAMP-E 2032:\", allowed({(\"ROOF-E\", 2033), (\"RAMP-E\", 2032)}))\nprint(\"ROOF-E 2032, LIFT-E 2033:\", allowed({(\"ROOF-E\", 2032), (\"LIFT-E\", 2033)}))\nprint(\"RAMP-E 2031 only:\", allowed({(\"RAMP-E\", 2031)}))\nprint(\"ROOF-E 2031+2032, LIFT-E 2032:\", allowed({(\"ROOF-E\", 2031), (\"ROOF-E\", 2032), (\"LIFT-E\", 2032)}))\n"
     }
   ],
   "video": null,
@@ -84,8 +102,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -95,14 +113,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "2ad09f579e03d1e5e76277e3384d4116ae8c6a6118e70ca4f57c9b3beb1fa990",
+  "content_sha256": "4dd71d575dca373657c1cfc4ebeb953b9b8ec9afbe3b4e9ace95b17227146cfe",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n\n\ndef add_mandates(model: mathopt.Model, x: dict, projects: list[Project], required: dict[str, int],\n                 access: dict[str, list[str]], targets: dict[str, tuple[int, int]]) -> None:\n    \"\"\"Each project at most once; required work by its deadline; each school's access target.\"\"\"\n    # TODO: the once rows, the required rows and the access rows.\n    return None\n\n\ndef build(projects: list[Project], required: dict[str, int], access: dict[str, list[str]],\n          targets: dict[str, tuple[int, int]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"school-works\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    add_mandates(model, x, projects, required, access, targets)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"ROOF\", (2027, 2028)), Project(\"RAMP\", (2028, 2029))]\n    model, x = build(projects, {\"ROOF\": 2027}, {\"Oak\": [\"RAMP\"]}, {\"Oak\": (1, 2029)})\n    print(model.get_num_linear_constraints(), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-1/schools.py",
     "test_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-1/test_schools.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-1/schools.py"
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -154,6 +172,10 @@
     "concepts": [
       "a must-do is an equality row on whether the project starts, while a discretionary project gets an at-most-once row",
       "a mandate on a group is one counting row over the members' start sums"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-1/try_it.py"
   }
 }

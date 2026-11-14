@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 3,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Copy, override three projects, re-optimize, diff",
   "blocks": [
     {
@@ -51,6 +51,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: tuple[int, ...]          # spend in each year of work, start year first ($k)\n    value: dict[int, int]          # value if started in that year ($k); its keys are the window\n\n\n@dataclass\nclass Plan:\n    plan_id: str\n    budget: dict[int, int]                                            # year -> $k\n    overrides: dict[str, tuple] = field(default_factory=dict)         # pid -> (\"start_in\", y) or (\"out\", None)\n    parent_id: str | None = None\n\n\ndef solve(plan: Plan, projects: list[Project]) -> dict[str, int]:\n    \"\"\"The best plan as {pid: start year}: at most one start per project, spend within each year's budget.\"\"\"\n    model = mathopt.Model()\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.value}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.value) <= 1)\n        kind, year = plan.overrides.get(p.pid, (None, None))\n        for t in p.value:\n            if kind == \"out\" or (kind == \"start_in\" and t != year):\n                x[p.pid, t].upper_bound = 0\n            if kind == \"start_in\" and t == year:\n                x[p.pid, t].lower_bound = 1\n    for y, cap in plan.budget.items():\n        spend = mathopt.LinearExpression()\n        for p in projects:\n            for t in p.value:\n                if 0 <= y - t < len(p.cost):\n                    spend += p.cost[y - t] * x[p.pid, t]\n        model.add_linear_constraint(spend <= cap)\n    model.maximize(sum(p.value[t] * x[p.pid, t] for p in projects for t in p.value))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    assert result.termination.reason == mathopt.TerminationReason.OPTIMAL, result.termination\n    return {pid: t for (pid, t), v in x.items() if result.variable_values(v) > 0.5}\n\n\ndef copy_with_overrides(base: Plan, plan_id: str, overrides: dict[str, tuple]) -> Plan:\n    \"\"\"A copy of base, sharing no container with it, with the given overrides added on top.\"\"\"\n    return Plan(plan_id, dict(base.budget), {**base.overrides, **overrides}, parent_id=base.plan_id)\n\n\ndef diff(a: dict[str, int], b: dict[str, int]) -> dict[str, list]:\n    \"\"\"From plan a to plan b: projects selected, deferred, and shifted as (pid, a's year, b's year).\"\"\"\n    return {\"selected\": sorted(set(b) - set(a)),\n            \"deferred\": sorted(set(a) - set(b)),\n            \"shifted\": [(p, a[p], b[p]) for p in sorted(set(a) & set(b)) if a[p] != b[p]]}\n\n\ndef what_if(base: Plan, plan_id: str, overrides: dict[str, tuple], projects: list[Project]) -> tuple[Plan, dict]:\n    \"\"\"Copy base, override, re-optimize both, and diff the two plans.\"\"\"\n    trial = copy_with_overrides(base, plan_id, overrides)\n    return trial, diff(solve(base, projects), solve(trial, projects))\n\n\nif __name__ == \"__main__\":\n    mains = [Project(\"M-1\", (300,), {2027: 500, 2028: 450}), Project(\"M-2\", (400,), {2027: 420, 2028: 400})]\n    base = Plan(\"W-1\", {2027: 400, 2028: 400})\n    print(what_if(base, \"W-2\", {\"M-1\": (\"start_in\", 2028)}, mains))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom whatif import Plan, Project, diff, solve, what_if\n\npipes = [\n    Project(\"P-1\", (200, 100), {2030: 600, 2031: 550}),\n    Project(\"P-2\", (150,), {2030: 300, 2031: 280, 2032: 260}),\n    Project(\"P-3\", (250,), {2031: 420, 2032: 390}),\n    Project(\"P-4\", (100,), {2032: 140}),\n]\nbase = Plan(\"S-1\", {2030: 400, 2031: 400, 2032: 400})\n\nprint(\"base plan:\", solve(base, pipes))\ntrial, changes = what_if(base, \"S-2\", {\"P-1\": (\"start_in\", 2031), \"P-4\": (\"out\", None)}, pipes)\nprint(\"trial S-2 overrides:\", trial.overrides, \"parent\", trial.parent_id)\nprint(\"trial plan:\", solve(trial, pipes))\nprint(\"diff base to trial:\", changes)\nprint(\"diff of two small plans:\", diff({\"P-2\": 2030}, {\"P-2\": 2032, \"P-3\": 2031}))\n"
         }
       ]
     },
@@ -63,6 +72,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: tuple[int, ...]          # spend in each year of work, start year first ($k)\n    value: dict[int, int]          # value if started in that year ($k); its keys are the window\n\n\n@dataclass\nclass Plan:\n    plan_id: str\n    budget: dict[int, int]                                            # year -> $k\n    overrides: dict[str, tuple] = field(default_factory=dict)         # pid -> (\"start_in\", y) or (\"out\", None)\n    parent_id: str | None = None\n\n\ndef solve(plan: Plan, projects: list[Project]) -> dict[str, int]:\n    \"\"\"The best plan as {pid: start year}: at most one start per project, spend within each year's budget.\"\"\"\n    model = mathopt.Model()\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.value}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.value) <= 1)\n        kind, year = plan.overrides.get(p.pid, (None, None))\n        for t in p.value:\n            if kind == \"out\" or (kind == \"start_in\" and t != year):\n                x[p.pid, t].upper_bound = 0\n            if kind == \"start_in\" and t == year:\n                x[p.pid, t].lower_bound = 1\n    for y, cap in plan.budget.items():\n        spend = mathopt.LinearExpression()\n        for p in projects:\n            for t in p.value:\n                if 0 <= y - t < len(p.cost):\n                    spend += p.cost[y - t] * x[p.pid, t]\n        model.add_linear_constraint(spend <= cap)\n    model.maximize(sum(p.value[t] * x[p.pid, t] for p in projects for t in p.value))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    assert result.termination.reason == mathopt.TerminationReason.OPTIMAL, result.termination\n    return {pid: t for (pid, t), v in x.items() if result.variable_values(v) > 0.5}\n\n\ndef copy_with_overrides(base: Plan, plan_id: str, overrides: dict[str, tuple]) -> Plan:\n    \"\"\"A copy of base, sharing no container with it, with the given overrides added on top.\"\"\"\n    # TODO\n    return base\n\n\ndef diff(a: dict[str, int], b: dict[str, int]) -> dict[str, list]:\n    \"\"\"From plan a to plan b: projects selected, deferred, and shifted as (pid, a's year, b's year).\"\"\"\n    # TODO\n    return {\"selected\": [], \"deferred\": [], \"shifted\": []}\n\n\ndef what_if(base: Plan, plan_id: str, overrides: dict[str, tuple], projects: list[Project]) -> tuple[Plan, dict]:\n    \"\"\"Copy base, override, re-optimize both, and diff the two plans.\"\"\"\n    trial = copy_with_overrides(base, plan_id, overrides)\n    return trial, diff(solve(base, projects), solve(trial, projects))\n\n\nif __name__ == \"__main__\":\n    mains = [Project(\"M-1\", (300,), {2027: 500, 2028: 450}), Project(\"M-2\", (400,), {2027: 420, 2028: 400})]\n    base = Plan(\"W-1\", {2027: 400, 2028: 400})\n    print(what_if(base, \"W-2\", {\"M-1\": (\"start_in\", 2028)}, mains))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom whatif import Plan, Project, diff, solve, what_if\n\npipes = [\n    Project(\"P-1\", (200, 100), {2030: 600, 2031: 550}),\n    Project(\"P-2\", (150,), {2030: 300, 2031: 280, 2032: 260}),\n    Project(\"P-3\", (250,), {2031: 420, 2032: 390}),\n    Project(\"P-4\", (100,), {2032: 140}),\n]\nbase = Plan(\"S-1\", {2030: 400, 2031: 400, 2032: 400})\n\nprint(\"base plan:\", solve(base, pipes))\ntrial, changes = what_if(base, \"S-2\", {\"P-1\": (\"start_in\", 2031), \"P-4\": (\"out\", None)}, pipes)\nprint(\"trial S-2 overrides:\", trial.overrides, \"parent\", trial.parent_id)\nprint(\"trial plan:\", solve(trial, pipes))\nprint(\"diff base to trial:\", changes)\nprint(\"diff of two small plans:\", diff({\"P-2\": 2030}, {\"P-2\": 2032, \"P-3\": 2031}))\n"
     }
   ],
   "video": null,
@@ -70,8 +88,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -81,14 +99,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "9713239910729959f83f2d1143b8d607a242cbbab12c65c60c4a1d40d869b5b7",
+  "content_sha256": "9c76a650b02e3639de07cc264fbe951f2a63e3a85a233ad68bccbdc0b184a5ef",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: tuple[int, ...]          # spend in each year of work, start year first ($k)\n    value: dict[int, int]          # value if started in that year ($k); its keys are the window\n\n\n@dataclass\nclass Plan:\n    plan_id: str\n    budget: dict[int, int]                                            # year -> $k\n    overrides: dict[str, tuple] = field(default_factory=dict)         # pid -> (\"start_in\", y) or (\"out\", None)\n    parent_id: str | None = None\n\n\ndef solve(plan: Plan, projects: list[Project]) -> dict[str, int]:\n    \"\"\"The best plan as {pid: start year}: at most one start per project, spend within each year's budget.\"\"\"\n    model = mathopt.Model()\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.value}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.value) <= 1)\n        kind, year = plan.overrides.get(p.pid, (None, None))\n        for t in p.value:\n            if kind == \"out\" or (kind == \"start_in\" and t != year):\n                x[p.pid, t].upper_bound = 0\n            if kind == \"start_in\" and t == year:\n                x[p.pid, t].lower_bound = 1\n    for y, cap in plan.budget.items():\n        spend = mathopt.LinearExpression()\n        for p in projects:\n            for t in p.value:\n                if 0 <= y - t < len(p.cost):\n                    spend += p.cost[y - t] * x[p.pid, t]\n        model.add_linear_constraint(spend <= cap)\n    model.maximize(sum(p.value[t] * x[p.pid, t] for p in projects for t in p.value))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    assert result.termination.reason == mathopt.TerminationReason.OPTIMAL, result.termination\n    return {pid: t for (pid, t), v in x.items() if result.variable_values(v) > 0.5}\n\n\ndef copy_with_overrides(base: Plan, plan_id: str, overrides: dict[str, tuple]) -> Plan:\n    \"\"\"A copy of base, sharing no container with it, with the given overrides added on top.\"\"\"\n    # TODO\n    return base\n\n\ndef diff(a: dict[str, int], b: dict[str, int]) -> dict[str, list]:\n    \"\"\"From plan a to plan b: projects selected, deferred, and shifted as (pid, a's year, b's year).\"\"\"\n    # TODO\n    return {\"selected\": [], \"deferred\": [], \"shifted\": []}\n\n\ndef what_if(base: Plan, plan_id: str, overrides: dict[str, tuple], projects: list[Project]) -> tuple[Plan, dict]:\n    \"\"\"Copy base, override, re-optimize both, and diff the two plans.\"\"\"\n    trial = copy_with_overrides(base, plan_id, overrides)\n    return trial, diff(solve(base, projects), solve(trial, projects))\n\n\nif __name__ == \"__main__\":\n    mains = [Project(\"M-1\", (300,), {2027: 500, 2028: 450}), Project(\"M-2\", (400,), {2027: 420, 2028: 400})]\n    base = Plan(\"W-1\", {2027: 400, 2028: 400})\n    print(what_if(base, \"W-2\", {\"M-1\": (\"start_in\", 2028)}, mains))\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-02/practice-3/whatif.py",
     "test_path": "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-02/practice-3/test_whatif.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-02/practice-3/whatif.py"
+      "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-02/practice-3/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -139,6 +157,10 @@
     },
     "concepts": [
       "a what-if copies the plan, adds overrides as bounds, re-optimizes both and diffs them project by project"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-02/practice-3/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-02/practice-3/try_it.py"
   }
 }

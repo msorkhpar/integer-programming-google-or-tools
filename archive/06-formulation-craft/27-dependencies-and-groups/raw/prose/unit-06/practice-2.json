@@ -9,7 +9,7 @@
   "unit": 6,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Reviewing a rail depot's overrides",
   "blocks": [
     {
@@ -66,6 +66,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom collections import defaultdict\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Job:\n    years: tuple[int, ...]\n    crew: str\n    follows: str | None = None\n    lag: int = 0\n\n\ndef conflicts(jobs: dict[str, Job], overrides: list[tuple]) -> set[str]:\n    \"\"\"The jobs that take part in a conflict between the overrides and the model's rules.\"\"\"\n    locked = {o[1]: o[2] for o in overrides if o[0] == \"lock\"}\n    banned = {o[1] for o in overrides if o[0] == \"ban\"}\n    found = {j for j, year in locked.items() if year not in jobs[j].years} | (set(locked) & banned)\n    by_crew_year = defaultdict(list)\n    for j, year in locked.items():\n        by_crew_year[jobs[j].crew, year].append(j)\n    found |= {j for group in by_crew_year.values() if len(group) > 1 for j in group}\n    found |= {j for j, year in locked.items()\n              if jobs[j].follows in locked and year < locked[jobs[j].follows] + jobs[j].lag}\n    return found\n\n\nif __name__ == \"__main__\":\n    jobs = {\"BRAKES\": Job((2027, 2028), \"north\"), \"WHEELS\": Job((2028,), \"north\")}\n    print(conflicts(jobs, [(\"lock\", \"BRAKES\", 2028), (\"lock\", \"WHEELS\", 2028)]))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom review import Job, conflicts\n\n# A tram depot's jobs: start years, crew, optional predecessor and lag.\njobs = {\n    \"WHEELS\": Job((2027, 2028), \"red\"),\n    \"BRAKES\": Job((2027, 2028, 2029), \"red\"),\n    \"SEATS\": Job((2028, 2029), \"blue\"),\n    \"LIGHTS\": Job((2029, 2030, 2031), \"green\", follows=\"SEATS\", lag=1),\n}\n\nprint(\"WHEELS 2027, SEATS 2028, LIGHTS 2029:\",\n      conflicts(jobs, [(\"lock\", \"WHEELS\", 2027), (\"lock\", \"SEATS\", 2028), (\"lock\", \"LIGHTS\", 2029)]))\nprint(\"SEATS 2027:\", conflicts(jobs, [(\"lock\", \"SEATS\", 2027)]))\nprint(\"WHEELS 2028, BRAKES 2028:\", conflicts(jobs, [(\"lock\", \"WHEELS\", 2028), (\"lock\", \"BRAKES\", 2028)]))\nprint(\"BRAKES 2029 and ban BRAKES:\", conflicts(jobs, [(\"lock\", \"BRAKES\", 2029), (\"ban\", \"BRAKES\")]))\nprint(\"SEATS 2029, LIGHTS 2029:\", conflicts(jobs, [(\"lock\", \"SEATS\", 2029), (\"lock\", \"LIGHTS\", 2029)]))\n"
         }
       ]
     },
@@ -78,6 +87,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Job:\n    years: tuple[int, ...]\n    crew: str\n    follows: str | None = None\n    lag: int = 0\n\n\ndef conflicts(jobs: dict[str, Job], overrides: list[tuple]) -> set[str]:\n    \"\"\"The jobs that take part in a conflict between the overrides and the model's rules.\"\"\"\n    # TODO: compare the locks and bans with each other and with the jobs' rules.\n    return {\"?\"}\n\n\nif __name__ == \"__main__\":\n    jobs = {\"BRAKES\": Job((2027, 2028), \"north\"), \"WHEELS\": Job((2028,), \"north\")}\n    print(conflicts(jobs, [(\"lock\", \"BRAKES\", 2028), (\"lock\", \"WHEELS\", 2028)]))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom review import Job, conflicts\n\n# A tram depot's jobs: start years, crew, optional predecessor and lag.\njobs = {\n    \"WHEELS\": Job((2027, 2028), \"red\"),\n    \"BRAKES\": Job((2027, 2028, 2029), \"red\"),\n    \"SEATS\": Job((2028, 2029), \"blue\"),\n    \"LIGHTS\": Job((2029, 2030, 2031), \"green\", follows=\"SEATS\", lag=1),\n}\n\nprint(\"WHEELS 2027, SEATS 2028, LIGHTS 2029:\",\n      conflicts(jobs, [(\"lock\", \"WHEELS\", 2027), (\"lock\", \"SEATS\", 2028), (\"lock\", \"LIGHTS\", 2029)]))\nprint(\"SEATS 2027:\", conflicts(jobs, [(\"lock\", \"SEATS\", 2027)]))\nprint(\"WHEELS 2028, BRAKES 2028:\", conflicts(jobs, [(\"lock\", \"WHEELS\", 2028), (\"lock\", \"BRAKES\", 2028)]))\nprint(\"BRAKES 2029 and ban BRAKES:\", conflicts(jobs, [(\"lock\", \"BRAKES\", 2029), (\"ban\", \"BRAKES\")]))\nprint(\"SEATS 2029, LIGHTS 2029:\", conflicts(jobs, [(\"lock\", \"SEATS\", 2029), (\"lock\", \"LIGHTS\", 2029)]))\n"
     }
   ],
   "video": null,
@@ -85,8 +103,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 0,
     "lists": 2,
     "images": 0,
@@ -96,14 +114,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "ee714be92698a779c872c69ef4939a31a40267ac7d0c86aa5ed740a61a9c43e1",
+  "content_sha256": "8c89e65f4ddc21b3362e0d9d7eb1b0b4aed03c6dba8e84809c8edc3f32706619",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Job:\n    years: tuple[int, ...]\n    crew: str\n    follows: str | None = None\n    lag: int = 0\n\n\ndef conflicts(jobs: dict[str, Job], overrides: list[tuple]) -> set[str]:\n    \"\"\"The jobs that take part in a conflict between the overrides and the model's rules.\"\"\"\n    # TODO: compare the locks and bans with each other and with the jobs' rules.\n    return {\"?\"}\n\n\nif __name__ == \"__main__\":\n    jobs = {\"BRAKES\": Job((2027, 2028), \"north\"), \"WHEELS\": Job((2028,), \"north\")}\n    print(conflicts(jobs, [(\"lock\", \"BRAKES\", 2028), (\"lock\", \"WHEELS\", 2028)]))\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-06/practice-2/review.py",
     "test_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-06/practice-2/test_review.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-06/practice-2/review.py"
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-06/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -164,6 +182,10 @@
     },
     "concepts": [
       "overrides are checked against windows and rules before the solve"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-06/practice-2/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-06/practice-2/try_it.py"
   }
 }

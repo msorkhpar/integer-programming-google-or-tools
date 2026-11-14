@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A schema for a bus-replacement snapshot",
   "blocks": [
     {
@@ -60,6 +60,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom pydantic import BaseModel, Field, model_validator\n\n\nclass Bus(BaseModel):\n    bus_id: str\n    depot: str\n    cost: int = Field(gt=0)                     # $k\n    earliest: int\n    latest: int\n\n    @model_validator(mode=\"after\")\n    def window_holds_a_year(self):\n        if self.earliest > self.latest:\n            raise ValueError(f\"{self.bus_id}: no year between {self.earliest} and {self.latest}\")\n        return self\n\n\nclass YearBudget(BaseModel):\n    year: int\n    amount: int = Field(ge=0)                   # $k\n\n\nclass FleetSnapshot(BaseModel):\n    schema_version: int\n    horizon: list[int]\n    depots: list[str]\n    budgets: list[YearBudget]\n    buses: list[Bus]\n\n    @model_validator(mode=\"after\")\n    def references_resolve(self):\n        problems: list[str] = []\n        seen = set()\n        for bus in self.buses:\n            if bus.bus_id in seen:\n                problems.append(f\"bus {bus.bus_id} is listed twice\")\n            seen.add(bus.bus_id)\n            if bus.depot not in self.depots:\n                problems.append(f\"bus {bus.bus_id} is at unlisted depot {bus.depot}\")\n        for year in self.horizon:\n            rows = [b for b in self.budgets if b.year == year]\n            if len(rows) != 1:\n                problems.append(f\"year {year} has {len(rows)} budget rows\")\n        if problems:\n            raise ValueError(\"; \".join(problems))\n        return self\n\nif __name__ == \"__main__\":\n    text = ('{\"schema_version\": 3, \"horizon\": [2027], \"depots\": [\"North\"], '\n            '\"budgets\": [{\"year\": 2027, \"amount\": 900}], '\n            '\"buses\": [{\"bus_id\": \"B101\", \"depot\": \"North\", \"cost\": 450, \"earliest\": 2027, \"latest\": 2027}]}')\n    print(FleetSnapshot.model_validate_json(text))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport copy\nimport json\n\nfrom pydantic import ValidationError\n\nfrom fleet import FleetSnapshot\n\nclean = {\n    \"schema_version\": 3, \"horizon\": [2031, 2032], \"depots\": [\"East\", \"Quay\"],\n    \"budgets\": [{\"year\": 2031, \"amount\": 700}, {\"year\": 2032, \"amount\": 800}],\n    \"buses\": [{\"bus_id\": \"E1\", \"depot\": \"East\", \"cost\": 390, \"earliest\": 2031, \"latest\": 2032},\n              {\"bus_id\": \"Q1\", \"depot\": \"Quay\", \"cost\": 410, \"earliest\": 2032, \"latest\": 2032}],\n}\n\n\ndef check(doc):\n    try:\n        FleetSnapshot.model_validate_json(json.dumps(doc))\n        return \"accepted\"\n    except ValidationError as error:\n        return \"; \".join(e[\"msg\"] for e in error.errors())\n\n\nbad = copy.deepcopy(clean)\nbad[\"buses\"][1][\"depot\"] = \"Hill\"\nbad[\"budgets\"].pop()\nprint(\"clean snapshot:\", check(clean))\nprint(\"Q1 at Hill, no 2032 budget:\", check(bad))\ntwice = copy.deepcopy(clean)\ntwice[\"buses\"].append(dict(twice[\"buses\"][0]))\nprint(\"E1 listed twice:\", check(twice))\n"
         }
       ]
     },
@@ -72,6 +81,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom pydantic import BaseModel, model_validator\n\n\nclass Bus(BaseModel):\n    # TODO: a bound on cost.\n    bus_id: str\n    depot: str\n    cost: int                                   # $k\n    earliest: int\n    latest: int\n\n    @model_validator(mode=\"after\")\n    def window_holds_a_year(self):\n        # TODO: refuse a window that holds no year.\n        return self\n\n\nclass YearBudget(BaseModel):\n    # TODO: a budget cannot be negative.\n    year: int\n    amount: int                                 # $k\n\n\nclass FleetSnapshot(BaseModel):\n    schema_version: int\n    horizon: list[int]\n    depots: list[str]\n    budgets: list[YearBudget]\n    buses: list[Bus]\n\n    @model_validator(mode=\"after\")\n    def references_resolve(self):\n        problems: list[str] = []\n        # TODO: every rule across records; add one message per problem found.\n        if problems:\n            raise ValueError(\"; \".join(problems))\n        return self\n\n\nif __name__ == \"__main__\":\n    text = ('{\"schema_version\": 3, \"horizon\": [2027], \"depots\": [\"North\"], '\n            '\"budgets\": [{\"year\": 2027, \"amount\": 900}], '\n            '\"buses\": [{\"bus_id\": \"B101\", \"depot\": \"North\", \"cost\": 450, \"earliest\": 2027, \"latest\": 2027}]}')\n    print(FleetSnapshot.model_validate_json(text))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport copy\nimport json\n\nfrom pydantic import ValidationError\n\nfrom fleet import FleetSnapshot\n\nclean = {\n    \"schema_version\": 3, \"horizon\": [2031, 2032], \"depots\": [\"East\", \"Quay\"],\n    \"budgets\": [{\"year\": 2031, \"amount\": 700}, {\"year\": 2032, \"amount\": 800}],\n    \"buses\": [{\"bus_id\": \"E1\", \"depot\": \"East\", \"cost\": 390, \"earliest\": 2031, \"latest\": 2032},\n              {\"bus_id\": \"Q1\", \"depot\": \"Quay\", \"cost\": 410, \"earliest\": 2032, \"latest\": 2032}],\n}\n\n\ndef check(doc):\n    try:\n        FleetSnapshot.model_validate_json(json.dumps(doc))\n        return \"accepted\"\n    except ValidationError as error:\n        return \"; \".join(e[\"msg\"] for e in error.errors())\n\n\nbad = copy.deepcopy(clean)\nbad[\"buses\"][1][\"depot\"] = \"Hill\"\nbad[\"budgets\"].pop()\nprint(\"clean snapshot:\", check(clean))\nprint(\"Q1 at Hill, no 2032 budget:\", check(bad))\ntwice = copy.deepcopy(clean)\ntwice[\"buses\"].append(dict(twice[\"buses\"][0]))\nprint(\"E1 listed twice:\", check(twice))\n"
     }
   ],
   "video": null,
@@ -79,8 +97,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 6,
-    "code": 2,
+    "paras": 7,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -90,14 +108,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "c284bb71a5094dc5be12e58a62084472ba2fa9fee28db3ab4685f06912d99a27",
+  "content_sha256": "22d21883c298cba74186a575c7248694e5f96f79f2d4d323615694235f0cdad1",
   "starting_code": "from __future__ import annotations\n\nfrom pydantic import BaseModel, model_validator\n\n\nclass Bus(BaseModel):\n    # TODO: a bound on cost.\n    bus_id: str\n    depot: str\n    cost: int                                   # $k\n    earliest: int\n    latest: int\n\n    @model_validator(mode=\"after\")\n    def window_holds_a_year(self):\n        # TODO: refuse a window that holds no year.\n        return self\n\n\nclass YearBudget(BaseModel):\n    # TODO: a budget cannot be negative.\n    year: int\n    amount: int                                 # $k\n\n\nclass FleetSnapshot(BaseModel):\n    schema_version: int\n    horizon: list[int]\n    depots: list[str]\n    budgets: list[YearBudget]\n    buses: list[Bus]\n\n    @model_validator(mode=\"after\")\n    def references_resolve(self):\n        problems: list[str] = []\n        # TODO: every rule across records; add one message per problem found.\n        if problems:\n            raise ValueError(\"; \".join(problems))\n        return self\n\n\nif __name__ == \"__main__\":\n    text = ('{\"schema_version\": 3, \"horizon\": [2027], \"depots\": [\"North\"], '\n            '\"budgets\": [{\"year\": 2027, \"amount\": 900}], '\n            '\"buses\": [{\"bus_id\": \"B101\", \"depot\": \"North\", \"cost\": 450, \"earliest\": 2027, \"latest\": 2027}]}')\n    print(FleetSnapshot.model_validate_json(text))\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-1/fleet.py",
     "test_path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-1/test_fleet.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-1/fleet.py"
+      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -163,6 +181,10 @@
     },
     "concepts": [
       "a snapshot schema nests its records, bounds each parameter, and checks every reference across records in one model validator that reports every problem at once"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-1/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-01/practice-1/try_it.py"
   }
 }

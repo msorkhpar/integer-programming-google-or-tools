@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A workshop's late repairs",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef least_penalty(jobs: dict[str, tuple[int, int, int, int]], mechanics: int,\n                  horizon: int) -> tuple[int, dict[str, int]]:\n    \"\"\"(least total penalty, start day of each job) under a pool of mechanics.\"\"\"\n    model = cp_model.CpModel()\n    start, late, intervals, demands = {}, {}, [], []\n    for name, (days, need, due, _) in jobs.items():\n        start[name] = model.new_int_var(0, horizon - days, f\"start_{name}\")\n        intervals.append(model.new_fixed_size_interval_var(start[name], days, f\"repair_{name}\"))\n        demands.append(need)\n        late[name] = model.new_int_var(0, horizon, f\"late_{name}\")\n        model.add_max_equality(late[name], [0, start[name] + days - due])\n    model.add_cumulative(intervals, demands, mechanics)\n    model.minimize(sum(penalty * late[name] for name, (_, _, _, penalty) in jobs.items()))\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.solve(model)\n    return round(solver.objective_value), {name: solver.value(start[name]) for name in jobs}\n\n\nif __name__ == \"__main__\":\n    print(least_penalty({\"lathe\": (3, 1, 3, 5), \"press\": (2, 2, 4, 9), \"pump\": (2, 1, 2, 1)}, 2, 20))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom workshop import least_penalty\n\n# Each repair is (days, mechanics, due day, penalty per late day).\njobs = {\"gearbox\": (3, 2, 3, 4), \"brakes\": (2, 1, 2, 7), \"clutch\": (2, 1, 5, 2)}\nfor mechanics in (3, 2):\n    total, start = least_penalty(jobs, mechanics, 15)\n    print(f\"{mechanics} mechanics: penalty {total}, starts {start}\")\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef least_penalty(jobs: dict[str, tuple[int, int, int, int]], mechanics: int,\n                  horizon: int) -> tuple[int, dict[str, int]]:\n    \"\"\"(least total penalty, start day of each job) under a pool of mechanics.\"\"\"\n    # TODO: an interval per job, the cumulative over the mechanics, a lateness variable per job set\n    # to max(0, end - due), and minimize the weighted lateness. Placeholders below.\n    return -1, {name: -1 for name in jobs}\n\n\nif __name__ == \"__main__\":\n    print(least_penalty({\"lathe\": (3, 1, 3, 5), \"press\": (2, 2, 4, 9), \"pump\": (2, 1, 2, 1)}, 2, 20))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom workshop import least_penalty\n\n# Each repair is (days, mechanics, due day, penalty per late day).\njobs = {\"gearbox\": (3, 2, 3, 4), \"brakes\": (2, 1, 2, 7), \"clutch\": (2, 1, 5, 2)}\nfor mechanics in (3, 2):\n    total, start = least_penalty(jobs, mechanics, 15)\n    print(f\"{mechanics} mechanics: penalty {total}, starts {start}\")\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "59e335d54934286537f39f84553e2ce11a415357c372f1c62909026353f15865",
+  "content_sha256": "a4637a7de838a6db59994a4102773f4c60d12d5c18e03caa555b7231a433b9ef",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef least_penalty(jobs: dict[str, tuple[int, int, int, int]], mechanics: int,\n                  horizon: int) -> tuple[int, dict[str, int]]:\n    \"\"\"(least total penalty, start day of each job) under a pool of mechanics.\"\"\"\n    # TODO: an interval per job, the cumulative over the mechanics, a lateness variable per job set\n    # to max(0, end - due), and minimize the weighted lateness. Placeholders below.\n    return -1, {name: -1 for name in jobs}\n\n\nif __name__ == \"__main__\":\n    print(least_penalty({\"lathe\": (3, 1, 3, 5), \"press\": (2, 2, 4, 9), \"pump\": (2, 1, 2, 1)}, 2, 20))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-04/practice-1/workshop.py",
     "test_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-04/practice-1/test_workshop.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-04/practice-1/workshop.py"
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-04/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -136,6 +154,10 @@
     "concepts": [
       "due weeks that cannot all be met make the model infeasible as rules, so they belong in the objective",
       "lateness is the max of 0 and end minus due, weighted by the risk of each week late"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-04/practice-1/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-04/practice-1/try_it.py"
   }
 }

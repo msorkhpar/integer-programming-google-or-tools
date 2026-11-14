@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Bytes that repeat for a routing run",
   "blocks": [
     {
@@ -51,6 +51,15 @@
           "type": "code",
           "lang": "python",
           "text": "\"\"\"Canonical bytes for a delivery-routing run record, so a determinism test can compare runs.\n\nA record is a dict:\n    \"started_at\": when the run started (text; a clock)\n    \"stats\":      {\"wall_seconds\": float (a clock), \"nodes\": int}\n    \"cost\":       float, the routes' total cost\n    \"routes\":     {truck: [stops, in the order visited]}\n    \"unserved\":   a set of stops no truck visits\n\"\"\"\n\nfrom __future__ import annotations\n\nimport json\n\nCLOCK = {(\"started_at\",), (\"stats\", \"wall_seconds\")}\n\n\ndef _clean(value, path=()):\n    if isinstance(value, dict):\n        return {k: _clean(v, path + (k,)) for k, v in value.items() if path + (k,) not in CLOCK}\n    if isinstance(value, (set, frozenset)):\n        return sorted(_clean(v, path) for v in value)\n    if isinstance(value, list):\n        return [_clean(v, path) for v in value]\n    if isinstance(value, float):\n        rounded = round(value, 6)\n        return 0.0 if rounded == 0 else rounded\n    return value\n\n\ndef canonical(record: dict) -> bytes:\n    \"\"\"The record without its clocks, floats to 6 decimals, keys sorted, as compact JSON bytes.\"\"\"\n    return json.dumps(_clean(record), sort_keys=True, separators=(\",\", \":\")).encode(\"utf-8\")\n\n\ndef repeats(records: list[dict]) -> bool:\n    \"\"\"True when every record has the same canonical bytes.\"\"\"\n    return len({canonical(r) for r in records}) <= 1\n\n\nif __name__ == \"__main__\":\n    run = {\"started_at\": \"09:00\", \"stats\": {\"wall_seconds\": 1.2, \"nodes\": 40}, \"cost\": 512.0,\n           \"routes\": {\"t1\": [\"a\", \"b\"]}, \"unserved\": {\"c\"}}\n    print(canonical(run))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom run_bytes import canonical, repeats\n\nfirst = {\"started_at\": \"2031-05-04T07:15:00\", \"stats\": {\"wall_seconds\": 0.8, \"nodes\": 22}, \"cost\": 377.25,\n         \"routes\": {\"van1\": [\"hub\", \"p\", \"q\", \"hub\"], \"van2\": [\"hub\", \"r\", \"hub\"]}, \"unserved\": {\"s\", \"t\"}}\nagain = {**first, \"started_at\": \"2031-05-05T18:40:00\", \"stats\": {\"wall_seconds\": 2.1, \"nodes\": 22},\n         \"cost\": 377.2500000003, \"unserved\": {\"t\", \"s\"}}\nswapped = {**first, \"routes\": {**first[\"routes\"], \"van1\": [\"hub\", \"q\", \"p\", \"hub\"]}}\n\nprint(\"canonical bytes:\", canonical(first))\nprint(\"next day, other clock:\", repeats([first, again]))\nprint(\"van1 visits q before p:\", repeats([first, swapped]))\n"
         }
       ]
     },
@@ -63,6 +72,15 @@
       "type": "code",
       "lang": "python",
       "text": "\"\"\"Canonical bytes for a delivery-routing run record, so a determinism test can compare runs.\n\nA record is a dict:\n    \"started_at\": when the run started (text; a clock)\n    \"stats\":      {\"wall_seconds\": float (a clock), \"nodes\": int}\n    \"cost\":       float, the routes' total cost\n    \"routes\":     {truck: [stops, in the order visited]}\n    \"unserved\":   a set of stops no truck visits\n\"\"\"\n\nfrom __future__ import annotations\n\nimport json\n\n\ndef canonical(record: dict) -> bytes:\n    \"\"\"The record without its clocks, floats to 6 decimals, keys sorted, as compact JSON bytes.\"\"\"\n    # TODO\n    return b\"\"\n\n\ndef repeats(records: list[dict]) -> bool:\n    \"\"\"True when every record has the same canonical bytes.\"\"\"\n    # TODO\n    return True\n\n\nif __name__ == \"__main__\":\n    run = {\"started_at\": \"09:00\", \"stats\": {\"wall_seconds\": 1.2, \"nodes\": 40}, \"cost\": 512.0,\n           \"routes\": {\"t1\": [\"a\", \"b\"]}, \"unserved\": {\"c\"}}\n    print(canonical(run))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom run_bytes import canonical, repeats\n\nfirst = {\"started_at\": \"2031-05-04T07:15:00\", \"stats\": {\"wall_seconds\": 0.8, \"nodes\": 22}, \"cost\": 377.25,\n         \"routes\": {\"van1\": [\"hub\", \"p\", \"q\", \"hub\"], \"van2\": [\"hub\", \"r\", \"hub\"]}, \"unserved\": {\"s\", \"t\"}}\nagain = {**first, \"started_at\": \"2031-05-05T18:40:00\", \"stats\": {\"wall_seconds\": 2.1, \"nodes\": 22},\n         \"cost\": 377.2500000003, \"unserved\": {\"t\", \"s\"}}\nswapped = {**first, \"routes\": {**first[\"routes\"], \"van1\": [\"hub\", \"q\", \"p\", \"hub\"]}}\n\nprint(\"canonical bytes:\", canonical(first))\nprint(\"next day, other clock:\", repeats([first, again]))\nprint(\"van1 visits q before p:\", repeats([first, swapped]))\n"
     }
   ],
   "video": null,
@@ -70,8 +88,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -81,14 +99,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "e8e9938e8eb22fb3d57526887ab0e084c48b9e7b7d484a6b4c679e3c05cff7fc",
+  "content_sha256": "c7a3dd8ddbe09f0ce3c2fad42ebc07436e648ba9db81a87245d8f4645af1d54f",
   "starting_code": "\"\"\"Canonical bytes for a delivery-routing run record, so a determinism test can compare runs.\n\nA record is a dict:\n    \"started_at\": when the run started (text; a clock)\n    \"stats\":      {\"wall_seconds\": float (a clock), \"nodes\": int}\n    \"cost\":       float, the routes' total cost\n    \"routes\":     {truck: [stops, in the order visited]}\n    \"unserved\":   a set of stops no truck visits\n\"\"\"\n\nfrom __future__ import annotations\n\nimport json\n\n\ndef canonical(record: dict) -> bytes:\n    \"\"\"The record without its clocks, floats to 6 decimals, keys sorted, as compact JSON bytes.\"\"\"\n    # TODO\n    return b\"\"\n\n\ndef repeats(records: list[dict]) -> bool:\n    \"\"\"True when every record has the same canonical bytes.\"\"\"\n    # TODO\n    return True\n\n\nif __name__ == \"__main__\":\n    run = {\"started_at\": \"09:00\", \"stats\": {\"wall_seconds\": 1.2, \"nodes\": 40}, \"cost\": 512.0,\n           \"routes\": {\"t1\": [\"a\", \"b\"]}, \"unserved\": {\"c\"}}\n    print(canonical(run))\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-04/practice-1/run_bytes.py",
     "test_path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-04/practice-1/test_run_bytes.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-04/practice-1/run_bytes.py"
+      "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-04/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -140,6 +158,10 @@
     "concepts": [
       "a determinism comparison must tell real differences from noise, or it can never fail",
       "runs are compared as canonical bytes, with clocks left out and floats rounded"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-04/practice-1/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-04/practice-1/try_it.py"
   }
 }

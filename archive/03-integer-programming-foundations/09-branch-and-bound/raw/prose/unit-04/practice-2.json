@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Search for the best stock plan",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport math\n\n\ndef by_ratio(items: list[tuple[str, int, int]]) -> list[tuple[str, int, int]]:\n    \"\"\"Best value per cost first; ties by name.\"\"\"\n    return sorted(items, key=lambda it: (-it[1] / it[2], it[0]))\n\n\ndef bound(order, budget: float, fixed: dict[str, int]):\n    \"\"\"Dantzig's bound at a node: (value, split or None, names whole in the LP), or None if infeasible.\n\n    `order` is the free items in ratio order.\n    \"\"\"\n    left = budget - sum(c for n, _, c in order if fixed.get(n) == 1)\n    if left < 0:\n        return None\n    value = float(sum(v for n, v, _ in order if fixed.get(n) == 1))\n    taken = [n for n, _, _ in order if fixed.get(n) == 1]\n    for n, v, c in order:\n        if n in fixed:\n            continue\n        if c <= left:\n            left -= c\n            value += v\n            taken.append(n)\n        elif left > 0:\n            return value + v * left / c, n, taken\n        else:\n            break\n    return value, None, taken\n\n\ndef best_plan(items: list[tuple[str, int, int]], budget: int, must: set[str]):\n    \"\"\"(total value, sorted names) of the best plan that stocks every item in `must`; None if impossible.\"\"\"\n    must_cost = sum(c for n, _, c in items if n in must)\n    must_value = sum(v for n, v, _ in items if n in must)\n    if must_cost > budget:\n        return None\n    order = by_ratio([it for it in items if it[0] not in must])\n    best_value, best = -1, []\n    stack: list[dict[str, int]] = [{}]\n    while stack:\n        fixed = stack.pop()\n        node = bound(order, budget - must_cost, fixed)\n        if node is None:\n            continue\n        value, split, taken = node\n        if math.floor(value + 1e-9) <= best_value:\n            continue\n        if split is None:\n            best_value, best = round(value), taken\n            continue\n        stack.append({**fixed, split: 0})\n        stack.append({**fixed, split: 1})\n    return best_value + must_value, sorted(best + list(must))\n\n\nif __name__ == \"__main__\":\n    spares = [(\"T1\", 120, 40), (\"T2\", 100, 50), (\"T3\", 45, 45), (\"T4\", 30, 60), (\"R1\", 10, 25)]\n    print(best_plan(spares, 120, {\"R1\"}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom search import best_plan\n\n# Spare pumps: (name, value, cost); \"R9\" is required by the regulator.\npumps = [(\"P1\", 90, 30), (\"P2\", 80, 40), (\"P3\", 36, 36), (\"P4\", 20, 40), (\"R9\", 8, 20)]\n\nprint(\"plan at budget 100, must R9:\", best_plan(pumps, 100, {\"R9\"}))\nprint(\"plan at budget 100, must nothing:\", best_plan(pumps, 100, set()))\nprint(\"plan at budget 15, must R9:\", best_plan(pumps, 15, {\"R9\"}))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport math\n\n\ndef by_ratio(items: list[tuple[str, int, int]]) -> list[tuple[str, int, int]]:\n    \"\"\"Best value per cost first; ties by name.\"\"\"\n    return sorted(items, key=lambda it: (-it[1] / it[2], it[0]))\n\n\ndef bound(order, budget: float, fixed: dict[str, int]):\n    \"\"\"Dantzig's bound at a node: (value, split or None, names whole in the LP), or None if infeasible.\n\n    `order` is the free items in ratio order.\n    \"\"\"\n    left = budget - sum(c for n, _, c in order if fixed.get(n) == 1)\n    if left < 0:\n        return None\n    value = float(sum(v for n, v, _ in order if fixed.get(n) == 1))\n    taken = [n for n, _, _ in order if fixed.get(n) == 1]\n    for n, v, c in order:\n        if n in fixed:\n            continue\n        if c <= left:\n            left -= c\n            value += v\n            taken.append(n)\n        elif left > 0:\n            return value + v * left / c, n, taken\n        else:\n            break\n    return value, None, taken\n\n\ndef best_plan(items: list[tuple[str, int, int]], budget: int, must: set[str]):\n    \"\"\"(total value, sorted names) of the best plan that stocks every item in `must`; None if impossible.\"\"\"\n    # TODO: pay for the must-stock items first (None if they do not fit), sort the rest once with\n    # by_ratio, then run the depth-first search over a stack of fixings using bound(). Add the\n    # must-stock items back into the value and the names at the end.\n    return -1, []\n\n\nif __name__ == \"__main__\":\n    spares = [(\"T1\", 120, 40), (\"T2\", 100, 50), (\"T3\", 45, 45), (\"T4\", 30, 60), (\"R1\", 10, 25)]\n    print(best_plan(spares, 120, {\"R1\"}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom search import best_plan\n\n# Spare pumps: (name, value, cost); \"R9\" is required by the regulator.\npumps = [(\"P1\", 90, 30), (\"P2\", 80, 40), (\"P3\", 36, 36), (\"P4\", 20, 40), (\"R9\", 8, 20)]\n\nprint(\"plan at budget 100, must R9:\", best_plan(pumps, 100, {\"R9\"}))\nprint(\"plan at budget 100, must nothing:\", best_plan(pumps, 100, set()))\nprint(\"plan at budget 15, must R9:\", best_plan(pumps, 15, {\"R9\"}))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "014061082bf0f728ba391d2d20c48205f7f43829a91f449d230b5cb974e6dff1",
+  "content_sha256": "a14ec18df275dffd4fdf14ca9f3dbdb865212a2a0444fe7c099e46bf33f66bf2",
   "starting_code": "from __future__ import annotations\n\nimport math\n\n\ndef by_ratio(items: list[tuple[str, int, int]]) -> list[tuple[str, int, int]]:\n    \"\"\"Best value per cost first; ties by name.\"\"\"\n    return sorted(items, key=lambda it: (-it[1] / it[2], it[0]))\n\n\ndef bound(order, budget: float, fixed: dict[str, int]):\n    \"\"\"Dantzig's bound at a node: (value, split or None, names whole in the LP), or None if infeasible.\n\n    `order` is the free items in ratio order.\n    \"\"\"\n    left = budget - sum(c for n, _, c in order if fixed.get(n) == 1)\n    if left < 0:\n        return None\n    value = float(sum(v for n, v, _ in order if fixed.get(n) == 1))\n    taken = [n for n, _, _ in order if fixed.get(n) == 1]\n    for n, v, c in order:\n        if n in fixed:\n            continue\n        if c <= left:\n            left -= c\n            value += v\n            taken.append(n)\n        elif left > 0:\n            return value + v * left / c, n, taken\n        else:\n            break\n    return value, None, taken\n\n\ndef best_plan(items: list[tuple[str, int, int]], budget: int, must: set[str]):\n    \"\"\"(total value, sorted names) of the best plan that stocks every item in `must`; None if impossible.\"\"\"\n    # TODO: pay for the must-stock items first (None if they do not fit), sort the rest once with\n    # by_ratio, then run the depth-first search over a stack of fixings using bound(). Add the\n    # must-stock items back into the value and the names at the end.\n    return -1, []\n\n\nif __name__ == \"__main__\":\n    spares = [(\"T1\", 120, 40), (\"T2\", 100, 50), (\"T3\", 45, 45), (\"T4\", 30, 60), (\"R1\", 10, 25)]\n    print(best_plan(spares, 120, {\"R1\"}))\n",
   "exercise": {
     "main_path": "practice/03-integer-programming-foundations/09-branch-and-bound/prose/unit-04/practice-2/search.py",
     "test_path": "practice/03-integer-programming-foundations/09-branch-and-bound/prose/unit-04/practice-2/test_search.py",
     "run_command": [
       "python3",
-      "practice/03-integer-programming-foundations/09-branch-and-bound/prose/unit-04/practice-2/search.py"
+      "practice/03-integer-programming-foundations/09-branch-and-bound/prose/unit-04/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -138,6 +156,10 @@
       "items fixed at 1 are paid first, items fixed at 0 are skipped, and the free items keep their order",
       "the budget-only selection: must-dos paid first, one 0-1 variable per other project, one budget row",
       "the search pops fixings from a stack, prunes three ways, and pushes both children of the split item"
-    ]
+    ],
+    "files": [
+      "practice/03-integer-programming-foundations/09-branch-and-bound/prose/unit-04/practice-2/try_it.py"
+    ],
+    "try_file": "practice/03-integer-programming-foundations/09-branch-and-bound/prose/unit-04/practice-2/try_it.py"
   }
 }

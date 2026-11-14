@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Rent the inspection robot by the week",
   "blocks": [
     {
@@ -65,6 +65,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Pipe:\n    pid: str\n    km: float\n    cost: int        # $k, the inspection's own cost\n\n\ndef add_inspection_rules(model: mathopt.Model, x: dict, pipes: list[Pipe], km_per_week: float,\n                         weekly_rate: int, max_weeks: int, budget: int) -> None:\n    \"\"\"Whole weeks of rental cover the kilometres inspected; costs plus rental stay within the budget.\"\"\"\n    weeks = model.add_variable(lb=0, ub=max_weeks, is_integer=True, name=\"weeks\")\n    model.add_linear_constraint(km_per_week * weeks >= sum(p.km * x[p.pid] for p in pipes), name=\"coverage\")\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in pipes) + weekly_rate * weeks <= budget,\n                                name=\"budget\")\n\n\ndef build(pipes: list[Pipe], km_per_week: float, weekly_rate: int, max_weeks: int,\n          budget: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"pipe-inspection\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in pipes}\n    add_inspection_rules(model, x, pipes, km_per_week, weekly_rate, max_weeks, budget)\n    model.maximize(sum(p.km * x[p.pid] for p in pipes))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    mains = [Pipe(\"M1\", 12.0, 40), Pipe(\"M2\", 25.0, 90)]\n    model, x = build(mains, 30.0, 50, 2, 300)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom inspection import Pipe, build\n\n# Five sewer mains: id, length (km), inspection cost ($k).\nmains = [Pipe(\"M1\", 18.0, 90), Pipe(\"M2\", 10.0, 70), Pipe(\"M3\", 22.0, 50),\n         Pipe(\"M4\", 9.0, 35), Pipe(\"M5\", 4.0, 25)]\n\n\ndef allowed(plan, budget):\n    model, x = build(mains, 25.0, 40, 2, budget)\n    for pid, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if pid in plan else 0.0\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"M1+M2 at budget 250:\", allowed({\"M1\", \"M2\"}, 250))\nprint(\"M1+M2 at budget 220:\", allowed({\"M1\", \"M2\"}, 220))\nprint(\"M1+M3+M5 at budget 1000:\", allowed({\"M1\", \"M3\", \"M5\"}, 1000))\nprint(\"M4 alone at budget 70:\", allowed({\"M4\"}, 70))\nprint(\"no mains at budget 0:\", allowed(set(), 0))\n"
         }
       ]
     },
@@ -77,6 +86,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Pipe:\n    pid: str\n    km: float\n    cost: int        # $k, the inspection's own cost\n\n\ndef add_inspection_rules(model: mathopt.Model, x: dict, pipes: list[Pipe], km_per_week: float,\n                         weekly_rate: int, max_weeks: int, budget: int) -> None:\n    \"\"\"Whole weeks of rental cover the kilometres inspected; costs plus rental stay within the budget.\"\"\"\n    # TODO: the rental variable, the coverage row and the budget row.\n    return None\n\n\ndef build(pipes: list[Pipe], km_per_week: float, weekly_rate: int, max_weeks: int,\n          budget: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"pipe-inspection\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in pipes}\n    add_inspection_rules(model, x, pipes, km_per_week, weekly_rate, max_weeks, budget)\n    model.maximize(sum(p.km * x[p.pid] for p in pipes))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    mains = [Pipe(\"M1\", 12.0, 40), Pipe(\"M2\", 25.0, 90)]\n    model, x = build(mains, 30.0, 50, 2, 300)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom inspection import Pipe, build\n\n# Five sewer mains: id, length (km), inspection cost ($k).\nmains = [Pipe(\"M1\", 18.0, 90), Pipe(\"M2\", 10.0, 70), Pipe(\"M3\", 22.0, 50),\n         Pipe(\"M4\", 9.0, 35), Pipe(\"M5\", 4.0, 25)]\n\n\ndef allowed(plan, budget):\n    model, x = build(mains, 25.0, 40, 2, budget)\n    for pid, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if pid in plan else 0.0\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"M1+M2 at budget 250:\", allowed({\"M1\", \"M2\"}, 250))\nprint(\"M1+M2 at budget 220:\", allowed({\"M1\", \"M2\"}, 220))\nprint(\"M1+M3+M5 at budget 1000:\", allowed({\"M1\", \"M3\", \"M5\"}, 1000))\nprint(\"M4 alone at budget 70:\", allowed({\"M4\"}, 70))\nprint(\"no mains at budget 0:\", allowed(set(), 0))\n"
     }
   ],
   "video": null,
@@ -84,8 +102,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -95,14 +113,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "8fff9de242f8060bfd118c9bde4b22bb51850d3e2fc9f2e285ccf6b2bf768fc3",
+  "content_sha256": "28f2c67ed154be32fd5ea91ecc59e93d3d1fb76784d2ac308f25a26934f37220",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Pipe:\n    pid: str\n    km: float\n    cost: int        # $k, the inspection's own cost\n\n\ndef add_inspection_rules(model: mathopt.Model, x: dict, pipes: list[Pipe], km_per_week: float,\n                         weekly_rate: int, max_weeks: int, budget: int) -> None:\n    \"\"\"Whole weeks of rental cover the kilometres inspected; costs plus rental stay within the budget.\"\"\"\n    # TODO: the rental variable, the coverage row and the budget row.\n    return None\n\n\ndef build(pipes: list[Pipe], km_per_week: float, weekly_rate: int, max_weeks: int,\n          budget: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"pipe-inspection\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in pipes}\n    add_inspection_rules(model, x, pipes, km_per_week, weekly_rate, max_weeks, budget)\n    model.maximize(sum(p.km * x[p.pid] for p in pipes))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    mains = [Pipe(\"M1\", 12.0, 40), Pipe(\"M2\", 25.0, 90)]\n    model, x = build(mains, 30.0, 50, 2, 300)\n    print(len(list(model.linear_constraints())), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-2/inspection.py",
     "test_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-2/test_inspection.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-2/inspection.py"
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -148,6 +166,10 @@
     },
     "concepts": [
       "a number of batches is an integer variable bounded below by the quantity it must cover"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/23-binary-logic/prose/unit-01/practice-2/try_it.py"
   }
 }

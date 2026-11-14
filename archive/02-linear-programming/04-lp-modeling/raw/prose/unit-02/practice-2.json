@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Report how much room each row has left",
   "blocks": [
     {
@@ -76,6 +76,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef room(model: mathopt.Model, result: mathopt.SolveResult) -> dict[str, float]:\n    \"\"\"Each row's room at the solution: slack on a <= row, surplus on a >= row, the nearer side of a range.\"\"\"\n    values = result.variable_values()\n    rooms = {}\n    for row in model.linear_constraints():\n        a = sum(term.coefficient * values[term.variable] for term in row.terms())\n        lo, hi = row.lower_bound, row.upper_bound\n        if math.isfinite(lo) and math.isfinite(hi):\n            rooms[row.name] = min(hi - a, a - lo)\n        elif math.isfinite(hi):\n            rooms[row.name] = hi - a\n        else:\n            rooms[row.name] = a - lo\n    return rooms\n\n\ndef binding(model: mathopt.Model, result: mathopt.SolveResult, tol: float = 1e-6) -> list[str]:\n    \"\"\"Names of the rows with no room left (within tol), in the order the model holds them.\"\"\"\n    return [name for name, r in room(model, result).items() if r <= tol]\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_variable(lb=0, ub=4, name=\"x\")\n    model.add_linear_constraint(x <= 10, name=\"cap\")\n    model.maximize(x)\n    result = mathopt.solve(model, mathopt.SolverType.GLOP)\n    print(room(model, result), binding(model, result))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom report import binding, room\n\n# Two kilns whose output is fixed by their bounds, so the solve returns exactly (30, 15).\nmodel = mathopt.Model(name=\"kilns\")\na = model.add_variable(lb=30, ub=30, name=\"a\")\nb = model.add_variable(lb=15, ub=15, name=\"b\")\nmodel.add_linear_constraint(2 * a + b <= 90, name=\"gas\")\nmodel.add_linear_constraint(a + b >= 40, name=\"order\")\nmodel.add_linear_constraint(lb=5, ub=15, expr=a - b, name=\"spread\")\nmodel.add_linear_constraint(a <= 2 * b, name=\"mix\")\nmodel.maximize(a + b)\nresult = mathopt.solve(model, mathopt.SolverType.GLOP)\n\nfor name, r in room(model, result).items():\n    print(f\"room of {name}:\", round(r, 6))\nprint(\"binding rows:\", binding(model, result))\n"
         }
       ]
     },
@@ -88,6 +97,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef room(model: mathopt.Model, result: mathopt.SolveResult) -> dict[str, float]:\n    \"\"\"Each row's room at the solution: slack on a <= row, surplus on a >= row, the nearer side of a range.\"\"\"\n    # TODO: each row's room from its activity and its stored bounds. For now every row reports 0.\n    return {row.name: 0.0 for row in model.linear_constraints()}\n\n\ndef binding(model: mathopt.Model, result: mathopt.SolveResult, tol: float = 1e-6) -> list[str]:\n    \"\"\"Names of the rows with no room left (within tol), in the order the model holds them.\"\"\"\n    # TODO: the rows whose room is at most tol.\n    return []\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_variable(lb=0, ub=4, name=\"x\")\n    model.add_linear_constraint(x <= 10, name=\"cap\")\n    model.maximize(x)\n    result = mathopt.solve(model, mathopt.SolverType.GLOP)\n    print(room(model, result), binding(model, result))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom report import binding, room\n\n# Two kilns whose output is fixed by their bounds, so the solve returns exactly (30, 15).\nmodel = mathopt.Model(name=\"kilns\")\na = model.add_variable(lb=30, ub=30, name=\"a\")\nb = model.add_variable(lb=15, ub=15, name=\"b\")\nmodel.add_linear_constraint(2 * a + b <= 90, name=\"gas\")\nmodel.add_linear_constraint(a + b >= 40, name=\"order\")\nmodel.add_linear_constraint(lb=5, ub=15, expr=a - b, name=\"spread\")\nmodel.add_linear_constraint(a <= 2 * b, name=\"mix\")\nmodel.maximize(a + b)\nresult = mathopt.solve(model, mathopt.SolverType.GLOP)\n\nfor name, r in room(model, result).items():\n    print(f\"room of {name}:\", round(r, 6))\nprint(\"binding rows:\", binding(model, result))\n"
     }
   ],
   "video": null,
@@ -95,8 +113,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 1,
     "lists": 1,
     "images": 0,
@@ -106,14 +124,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "0b46e09db97a16aa4017155f29fbd918c74f568fb71b33cfe5521892ab16fac8",
+  "content_sha256": "933054b1ff7b2ae2bcc208c49a46ea6e08e766ce3aee450f56c937635b98b313",
   "starting_code": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef room(model: mathopt.Model, result: mathopt.SolveResult) -> dict[str, float]:\n    \"\"\"Each row's room at the solution: slack on a <= row, surplus on a >= row, the nearer side of a range.\"\"\"\n    # TODO: each row's room from its activity and its stored bounds. For now every row reports 0.\n    return {row.name: 0.0 for row in model.linear_constraints()}\n\n\ndef binding(model: mathopt.Model, result: mathopt.SolveResult, tol: float = 1e-6) -> list[str]:\n    \"\"\"Names of the rows with no room left (within tol), in the order the model holds them.\"\"\"\n    # TODO: the rows whose room is at most tol.\n    return []\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_variable(lb=0, ub=4, name=\"x\")\n    model.add_linear_constraint(x <= 10, name=\"cap\")\n    model.maximize(x)\n    result = mathopt.solve(model, mathopt.SolverType.GLOP)\n    print(room(model, result), binding(model, result))\n",
   "exercise": {
     "main_path": "practice/02-linear-programming/04-lp-modeling/prose/unit-02/practice-2/report.py",
     "test_path": "practice/02-linear-programming/04-lp-modeling/prose/unit-02/practice-2/test_report.py",
     "run_command": [
       "python3",
-      "practice/02-linear-programming/04-lp-modeling/prose/unit-02/practice-2/report.py"
+      "practice/02-linear-programming/04-lp-modeling/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -160,6 +178,10 @@
     "concepts": [
       "a row's room is its slack or surplus, and a row with none is binding",
       "MathOpt keeps each row as a lower and an upper bound on one expression, so a range is one row"
-    ]
+    ],
+    "files": [
+      "practice/02-linear-programming/04-lp-modeling/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/02-linear-programming/04-lp-modeling/prose/unit-02/practice-2/try_it.py"
   }
 }

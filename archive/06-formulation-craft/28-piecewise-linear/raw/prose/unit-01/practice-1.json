@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Overtime tiers inside a crew's labor budget",
   "blocks": [
     {
@@ -81,6 +81,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Job:\n    jid: str\n    hours: float\n\n\ndef add_labor_rules(model: mathopt.Model, x: dict, jobs: list[Job], tiers: list[tuple[float, float]],\n                    budget: float) -> None:\n    \"\"\"The month's tiered labor cost within the budget, and no more hours than the last tier allows.\"\"\"\n    hours = sum(j.hours * x[j.jid] for j in jobs)\n    used, cost, start = [], 0, 0.0\n    for k, (upper, rate) in enumerate(tiers):\n        part = model.add_variable(lb=0, ub=upper - start, name=f\"tier{k}\")   # hours paid at this rate\n        used.append(part)\n        cost = cost + rate * part\n        start = upper\n    model.add_linear_constraint(hours == sum(used), name=\"hours\")\n    model.add_linear_constraint(cost <= budget, name=\"labor_budget\")\n\n\ndef build(jobs: list[Job], tiers: list[tuple[float, float]], budget: float) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"crew month\")\n    x = {j.jid: model.add_binary_variable(name=f\"x_{j.jid}\") for j in jobs}\n    add_labor_rules(model, x, jobs, tiers, budget)\n    model.maximize(sum(j.hours * x[j.jid] for j in jobs))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    jobs = [Job(\"Elm St\", 100), Job(\"Oak Ave\", 80), Job(\"Pine Rd\", 40)]\n    model, x = build(jobs, [(160, 60.0), (200, 90.0), (240, 120.0)], 12_000)\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom crew_month import Job, build\n\n# Sewer repairs with their crew hours: 80, 60, 30, 15, 45.\njobs = [Job(\"R1\", 80), Job(\"R2\", 60), Job(\"R3\", 30), Job(\"R4\", 15), Job(\"R5\", 45)]\ntiers = [(140, 50.0), (180, 80.0), (220, 110.0)]\n\ndef accepted(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(plan, budget):\n    model, x = build(jobs, tiers, budget)\n    for jid, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if jid in plan else 0.0\n    return accepted(model)\n\n\nprint(\"R1 R2 (140 h) at budget 7000:\", allowed({\"R1\", \"R2\"}, 7000))\nprint(\"R1 R2 R4 (155 h) at budget 8000:\", allowed({\"R1\", \"R2\", \"R4\"}, 8000))\nprint(\"R1 R2 R4 (155 h) at budget 8300:\", allowed({\"R1\", \"R2\", \"R4\"}, 8300))\nprint(\"R1 R2 R3 R5 (215 h) at budget 100000:\", allowed({\"R1\", \"R2\", \"R3\", \"R5\"}, 100_000))\nprint(\"all jobs (230 h) at budget 100000:\", allowed({\"R1\", \"R2\", \"R3\", \"R4\", \"R5\"}, 100_000))\n"
         }
       ]
     },
@@ -93,6 +102,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Job:\n    jid: str\n    hours: float\n\n\ndef add_labor_rules(model: mathopt.Model, x: dict, jobs: list[Job], tiers: list[tuple[float, float]],\n                    budget: float) -> None:\n    \"\"\"The month's tiered labor cost within the budget, and no more hours than the last tier allows.\"\"\"\n    # TODO: the month's hours, a variable per tier, the hours row and the budget row.\n    return None\n\n\ndef build(jobs: list[Job], tiers: list[tuple[float, float]], budget: float) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"crew month\")\n    x = {j.jid: model.add_binary_variable(name=f\"x_{j.jid}\") for j in jobs}\n    add_labor_rules(model, x, jobs, tiers, budget)\n    model.maximize(sum(j.hours * x[j.jid] for j in jobs))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    jobs = [Job(\"Elm St\", 100), Job(\"Oak Ave\", 80), Job(\"Pine Rd\", 40)]\n    model, x = build(jobs, [(160, 60.0), (200, 90.0), (240, 120.0)], 12_000)\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom crew_month import Job, build\n\n# Sewer repairs with their crew hours: 80, 60, 30, 15, 45.\njobs = [Job(\"R1\", 80), Job(\"R2\", 60), Job(\"R3\", 30), Job(\"R4\", 15), Job(\"R5\", 45)]\ntiers = [(140, 50.0), (180, 80.0), (220, 110.0)]\n\ndef accepted(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(plan, budget):\n    model, x = build(jobs, tiers, budget)\n    for jid, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if jid in plan else 0.0\n    return accepted(model)\n\n\nprint(\"R1 R2 (140 h) at budget 7000:\", allowed({\"R1\", \"R2\"}, 7000))\nprint(\"R1 R2 R4 (155 h) at budget 8000:\", allowed({\"R1\", \"R2\", \"R4\"}, 8000))\nprint(\"R1 R2 R4 (155 h) at budget 8300:\", allowed({\"R1\", \"R2\", \"R4\"}, 8300))\nprint(\"R1 R2 R3 R5 (215 h) at budget 100000:\", allowed({\"R1\", \"R2\", \"R3\", \"R5\"}, 100_000))\nprint(\"all jobs (230 h) at budget 100000:\", allowed({\"R1\", \"R2\", \"R3\", \"R4\", \"R5\"}, 100_000))\n"
     }
   ],
   "video": null,
@@ -100,8 +118,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 6,
-    "code": 2,
+    "paras": 7,
+    "code": 3,
     "tables": 1,
     "lists": 0,
     "images": 0,
@@ -111,14 +129,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "aa4444f07878f82a5de59a9021a3f6d618dbb8eefc8302ea7c6a6f2984e0d879",
+  "content_sha256": "eadc701fb104b103a0e776e39189bfb148863d66b71173ee94bc7e02d4717682",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Job:\n    jid: str\n    hours: float\n\n\ndef add_labor_rules(model: mathopt.Model, x: dict, jobs: list[Job], tiers: list[tuple[float, float]],\n                    budget: float) -> None:\n    \"\"\"The month's tiered labor cost within the budget, and no more hours than the last tier allows.\"\"\"\n    # TODO: the month's hours, a variable per tier, the hours row and the budget row.\n    return None\n\n\ndef build(jobs: list[Job], tiers: list[tuple[float, float]], budget: float) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"crew month\")\n    x = {j.jid: model.add_binary_variable(name=f\"x_{j.jid}\") for j in jobs}\n    add_labor_rules(model, x, jobs, tiers, budget)\n    model.maximize(sum(j.hours * x[j.jid] for j in jobs))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    jobs = [Job(\"Elm St\", 100), Job(\"Oak Ave\", 80), Job(\"Pine Rd\", 40)]\n    model, x = build(jobs, [(160, 60.0), (200, 90.0), (240, 120.0)], 12_000)\n    print(model.get_num_linear_constraints(), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-01/practice-1/crew_month.py",
     "test_path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-01/practice-1/test_crew_month.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-01/practice-1/crew_month.py"
+      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-01/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -166,6 +184,10 @@
       "a piecewise-linear function is fixed by its breakpoints, and its slopes tell convex from concave",
       "a convex cost written as one row per segment's line, inside a budget row",
       "a convex cost written as one bounded variable per segment, with no binaries"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-01/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-01/practice-1/try_it.py"
   }
 }

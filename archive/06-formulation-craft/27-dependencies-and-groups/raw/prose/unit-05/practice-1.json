@@ -9,7 +9,7 @@
   "unit": 5,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A fiber builder's county agreements",
   "blocks": [
     {
@@ -69,6 +69,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    county: str\n    cost: tuple[int, ...]\n    starts: tuple[int, ...]\n\n\ndef add_county_rules(model: mathopt.Model, x: dict, projects: list[Project], years: tuple[int, ...],\n                     floor: dict[str, int], cap: dict[str, int], yearly_cap: dict[tuple[str, int], int]) -> None:\n    \"\"\"Each county's minimum and cap over the plan, and its caps in single years.\"\"\"\n    def in_year(county: str, year: int):\n        return sum(p.cost[year - t] * x[p.pid, t] for p in projects if p.county == county\n                   for t in p.starts if 0 <= year - t < len(p.cost))\n\n    def whole_plan(county: str):\n        return sum(sum(p.cost) * x[p.pid, t] for p in projects if p.county == county for t in p.starts)\n\n    for county, least in floor.items():\n        model.add_linear_constraint(whole_plan(county) >= least, name=f\"floor_{county}\")\n    for county, most in cap.items():\n        model.add_linear_constraint(whole_plan(county) <= most, name=f\"cap_{county}\")\n    for (county, year), most in yearly_cap.items():\n        model.add_linear_constraint(in_year(county, year) <= most, name=f\"cap_{county}_{year}\")\n\n\ndef build(projects: list[Project], years: tuple[int, ...], floor: dict[str, int], cap: dict[str, int],\n          yearly_cap: dict[tuple[str, int], int]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"counties\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_county_rules(model, x, projects, years, floor, cap, yearly_cap)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"F1\", \"Ash\", (300, 200), (2027, 2028)), Project(\"F2\", \"Ash\", (250,), (2027,))]\n    model, x = build(projects, (2027, 2028, 2029), {\"Ash\": 400}, {\"Ash\": 700}, {(\"Ash\", 2028): 300})\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom counties import Project, build\n\n# Fiber projects in two counties, 2027 to 2029, in $k.\nyears = (2027, 2028, 2029)\nprojects = [Project(\"E1\", \"Elm\", (300, 100), (2027, 2028)), Project(\"E2\", \"Elm\", (200,), (2027, 2028, 2029)),\n            Project(\"E3\", \"Elm\", (350,), (2028, 2029)), Project(\"O1\", \"Oak\", (400,), (2027, 2028, 2029)),\n            Project(\"O2\", \"Oak\", (100, 100), (2027, 2028))]\nfloor = {\"Elm\": 500, \"Oak\": 200}\ncap = {\"Elm\": 800}\nyearly_cap = {(\"Elm\", 2028): 400}\n\ndef accepted(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(plan):\n    model, x = build(projects, years, floor, cap, yearly_cap)\n    for key, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0\n    return accepted(model)\n\n\nprint(\"E1 2027, E2 2029, O1 2027:\", allowed({(\"E1\", 2027), (\"E2\", 2029), (\"O1\", 2027)}))\nprint(\"E1 2027, O1 2027:\", allowed({(\"E1\", 2027), (\"O1\", 2027)}))\nprint(\"E1 2027, E2 2027, E3 2029, O2 2027:\", allowed({(\"E1\", 2027), (\"E2\", 2027), (\"E3\", 2029), (\"O2\", 2027)}))\nprint(\"E1 2027, E3 2028, O1 2029:\", allowed({(\"E1\", 2027), (\"E3\", 2028), (\"O1\", 2029)}))\n"
         }
       ]
     },
@@ -81,6 +90,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    county: str\n    cost: tuple[int, ...]\n    starts: tuple[int, ...]\n\n\ndef add_county_rules(model: mathopt.Model, x: dict, projects: list[Project], years: tuple[int, ...],\n                     floor: dict[str, int], cap: dict[str, int], yearly_cap: dict[tuple[str, int], int]) -> None:\n    \"\"\"Each county's minimum and cap over the plan, and its caps in single years.\"\"\"\n    # TODO: the spend expressions and the three kinds of rows.\n    return None\n\n\ndef build(projects: list[Project], years: tuple[int, ...], floor: dict[str, int], cap: dict[str, int],\n          yearly_cap: dict[tuple[str, int], int]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"counties\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_county_rules(model, x, projects, years, floor, cap, yearly_cap)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"F1\", \"Ash\", (300, 200), (2027, 2028)), Project(\"F2\", \"Ash\", (250,), (2027,))]\n    model, x = build(projects, (2027, 2028, 2029), {\"Ash\": 400}, {\"Ash\": 700}, {(\"Ash\", 2028): 300})\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom counties import Project, build\n\n# Fiber projects in two counties, 2027 to 2029, in $k.\nyears = (2027, 2028, 2029)\nprojects = [Project(\"E1\", \"Elm\", (300, 100), (2027, 2028)), Project(\"E2\", \"Elm\", (200,), (2027, 2028, 2029)),\n            Project(\"E3\", \"Elm\", (350,), (2028, 2029)), Project(\"O1\", \"Oak\", (400,), (2027, 2028, 2029)),\n            Project(\"O2\", \"Oak\", (100, 100), (2027, 2028))]\nfloor = {\"Elm\": 500, \"Oak\": 200}\ncap = {\"Elm\": 800}\nyearly_cap = {(\"Elm\", 2028): 400}\n\ndef accepted(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(plan):\n    model, x = build(projects, years, floor, cap, yearly_cap)\n    for key, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0\n    return accepted(model)\n\n\nprint(\"E1 2027, E2 2029, O1 2027:\", allowed({(\"E1\", 2027), (\"E2\", 2029), (\"O1\", 2027)}))\nprint(\"E1 2027, O1 2027:\", allowed({(\"E1\", 2027), (\"O1\", 2027)}))\nprint(\"E1 2027, E2 2027, E3 2029, O2 2027:\", allowed({(\"E1\", 2027), (\"E2\", 2027), (\"E3\", 2029), (\"O2\", 2027)}))\nprint(\"E1 2027, E3 2028, O1 2029:\", allowed({(\"E1\", 2027), (\"E3\", 2028), (\"O1\", 2029)}))\n"
     }
   ],
   "video": null,
@@ -88,8 +106,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 6,
-    "code": 2,
+    "paras": 7,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -99,14 +117,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "6931ca24b733e4c1938b31fd7ce9d2f2af8707a1e50ac3dfe1852f05754f1ce1",
+  "content_sha256": "7a1ff3740667b015e93adf6bf5712cbb48f2785189f4643d9fee143012f905e2",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    county: str\n    cost: tuple[int, ...]\n    starts: tuple[int, ...]\n\n\ndef add_county_rules(model: mathopt.Model, x: dict, projects: list[Project], years: tuple[int, ...],\n                     floor: dict[str, int], cap: dict[str, int], yearly_cap: dict[tuple[str, int], int]) -> None:\n    \"\"\"Each county's minimum and cap over the plan, and its caps in single years.\"\"\"\n    # TODO: the spend expressions and the three kinds of rows.\n    return None\n\n\ndef build(projects: list[Project], years: tuple[int, ...], floor: dict[str, int], cap: dict[str, int],\n          yearly_cap: dict[tuple[str, int], int]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"counties\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_county_rules(model, x, projects, years, floor, cap, yearly_cap)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"F1\", \"Ash\", (300, 200), (2027, 2028)), Project(\"F2\", \"Ash\", (250,), (2027,))]\n    model, x = build(projects, (2027, 2028, 2029), {\"Ash\": 400}, {\"Ash\": 700}, {(\"Ash\", 2028): 300})\n    print(model.get_num_linear_constraints(), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-1/counties.py",
     "test_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-1/test_counties.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-1/counties.py"
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -157,6 +175,10 @@
     },
     "concepts": [
       "a jurisdiction's limits are rows on the spend of its own projects, over the plan or in one year"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-1/try_it.py"
   }
 }

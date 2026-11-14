@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Five checks for a hospital's equipment program",
   "blocks": [
     {
@@ -82,6 +82,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\n\ndef allowed_years(item: dict, years: list[int]) -> list[int]:\n    \"\"\"The plan years an item may be installed in: inside its release-deadline window.\"\"\"\n    return [t for t in years if item[\"release\"] <= t <= item[\"deadline\"]]\n\n\ndef precheck(items: dict, budget: dict, engineers: dict, dept_minimum: dict) -> list[tuple[str, str]]:\n    \"\"\"Every (check, subject) that proves the equipment program can have no plan, sorted.\"\"\"\n    years = sorted(budget)\n    found = []\n    for name, item in items.items():\n        if not item[\"required\"]:\n            continue\n        options = allowed_years(item, years)\n        if not options:\n            found.append((\"window\", name))\n            continue\n        if all(item[\"cost\"] > budget[t] for t in options):\n            found.append((\"budget\", name))\n        if all(item[\"engineer_days\"] > engineers[t] for t in options):\n            found.append((\"engineers\", name))\n    for name, item in items.items():\n        other = item[\"excludes\"]\n        if other and item[\"required\"] and items[other][\"required\"]:\n            found.append((\"exclusion\", \"|\".join(sorted((name, other)))))\n    for dept, minimum in dept_minimum.items():\n        supply = sum(item[\"cost\"] for item in items.values() if item[\"dept\"] == dept)\n        if supply < minimum:\n            found.append((\"minimum\", dept))\n    return sorted(set(found))\n\n\nif __name__ == \"__main__\":\n    items = {\"MRI-2\": {\"dept\": \"radiology\", \"cost\": 900, \"release\": 2027, \"deadline\": 2028, \"required\": True,\n                       \"engineer_days\": 30, \"excludes\": None}}\n    print(precheck(items, {2027: 800, 2028: 1000}, {2027: 40, 2028: 40}, {\"radiology\": 500}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom checks import precheck\n\nmoney = {2030: 900, 2031: 1100}\ncrews = {2030: 15, 2031: 25}\nminimum = {\"cardiology\": 500, \"icu\": 200}\n\n\ndef item(dept, cost, release, deadline, required, days, excludes=None):\n    return {\"dept\": dept, \"cost\": cost, \"release\": release, \"deadline\": deadline, \"required\": required,\n            \"engineer_days\": days, \"excludes\": excludes}\n\n\nkit = {\n    \"ECHO-1\": item(\"cardiology\", 600, 2030, 2031, True, 12),\n    \"ECHO-2\": item(\"cardiology\", 400, 2031, 2031, False, 6, excludes=\"VENT-3\"),\n    \"VENT-3\": item(\"icu\", 250, 2030, 2031, True, 4),\n}\nprint(\"checks on the plain kit:\", precheck(kit, money, crews, minimum))\n\nkit[\"ECHO-1\"][\"engineer_days\"] = 30\nkit[\"ECHO-2\"][\"required\"] = True\nprint(\"checks, ECHO-1 at 30 days, ECHO-2 required:\", precheck(kit, money, crews, minimum))\nprint(\"checks, icu minimum 900:\", precheck(kit, money, crews, {**minimum, \"icu\": 900}))\n"
         }
       ]
     },
@@ -94,6 +103,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\n\ndef allowed_years(item: dict, years: list[int]) -> list[int]:\n    \"\"\"The plan years an item may be installed in: inside its release-deadline window.\"\"\"\n    return [t for t in years if item[\"release\"] <= t <= item[\"deadline\"]]\n\n\ndef precheck(items: dict, budget: dict, engineers: dict, dept_minimum: dict) -> list[tuple[str, str]]:\n    \"\"\"Every (check, subject) that proves the equipment program can have no plan, sorted.\"\"\"\n    # TODO: the five checks. Each must fire only when no plan can exist.\n    return []\n\n\nif __name__ == \"__main__\":\n    items = {\"MRI-2\": {\"dept\": \"radiology\", \"cost\": 900, \"release\": 2027, \"deadline\": 2028, \"required\": True,\n                       \"engineer_days\": 30, \"excludes\": None}}\n    print(precheck(items, {2027: 800, 2028: 1000}, {2027: 40, 2028: 40}, {\"radiology\": 500}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom checks import precheck\n\nmoney = {2030: 900, 2031: 1100}\ncrews = {2030: 15, 2031: 25}\nminimum = {\"cardiology\": 500, \"icu\": 200}\n\n\ndef item(dept, cost, release, deadline, required, days, excludes=None):\n    return {\"dept\": dept, \"cost\": cost, \"release\": release, \"deadline\": deadline, \"required\": required,\n            \"engineer_days\": days, \"excludes\": excludes}\n\n\nkit = {\n    \"ECHO-1\": item(\"cardiology\", 600, 2030, 2031, True, 12),\n    \"ECHO-2\": item(\"cardiology\", 400, 2031, 2031, False, 6, excludes=\"VENT-3\"),\n    \"VENT-3\": item(\"icu\", 250, 2030, 2031, True, 4),\n}\nprint(\"checks on the plain kit:\", precheck(kit, money, crews, minimum))\n\nkit[\"ECHO-1\"][\"engineer_days\"] = 30\nkit[\"ECHO-2\"][\"required\"] = True\nprint(\"checks, ECHO-1 at 30 days, ECHO-2 required:\", precheck(kit, money, crews, minimum))\nprint(\"checks, icu minimum 900:\", precheck(kit, money, crews, {**minimum, \"icu\": 900}))\n"
     }
   ],
   "video": null,
@@ -101,8 +119,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 1,
     "lists": 0,
     "images": 0,
@@ -112,14 +130,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "6e91128a35b6e4f0f4fc9243d088709836e48c2676ddd710408b07417487d459",
+  "content_sha256": "e4df369f20e9dd23cf422c7f4a49d15d583283d3baa4e9e9f06578bf6d0f1c15",
   "starting_code": "from __future__ import annotations\n\n\ndef allowed_years(item: dict, years: list[int]) -> list[int]:\n    \"\"\"The plan years an item may be installed in: inside its release-deadline window.\"\"\"\n    return [t for t in years if item[\"release\"] <= t <= item[\"deadline\"]]\n\n\ndef precheck(items: dict, budget: dict, engineers: dict, dept_minimum: dict) -> list[tuple[str, str]]:\n    \"\"\"Every (check, subject) that proves the equipment program can have no plan, sorted.\"\"\"\n    # TODO: the five checks. Each must fire only when no plan can exist.\n    return []\n\n\nif __name__ == \"__main__\":\n    items = {\"MRI-2\": {\"dept\": \"radiology\", \"cost\": 900, \"release\": 2027, \"deadline\": 2028, \"required\": True,\n                       \"engineer_days\": 30, \"excludes\": None}}\n    print(precheck(items, {2027: 800, 2028: 1000}, {2027: 40, 2028: 40}, {\"radiology\": 500}))\n",
   "exercise": {
     "main_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-02/practice-1/checks.py",
     "test_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-02/practice-1/test_checks.py",
     "run_command": [
       "python3",
-      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-02/practice-1/checks.py"
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -170,6 +188,10 @@
     },
     "concepts": [
       "five input checks, each comparing a least demand with a most supply"
-    ]
+    ],
+    "files": [
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-02/practice-1/try_it.py"
   }
 }

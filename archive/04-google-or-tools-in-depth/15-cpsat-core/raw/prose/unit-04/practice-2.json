@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "The order of a drainage crew's repairs",
   "blocks": [
     {
@@ -48,6 +48,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    days: int      # days the job takes\n    due: int       # the day it is due (lateness is measured from here)\n    weight: int    # cost of one day of lateness\n\n\ndef best_order(jobs: list[Job]) -> tuple[int, list[str]]:\n    \"\"\"The least weighted lateness for one crew doing the jobs one at a time, and the order that gives it.\"\"\"\n    horizon = sum(j.days for j in jobs)\n    model = cp_model.CpModel()\n    start = {j.name: model.new_int_var(0, horizon, f\"start_{j.name}\") for j in jobs}\n    late = {j.name: model.new_int_var(0, horizon, f\"late_{j.name}\") for j in jobs}\n    for j in jobs:\n        model.add(late[j.name] >= start[j.name] + j.days - j.due)\n    for a, b in ((a, b) for i, a in enumerate(jobs) for b in jobs[i + 1:]):\n        first = model.new_bool_var(f\"{a.name}_before_{b.name}\")\n        model.add(start[a.name] + a.days <= start[b.name]).only_enforce_if(first)\n        model.add(start[b.name] + b.days <= start[a.name]).only_enforce_if(~first)\n    model.minimize(sum(j.weight * late[j.name] for j in jobs))\n    solver = cp_model.CpSolver()\n    solver.solve(model)\n    order = sorted(start, key=lambda name: solver.value(start[name]))\n    return round(solver.objective_value), order\n\n\nif __name__ == \"__main__\":\n    print(best_order([Job(\"north\", 3, 4, 2), Job(\"ridge\", 2, 2, 5), Job(\"creek\", 4, 6, 1)]))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom crews import Job, best_order\n\n# Culvert repairs: name, days, due day, cost per late day.\njobs = [Job(\"brook\", 2, 3, 3), Job(\"lane\", 4, 5, 1), Job(\"ford\", 1, 1, 6), Job(\"weir\", 3, 8, 2)]\n\nprint(\"four repairs:\", best_order(jobs))\nprint(\"first two only:\", best_order(jobs[:2]))\nprint(\"all due late:\", best_order([Job(\"m1\", 2, 20, 1), Job(\"m2\", 3, 20, 1)]))\n"
         }
       ]
     },
@@ -60,6 +69,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    days: int      # days the job takes\n    due: int       # the day it is due (lateness is measured from here)\n    weight: int    # cost of one day of lateness\n\n\ndef best_order(jobs: list[Job]) -> tuple[int, list[str]]:\n    \"\"\"The least weighted lateness for one crew doing the jobs one at a time, and the order that gives it.\"\"\"\n    # TODO: start and lateness variables, one disjunction per pair, the objective; solve and read the order.\n    return 0, [j.name for j in jobs]\n\nif __name__ == \"__main__\":\n    print(best_order([Job(\"north\", 3, 4, 2), Job(\"ridge\", 2, 2, 5), Job(\"creek\", 4, 6, 1)]))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom crews import Job, best_order\n\n# Culvert repairs: name, days, due day, cost per late day.\njobs = [Job(\"brook\", 2, 3, 3), Job(\"lane\", 4, 5, 1), Job(\"ford\", 1, 1, 6), Job(\"weir\", 3, 8, 2)]\n\nprint(\"four repairs:\", best_order(jobs))\nprint(\"first two only:\", best_order(jobs[:2]))\nprint(\"all due late:\", best_order([Job(\"m1\", 2, 20, 1), Job(\"m2\", 3, 20, 1)]))\n"
     }
   ],
   "video": null,
@@ -67,8 +85,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 2,
+    "paras": 4,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -78,14 +96,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "e392a4209f249c8a7c531f7cfde12735ee3eb8001ae13fbc3e406d8f2a84ebcf",
+  "content_sha256": "6ef8231bc810cca4ea7c1293b3226120a499a7eb9e1e6e072d7fce2d1fea9a17",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    days: int      # days the job takes\n    due: int       # the day it is due (lateness is measured from here)\n    weight: int    # cost of one day of lateness\n\n\ndef best_order(jobs: list[Job]) -> tuple[int, list[str]]:\n    \"\"\"The least weighted lateness for one crew doing the jobs one at a time, and the order that gives it.\"\"\"\n    # TODO: start and lateness variables, one disjunction per pair, the objective; solve and read the order.\n    return 0, [j.name for j in jobs]\n\nif __name__ == \"__main__\":\n    print(best_order([Job(\"north\", 3, 4, 2), Job(\"ridge\", 2, 2, 5), Job(\"creek\", 4, 6, 1)]))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-2/crews.py",
     "test_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-2/test_crews.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-2/crews.py"
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -126,6 +144,10 @@
     },
     "concepts": [
       "sequencing and disjunctions give big-M models a weak bound, and CP-SAT proves them with propagation"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-2/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-2/try_it.py"
   }
 }

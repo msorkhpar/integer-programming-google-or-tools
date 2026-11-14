@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Write a city's ratio rules as linear rows",
   "blocks": [
     {
@@ -60,6 +60,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_share_rules(model: mathopt.Model, spend: dict[str, mathopt.Variable], max_share: float,\n                    pairs: list[tuple[str, str, float]]) -> None:\n    \"\"\"Add the agency's ratio rules to `model` as linear rows.\"\"\"\n    total = sum(spend.values())\n    for k in spend:\n        model.add_linear_constraint(spend[k] <= max_share * total, name=f\"share_{k}\")\n    for a, b, ratio in pairs:\n        model.add_linear_constraint(spend[a] >= ratio * spend[b], name=f\"ratio_{a}_{b}\")\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    spend = {k: model.add_variable(lb=0, name=k) for k in (\"bus\", \"rail\", \"ferry\")}\n    add_share_rules(model, spend, 0.5, [(\"rail\", \"ferry\", 2.0)])\n    for row in model.linear_constraints():\n        print(row.name, row.lower_bound, row.upper_bound)\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom rules import add_share_rules\n\nAREAS = (\"parks\", \"roads\", \"libraries\")\n\n\ndef allowed(plan, max_share, pairs):\n    \"\"\"Fix every amount to the plan's value and ask GLOP whether the rows allow it.\"\"\"\n    model = mathopt.Model()\n    spend = {k: model.add_variable(lb=plan[k], ub=plan[k], name=k) for k in AREAS}\n    add_share_rules(model, spend, max_share, pairs)\n    result = mathopt.solve(model, mathopt.SolverType.GLOP)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"plan 30/40/30, share 0.4:\", allowed({\"parks\": 30, \"roads\": 40, \"libraries\": 30}, 0.4, []))\nprint(\"plan 20/55/25, share 0.4:\", allowed({\"parks\": 20, \"roads\": 55, \"libraries\": 25}, 0.4, []))\npairs = [(\"parks\", \"libraries\", 1.5)]\nprint(\"plan 30/40/30, share 0.4, parks >= 1.5 libraries:\", allowed({\"parks\": 30, \"roads\": 40, \"libraries\": 30}, 0.4, pairs))\n"
         }
       ]
     },
@@ -72,6 +81,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_share_rules(model: mathopt.Model, spend: dict[str, mathopt.Variable], max_share: float,\n                    pairs: list[tuple[str, str, float]]) -> None:\n    \"\"\"Add the agency's ratio rules to `model` as linear rows.\"\"\"\n    # TODO: one share row per mode, then one row per (a, b, ratio) pair, each multiplied out.\n    return None\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    spend = {k: model.add_variable(lb=0, name=k) for k in (\"bus\", \"rail\", \"ferry\")}\n    add_share_rules(model, spend, 0.5, [(\"rail\", \"ferry\", 2.0)])\n    for row in model.linear_constraints():\n        print(row.name, row.lower_bound, row.upper_bound)\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom rules import add_share_rules\n\nAREAS = (\"parks\", \"roads\", \"libraries\")\n\n\ndef allowed(plan, max_share, pairs):\n    \"\"\"Fix every amount to the plan's value and ask GLOP whether the rows allow it.\"\"\"\n    model = mathopt.Model()\n    spend = {k: model.add_variable(lb=plan[k], ub=plan[k], name=k) for k in AREAS}\n    add_share_rules(model, spend, max_share, pairs)\n    result = mathopt.solve(model, mathopt.SolverType.GLOP)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"plan 30/40/30, share 0.4:\", allowed({\"parks\": 30, \"roads\": 40, \"libraries\": 30}, 0.4, []))\nprint(\"plan 20/55/25, share 0.4:\", allowed({\"parks\": 20, \"roads\": 55, \"libraries\": 25}, 0.4, []))\npairs = [(\"parks\", \"libraries\", 1.5)]\nprint(\"plan 30/40/30, share 0.4, parks >= 1.5 libraries:\", allowed({\"parks\": 30, \"roads\": 40, \"libraries\": 30}, 0.4, pairs))\n"
     }
   ],
   "video": null,
@@ -79,8 +97,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -90,14 +108,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "557a3730974176e20e1d8ada5b39f2e64f9eef8d1829edf74c1f76332ee8a96b",
+  "content_sha256": "fba03b0e381d6030900c817b2d01d6033e6b47ca6ee515abd86ef043c3c99fed",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_share_rules(model: mathopt.Model, spend: dict[str, mathopt.Variable], max_share: float,\n                    pairs: list[tuple[str, str, float]]) -> None:\n    \"\"\"Add the agency's ratio rules to `model` as linear rows.\"\"\"\n    # TODO: one share row per mode, then one row per (a, b, ratio) pair, each multiplied out.\n    return None\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    spend = {k: model.add_variable(lb=0, name=k) for k in (\"bus\", \"rail\", \"ferry\")}\n    add_share_rules(model, spend, 0.5, [(\"rail\", \"ferry\", 2.0)])\n    for row in model.linear_constraints():\n        print(row.name, row.lower_bound, row.upper_bound)\n",
   "exercise": {
     "main_path": "practice/02-linear-programming/04-lp-modeling/prose/unit-01/practice-1/rules.py",
     "test_path": "practice/02-linear-programming/04-lp-modeling/prose/unit-01/practice-1/test_rules.py",
     "run_command": [
       "python3",
-      "practice/02-linear-programming/04-lp-modeling/prose/unit-01/practice-1/rules.py"
+      "practice/02-linear-programming/04-lp-modeling/prose/unit-01/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -148,6 +166,10 @@
     },
     "concepts": [
       "a share or ratio rule becomes a linear row once both sides are multiplied by a total that is never negative"
-    ]
+    ],
+    "files": [
+      "practice/02-linear-programming/04-lp-modeling/prose/unit-01/practice-1/try_it.py"
+    ],
+    "try_file": "practice/02-linear-programming/04-lp-modeling/prose/unit-01/practice-1/try_it.py"
   }
 }

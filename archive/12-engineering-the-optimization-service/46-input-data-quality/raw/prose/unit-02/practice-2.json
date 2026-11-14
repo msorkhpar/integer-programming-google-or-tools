@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Reject a snapshot with six planted defects",
   "blocks": [
     {
@@ -97,6 +97,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nFinding = tuple[str, str, str]                  # (severity, rule, subject)\n\n\ndef starts(job: dict, horizon: list[int]) -> list[int]:\n    \"\"\"The start years in the job's window whose whole work falls inside the horizon.\"\"\"\n    return [t for t in range(job[\"earliest\"], job[\"latest\"] + 1)\n            if t >= horizon[0] and t + len(job[\"cost\"]) - 1 <= horizon[-1]]\n\n\ndef cycles(snapshot: dict) -> list[Finding]:\n    after = {j[\"id\"]: j[\"after\"] for j in snapshot[\"jobs\"]}\n    found = set()\n    for first in after:\n        seen, jid = [], first\n        while jid is not None and jid not in seen:\n            seen.append(jid)\n            jid = after[jid]\n        if jid is not None:\n            found.add((\"error\", \"prerequisite-cycle\", \"+\".join(sorted(seen[seen.index(jid):]))))\n    return sorted(found)\n\n\ndef needed(snapshot: dict) -> set[str]:\n    \"\"\"Jobs every plan must do: the required ones and, through `after`, all their prerequisites.\"\"\"\n    by_id = {j[\"id\"]: j for j in snapshot[\"jobs\"]}\n    need, todo = set(), [j[\"id\"] for j in snapshot[\"jobs\"] if j[\"required\"]]\n    while todo:\n        jid = todo.pop()\n        if jid not in need:\n            need.add(jid)\n            if by_id[jid][\"after\"] is not None:\n                todo.append(by_id[jid][\"after\"])\n    return need\n\n\ndef too_late(snapshot: dict) -> list[Finding]:\n    by_id = {j[\"id\"]: j for j in snapshot[\"jobs\"]}\n    need = needed(snapshot)\n    found = []\n    for job in snapshot[\"jobs\"]:\n        if job[\"after\"] is None:\n            continue\n        mine, theirs = starts(job, snapshot[\"horizon\"]), starts(by_id[job[\"after\"]], snapshot[\"horizon\"])\n        if not any(s + job[\"lag\"] <= t for s in theirs for t in mine):\n            found.append((\"error\" if job[\"id\"] in need else \"warning\", \"prerequisite-too-late\", job[\"id\"]))\n    return found\n\n\ndef no_start(snapshot: dict) -> list[Finding]:\n    return [(\"error\", \"no-start-in-horizon\", j[\"id\"]) for j in snapshot[\"jobs\"]\n            if j[\"required\"] and not starts(j, snapshot[\"horizon\"])]\n\n\ndef over_budget(snapshot: dict) -> list[Finding]:\n    by_id = {j[\"id\"]: j for j in snapshot[\"jobs\"]}\n    need = needed(snapshot)\n    if sum(sum(by_id[jid][\"cost\"]) for jid in need) > sum(snapshot[\"budgets\"].values()):\n        return [(\"error\", \"required-over-budget\", \"plan\")]\n    return []\n\n\ndef drift(snapshot: dict, previous: dict | None, factor: float = 3.0) -> list[Finding]:\n    if previous is None:\n        return []\n    found = []\n    for year, amount in snapshot[\"budgets\"].items():\n        old = previous[\"budgets\"].get(year)\n        if old and (amount > factor * old or amount * factor < old):\n            found.append((\"warning\", \"budget-drift\", str(year)))\n    return found\n\n\ndef review(snapshot: dict, previous: dict | None = None) -> list[Finding]:\n    \"\"\"Every finding of every rule, sorted: errors first.\"\"\"\n    return sorted(cycles(snapshot) + too_late(snapshot) + no_start(snapshot) + over_budget(snapshot)\n                  + drift(snapshot, previous))\n\n\ndef rejected(findings: list[Finding]) -> bool:\n    return any(severity == \"error\" for severity, _, _ in findings)\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"horizon\": [2027, 2028], \"budgets\": {2027: 500, 2028: 500},\n                \"jobs\": [{\"id\": \"M1\", \"cost\": [900], \"earliest\": 2027, \"latest\": 2028, \"required\": True,\n                          \"after\": None, \"lag\": 0}]}\n    print(review(snapshot))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport copy\n\nfrom review import rejected, review\n\nclean = {\n    \"horizon\": [2031, 2032, 2033],\n    \"budgets\": {2031: 800, 2032: 800, 2033: 800},\n    \"jobs\": [\n        {\"id\": \"P1\", \"cost\": [400], \"earliest\": 2031, \"latest\": 2032, \"required\": True, \"after\": None, \"lag\": 0},\n        {\"id\": \"P2\", \"cost\": [300], \"earliest\": 2032, \"latest\": 2033, \"required\": False, \"after\": \"P1\", \"lag\": 1},\n        {\"id\": \"P3\", \"cost\": [200], \"earliest\": 2031, \"latest\": 2033, \"required\": False, \"after\": None, \"lag\": 0},\n    ],\n}\ndirty = copy.deepcopy(clean)\ndirty[\"jobs\"][1][\"lag\"] = 5\ndirty[\"jobs\"][2][\"after\"] = \"P3\"\ndirty[\"budgets\"][2033] = 100\n\nprint(\"clean snapshot:\", review(clean, clean), \"rejected:\", rejected(review(clean, clean)))\nfor finding in review(dirty, clean):\n    print(\"dirty snapshot finding:\", finding)\nprint(\"dirty snapshot rejected:\", rejected(review(dirty, clean)))\n"
         }
       ]
     },
@@ -109,6 +118,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nFinding = tuple[str, str, str]                  # (severity, rule, subject)\n\n\ndef starts(job: dict, horizon: list[int]) -> list[int]:\n    \"\"\"The start years in the job's window whose whole work falls inside the horizon.\"\"\"\n    # TODO\n    return []\n\n\ndef cycles(snapshot: dict) -> list[Finding]:\n    # TODO: one finding per cycle of prerequisites, its jobs sorted and joined with \"+\".\n    return []\n\n\ndef too_late(snapshot: dict) -> list[Finding]:\n    # TODO: a job whose prerequisite cannot start early enough for any of its own start years.\n    return []\n\n\ndef no_start(snapshot: dict) -> list[Finding]:\n    # TODO: a required job with no start year.\n    return []\n\n\ndef over_budget(snapshot: dict) -> list[Finding]:\n    # TODO: what every plan must pay for, against all the budgets together.\n    return []\n\n\ndef drift(snapshot: dict, previous: dict | None, factor: float = 3.0) -> list[Finding]:\n    # TODO: a year's budget more than `factor` times larger or smaller than in `previous`.\n    return []\n\n\ndef review(snapshot: dict, previous: dict | None = None) -> list[Finding]:\n    \"\"\"Every finding of every rule, sorted: errors first.\"\"\"\n    # TODO: run every rule.\n    return [(\"?\", \"not reviewed\", \"\")]\n\n\ndef rejected(findings: list[Finding]) -> bool:\n    return any(severity == \"error\" for severity, _, _ in findings)\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"horizon\": [2027, 2028], \"budgets\": {2027: 500, 2028: 500},\n                \"jobs\": [{\"id\": \"M1\", \"cost\": [900], \"earliest\": 2027, \"latest\": 2028, \"required\": True,\n                          \"after\": None, \"lag\": 0}]}\n    print(review(snapshot))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport copy\n\nfrom review import rejected, review\n\nclean = {\n    \"horizon\": [2031, 2032, 2033],\n    \"budgets\": {2031: 800, 2032: 800, 2033: 800},\n    \"jobs\": [\n        {\"id\": \"P1\", \"cost\": [400], \"earliest\": 2031, \"latest\": 2032, \"required\": True, \"after\": None, \"lag\": 0},\n        {\"id\": \"P2\", \"cost\": [300], \"earliest\": 2032, \"latest\": 2033, \"required\": False, \"after\": \"P1\", \"lag\": 1},\n        {\"id\": \"P3\", \"cost\": [200], \"earliest\": 2031, \"latest\": 2033, \"required\": False, \"after\": None, \"lag\": 0},\n    ],\n}\ndirty = copy.deepcopy(clean)\ndirty[\"jobs\"][1][\"lag\"] = 5\ndirty[\"jobs\"][2][\"after\"] = \"P3\"\ndirty[\"budgets\"][2033] = 100\n\nprint(\"clean snapshot:\", review(clean, clean), \"rejected:\", rejected(review(clean, clean)))\nfor finding in review(dirty, clean):\n    print(\"dirty snapshot finding:\", finding)\nprint(\"dirty snapshot rejected:\", rejected(review(dirty, clean)))\n"
     }
   ],
   "video": null,
@@ -116,8 +134,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 1,
     "lists": 0,
     "images": 0,
@@ -127,14 +145,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "23e040ece1ffeecc0be30072953acf2b7bca418c7f2012c9f14b0af3434a1bf2",
+  "content_sha256": "1b7949f2a3599595e9b2feb7b0951471bf0fb3fd39bd4a0b4706623acfee5c96",
   "starting_code": "from __future__ import annotations\n\nFinding = tuple[str, str, str]                  # (severity, rule, subject)\n\n\ndef starts(job: dict, horizon: list[int]) -> list[int]:\n    \"\"\"The start years in the job's window whose whole work falls inside the horizon.\"\"\"\n    # TODO\n    return []\n\n\ndef cycles(snapshot: dict) -> list[Finding]:\n    # TODO: one finding per cycle of prerequisites, its jobs sorted and joined with \"+\".\n    return []\n\n\ndef too_late(snapshot: dict) -> list[Finding]:\n    # TODO: a job whose prerequisite cannot start early enough for any of its own start years.\n    return []\n\n\ndef no_start(snapshot: dict) -> list[Finding]:\n    # TODO: a required job with no start year.\n    return []\n\n\ndef over_budget(snapshot: dict) -> list[Finding]:\n    # TODO: what every plan must pay for, against all the budgets together.\n    return []\n\n\ndef drift(snapshot: dict, previous: dict | None, factor: float = 3.0) -> list[Finding]:\n    # TODO: a year's budget more than `factor` times larger or smaller than in `previous`.\n    return []\n\n\ndef review(snapshot: dict, previous: dict | None = None) -> list[Finding]:\n    \"\"\"Every finding of every rule, sorted: errors first.\"\"\"\n    # TODO: run every rule.\n    return [(\"?\", \"not reviewed\", \"\")]\n\n\ndef rejected(findings: list[Finding]) -> bool:\n    return any(severity == \"error\" for severity, _, _ in findings)\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"horizon\": [2027, 2028], \"budgets\": {2027: 500, 2028: 500},\n                \"jobs\": [{\"id\": \"M1\", \"cost\": [900], \"earliest\": 2027, \"latest\": 2028, \"required\": True,\n                          \"after\": None, \"lag\": 0}]}\n    print(review(snapshot))\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-2/review.py",
     "test_path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-2/test_review.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-2/review.py"
+      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -200,6 +218,10 @@
     },
     "concepts": [
       "a gate that runs every rule on a snapshot, compares it with the last accepted one, and gives each finding the severity of what it proves"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-2/try_it.py"
   }
 }

@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Detours and corridor fees for street works",
   "blocks": [
     {
@@ -64,6 +64,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Street:\n    sid: str\n    cost: int        # $k\n\n\ndef add_traffic_costs(model: mathopt.Model, x: dict, streets: list[Street],\n                      detours: dict[tuple[str, str], int], corridor_fees: list[tuple[list[str], int]],\n                      budget: int) -> None:\n    \"\"\"Street costs, plus a detour for each adjacent pair rebuilt together, plus each full corridor's fee.\"\"\"\n    extra = []\n    for (a, b), cost in detours.items():\n        detour = model.add_binary_variable(name=f\"detour_{a}_{b}\")\n        model.add_linear_constraint(detour >= x[a] + x[b] - 1, name=f\"detour_{a}_{b}\")\n        extra.append(cost * detour)\n    for k, (corridor, fee) in enumerate(corridor_fees):\n        full = model.add_binary_variable(name=f\"corridor_{k}\")\n        model.add_linear_constraint(full >= sum(x[s] for s in corridor) - (len(corridor) - 1),\n                                    name=f\"corridor_{k}\")\n        extra.append(fee * full)\n    model.add_linear_constraint(sum(s.cost * x[s.sid] for s in streets) + sum(extra) <= budget, name=\"budget\")\n\n\ndef build(streets: list[Street], detours: dict[tuple[str, str], int],\n          corridor_fees: list[tuple[list[str], int]], budget: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"street-works\")\n    x = {s.sid: model.add_binary_variable(name=f\"x_{s.sid}\") for s in streets}\n    add_traffic_costs(model, x, streets, detours, corridor_fees, budget)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    streets = [Street(\"Elm\", 100), Street(\"Oak\", 80)]\n    model, x = build(streets, {(\"Elm\", \"Oak\"): 30}, [], 200)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom streets import Street, build\n\n# Street rebuilds: id, cost. One detour pair and one three-street corridor.\nstreets = [Street(\"A\", 70), Street(\"B\", 60), Street(\"C\", 40), Street(\"D\", 30), Street(\"E\", 20), Street(\"Z\", 15)]\ndetours = {(\"A\", \"B\"): 20}\ncorridors = [([\"C\", \"D\", \"E\"], 10)]\n\n\ndef solved(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef fix(variables, plan):\n    for key, var in variables.items():\n        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0\n\n\ndef allowed(plan, budget):\n    model, x = build(streets, detours, corridors, budget)\n    fix(x, plan)\n    return solved(model)\n\n\nprint(\"A+B at budget 150:\", allowed({\"A\", \"B\"}, 150))\nprint(\"A+B at budget 140:\", allowed({\"A\", \"B\"}, 140))\nprint(\"C+D+E at budget 95:\", allowed({\"C\", \"D\", \"E\"}, 95))\nprint(\"C+D+E at budget 100:\", allowed({\"C\", \"D\", \"E\"}, 100))\nprint(\"C+D at budget 70:\", allowed({\"C\", \"D\"}, 70))\n"
         }
       ]
     },
@@ -76,6 +85,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Street:\n    sid: str\n    cost: int        # $k\n\n\ndef add_traffic_costs(model: mathopt.Model, x: dict, streets: list[Street],\n                      detours: dict[tuple[str, str], int], corridor_fees: list[tuple[list[str], int]],\n                      budget: int) -> None:\n    \"\"\"Street costs, plus a detour for each adjacent pair rebuilt together, plus each full corridor's fee.\"\"\"\n    # TODO: a variable per detour and per corridor, their rows, and the budget row.\n    return None\n\n\ndef build(streets: list[Street], detours: dict[tuple[str, str], int],\n          corridor_fees: list[tuple[list[str], int]], budget: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"street-works\")\n    x = {s.sid: model.add_binary_variable(name=f\"x_{s.sid}\") for s in streets}\n    add_traffic_costs(model, x, streets, detours, corridor_fees, budget)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    streets = [Street(\"Elm\", 100), Street(\"Oak\", 80)]\n    model, x = build(streets, {(\"Elm\", \"Oak\"): 30}, [], 200)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom streets import Street, build\n\n# Street rebuilds: id, cost. One detour pair and one three-street corridor.\nstreets = [Street(\"A\", 70), Street(\"B\", 60), Street(\"C\", 40), Street(\"D\", 30), Street(\"E\", 20), Street(\"Z\", 15)]\ndetours = {(\"A\", \"B\"): 20}\ncorridors = [([\"C\", \"D\", \"E\"], 10)]\n\n\ndef solved(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef fix(variables, plan):\n    for key, var in variables.items():\n        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0\n\n\ndef allowed(plan, budget):\n    model, x = build(streets, detours, corridors, budget)\n    fix(x, plan)\n    return solved(model)\n\n\nprint(\"A+B at budget 150:\", allowed({\"A\", \"B\"}, 150))\nprint(\"A+B at budget 140:\", allowed({\"A\", \"B\"}, 140))\nprint(\"C+D+E at budget 95:\", allowed({\"C\", \"D\", \"E\"}, 95))\nprint(\"C+D+E at budget 100:\", allowed({\"C\", \"D\", \"E\"}, 100))\nprint(\"C+D at budget 70:\", allowed({\"C\", \"D\"}, 70))\n"
     }
   ],
   "video": null,
@@ -83,8 +101,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -94,14 +112,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "3a78cb35952b866ae00c41a42e3fa67026539a168c7cf57d20f7933b52910855",
+  "content_sha256": "b490065368e2162414b3ee966b225d4cf1497a564b68ab423c9b8117ed5c4c4a",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Street:\n    sid: str\n    cost: int        # $k\n\n\ndef add_traffic_costs(model: mathopt.Model, x: dict, streets: list[Street],\n                      detours: dict[tuple[str, str], int], corridor_fees: list[tuple[list[str], int]],\n                      budget: int) -> None:\n    \"\"\"Street costs, plus a detour for each adjacent pair rebuilt together, plus each full corridor's fee.\"\"\"\n    # TODO: a variable per detour and per corridor, their rows, and the budget row.\n    return None\n\n\ndef build(streets: list[Street], detours: dict[tuple[str, str], int],\n          corridor_fees: list[tuple[list[str], int]], budget: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"street-works\")\n    x = {s.sid: model.add_binary_variable(name=f\"x_{s.sid}\") for s in streets}\n    add_traffic_costs(model, x, streets, detours, corridor_fees, budget)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    streets = [Street(\"Elm\", 100), Street(\"Oak\", 80)]\n    model, x = build(streets, {(\"Elm\", \"Oak\"): 30}, [], 200)\n    print(len(list(model.linear_constraints())), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-04/practice-1/streets.py",
     "test_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-04/practice-1/test_streets.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/23-binary-logic/prose/unit-04/practice-1/streets.py"
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-04/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -148,6 +166,10 @@
     "concepts": [
       "the product of binaries is replaced by a new binary tied to its factors by linear rows",
       "whether a product is rewarded or charged decides which of its rows are essential"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-04/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/23-binary-logic/prose/unit-04/practice-1/try_it.py"
   }
 }

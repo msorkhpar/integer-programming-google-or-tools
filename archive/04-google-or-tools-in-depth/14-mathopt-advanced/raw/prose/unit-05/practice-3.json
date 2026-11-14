@@ -9,7 +9,7 @@
   "unit": 5,
   "kind": "practice",
   "ordinal": 3,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "An infeasible subsystem as lines a planner can read",
   "blocks": [
     {
@@ -68,6 +68,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef explain(result: mathopt.ComputeInfeasibleSubsystemResult) -> list[str]:\n    \"\"\"Sorted lines, one per side of each row or variable bound, and per integrality, in the subsystem.\"\"\"\n    if result.feasibility != mathopt.FeasibilityStatus.INFEASIBLE:\n        return []\n    subset = result.infeasible_subsystem\n    lines = []\n    for item, sides in [*subset.linear_constraints.items(), *subset.variable_bounds.items()]:\n        if sides.lower:\n            lines.append(f\"{item.name} >= {item.lower_bound:g}\")\n        if sides.upper:\n            lines.append(f\"{item.name} <= {item.upper_bound:g}\")\n    lines += [f\"{v.name} is integer\" for v in subset.variable_integrality]\n    return sorted(lines)\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_variable(lb=0, ub=10, name=\"x\")\n    row = model.add_linear_constraint(x >= 12, name=\"need\")\n    subset = mathopt.ModelSubset(linear_constraints={row: mathopt.ModelSubsetBounds(lower=True)},\n                                 variable_bounds={x: mathopt.ModelSubsetBounds(upper=True)})\n    print(explain(mathopt.ComputeInfeasibleSubsystemResult(\n        feasibility=mathopt.FeasibilityStatus.INFEASIBLE, infeasible_subsystem=subset, is_minimal=True)))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom explain import explain\n\nB = mathopt.ModelSubsetBounds\n\n# A barge plan: tonnes must reach 90, the quay takes at most 70.\nmodel = mathopt.Model(name=\"barge\")\ntonnes = model.add_integer_variable(lb=0, ub=80, name=\"tonnes\")\nquay = model.add_linear_constraint(tonnes <= 70, name=\"quay\")\norder = model.add_linear_constraint(tonnes >= 90, name=\"order\")\nsubset = mathopt.ModelSubset(linear_constraints={order: B(lower=True), quay: B(upper=True)},\n                             variable_bounds={tonnes: B(upper=True)},\n                             variable_integrality=frozenset({tonnes}))\n\nfor status in (mathopt.FeasibilityStatus.INFEASIBLE, mathopt.FeasibilityStatus.FEASIBLE):\n    found = mathopt.ComputeInfeasibleSubsystemResult(feasibility=status, infeasible_subsystem=subset, is_minimal=False)\n    print(f\"lines when {status.name}:\", explain(found))\n"
         }
       ]
     },
@@ -80,6 +89,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef explain(result: mathopt.ComputeInfeasibleSubsystemResult) -> list[str]:\n    \"\"\"Sorted lines, one per side of each row or variable bound, and per integrality, in the subsystem.\"\"\"\n    # TODO: check feasibility, then read linear_constraints, variable_bounds and variable_integrality.\n    return []\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_variable(lb=0, ub=10, name=\"x\")\n    row = model.add_linear_constraint(x >= 12, name=\"need\")\n    subset = mathopt.ModelSubset(linear_constraints={row: mathopt.ModelSubsetBounds(lower=True)},\n                                 variable_bounds={x: mathopt.ModelSubsetBounds(upper=True)})\n    print(explain(mathopt.ComputeInfeasibleSubsystemResult(\n        feasibility=mathopt.FeasibilityStatus.INFEASIBLE, infeasible_subsystem=subset, is_minimal=True)))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom explain import explain\n\nB = mathopt.ModelSubsetBounds\n\n# A barge plan: tonnes must reach 90, the quay takes at most 70.\nmodel = mathopt.Model(name=\"barge\")\ntonnes = model.add_integer_variable(lb=0, ub=80, name=\"tonnes\")\nquay = model.add_linear_constraint(tonnes <= 70, name=\"quay\")\norder = model.add_linear_constraint(tonnes >= 90, name=\"order\")\nsubset = mathopt.ModelSubset(linear_constraints={order: B(lower=True), quay: B(upper=True)},\n                             variable_bounds={tonnes: B(upper=True)},\n                             variable_integrality=frozenset({tonnes}))\n\nfor status in (mathopt.FeasibilityStatus.INFEASIBLE, mathopt.FeasibilityStatus.FEASIBLE):\n    found = mathopt.ComputeInfeasibleSubsystemResult(feasibility=status, infeasible_subsystem=subset, is_minimal=False)\n    print(f\"lines when {status.name}:\", explain(found))\n"
     }
   ],
   "video": null,
@@ -87,8 +105,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 2,
-    "code": 1,
+    "paras": 3,
+    "code": 2,
     "tables": 1,
     "lists": 0,
     "images": 0,
@@ -98,14 +116,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "345de2e94988909bf684a57c2bcc4ad3487e3253e2a4ce6a09eb9c240c893620",
+  "content_sha256": "559f5f044748ac88510e6bbc199eed1f790b3a9ac7837275dd33824a16488a69",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef explain(result: mathopt.ComputeInfeasibleSubsystemResult) -> list[str]:\n    \"\"\"Sorted lines, one per side of each row or variable bound, and per integrality, in the subsystem.\"\"\"\n    # TODO: check feasibility, then read linear_constraints, variable_bounds and variable_integrality.\n    return []\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_variable(lb=0, ub=10, name=\"x\")\n    row = model.add_linear_constraint(x >= 12, name=\"need\")\n    subset = mathopt.ModelSubset(linear_constraints={row: mathopt.ModelSubsetBounds(lower=True)},\n                                 variable_bounds={x: mathopt.ModelSubsetBounds(upper=True)})\n    print(explain(mathopt.ComputeInfeasibleSubsystemResult(\n        feasibility=mathopt.FeasibilityStatus.INFEASIBLE, infeasible_subsystem=subset, is_minimal=True)))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-3/explain.py",
     "test_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-3/test_explain.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-3/explain.py"
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-3/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -151,6 +169,10 @@
     },
     "concepts": [
       "an infeasible subsystem result turned into lines, side by side"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-3/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-3/try_it.py"
   }
 }

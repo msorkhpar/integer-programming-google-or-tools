@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A cut from a pumping LP",
   "blocks": [
     {
@@ -47,6 +47,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef pumping_cut(stations: dict, demand: float, limit: float, price: float, plan: dict[str, int], x: dict):\n    \"\"\"The pumping cost of a fixed plan, and the optimality cut its LP gives, in the master's x.\"\"\"\n    sub = mathopt.Model(name=\"pumping\")\n    flow = {j: sub.add_variable(lb=0, name=f\"flow_{j}\") for j in stations}\n    buy = sub.add_variable(lb=0, name=\"buy\")\n    need = sub.add_linear_constraint(\n        sum(flow.values()) + buy >= demand + sum(s[\"refill\"] * plan[j] for j, s in stations.items()), name=\"need\")\n    caps = {j: sub.add_linear_constraint(flow[j] <= s[\"capacity\"] * plan[j], name=f\"cap_{j}\")\n            for j, s in stations.items()}\n    most = sub.add_linear_constraint(buy <= limit, name=\"limit\")\n    sub.minimize(sum(s[\"energy\"] * flow[j] for j, s in stations.items()) + price * buy)\n    result = mathopt.solve(sub, mathopt.SolverType.GLOP)\n    cut = result.dual_values(need) * (demand + sum(s[\"refill\"] * x[j] for j, s in stations.items()))\n    cut += sum(result.dual_values(caps[j]) * s[\"capacity\"] * x[j] for j, s in stations.items())\n    cut += result.dual_values(most) * limit\n    return result.objective_value(), cut\n\n\nif __name__ == \"__main__\":\n    master = mathopt.Model()\n    x = {\"A\": master.add_binary_variable(name=\"A\")}\n    print(pumping_cut({\"A\": {\"capacity\": 60, \"energy\": 2.0, \"refill\": 5}}, 100, 500, 6.0, {\"A\": 1}, x))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom pump_cut import pumping_cut\n\nstations = {\n    \"ridge\": {\"capacity\": 50, \"energy\": 2.2, \"refill\": 4},\n    \"pond\": {\"capacity\": 90, \"energy\": 1.2, \"refill\": 6},\n}\nmaster = mathopt.Model(name=\"stations\")\nx = {j: master.add_binary_variable(name=j) for j in stations}\n\nfor plan in ({\"ridge\": 0, \"pond\": 0}, {\"ridge\": 1, \"pond\": 0}, {\"ridge\": 1, \"pond\": 1}):\n    cost, cut = pumping_cut(stations, 120, 400, 5.0, plan, x)\n    print(f\"plan {plan}: pumping cost {round(cost, 2)}, cut {cut}\")\n"
         }
       ]
     },
@@ -59,6 +68,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef pumping_cut(stations: dict, demand: float, limit: float, price: float, plan: dict[str, int], x: dict):\n    \"\"\"The pumping cost of a fixed plan, and the optimality cut its LP gives, in the master's x.\"\"\"\n    # TODO: write the subproblem and its cut first, then build, solve and return them.\n    return 0.0, mathopt.LinearExpression()\n\n\nif __name__ == \"__main__\":\n    master = mathopt.Model()\n    x = {\"A\": master.add_binary_variable(name=\"A\")}\n    print(pumping_cut({\"A\": {\"capacity\": 60, \"energy\": 2.0, \"refill\": 5}}, 100, 500, 6.0, {\"A\": 1}, x))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom pump_cut import pumping_cut\n\nstations = {\n    \"ridge\": {\"capacity\": 50, \"energy\": 2.2, \"refill\": 4},\n    \"pond\": {\"capacity\": 90, \"energy\": 1.2, \"refill\": 6},\n}\nmaster = mathopt.Model(name=\"stations\")\nx = {j: master.add_binary_variable(name=j) for j in stations}\n\nfor plan in ({\"ridge\": 0, \"pond\": 0}, {\"ridge\": 1, \"pond\": 0}, {\"ridge\": 1, \"pond\": 1}):\n    cost, cut = pumping_cut(stations, 120, 400, 5.0, plan, x)\n    print(f\"plan {plan}: pumping cost {round(cost, 2)}, cut {cut}\")\n"
     }
   ],
   "video": null,
@@ -66,8 +84,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -77,14 +95,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "c246b51b0046990a1f2a78770ec553cc0aba51272e20b4663ae3a54f56dcf5e2",
+  "content_sha256": "f736341edb3d1758b3a249abe42975f02929452716f99efe2b433247347cf173",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef pumping_cut(stations: dict, demand: float, limit: float, price: float, plan: dict[str, int], x: dict):\n    \"\"\"The pumping cost of a fixed plan, and the optimality cut its LP gives, in the master's x.\"\"\"\n    # TODO: write the subproblem and its cut first, then build, solve and return them.\n    return 0.0, mathopt.LinearExpression()\n\n\nif __name__ == \"__main__\":\n    master = mathopt.Model()\n    x = {\"A\": master.add_binary_variable(name=\"A\")}\n    print(pumping_cut({\"A\": {\"capacity\": 60, \"energy\": 2.0, \"refill\": 5}}, 100, 500, 6.0, {\"A\": 1}, x))\n",
   "exercise": {
     "main_path": "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-02/practice-1/pump_cut.py",
     "test_path": "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-02/practice-1/test_pump_cut.py",
     "run_command": [
       "python3",
-      "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-02/practice-1/pump_cut.py"
+      "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -131,6 +149,10 @@
     "concepts": [
       "with the integer plan fixed, the continuous decisions form an LP whose right-hand sides depend on the plan",
       "the subproblem's duals times its right-hand sides, written in the master's variables, give a cut exact at the plan and valid for all others"
-    ]
+    ],
+    "files": [
+      "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/11-performance-at-scale/44-decomposition-and-heuristics/prose/unit-02/practice-1/try_it.py"
   }
 }

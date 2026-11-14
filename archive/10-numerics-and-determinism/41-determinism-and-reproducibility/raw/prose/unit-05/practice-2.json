@@ -9,7 +9,7 @@
   "unit": 5,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A determinism check for HiGHS and CP-SAT",
   "blocks": [
     {
@@ -43,6 +43,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport hashlib\nimport json\n\n\ndef canonical(manifest: dict) -> bytes:\n    return json.dumps(manifest, sort_keys=True, separators=(\",\", \":\")).encode(\"utf-8\")\n\n\ndef changed_fields(a: dict, b: dict) -> list[str]:\n    \"\"\"Top-level keys whose values differ, or that only one manifest has.\"\"\"\n    return sorted(k for k in set(a) | set(b) if a.get(k) != b.get(k))\n\n\ndef assert_deterministic(run, runs: int = 5) -> str:\n    \"\"\"Call run() `runs` times; return the manifest digest, or raise AssertionError naming the change.\"\"\"\n    seen = [canonical(run()) for _ in range(runs)]\n    odd = next((k for k, m in enumerate(seen) if m != seen[0]), None)\n    if odd is not None:\n        fields = changed_fields(json.loads(seen[0]), json.loads(seen[odd]))\n        raise AssertionError(f\"run {odd + 1} of {runs} differs from run 1 in: {', '.join(fields)}\")\n    return hashlib.sha256(seen[0]).hexdigest()\n\n\nif __name__ == \"__main__\":\n    print(assert_deterministic(lambda: {\"status\": \"OPTIMAL\", \"objective\": 17.0}, 3))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom determinism import assert_deterministic\n\n\ndef steady():\n    return {\"status\": \"OPTIMAL\", \"objective\": 31.0, \"plan\": [[\"D1\", \"z2\"], [\"D2\", \"z1\"]]}\n\n\ncalls = []\n\n\ndef drifting():\n    calls.append(1)\n    plan = [[\"D1\", \"z2\"], [\"D2\", \"z1\"]] if len(calls) < 3 else [[\"D1\", \"z1\"], [\"D2\", \"z2\"]]\n    return {\"status\": \"OPTIMAL\", \"objective\": 31.0, \"plan\": plan}\n\n\nprint(\"digest of 4 steady runs:\", assert_deterministic(steady, 4))\ntry:\n    print(\"digest of 4 drifting runs:\", assert_deterministic(drifting, 4))\nexcept AssertionError as error:\n    print(\"4 drifting runs refused:\", error)\n"
         }
       ]
     },
@@ -55,6 +64,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport hashlib\nimport json\n\n\ndef canonical(manifest: dict) -> bytes:\n    return json.dumps(manifest, sort_keys=True, separators=(\",\", \":\")).encode(\"utf-8\")\n\n\ndef changed_fields(a: dict, b: dict) -> list[str]:\n    \"\"\"Top-level keys whose values differ, or that only one manifest has.\"\"\"\n    return sorted(k for k in set(a) | set(b) if a.get(k) != b.get(k))\n\n\ndef assert_deterministic(run, runs: int = 5) -> str:\n    \"\"\"Call run() `runs` times; return the manifest digest, or raise AssertionError naming the change.\"\"\"\n    # TODO: write it.\n    return \"\"\n\n\nif __name__ == \"__main__\":\n    print(assert_deterministic(lambda: {\"status\": \"OPTIMAL\", \"objective\": 17.0}, 3))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom determinism import assert_deterministic\n\n\ndef steady():\n    return {\"status\": \"OPTIMAL\", \"objective\": 31.0, \"plan\": [[\"D1\", \"z2\"], [\"D2\", \"z1\"]]}\n\n\ncalls = []\n\n\ndef drifting():\n    calls.append(1)\n    plan = [[\"D1\", \"z2\"], [\"D2\", \"z1\"]] if len(calls) < 3 else [[\"D1\", \"z1\"], [\"D2\", \"z2\"]]\n    return {\"status\": \"OPTIMAL\", \"objective\": 31.0, \"plan\": plan}\n\n\nprint(\"digest of 4 steady runs:\", assert_deterministic(steady, 4))\ntry:\n    print(\"digest of 4 drifting runs:\", assert_deterministic(drifting, 4))\nexcept AssertionError as error:\n    print(\"4 drifting runs refused:\", error)\n"
     }
   ],
   "video": null,
@@ -62,8 +80,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -73,14 +91,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "3dd8f76edf904d05be5d2d11be8e5973cb1a2cd81b465abbc76ffa728706e390",
+  "content_sha256": "62b0f9c69eb7c2a7702d51374e2d4f908318a44ab9cdd3eb99b060cb7651550a",
   "starting_code": "from __future__ import annotations\n\nimport hashlib\nimport json\n\n\ndef canonical(manifest: dict) -> bytes:\n    return json.dumps(manifest, sort_keys=True, separators=(\",\", \":\")).encode(\"utf-8\")\n\n\ndef changed_fields(a: dict, b: dict) -> list[str]:\n    \"\"\"Top-level keys whose values differ, or that only one manifest has.\"\"\"\n    return sorted(k for k in set(a) | set(b) if a.get(k) != b.get(k))\n\n\ndef assert_deterministic(run, runs: int = 5) -> str:\n    \"\"\"Call run() `runs` times; return the manifest digest, or raise AssertionError naming the change.\"\"\"\n    # TODO: write it.\n    return \"\"\n\n\nif __name__ == \"__main__\":\n    print(assert_deterministic(lambda: {\"status\": \"OPTIMAL\", \"objective\": 17.0}, 3))\n",
   "exercise": {
     "main_path": "practice/10-numerics-and-determinism/41-determinism-and-reproducibility/prose/unit-05/practice-2/determinism.py",
     "test_path": "practice/10-numerics-and-determinism/41-determinism-and-reproducibility/prose/unit-05/practice-2/test_determinism.py",
     "run_command": [
       "python3",
-      "practice/10-numerics-and-determinism/41-determinism-and-reproducibility/prose/unit-05/practice-2/determinism.py"
+      "practice/10-numerics-and-determinism/41-determinism-and-reproducibility/prose/unit-05/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -126,6 +144,10 @@
     },
     "concepts": [
       "every run is compared with the first as canonical bytes, and a difference fails with the changed fields named"
-    ]
+    ],
+    "files": [
+      "practice/10-numerics-and-determinism/41-determinism-and-reproducibility/prose/unit-05/practice-2/try_it.py"
+    ],
+    "try_file": "practice/10-numerics-and-determinism/41-determinism-and-reproducibility/prose/unit-05/practice-2/try_it.py"
   }
 }

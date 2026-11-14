@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Generators that are either off or above their minimum",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Unit:\n    name: str\n    min_mw: float\n    max_mw: float\n\n\ndef add_unit_rules(model: mathopt.Model, on: dict, power: dict, units: list[Unit]) -> None:\n    \"\"\"Off makes no power; on runs between the unit's minimum and maximum.\"\"\"\n    for u in units:\n        model.add_indicator_constraint(indicator=on[u.name], activate_on_zero=True,\n                                       implied_constraint=power[u.name] <= 0, name=f\"off_{u.name}\")\n        model.add_indicator_constraint(indicator=on[u.name], implied_constraint=power[u.name] >= u.min_mw,\n                                       name=f\"on_{u.name}\")\n\n\ndef build(units: list[Unit], demand: float) -> tuple[mathopt.Model, dict, dict]:\n    model = mathopt.Model(name=\"island hour\")\n    on = {u.name: model.add_binary_variable(name=f\"on_{u.name}\") for u in units}\n    power = {u.name: model.add_variable(lb=0, ub=u.max_mw, name=f\"p_{u.name}\") for u in units}\n    add_unit_rules(model, on, power, units)\n    model.add_linear_constraint(sum(power.values()) >= demand, name=\"demand\")\n    model.minimize(sum(on.values()))\n    return model, on, power\n\n\nif __name__ == \"__main__\":\n    model, on, power = build([Unit(\"D1\", 10, 40), Unit(\"D2\", 25, 60)], 50)\n    print(model.get_num_indicator_constraints(), \"indicator constraints\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport datetime\n\nfrom ortools.math_opt.python import mathopt\n\nfrom units import Unit, build\n\nunits = [Unit(\"G1\", 12, 30), Unit(\"G2\", 20, 50), Unit(\"G3\", 8, 15)]\nparams = mathopt.SolveParameters(time_limit=datetime.timedelta(seconds=10))\n\nfor demand in (14, 45, 85):\n    model, on, power = build(units, demand)\n    result = mathopt.solve(model, mathopt.SolverType.GSCIP, params=params)\n    print(f\"demand {demand}:\", result.termination.reason.name, \"indicators\", model.get_num_indicator_constraints())\n    if result.has_primal_feasible_solution():\n        print(f\"  output at demand {demand}:\", {n: round(result.variable_values(v), 2) for n, v in power.items()})\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Unit:\n    name: str\n    min_mw: float\n    max_mw: float\n\n\ndef add_unit_rules(model: mathopt.Model, on: dict, power: dict, units: list[Unit]) -> None:\n    \"\"\"Off makes no power; on runs between the unit's minimum and maximum.\"\"\"\n    # TODO: two indicator constraints per unit, `off_<name>` and `on_<name>`.\n    return None\n\n\ndef build(units: list[Unit], demand: float) -> tuple[mathopt.Model, dict, dict]:\n    model = mathopt.Model(name=\"island hour\")\n    on = {u.name: model.add_binary_variable(name=f\"on_{u.name}\") for u in units}\n    power = {u.name: model.add_variable(lb=0, ub=u.max_mw, name=f\"p_{u.name}\") for u in units}\n    add_unit_rules(model, on, power, units)\n    model.add_linear_constraint(sum(power.values()) >= demand, name=\"demand\")\n    model.minimize(sum(on.values()))\n    return model, on, power\n\n\nif __name__ == \"__main__\":\n    model, on, power = build([Unit(\"D1\", 10, 40), Unit(\"D2\", 25, 60)], 50)\n    print(model.get_num_indicator_constraints(), \"indicator constraints\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport datetime\n\nfrom ortools.math_opt.python import mathopt\n\nfrom units import Unit, build\n\nunits = [Unit(\"G1\", 12, 30), Unit(\"G2\", 20, 50), Unit(\"G3\", 8, 15)]\nparams = mathopt.SolveParameters(time_limit=datetime.timedelta(seconds=10))\n\nfor demand in (14, 45, 85):\n    model, on, power = build(units, demand)\n    result = mathopt.solve(model, mathopt.SolverType.GSCIP, params=params)\n    print(f\"demand {demand}:\", result.termination.reason.name, \"indicators\", model.get_num_indicator_constraints())\n    if result.has_primal_feasible_solution():\n        print(f\"  output at demand {demand}:\", {n: round(result.variable_values(v), 2) for n, v in power.items()})\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "0c5991d4a8746b95d570c30073e3d0190b38302b24cdee393b082de6e915aa3c",
+  "content_sha256": "498286f6ca4ba366fac4ae81a1f346d06d4fa6e5eca095b49914335b0490e314",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Unit:\n    name: str\n    min_mw: float\n    max_mw: float\n\n\ndef add_unit_rules(model: mathopt.Model, on: dict, power: dict, units: list[Unit]) -> None:\n    \"\"\"Off makes no power; on runs between the unit's minimum and maximum.\"\"\"\n    # TODO: two indicator constraints per unit, `off_<name>` and `on_<name>`.\n    return None\n\n\ndef build(units: list[Unit], demand: float) -> tuple[mathopt.Model, dict, dict]:\n    model = mathopt.Model(name=\"island hour\")\n    on = {u.name: model.add_binary_variable(name=f\"on_{u.name}\") for u in units}\n    power = {u.name: model.add_variable(lb=0, ub=u.max_mw, name=f\"p_{u.name}\") for u in units}\n    add_unit_rules(model, on, power, units)\n    model.add_linear_constraint(sum(power.values()) >= demand, name=\"demand\")\n    model.minimize(sum(on.values()))\n    return model, on, power\n\n\nif __name__ == \"__main__\":\n    model, on, power = build([Unit(\"D1\", 10, 40), Unit(\"D2\", 25, 60)], 50)\n    print(model.get_num_indicator_constraints(), \"indicator constraints\")\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-1/units.py",
     "test_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-1/test_units.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-1/units.py"
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -134,6 +152,10 @@
     },
     "concepts": [
       "an implication written as an indicator constraint, switched on at zero or at one, with one or two bounds"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-1/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-01/practice-1/try_it.py"
   }
 }

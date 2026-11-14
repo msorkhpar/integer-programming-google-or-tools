@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Solve a tour and walk it",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp, routing_enums_pb2\n\n\ndef build(cost: list[list[int]], depot: int):\n    \"\"\"Given: a one-vehicle routing model whose arc from node a to node b costs cost[a][b].\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(cost), 1, depot)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def arc(from_index, to_index):\n        return cost[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    routing.SetArcCostEvaluatorOfAllVehicles(routing.RegisterTransitCallback(arc))\n    return manager, routing\n\n\ndef solve_tour(cost: list[list[int]], depot: int) -> tuple[list[int], int]:\n    \"\"\"The tour as nodes, from the depot back to the depot, and its total cost.\"\"\"\n    manager, routing = build(cost, depot)\n    params = pywrapcp.DefaultRoutingSearchParameters()\n    params.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC\n    solution = routing.SolveWithParameters(params)\n    index, tour, total = routing.Start(0), [], 0\n    while not routing.IsEnd(index):\n        tour.append(manager.IndexToNode(index))\n        following = solution.Value(routing.NextVar(index))\n        total += routing.GetArcCostForVehicle(index, following, 0)\n        index = following\n    tour.append(manager.IndexToNode(index))\n    return tour, total\n\n\nif __name__ == \"__main__\":\n    print(solve_tour([[0, 2, 9, 10], [1, 0, 6, 4], [15, 7, 0, 8], [6, 3, 12, 0]], 0))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom walk import solve_tour\n\n# A window cleaner's yard (0) and five houses, in minutes.\nhouses = [\n    [0, 9, 14, 6, 11, 7],\n    [9, 0, 5, 10, 13, 12],\n    [14, 5, 0, 8, 4, 15],\n    [6, 10, 8, 0, 5, 3],\n    [11, 13, 4, 5, 0, 9],\n    [7, 12, 15, 3, 9, 0],\n]\n\ntour, total = solve_tour(houses, 0)\nprint(\"tour from yard 0:\", tour)\nprint(\"its total minutes:\", total)\ntour, total = solve_tour(houses, 3)\nprint(\"tour from house 3:\", tour, \"total:\", total)\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp, routing_enums_pb2\n\n\ndef build(cost: list[list[int]], depot: int):\n    \"\"\"Given: a one-vehicle routing model whose arc from node a to node b costs cost[a][b].\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(cost), 1, depot)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def arc(from_index, to_index):\n        return cost[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    routing.SetArcCostEvaluatorOfAllVehicles(routing.RegisterTransitCallback(arc))\n    return manager, routing\n\n\ndef solve_tour(cost: list[list[int]], depot: int) -> tuple[list[int], int]:\n    \"\"\"The tour as nodes, from the depot back to the depot, and its total cost.\"\"\"\n    # TODO: solve with PATH_CHEAPEST_ARC, then walk vehicle 0's route.\n    return [depot, depot], 0\n\n\nif __name__ == \"__main__\":\n    print(solve_tour([[0, 2, 9, 10], [1, 0, 6, 4], [15, 7, 0, 8], [6, 3, 12, 0]], 0))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom walk import solve_tour\n\n# A window cleaner's yard (0) and five houses, in minutes.\nhouses = [\n    [0, 9, 14, 6, 11, 7],\n    [9, 0, 5, 10, 13, 12],\n    [14, 5, 0, 8, 4, 15],\n    [6, 10, 8, 0, 5, 3],\n    [11, 13, 4, 5, 0, 9],\n    [7, 12, 15, 3, 9, 0],\n]\n\ntour, total = solve_tour(houses, 0)\nprint(\"tour from yard 0:\", tour)\nprint(\"its total minutes:\", total)\ntour, total = solve_tour(houses, 3)\nprint(\"tour from house 3:\", tour, \"total:\", total)\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "46089123a23f499f7ef34c9350ddde89d2c52454908c164518e981b1e10be2a8",
+  "content_sha256": "31fbf07b099ce2935e264539d155d4699184ae6abdeb647c05608cb0eb91acce",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp, routing_enums_pb2\n\n\ndef build(cost: list[list[int]], depot: int):\n    \"\"\"Given: a one-vehicle routing model whose arc from node a to node b costs cost[a][b].\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(cost), 1, depot)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def arc(from_index, to_index):\n        return cost[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    routing.SetArcCostEvaluatorOfAllVehicles(routing.RegisterTransitCallback(arc))\n    return manager, routing\n\n\ndef solve_tour(cost: list[list[int]], depot: int) -> tuple[list[int], int]:\n    \"\"\"The tour as nodes, from the depot back to the depot, and its total cost.\"\"\"\n    # TODO: solve with PATH_CHEAPEST_ARC, then walk vehicle 0's route.\n    return [depot, depot], 0\n\n\nif __name__ == \"__main__\":\n    print(solve_tour([[0, 2, 9, 10], [1, 0, 6, 4], [15, 7, 0, 8], [6, 3, 12, 0]], 0))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-01/practice-2/walk.py",
     "test_path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-01/practice-2/test_walk.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-01/practice-2/walk.py"
+      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -130,6 +148,10 @@
     },
     "concepts": [
       "a route is read by following NextVar from the vehicle's start until its end"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-01/practice-2/try_it.py"
   }
 }

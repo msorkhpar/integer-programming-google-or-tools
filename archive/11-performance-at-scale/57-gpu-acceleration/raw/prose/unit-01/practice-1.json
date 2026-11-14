@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "PDHG for a blend with exact nutrient rows",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport numpy as np\n\n\ndef pdhg_step(A, b, c, u, x, y, tau: float, sigma: float):\n    \"\"\"One PDHG iteration for  min c'x  s.t.  A x = b,  0 <= x <= u.  Returns (x_new, y_new).\"\"\"\n    x_new = np.clip(x - tau * (c - A.T @ y), 0.0, u)\n    y_new = y + sigma * (b - A @ (2 * x_new - x))\n    return x_new, y_new\n\n\ndef solve(A, b, c, u, iterations: int):\n    \"\"\"Run pdhg_step from zero with tau = sigma = 0.9 / ||A||_F; return the last x and y.\"\"\"\n    tau = sigma = 0.9 / np.linalg.norm(A)\n    x, y = np.zeros(A.shape[1]), np.zeros(A.shape[0])\n    for _ in range(iterations):\n        x, y = pdhg_step(A, b, c, u, x, y, tau, sigma)\n    return x, y\n\n\nif __name__ == \"__main__\":\n    A = np.array([[1.0, 1.0]])\n    x, y = solve(A, np.array([4.0]), np.array([1.0, 2.0]), np.array([3.0, 3.0]), 2000)\n    print(np.round(x, 4), np.round(y, 4))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nimport numpy as np\n\nfrom blend import pdhg_step, solve\n\n# min 2 x1 + 1 x2 + 3 x3  s.t.  x1 + x2 + x3 = 6,  x1 - x2 = 1,  0 <= x <= 4\nA = np.array([[1.0, 1.0, 1.0], [1.0, -1.0, 0.0]])\nb = np.array([6.0, 1.0])\nc = np.array([2.0, 1.0, 3.0])\nu = np.array([4.0, 4.0, 4.0])\n\nx, y = pdhg_step(A, b, c, u, np.zeros(3), np.zeros(2), 0.2, 0.2)\nprint(\"one step from zero, tau = sigma = 0.2: x\", np.round(x, 4), \"y\", np.round(y, 4))\nfor iterations in (10, 5000):\n    x, y = solve(A, b, c, u, iterations)\n    print(f\"{iterations} iterations: x {np.round(x, 4)}, y {np.round(y, 4)}, cost {round(float(c @ x), 4)},\"\n          f\" row error {round(float(np.max(np.abs(A @ x - b))), 6)}\")\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport numpy as np\n\n\ndef pdhg_step(A, b, c, u, x, y, tau: float, sigma: float):\n    \"\"\"One PDHG iteration for  min c'x  s.t.  A x = b,  0 <= x <= u.  Returns (x_new, y_new).\"\"\"\n    # TODO: the primal step (clipped to the bounds), then the dual step at the look-ahead point.\n    return x.copy(), y.copy()\n\n\ndef solve(A, b, c, u, iterations: int):\n    \"\"\"Run pdhg_step from zero with tau = sigma = 0.9 / ||A||_F; return the last x and y.\"\"\"\n    tau = sigma = 0.9 / np.linalg.norm(A)\n    x, y = np.zeros(A.shape[1]), np.zeros(A.shape[0])\n    for _ in range(iterations):\n        x, y = pdhg_step(A, b, c, u, x, y, tau, sigma)\n    return x, y\n\n\nif __name__ == \"__main__\":\n    A = np.array([[1.0, 1.0]])\n    x, y = solve(A, np.array([4.0]), np.array([1.0, 2.0]), np.array([3.0, 3.0]), 2000)\n    print(np.round(x, 4), np.round(y, 4))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nimport numpy as np\n\nfrom blend import pdhg_step, solve\n\n# min 2 x1 + 1 x2 + 3 x3  s.t.  x1 + x2 + x3 = 6,  x1 - x2 = 1,  0 <= x <= 4\nA = np.array([[1.0, 1.0, 1.0], [1.0, -1.0, 0.0]])\nb = np.array([6.0, 1.0])\nc = np.array([2.0, 1.0, 3.0])\nu = np.array([4.0, 4.0, 4.0])\n\nx, y = pdhg_step(A, b, c, u, np.zeros(3), np.zeros(2), 0.2, 0.2)\nprint(\"one step from zero, tau = sigma = 0.2: x\", np.round(x, 4), \"y\", np.round(y, 4))\nfor iterations in (10, 5000):\n    x, y = solve(A, b, c, u, iterations)\n    print(f\"{iterations} iterations: x {np.round(x, 4)}, y {np.round(y, 4)}, cost {round(float(c @ x), 4)},\"\n          f\" row error {round(float(np.max(np.abs(A @ x - b))), 6)}\")\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "211238b9b685bf0b56e753f1c95df61e7842dc937f80866fe04d7b1f07bd3573",
+  "content_sha256": "4ae3265861705535639c583a9417cdc957858672e0cfe845c240cc549df97e21",
   "starting_code": "from __future__ import annotations\n\nimport numpy as np\n\n\ndef pdhg_step(A, b, c, u, x, y, tau: float, sigma: float):\n    \"\"\"One PDHG iteration for  min c'x  s.t.  A x = b,  0 <= x <= u.  Returns (x_new, y_new).\"\"\"\n    # TODO: the primal step (clipped to the bounds), then the dual step at the look-ahead point.\n    return x.copy(), y.copy()\n\n\ndef solve(A, b, c, u, iterations: int):\n    \"\"\"Run pdhg_step from zero with tau = sigma = 0.9 / ||A||_F; return the last x and y.\"\"\"\n    tau = sigma = 0.9 / np.linalg.norm(A)\n    x, y = np.zeros(A.shape[1]), np.zeros(A.shape[0])\n    for _ in range(iterations):\n        x, y = pdhg_step(A, b, c, u, x, y, tau, sigma)\n    return x, y\n\n\nif __name__ == \"__main__\":\n    A = np.array([[1.0, 1.0]])\n    x, y = solve(A, np.array([4.0]), np.array([1.0, 2.0]), np.array([3.0, 3.0]), 2000)\n    print(np.round(x, 4), np.round(y, 4))\n",
   "exercise": {
     "main_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-01/practice-1/blend.py",
     "test_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-01/practice-1/test_blend.py",
     "run_command": [
       "python3",
-      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-01/practice-1/blend.py"
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-01/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -144,6 +162,10 @@
     },
     "concepts": [
       "one PDHG iteration is a clipped primal step and a dual step at the look-ahead point, with each price clipped by its row's sides"
-    ]
+    ],
+    "files": [
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-01/practice-1/try_it.py"
+    ],
+    "try_file": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-01/practice-1/try_it.py"
   }
 }

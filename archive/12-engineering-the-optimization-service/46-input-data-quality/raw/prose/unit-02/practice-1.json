@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Cross-job checks for a track-renewal snapshot",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom collections import Counter\n\n\ndef required(snapshot: dict) -> set[str]:\n    \"\"\"Jobs every plan must do: the required ones and, through `after`, all their prerequisites.\"\"\"\n    by_id = {j[\"id\"]: j for j in snapshot[\"jobs\"]}\n    need, todo = set(), [j[\"id\"] for j in snapshot[\"jobs\"] if j[\"required\"]]\n    while todo:\n        jid = todo.pop()\n        if jid not in need:\n            need.add(jid)\n            if by_id[jid][\"after\"]:\n                todo.append(by_id[jid][\"after\"])\n    return need\n\n\ndef cross_checks(snapshot: dict) -> list[tuple[str, str]]:\n    \"\"\"(rule, subject) for each cross-job problem that proves no plan exists, sorted.\"\"\"\n    by_id = {j[\"id\"]: j for j in snapshot[\"jobs\"]}\n    need = required(snapshot)\n    found = []\n    taken = Counter(by_id[jid][\"exclusive\"] for jid in need if by_id[jid][\"exclusive\"])\n    found += [(\"exclusive-required\", group) for group, n in taken.items() if n > 1]\n    for crew, supply in snapshot[\"crews\"].items():\n        demand = sum(by_id[jid][\"crew_weeks\"] for jid in need if by_id[jid][\"crew\"] == crew)\n        if demand > supply:\n            found.append((\"crew-short\", crew))\n    return sorted(found)\n\n\nif __name__ == \"__main__\":\n    jobs = [{\"id\": \"T1\", \"crew\": \"track\", \"crew_weeks\": 4, \"required\": True, \"after\": None, \"exclusive\": \"G1\"},\n            {\"id\": \"T2\", \"crew\": \"track\", \"crew_weeks\": 3, \"required\": True, \"after\": None, \"exclusive\": \"G1\"}]\n    print(cross_checks({\"crews\": {\"track\": 10}, \"jobs\": jobs}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport copy\n\nfrom cross import cross_checks\n\nclean = {\n    \"crews\": {\"paving\": 10, \"drainage\": 6},\n    \"jobs\": [\n        {\"id\": \"R1\", \"crew\": \"paving\", \"crew_weeks\": 6, \"required\": True, \"after\": None, \"exclusive\": None},\n        {\"id\": \"R2\", \"crew\": \"paving\", \"crew_weeks\": 3, \"required\": False, \"after\": None, \"exclusive\": \"K1\"},\n        {\"id\": \"R3\", \"crew\": \"paving\", \"crew_weeks\": 2, \"required\": False, \"after\": None, \"exclusive\": \"K1\"},\n        {\"id\": \"D1\", \"crew\": \"drainage\", \"crew_weeks\": 4, \"required\": False, \"after\": \"R2\", \"exclusive\": None},\n    ],\n}\nboth = copy.deepcopy(clean)\nboth[\"jobs\"][2][\"required\"] = True\nboth[\"jobs\"][3][\"required\"] = True\n\nprint(\"clean snapshot:\", cross_checks(clean))\nprint(\"D1 and R3 required:\", cross_checks(both))\none = copy.deepcopy(clean)\none[\"jobs\"][2][\"required\"] = True\nprint(\"R3 required:\", cross_checks(one))\none[\"jobs\"][0][\"crew_weeks\"] = 9\nprint(\"R3 required, R1 at 9 weeks:\", cross_checks(one))\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom collections import Counter\n\n\ndef required(snapshot: dict) -> set[str]:\n    \"\"\"Jobs every plan must do: the required ones and, through `after`, all their prerequisites.\"\"\"\n    # TODO: the required jobs, then their prerequisites, and theirs, until none is new.\n    return set()\n\n\ndef cross_checks(snapshot: dict) -> list[tuple[str, str]]:\n    \"\"\"(rule, subject) for each cross-job problem that proves no plan exists, sorted.\"\"\"\n    # TODO: write the two rules from the statement, using required().\n    return [(\"not-checked\", \"\")]\n\n\nif __name__ == \"__main__\":\n    jobs = [{\"id\": \"T1\", \"crew\": \"track\", \"crew_weeks\": 4, \"required\": True, \"after\": None, \"exclusive\": \"G1\"},\n            {\"id\": \"T2\", \"crew\": \"track\", \"crew_weeks\": 3, \"required\": True, \"after\": None, \"exclusive\": \"G1\"}]\n    print(cross_checks({\"crews\": {\"track\": 10}, \"jobs\": jobs}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport copy\n\nfrom cross import cross_checks\n\nclean = {\n    \"crews\": {\"paving\": 10, \"drainage\": 6},\n    \"jobs\": [\n        {\"id\": \"R1\", \"crew\": \"paving\", \"crew_weeks\": 6, \"required\": True, \"after\": None, \"exclusive\": None},\n        {\"id\": \"R2\", \"crew\": \"paving\", \"crew_weeks\": 3, \"required\": False, \"after\": None, \"exclusive\": \"K1\"},\n        {\"id\": \"R3\", \"crew\": \"paving\", \"crew_weeks\": 2, \"required\": False, \"after\": None, \"exclusive\": \"K1\"},\n        {\"id\": \"D1\", \"crew\": \"drainage\", \"crew_weeks\": 4, \"required\": False, \"after\": \"R2\", \"exclusive\": None},\n    ],\n}\nboth = copy.deepcopy(clean)\nboth[\"jobs\"][2][\"required\"] = True\nboth[\"jobs\"][3][\"required\"] = True\n\nprint(\"clean snapshot:\", cross_checks(clean))\nprint(\"D1 and R3 required:\", cross_checks(both))\none = copy.deepcopy(clean)\none[\"jobs\"][2][\"required\"] = True\nprint(\"R3 required:\", cross_checks(one))\none[\"jobs\"][0][\"crew_weeks\"] = 9\nprint(\"R3 required, R1 at 9 weeks:\", cross_checks(one))\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 2,
+    "paras": 4,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "a6d4ed8f3a010f8c58676a0ed939a7974bb4fb462025003b8dd4c888cdfa97ab",
+  "content_sha256": "f0e6cf250f36f4a9a15a41ceb411ce100c1d93476018d1f79cf7d25ca450e4e0",
   "starting_code": "from __future__ import annotations\n\nfrom collections import Counter\n\n\ndef required(snapshot: dict) -> set[str]:\n    \"\"\"Jobs every plan must do: the required ones and, through `after`, all their prerequisites.\"\"\"\n    # TODO: the required jobs, then their prerequisites, and theirs, until none is new.\n    return set()\n\n\ndef cross_checks(snapshot: dict) -> list[tuple[str, str]]:\n    \"\"\"(rule, subject) for each cross-job problem that proves no plan exists, sorted.\"\"\"\n    # TODO: write the two rules from the statement, using required().\n    return [(\"not-checked\", \"\")]\n\n\nif __name__ == \"__main__\":\n    jobs = [{\"id\": \"T1\", \"crew\": \"track\", \"crew_weeks\": 4, \"required\": True, \"after\": None, \"exclusive\": \"G1\"},\n            {\"id\": \"T2\", \"crew\": \"track\", \"crew_weeks\": 3, \"required\": True, \"after\": None, \"exclusive\": \"G1\"}]\n    print(cross_checks({\"crews\": {\"track\": 10}, \"jobs\": jobs}))\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-1/cross.py",
     "test_path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-1/test_cross.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-1/cross.py"
+      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -149,6 +167,10 @@
     },
     "concepts": [
       "rules that look across several jobs at once, counting a required job's prerequisites as required, and firing only when no plan can exist"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-02/practice-1/try_it.py"
   }
 }

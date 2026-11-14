@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Check a Batch submission before moto would accept anything",
   "blocks": [
     {
@@ -54,6 +54,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport re\n\n#: Fargate's vCPU values and the memory (MiB) each allows, from the AWS Batch API reference.\nFARGATE = {\n    0.25: [512, 1024, 2048],\n    0.5: list(range(1024, 4096 + 1, 1024)),\n    1.0: list(range(2048, 8192 + 1, 1024)),\n    2.0: list(range(4096, 16384 + 1, 1024)),\n    4.0: list(range(8192, 30720 + 1, 1024)),\n    8.0: list(range(16384, 61440 + 1, 4096)),\n    16.0: list(range(32768, 122880 + 1, 8192)),\n    32.0: [61440, 122880, 249856],\n}\nNAME = re.compile(r\"[A-Za-z0-9][A-Za-z0-9_-]{0,127}\")\n\n\ndef problems(request: dict) -> list[str]:\n    \"\"\"Every rule of AWS Batch's SubmitJob that a Fargate request breaks, in the order checked.\"\"\"\n    found = []\n    name = request.get(\"jobName\", \"\")\n    if not NAME.fullmatch(name):\n        found.append(f\"jobName {name!r} is not a valid job name\")\n    seconds = request.get(\"timeout\", {}).get(\"attemptDurationSeconds\")\n    if seconds is not None and seconds < 60:\n        found.append(f\"timeout {seconds} s is under 60 s\")\n    attempts = request.get(\"retryStrategy\", {}).get(\"attempts\")\n    if attempts is not None and not 1 <= attempts <= 10:\n        found.append(f\"retry attempts {attempts} is outside 1-10\")\n    overrides = request.get(\"containerOverrides\", {})\n    size = {r[\"type\"]: r[\"value\"] for r in overrides.get(\"resourceRequirements\", [])}\n    if (\"VCPU\" in size) != (\"MEMORY\" in size):\n        found.append(\"VCPU and MEMORY must be given together\")\n    elif size and int(size[\"MEMORY\"]) not in FARGATE.get(float(size[\"VCPU\"]), []):\n        found.append(f\"VCPU {size['VCPU']} with MEMORY {size['MEMORY']} is not a Fargate size\")\n    seen = set()\n    for variable in overrides.get(\"environment\", []):\n        if variable[\"name\"] in seen:\n            found.append(f\"environment variable {variable['name']} is set twice\")\n        seen.add(variable[\"name\"])\n    return found\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom submit_check import problems\n\nrequest = {\n    \"jobName\": \"solve-0107\",\n    \"jobQueue\": \"depot-solves\",\n    \"jobDefinition\": \"depot-solve\",\n    \"containerOverrides\": {\n        \"environment\": [{\"name\": \"SCENARIO\", \"value\": \"north\"}],\n        \"resourceRequirements\": [{\"type\": \"VCPU\", \"value\": \"1\"}, {\"type\": \"MEMORY\", \"value\": \"4096\"}],\n    },\n    \"timeout\": {\"attemptDurationSeconds\": 900},\n    \"retryStrategy\": {\"attempts\": 3},\n}\nprint(\"request solve-0107:\", problems(request))\n\nodd = {**request, \"jobName\": \"-solve 7\", \"timeout\": {\"attemptDurationSeconds\": 45}}\nprint(\"name '-solve 7', timeout 45 s:\", problems(odd))\n\nbig = {**request, \"retryStrategy\": {\"attempts\": 12}, \"containerOverrides\": {\n    \"environment\": [{\"name\": \"SCENARIO\", \"value\": \"a\"}, {\"name\": \"SCENARIO\", \"value\": \"b\"}],\n    \"resourceRequirements\": [{\"type\": \"VCPU\", \"value\": \"0.5\"}, {\"type\": \"MEMORY\", \"value\": \"8192\"}]}}\nprint(\"12 attempts, 0.5 vCPU / 8192 MiB, SCENARIO twice:\", problems(big))\n"
         }
       ]
     },
@@ -66,6 +75,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport re\n\n#: Fargate's vCPU values and the memory (MiB) each allows, from the AWS Batch API reference.\nFARGATE = {\n    0.25: [512, 1024, 2048],\n    0.5: list(range(1024, 4096 + 1, 1024)),\n    1.0: list(range(2048, 8192 + 1, 1024)),\n    2.0: list(range(4096, 16384 + 1, 1024)),\n    4.0: list(range(8192, 30720 + 1, 1024)),\n    8.0: list(range(16384, 61440 + 1, 4096)),\n    16.0: list(range(32768, 122880 + 1, 8192)),\n    32.0: [61440, 122880, 249856],\n}\nNAME = re.compile(r\"[A-Za-z0-9][A-Za-z0-9_-]{0,127}\")\n\n\ndef problems(request: dict) -> list[str]:\n    \"\"\"Every rule of AWS Batch's SubmitJob that a Fargate request breaks, in the order checked.\"\"\"\n    found: list[str] = []\n    # TODO: name, timeout, retries, size, environment, in that order.\n    return found\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom submit_check import problems\n\nrequest = {\n    \"jobName\": \"solve-0107\",\n    \"jobQueue\": \"depot-solves\",\n    \"jobDefinition\": \"depot-solve\",\n    \"containerOverrides\": {\n        \"environment\": [{\"name\": \"SCENARIO\", \"value\": \"north\"}],\n        \"resourceRequirements\": [{\"type\": \"VCPU\", \"value\": \"1\"}, {\"type\": \"MEMORY\", \"value\": \"4096\"}],\n    },\n    \"timeout\": {\"attemptDurationSeconds\": 900},\n    \"retryStrategy\": {\"attempts\": 3},\n}\nprint(\"request solve-0107:\", problems(request))\n\nodd = {**request, \"jobName\": \"-solve 7\", \"timeout\": {\"attemptDurationSeconds\": 45}}\nprint(\"name '-solve 7', timeout 45 s:\", problems(odd))\n\nbig = {**request, \"retryStrategy\": {\"attempts\": 12}, \"containerOverrides\": {\n    \"environment\": [{\"name\": \"SCENARIO\", \"value\": \"a\"}, {\"name\": \"SCENARIO\", \"value\": \"b\"}],\n    \"resourceRequirements\": [{\"type\": \"VCPU\", \"value\": \"0.5\"}, {\"type\": \"MEMORY\", \"value\": \"8192\"}]}}\nprint(\"12 attempts, 0.5 vCPU / 8192 MiB, SCENARIO twice:\", problems(big))\n"
     }
   ],
   "video": null,
@@ -73,8 +91,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -84,14 +102,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "6707db95f60d37fbb179909d0d213bcd5f68ce45c476361d32096a979dff57a1",
+  "content_sha256": "79a84d5cc6a6fe1dbd5b252f4a971215fa1089eff9e97caf911d8ccbc1b37a1e",
   "starting_code": "from __future__ import annotations\n\nimport re\n\n#: Fargate's vCPU values and the memory (MiB) each allows, from the AWS Batch API reference.\nFARGATE = {\n    0.25: [512, 1024, 2048],\n    0.5: list(range(1024, 4096 + 1, 1024)),\n    1.0: list(range(2048, 8192 + 1, 1024)),\n    2.0: list(range(4096, 16384 + 1, 1024)),\n    4.0: list(range(8192, 30720 + 1, 1024)),\n    8.0: list(range(16384, 61440 + 1, 4096)),\n    16.0: list(range(32768, 122880 + 1, 8192)),\n    32.0: [61440, 122880, 249856],\n}\nNAME = re.compile(r\"[A-Za-z0-9][A-Za-z0-9_-]{0,127}\")\n\n\ndef problems(request: dict) -> list[str]:\n    \"\"\"Every rule of AWS Batch's SubmitJob that a Fargate request breaks, in the order checked.\"\"\"\n    found: list[str] = []\n    # TODO: name, timeout, retries, size, environment, in that order.\n    return found\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-2/submit_check.py",
     "test_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-2/test_submit_check.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-2/submit_check.py"
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -147,6 +165,10 @@
     },
     "concepts": [
       "checking requests against documented rules that moto does not enforce"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-2/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-2/try_it.py"
   }
 }

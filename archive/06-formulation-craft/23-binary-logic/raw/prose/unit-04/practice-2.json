@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "One liner thickness for a relining program",
   "blocks": [
     {
@@ -64,6 +64,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Pipe:\n    pid: str\n    kg_per_mm: float    # resin per mm of liner thickness\n    min_mm: float       # structural minimum thickness if relined\n\n\ndef add_liner_rules(model: mathopt.Model, x: dict, t: mathopt.Variable, pipes: list[Pipe],\n                    t_low: float, t_high: float, supply: float) -> None:\n    \"\"\"Resin at the program's thickness for every relined pipe within supply; each relined pipe's minimum.\"\"\"\n    resin = []\n    for p in pipes:\n        lined = model.add_variable(lb=0, ub=t_high, name=f\"lined_{p.pid}\")    # x[p] * t\n        model.add_linear_constraint(lined <= t_high * x[p.pid], name=f\"lined_off_{p.pid}\")\n        model.add_linear_constraint(lined <= t - t_low * (1 - x[p.pid]), name=f\"lined_le_{p.pid}\")\n        model.add_linear_constraint(lined >= t_low * x[p.pid], name=f\"lined_on_{p.pid}\")\n        model.add_linear_constraint(lined >= t - t_high * (1 - x[p.pid]), name=f\"lined_ge_{p.pid}\")\n        model.add_linear_constraint(t >= p.min_mm * x[p.pid], name=f\"thick_{p.pid}\")\n        resin.append(p.kg_per_mm * lined)\n    model.add_linear_constraint(sum(resin) <= supply, name=\"supply\")\n\n\ndef build(pipes: list[Pipe], t_low: float, t_high: float, supply: float) -> tuple[mathopt.Model, dict, mathopt.Variable]:\n    model = mathopt.Model(name=\"relining\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in pipes}\n    t = model.add_variable(lb=t_low, ub=t_high, name=\"t\")\n    add_liner_rules(model, x, t, pipes, t_low, t_high, supply)\n    model.maximize(sum(x.values()))\n    return model, x, t\n\n\nif __name__ == \"__main__\":\n    pipes = [Pipe(\"Main St\", 10.0, 4.0), Pipe(\"Mill Rd\", 8.0, 6.0)]\n    model, x, t = build(pipes, 3.0, 8.0, 100.0)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom relining import Pipe, build\n\n# Mains to reline: id, length, minimum liner thickness (mm). Resin supply 80.\npipes = [Pipe(\"L1\", 9.0, 5.0), Pipe(\"L2\", 5.0, 7.0), Pipe(\"L3\", 10.0, 3.5)]\n\n\ndef allowed(plan, thickness):\n    model, x, t = build(pipes, 3.0, 9.0, 80.0)\n    for pid, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if pid in plan else 0.0\n    t.lower_bound = t.upper_bound = thickness\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"L2 at 7 mm:\", allowed({\"L2\"}, 7.0))\nprint(\"L2 at 6 mm:\", allowed({\"L2\"}, 6.0))\nprint(\"L1+L3 at 4 mm:\", allowed({\"L1\", \"L3\"}, 4.0))\nprint(\"L1+L3 at 5 mm:\", allowed({\"L1\", \"L3\"}, 5.0))\nprint(\"L3 at 4 mm:\", allowed({\"L3\"}, 4.0))\n"
         }
       ]
     },
@@ -76,6 +85,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Pipe:\n    pid: str\n    kg_per_mm: float    # resin per mm of liner thickness\n    min_mm: float       # structural minimum thickness if relined\n\n\ndef add_liner_rules(model: mathopt.Model, x: dict, t: mathopt.Variable, pipes: list[Pipe],\n                    t_low: float, t_high: float, supply: float) -> None:\n    \"\"\"Resin at the program's thickness for every relined pipe within supply; each relined pipe's minimum.\"\"\"\n    # TODO: a resin variable per pipe, its rows, the supply row and the minimum-thickness rows.\n    return None\n\n\ndef build(pipes: list[Pipe], t_low: float, t_high: float, supply: float) -> tuple[mathopt.Model, dict, mathopt.Variable]:\n    model = mathopt.Model(name=\"relining\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in pipes}\n    t = model.add_variable(lb=t_low, ub=t_high, name=\"t\")\n    add_liner_rules(model, x, t, pipes, t_low, t_high, supply)\n    model.maximize(sum(x.values()))\n    return model, x, t\n\n\nif __name__ == \"__main__\":\n    pipes = [Pipe(\"Main St\", 10.0, 4.0), Pipe(\"Mill Rd\", 8.0, 6.0)]\n    model, x, t = build(pipes, 3.0, 8.0, 100.0)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom relining import Pipe, build\n\n# Mains to reline: id, length, minimum liner thickness (mm). Resin supply 80.\npipes = [Pipe(\"L1\", 9.0, 5.0), Pipe(\"L2\", 5.0, 7.0), Pipe(\"L3\", 10.0, 3.5)]\n\n\ndef allowed(plan, thickness):\n    model, x, t = build(pipes, 3.0, 9.0, 80.0)\n    for pid, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if pid in plan else 0.0\n    t.lower_bound = t.upper_bound = thickness\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"L2 at 7 mm:\", allowed({\"L2\"}, 7.0))\nprint(\"L2 at 6 mm:\", allowed({\"L2\"}, 6.0))\nprint(\"L1+L3 at 4 mm:\", allowed({\"L1\", \"L3\"}, 4.0))\nprint(\"L1+L3 at 5 mm:\", allowed({\"L1\", \"L3\"}, 5.0))\nprint(\"L3 at 4 mm:\", allowed({\"L3\"}, 4.0))\n"
     }
   ],
   "video": null,
@@ -83,8 +101,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -94,14 +112,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "08d590a9dbb1099585439b6c13bfdb5b9e093e17484f6ce2a132392268745b37",
+  "content_sha256": "f9f22196087f9e76babc96e0b8edd08ac5ccda970f0fdb2cade3e73792b3923b",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Pipe:\n    pid: str\n    kg_per_mm: float    # resin per mm of liner thickness\n    min_mm: float       # structural minimum thickness if relined\n\n\ndef add_liner_rules(model: mathopt.Model, x: dict, t: mathopt.Variable, pipes: list[Pipe],\n                    t_low: float, t_high: float, supply: float) -> None:\n    \"\"\"Resin at the program's thickness for every relined pipe within supply; each relined pipe's minimum.\"\"\"\n    # TODO: a resin variable per pipe, its rows, the supply row and the minimum-thickness rows.\n    return None\n\n\ndef build(pipes: list[Pipe], t_low: float, t_high: float, supply: float) -> tuple[mathopt.Model, dict, mathopt.Variable]:\n    model = mathopt.Model(name=\"relining\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in pipes}\n    t = model.add_variable(lb=t_low, ub=t_high, name=\"t\")\n    add_liner_rules(model, x, t, pipes, t_low, t_high, supply)\n    model.maximize(sum(x.values()))\n    return model, x, t\n\n\nif __name__ == \"__main__\":\n    pipes = [Pipe(\"Main St\", 10.0, 4.0), Pipe(\"Mill Rd\", 8.0, 6.0)]\n    model, x, t = build(pipes, 3.0, 8.0, 100.0)\n    print(len(list(model.linear_constraints())), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-04/practice-2/relining.py",
     "test_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-04/practice-2/test_relining.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/23-binary-logic/prose/unit-04/practice-2/relining.py"
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-04/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -148,6 +166,10 @@
     "concepts": [
       "a binary times a bounded continuous variable is a new continuous variable pinned by four rows",
       "the bounds written into the product rows come from the data and change the relaxation"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-04/practice-2/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/23-binary-logic/prose/unit-04/practice-2/try_it.py"
   }
 }

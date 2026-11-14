@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Replace an estimate in one transaction",
   "blocks": [
     {
@@ -39,6 +39,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport sqlite3\n\nSCHEMA = \"\"\"\nCREATE TABLE estimate (estimate_id INTEGER PRIMARY KEY, project TEXT NOT NULL UNIQUE) STRICT;\nCREATE TABLE estimate_line (\n    estimate_id INTEGER NOT NULL REFERENCES estimate (estimate_id),\n    item        TEXT NOT NULL,\n    amount      INTEGER NOT NULL CHECK (amount >= 0)\n) STRICT;\n\"\"\"\n\n\ndef connect(path: str) -> sqlite3.Connection:\n    conn = sqlite3.connect(path, autocommit=True)\n    conn.execute(\"PRAGMA foreign_keys = ON\")\n    conn.autocommit = False\n    return conn\n\n\ndef save_estimate(conn: sqlite3.Connection, project: str, lines: list[tuple[str, int]]) -> int:\n    \"\"\"Store the project's estimate, replacing any earlier one; all of it is committed, or none.\"\"\"\n    with conn:\n        conn.execute(\"DELETE FROM estimate_line WHERE estimate_id IN \"\n                     \"(SELECT estimate_id FROM estimate WHERE project = ?)\", (project,))\n        conn.execute(\"DELETE FROM estimate WHERE project = ?\", (project,))\n        estimate_id = conn.execute(\"INSERT INTO estimate (project) VALUES (?)\", (project,)).lastrowid\n        for item, amount in lines:\n            conn.execute(\"INSERT INTO estimate_line VALUES (?, ?, ?)\", (estimate_id, item, amount))\n    return estimate_id\n\n\nif __name__ == \"__main__\":\n    conn = connect(\":memory:\")\n    conn.executescript(SCHEMA)\n    print(save_estimate(conn, \"Elm Street main\", [(\"pipe\", 120), (\"paving\", 40)]))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport os\nimport sqlite3\nimport tempfile\n\nfrom estimate import SCHEMA, connect, save_estimate\n\nwith tempfile.TemporaryDirectory() as folder:\n    conn = connect(os.path.join(folder, \"estimates.db\"))\n    conn.executescript(SCHEMA)\n    conn.commit()\n\n    def lines(project):\n        return conn.execute(\"SELECT l.item, l.amount FROM estimate_line AS l JOIN estimate AS e \"\n                            \"USING (estimate_id) WHERE e.project = ?\", (project,)).fetchall()\n\n    print(\"save Oak Lane culvert:\", save_estimate(conn, \"Oak Lane culvert\", [(\"culvert\", 75), (\"grading\", 20)]))\n    print(\"lines:\", lines(\"Oak Lane culvert\"))\n    try:\n        save_estimate(conn, \"Oak Lane culvert\", [(\"culvert\", 60), (\"refund\", -5)])\n    except sqlite3.IntegrityError as e:\n        print(\"revision with -5 raised:\", e)\n    print(\"lines after it:\", lines(\"Oak Lane culvert\"))\n    save_estimate(conn, \"Oak Lane culvert\", [(\"culvert\", 80)])\n    print(\"lines after a revision to 80:\", lines(\"Oak Lane culvert\"))\n    conn.close()\n"
         }
       ]
     },
@@ -51,6 +60,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport sqlite3\n\nSCHEMA = \"\"\"\nCREATE TABLE estimate (estimate_id INTEGER PRIMARY KEY, project TEXT NOT NULL UNIQUE) STRICT;\nCREATE TABLE estimate_line (\n    estimate_id INTEGER NOT NULL REFERENCES estimate (estimate_id),\n    item        TEXT NOT NULL,\n    amount      INTEGER NOT NULL CHECK (amount >= 0)\n) STRICT;\n\"\"\"\n\n\ndef connect(path: str) -> sqlite3.Connection:\n    conn = sqlite3.connect(path, autocommit=True)\n    conn.execute(\"PRAGMA foreign_keys = ON\")\n    conn.autocommit = False\n    return conn\n\n\ndef save_estimate(conn: sqlite3.Connection, project: str, lines: list[tuple[str, int]]) -> int:\n    \"\"\"Store the project's estimate, replacing any earlier one; all of it is committed, or none.\"\"\"\n    # TODO: replace the project's estimate so that all of it is committed, or none of it.\n    return 0\n\n\nif __name__ == \"__main__\":\n    conn = connect(\":memory:\")\n    conn.executescript(SCHEMA)\n    print(save_estimate(conn, \"Elm Street main\", [(\"pipe\", 120), (\"paving\", 40)]))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport os\nimport sqlite3\nimport tempfile\n\nfrom estimate import SCHEMA, connect, save_estimate\n\nwith tempfile.TemporaryDirectory() as folder:\n    conn = connect(os.path.join(folder, \"estimates.db\"))\n    conn.executescript(SCHEMA)\n    conn.commit()\n\n    def lines(project):\n        return conn.execute(\"SELECT l.item, l.amount FROM estimate_line AS l JOIN estimate AS e \"\n                            \"USING (estimate_id) WHERE e.project = ?\", (project,)).fetchall()\n\n    print(\"save Oak Lane culvert:\", save_estimate(conn, \"Oak Lane culvert\", [(\"culvert\", 75), (\"grading\", 20)]))\n    print(\"lines:\", lines(\"Oak Lane culvert\"))\n    try:\n        save_estimate(conn, \"Oak Lane culvert\", [(\"culvert\", 60), (\"refund\", -5)])\n    except sqlite3.IntegrityError as e:\n        print(\"revision with -5 raised:\", e)\n    print(\"lines after it:\", lines(\"Oak Lane culvert\"))\n    save_estimate(conn, \"Oak Lane culvert\", [(\"culvert\", 80)])\n    print(\"lines after a revision to 80:\", lines(\"Oak Lane culvert\"))\n    conn.close()\n"
     }
   ],
   "video": null,
@@ -58,8 +76,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 2,
-    "code": 1,
+    "paras": 3,
+    "code": 2,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -69,14 +87,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "a1b79b7dadc6c3ead2be41656f01737035acb0d7cbef618a643c8293dcf04d36",
+  "content_sha256": "ca4aa8bfb2fc99b2fa3407742c0ce4b037f9ed242007a9614456f3ebd7d47f94",
   "starting_code": "from __future__ import annotations\n\nimport sqlite3\n\nSCHEMA = \"\"\"\nCREATE TABLE estimate (estimate_id INTEGER PRIMARY KEY, project TEXT NOT NULL UNIQUE) STRICT;\nCREATE TABLE estimate_line (\n    estimate_id INTEGER NOT NULL REFERENCES estimate (estimate_id),\n    item        TEXT NOT NULL,\n    amount      INTEGER NOT NULL CHECK (amount >= 0)\n) STRICT;\n\"\"\"\n\n\ndef connect(path: str) -> sqlite3.Connection:\n    conn = sqlite3.connect(path, autocommit=True)\n    conn.execute(\"PRAGMA foreign_keys = ON\")\n    conn.autocommit = False\n    return conn\n\n\ndef save_estimate(conn: sqlite3.Connection, project: str, lines: list[tuple[str, int]]) -> int:\n    \"\"\"Store the project's estimate, replacing any earlier one; all of it is committed, or none.\"\"\"\n    # TODO: replace the project's estimate so that all of it is committed, or none of it.\n    return 0\n\n\nif __name__ == \"__main__\":\n    conn = connect(\":memory:\")\n    conn.executescript(SCHEMA)\n    print(save_estimate(conn, \"Elm Street main\", [(\"pipe\", 120), (\"paving\", 40)]))\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-1/estimate.py",
     "test_path": "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-1/test_estimate.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-1/estimate.py"
+      "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -127,6 +145,10 @@
     },
     "concepts": [
       "rows that belong together are written in one transaction with placeholders"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-1/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-1/try_it.py"
   }
 }

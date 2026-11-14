@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Clashing talks as clique rows",
   "blocks": [
     {
@@ -55,6 +55,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport itertools\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Talk:\n    name: str\n    speaker: str\n    lab_hours: int             # hours of the shared lab the talk's demonstration needs\n    value: int\n\n\ndef clashes(talks: list[Talk], lab_hours: int) -> set[frozenset[str]]:\n    \"\"\"Pairs of talks no programme can accept together.\"\"\"\n    pairs = set()\n    for a, b in itertools.combinations(talks, 2):\n        same_speaker = a.speaker == b.speaker                         # a speaker gives one talk\n        too_long = a.lab_hours + b.lab_hours > lab_hours              # the two overrun the lab\n        if same_speaker or too_long:\n            pairs.add(frozenset((a.name, b.name)))\n    return pairs\n\n\ndef add_clash_rows(model: mathopt.Model, x: dict, pairs: set[frozenset[str]]) -> int:\n    \"\"\"Cover every clash with a row 'at most one of these talks', as few and as wide as greedily found.\"\"\"\n    names = sorted(x)\n    clash = {n: {m for m in names if frozenset((n, m)) in pairs} for n in names}\n    covered: set[frozenset[str]] = set()\n    rows = 0\n    for first in names:\n        for second in sorted(clash[first]):\n            if frozenset((first, second)) in covered:\n                continue\n            group = [first, second]\n            for other in names:\n                if other not in group and all(other in clash[g] for g in group):\n                    group.append(other)\n            model.add_linear_constraint(sum(x[g] for g in group) <= 1, name=f\"clash_{rows}\")\n            covered |= {frozenset(p) for p in itertools.combinations(group, 2)}\n            rows += 1\n    return rows\n\n\ndef build(talks: list[Talk], lab_hours: int, *, integer: bool = True) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"programme\")\n    x = {t.name: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{t.name}\") for t in talks}\n    add_clash_rows(model, x, clashes(talks, lab_hours))\n    model.maximize(sum(t.value * x[t.name] for t in talks))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    talks = [Talk(\"T1\", \"ana\", 5, 3), Talk(\"T2\", \"ben\", 4, 2), Talk(\"T3\", \"ana\", 1, 1)]\n    print(sorted(sorted(p) for p in clashes(talks, 8)))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom programme import Talk, build, clashes\n\ntalks = [Talk(\"Graphs\", \"rui\", 5, 6), Talk(\"Cuts\", \"sam\", 4, 5),\n         Talk(\"Heuristics\", \"rui\", 2, 3), Talk(\"Pricing\", \"tia\", 3, 4)]\nLAB = 8\n\nprint(\"clashing pairs at lab 8:\", sorted(sorted(p) for p in clashes(talks, LAB)))\nfor integer in (True, False):\n    model, x = build(talks, LAB, integer=integer)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    print(f\"integer={integer} rows:\", sum(1 for _ in model.linear_constraints()))\n    print(f\"integer={integer} value:\", round(result.objective_value(), 3),\n          {n: round(result.variable_values(v), 2) for n, v in x.items()})\n"
         }
       ]
     },
@@ -67,6 +76,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport itertools\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Talk:\n    name: str\n    speaker: str\n    lab_hours: int             # hours of the shared lab the talk's demonstration needs\n    value: int\n\n\ndef clashes(talks: list[Talk], lab_hours: int) -> set[frozenset[str]]:\n    \"\"\"Pairs of talks no programme can accept together.\"\"\"\n    # TODO: the pairs that clash, and why.\n    return set()\n\n\ndef add_clash_rows(model: mathopt.Model, x: dict, pairs: set[frozenset[str]]) -> int:\n    \"\"\"Cover every clash with a row 'at most one of these talks', as few and as wide as greedily found.\"\"\"\n    # TODO: rows that cover every clash.\n    return 0\n\n\ndef build(talks: list[Talk], lab_hours: int, *, integer: bool = True) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"programme\")\n    x = {t.name: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{t.name}\") for t in talks}\n    add_clash_rows(model, x, clashes(talks, lab_hours))\n    model.maximize(sum(t.value * x[t.name] for t in talks))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    talks = [Talk(\"T1\", \"ana\", 5, 3), Talk(\"T2\", \"ben\", 4, 2), Talk(\"T3\", \"ana\", 1, 1)]\n    print(sorted(sorted(p) for p in clashes(talks, 8)))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom programme import Talk, build, clashes\n\ntalks = [Talk(\"Graphs\", \"rui\", 5, 6), Talk(\"Cuts\", \"sam\", 4, 5),\n         Talk(\"Heuristics\", \"rui\", 2, 3), Talk(\"Pricing\", \"tia\", 3, 4)]\nLAB = 8\n\nprint(\"clashing pairs at lab 8:\", sorted(sorted(p) for p in clashes(talks, LAB)))\nfor integer in (True, False):\n    model, x = build(talks, LAB, integer=integer)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    print(f\"integer={integer} rows:\", sum(1 for _ in model.linear_constraints()))\n    print(f\"integer={integer} value:\", round(result.objective_value(), 3),\n          {n: round(result.variable_values(v), 2) for n, v in x.items()})\n"
     }
   ],
   "video": null,
@@ -74,8 +92,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -85,14 +103,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "39856735c3b59ffb0ed87a0c1340b1dadf2de196d030806b6b7bcbbfb5feb2cf",
+  "content_sha256": "22af37eb31323b47860fda70f2c9e14a3a3b78a94dff73e92aa3efad16fefd31",
   "starting_code": "from __future__ import annotations\n\nimport itertools\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Talk:\n    name: str\n    speaker: str\n    lab_hours: int             # hours of the shared lab the talk's demonstration needs\n    value: int\n\n\ndef clashes(talks: list[Talk], lab_hours: int) -> set[frozenset[str]]:\n    \"\"\"Pairs of talks no programme can accept together.\"\"\"\n    # TODO: the pairs that clash, and why.\n    return set()\n\n\ndef add_clash_rows(model: mathopt.Model, x: dict, pairs: set[frozenset[str]]) -> int:\n    \"\"\"Cover every clash with a row 'at most one of these talks', as few and as wide as greedily found.\"\"\"\n    # TODO: rows that cover every clash.\n    return 0\n\n\ndef build(talks: list[Talk], lab_hours: int, *, integer: bool = True) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"programme\")\n    x = {t.name: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{t.name}\") for t in talks}\n    add_clash_rows(model, x, clashes(talks, lab_hours))\n    model.maximize(sum(t.value * x[t.name] for t in talks))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    talks = [Talk(\"T1\", \"ana\", 5, 3), Talk(\"T2\", \"ben\", 4, 2), Talk(\"T3\", \"ana\", 1, 1)]\n    print(sorted(sorted(p) for p in clashes(talks, 8)))\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-02/practice-2/programme.py",
     "test_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-02/practice-2/test_programme.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/29-strong-formulations/prose/unit-02/practice-2/programme.py"
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -139,6 +157,10 @@
     "concepts": [
       "a set of pairwise conflicts gives one row that implies its pair rows and cuts more",
       "pairs no allowed plan uses together come from once, alternative and capacity rows"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/29-strong-formulations/prose/unit-02/practice-2/try_it.py"
   }
 }

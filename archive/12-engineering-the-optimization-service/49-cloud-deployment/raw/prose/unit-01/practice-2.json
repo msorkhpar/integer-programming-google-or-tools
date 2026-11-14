@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Review a Dockerfile before it ships",
   "blocks": [
     {
@@ -68,6 +68,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nSECRET_WORDS = (\"KEY\", \"SECRET\", \"TOKEN\", \"PASSWORD\")\n\n\ndef instructions(dockerfile: str) -> list[tuple[str, str]]:\n    \"\"\"(INSTRUCTION, rest) for every instruction line; comments and blank lines dropped.\"\"\"\n    out = []\n    for line in dockerfile.splitlines():\n        line = line.strip()\n        if line and not line.startswith(\"#\"):\n            word, _, rest = line.partition(\" \")\n            out.append((word.upper(), rest.strip()))\n    return out\n\n\ndef review(dockerfile: str) -> list[str]:\n    \"\"\"The findings for a Dockerfile, sorted, each at most once.\"\"\"\n    findings: set[str] = set()\n    stages: set[str] = set()\n    user = None\n    for word, rest in instructions(dockerfile):\n        if word == \"FROM\":\n            parts = rest.split()\n            image = parts[0]\n            if len(parts) >= 3 and parts[1].upper() == \"AS\":\n                stages.add(parts[2])\n            user = None                                   # each stage starts as root\n            if image in stages or image.lower() == \"scratch\":   # an earlier stage, or the empty image\n                continue\n            name = image.split(\"@\")[0]\n            tag = name.rsplit(\":\", 1)[1] if \":\" in name.rsplit(\"/\", 1)[-1] else None\n            if \"@sha256:\" not in image and tag in (None, \"latest\"):\n                findings.add(\"base-not-pinned\")\n        elif word == \"USER\":\n            user = rest.split(\":\")[0]\n        elif word in (\"ENV\", \"ARG\"):\n            for pair in rest.split():\n                key = pair.split(\"=\", 1)[0].upper()\n                if any(w in key for w in SECRET_WORDS):\n                    findings.add(\"secret-in-env\")\n        elif word in (\"CMD\", \"ENTRYPOINT\") and not rest.startswith(\"[\"):\n            findings.add(\"shell-form-cmd\")\n    if user in (None, \"root\", \"0\"):\n        findings.add(\"runs-as-root\")\n    return sorted(findings)\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom dockerfile_review import review\n\ntidy = \"\"\"\nFROM python:3.13.2-slim AS deps\nRUN pip install --prefix=/deps -r requirements.txt\nFROM python:3.13.2-slim\nCOPY --from=deps /deps /usr/local\nUSER planner\nENTRYPOINT [\"python\", \"-m\", \"scheduler\"]\n\"\"\"\nsloppy = \"\"\"\nFROM ubuntu:latest\nARG DB_PASSWORD=hunter2\nUSER planner\nENTRYPOINT python -m scheduler\n\"\"\"\n\nprint(\"tidy file:\", review(tidy))\nprint(\"sloppy file:\", review(sloppy))\nprint(\"tidy file without USER:\", review(tidy.replace(\"USER planner\\n\", \"\")))\n"
         }
       ]
     },
@@ -80,6 +89,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nSECRET_WORDS = (\"KEY\", \"SECRET\", \"TOKEN\", \"PASSWORD\")\n\n\ndef instructions(dockerfile: str) -> list[tuple[str, str]]:\n    \"\"\"(INSTRUCTION, rest) for every instruction line; comments and blank lines dropped.\"\"\"\n    out = []\n    for line in dockerfile.splitlines():\n        line = line.strip()\n        if line and not line.startswith(\"#\"):\n            word, _, rest = line.partition(\" \")\n            out.append((word.upper(), rest.strip()))\n    return out\n\n\ndef review(dockerfile: str) -> list[str]:\n    \"\"\"The findings for a Dockerfile, sorted, each at most once.\"\"\"\n    findings: set[str] = set()\n    # TODO: walk instructions(dockerfile) and add base-not-pinned, runs-as-root, secret-in-env, shell-form-cmd.\n    return sorted(findings)\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom dockerfile_review import review\n\ntidy = \"\"\"\nFROM python:3.13.2-slim AS deps\nRUN pip install --prefix=/deps -r requirements.txt\nFROM python:3.13.2-slim\nCOPY --from=deps /deps /usr/local\nUSER planner\nENTRYPOINT [\"python\", \"-m\", \"scheduler\"]\n\"\"\"\nsloppy = \"\"\"\nFROM ubuntu:latest\nARG DB_PASSWORD=hunter2\nUSER planner\nENTRYPOINT python -m scheduler\n\"\"\"\n\nprint(\"tidy file:\", review(tidy))\nprint(\"sloppy file:\", review(sloppy))\nprint(\"tidy file without USER:\", review(tidy.replace(\"USER planner\\n\", \"\")))\n"
     }
   ],
   "video": null,
@@ -87,8 +105,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 1,
     "lists": 0,
     "images": 0,
@@ -98,14 +116,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "7274f436bf2533ddc6a36c5730ae70174d715209a1ba060c30813a1970cf62d1",
+  "content_sha256": "7381647680dafdb0b38d78a33c03652306eb8c770db61b776f8ccbd8b460b5de",
   "starting_code": "from __future__ import annotations\n\nSECRET_WORDS = (\"KEY\", \"SECRET\", \"TOKEN\", \"PASSWORD\")\n\n\ndef instructions(dockerfile: str) -> list[tuple[str, str]]:\n    \"\"\"(INSTRUCTION, rest) for every instruction line; comments and blank lines dropped.\"\"\"\n    out = []\n    for line in dockerfile.splitlines():\n        line = line.strip()\n        if line and not line.startswith(\"#\"):\n            word, _, rest = line.partition(\" \")\n            out.append((word.upper(), rest.strip()))\n    return out\n\n\ndef review(dockerfile: str) -> list[str]:\n    \"\"\"The findings for a Dockerfile, sorted, each at most once.\"\"\"\n    findings: set[str] = set()\n    # TODO: walk instructions(dockerfile) and add base-not-pinned, runs-as-root, secret-in-env, shell-form-cmd.\n    return sorted(findings)\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-2/dockerfile_review.py",
     "test_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-2/test_dockerfile_review.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-2/dockerfile_review.py"
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -172,6 +190,10 @@
     "concepts": [
       "a non-root user, a build context filter and no credentials baked in",
       "one image serves the API and the solve worker under two commands in exec form"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-2/try_it.py"
   }
 }

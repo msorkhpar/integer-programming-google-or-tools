@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Patching and replacing a roof",
   "blocks": [
     {
@@ -65,6 +65,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_sequence_rules(model: mathopt.Model, patch: dict, replace: dict,\n                       roofs: dict[str, tuple[tuple[int, ...], tuple[int, ...]]], gap: int, warranty: int) -> None:\n    \"\"\"A replacement at least `gap` years after a patch; no patch within the new roof's warranty.\"\"\"\n    for r, (patch_years, replace_years) in roofs.items():\n        for t in replace_years:\n            clash = [patch[r, s] for s in patch_years if t - gap < s <= t + warranty]\n            model.add_linear_constraint(replace[r, t] + sum(clash) <= 1, name=f\"sequence_{r}_{t}\")\n\n\ndef build(roofs: dict[str, tuple[tuple[int, ...], tuple[int, ...]]], gap: int,\n          warranty: int) -> tuple[mathopt.Model, dict, dict]:\n    model = mathopt.Model(name=\"roofs\")\n    patch = {(r, s): model.add_binary_variable(name=f\"patch_{r}_{s}\") for r, (ps, _) in roofs.items() for s in ps}\n    replace = {(r, t): model.add_binary_variable(name=f\"replace_{r}_{t}\") for r, (_, ts) in roofs.items() for t in ts}\n    for r, (ps, ts) in roofs.items():\n        model.add_linear_constraint(sum(patch[r, s] for s in ps) <= 1, name=f\"once_patch_{r}\")\n        model.add_linear_constraint(sum(replace[r, t] for t in ts) <= 1, name=f\"once_replace_{r}\")\n    add_sequence_rules(model, patch, replace, roofs, gap, warranty)\n    return model, patch, replace\n\n\nif __name__ == \"__main__\":\n    model, patch, replace = build({\"LIB\": ((2027, 2028), (2029, 2030))}, gap=2, warranty=3)\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom roofs import build\n\n# Two dormitory roofs, 2027 to 2034.\nyears = tuple(range(2027, 2035))\nroofs = {\"DORM-A\": (years, years), \"DORM-B\": ((2027, 2028), (2031, 2032, 2033))}\n\ndef accepted(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(patches, replacements, gap=2, warranty=3):\n    model, patch, replace = build(roofs, gap, warranty)\n    for chosen, variables in ((patches, patch), (replacements, replace)):\n        for key, var in variables.items():\n            var.lower_bound = var.upper_bound = 1.0 if key in chosen else 0.0\n    return accepted(model)\n\n\nprint(\"DORM-A patch 2028, replace 2030:\", allowed({(\"DORM-A\", 2028)}, {(\"DORM-A\", 2030)}))\nprint(\"DORM-A patch 2028, replace 2029:\", allowed({(\"DORM-A\", 2028)}, {(\"DORM-A\", 2029)}))\nprint(\"DORM-A replace 2029, patch 2032:\", allowed({(\"DORM-A\", 2032)}, {(\"DORM-A\", 2029)}))\nprint(\"DORM-A replace 2029, patch 2033:\", allowed({(\"DORM-A\", 2033)}, {(\"DORM-A\", 2029)}))\nprint(\"DORM-B patch 2027, replace 2031:\", allowed({(\"DORM-B\", 2027)}, {(\"DORM-B\", 2031)}))\n"
         }
       ]
     },
@@ -77,6 +86,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_sequence_rules(model: mathopt.Model, patch: dict, replace: dict,\n                       roofs: dict[str, tuple[tuple[int, ...], tuple[int, ...]]], gap: int, warranty: int) -> None:\n    \"\"\"A replacement at least `gap` years after a patch; no patch within the new roof's warranty.\"\"\"\n    # TODO: one row per roof and replacement year.\n    return None\n\n\ndef build(roofs: dict[str, tuple[tuple[int, ...], tuple[int, ...]]], gap: int,\n          warranty: int) -> tuple[mathopt.Model, dict, dict]:\n    model = mathopt.Model(name=\"roofs\")\n    patch = {(r, s): model.add_binary_variable(name=f\"patch_{r}_{s}\") for r, (ps, _) in roofs.items() for s in ps}\n    replace = {(r, t): model.add_binary_variable(name=f\"replace_{r}_{t}\") for r, (_, ts) in roofs.items() for t in ts}\n    for r, (ps, ts) in roofs.items():\n        model.add_linear_constraint(sum(patch[r, s] for s in ps) <= 1, name=f\"once_patch_{r}\")\n        model.add_linear_constraint(sum(replace[r, t] for t in ts) <= 1, name=f\"once_replace_{r}\")\n    add_sequence_rules(model, patch, replace, roofs, gap, warranty)\n    return model, patch, replace\n\n\nif __name__ == \"__main__\":\n    model, patch, replace = build({\"LIB\": ((2027, 2028), (2029, 2030))}, gap=2, warranty=3)\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom roofs import build\n\n# Two dormitory roofs, 2027 to 2034.\nyears = tuple(range(2027, 2035))\nroofs = {\"DORM-A\": (years, years), \"DORM-B\": ((2027, 2028), (2031, 2032, 2033))}\n\ndef accepted(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(patches, replacements, gap=2, warranty=3):\n    model, patch, replace = build(roofs, gap, warranty)\n    for chosen, variables in ((patches, patch), (replacements, replace)):\n        for key, var in variables.items():\n            var.lower_bound = var.upper_bound = 1.0 if key in chosen else 0.0\n    return accepted(model)\n\n\nprint(\"DORM-A patch 2028, replace 2030:\", allowed({(\"DORM-A\", 2028)}, {(\"DORM-A\", 2030)}))\nprint(\"DORM-A patch 2028, replace 2029:\", allowed({(\"DORM-A\", 2028)}, {(\"DORM-A\", 2029)}))\nprint(\"DORM-A replace 2029, patch 2032:\", allowed({(\"DORM-A\", 2032)}, {(\"DORM-A\", 2029)}))\nprint(\"DORM-A replace 2029, patch 2033:\", allowed({(\"DORM-A\", 2033)}, {(\"DORM-A\", 2029)}))\nprint(\"DORM-B patch 2027, replace 2031:\", allowed({(\"DORM-B\", 2027)}, {(\"DORM-B\", 2031)}))\n"
     }
   ],
   "video": null,
@@ -84,8 +102,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -95,14 +113,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "98d1833d43c8fbb366342f417096ec161adcdc7c435a5c9d4514473372b6c980",
+  "content_sha256": "b69678e8ebfabfbc61e52b3a93ba0eb96700d1e0cb34c2eed45df846c6511ae8",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_sequence_rules(model: mathopt.Model, patch: dict, replace: dict,\n                       roofs: dict[str, tuple[tuple[int, ...], tuple[int, ...]]], gap: int, warranty: int) -> None:\n    \"\"\"A replacement at least `gap` years after a patch; no patch within the new roof's warranty.\"\"\"\n    # TODO: one row per roof and replacement year.\n    return None\n\n\ndef build(roofs: dict[str, tuple[tuple[int, ...], tuple[int, ...]]], gap: int,\n          warranty: int) -> tuple[mathopt.Model, dict, dict]:\n    model = mathopt.Model(name=\"roofs\")\n    patch = {(r, s): model.add_binary_variable(name=f\"patch_{r}_{s}\") for r, (ps, _) in roofs.items() for s in ps}\n    replace = {(r, t): model.add_binary_variable(name=f\"replace_{r}_{t}\") for r, (_, ts) in roofs.items() for t in ts}\n    for r, (ps, ts) in roofs.items():\n        model.add_linear_constraint(sum(patch[r, s] for s in ps) <= 1, name=f\"once_patch_{r}\")\n        model.add_linear_constraint(sum(replace[r, t] for t in ts) <= 1, name=f\"once_replace_{r}\")\n    add_sequence_rules(model, patch, replace, roofs, gap, warranty)\n    return model, patch, replace\n\n\nif __name__ == \"__main__\":\n    model, patch, replace = build({\"LIB\": ((2027, 2028), (2029, 2030))}, gap=2, warranty=3)\n    print(model.get_num_linear_constraints(), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-03/practice-2/roofs.py",
     "test_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-03/practice-2/test_roofs.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-03/practice-2/roofs.py"
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-03/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -153,6 +171,10 @@
     },
     "concepts": [
       "when two options may follow each other, one row per year lists the other option's years that conflict with it"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-03/practice-2/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-03/practice-2/try_it.py"
   }
 }

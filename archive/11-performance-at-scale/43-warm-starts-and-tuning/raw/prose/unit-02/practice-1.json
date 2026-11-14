@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Read every new plan off a HiGHS log",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport re\n\n\ndef incumbents(log: list[str], minimize: bool = True) -> list[tuple[float, float]]:\n    \"\"\"(LP iterations, objective) each time a HiGHS MIP log's progress table shows a better plan.\"\"\"\n    events: list[tuple[float, float]] = []\n    in_table = False\n    for line in log:\n        if \"LpIters\" in line:\n            in_table = True\n            continue\n        if not in_table:\n            continue\n        if line.startswith(\"Solving report\"):\n            break\n        tokens = line.split()\n        if len(tokens) < 11 or not re.fullmatch(r\"\\d+(\\.\\d+)?s\", tokens[-1]):\n            continue\n        try:\n            best = float(tokens[-7])\n            iterations = float(tokens[-2][:-1]) * 1000 if tokens[-2].endswith(\"k\") else float(tokens[-2])\n        except ValueError:\n            continue\n        if best in (float(\"inf\"), float(\"-inf\")):\n            continue\n        better = not events or (best < events[-1][1] if minimize else best > events[-1][1])\n        if better:\n            events.append((iterations, best))\n    return events\n\n\nif __name__ == \"__main__\":\n    demo = [\n        \"Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time\",\n        \" J       0       0         0   0.00%   0               9120              Large        0      0      0         0     0.0s\",\n        \" L       0       0         0   0.00%   7710.5          7800               1.15%      12      9      0       210     0.1s\",\n    ]\n    print(incumbents(demo))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom highs_log import incumbents\n\n# A short HiGHS log for a depot schedule: header, then the progress table.\nlog = [\n    \"Presolving model\",\n    \"Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time\",\n    \"         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s\",\n    \" J       0       0         0   0.00%   0               5400               Large        0      0      0         0     0.0s\",\n    \" L       0       0         0   0.00%   4810            5120               6.05%       10      6      0       133     0.1s\",\n    \"         0       0         0   0.00%   4850            5120               5.27%       12      8      0       260     0.1s\",\n    \" T      40       2        18  80.00%   4950            4990               0.80%       20     11     30      2048k    0.6s\",\n    \"\",\n    \"Solving report\",\n]\n\nfor lp_iterations, plan in incumbents(log):\n    print(f\"new plan {plan} after {lp_iterations} LP iterations\")\nprint(\"as a maximization:\", incumbents(log, minimize=False))\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport re\n\n\ndef incumbents(log: list[str], minimize: bool = True) -> list[tuple[float, float]]:\n    \"\"\"(LP iterations, objective) each time a HiGHS MIP log's progress table shows a better plan.\"\"\"\n    # TODO: find the table, read BestSol and LpIters from each row, keep only better plans.\n    return []\n\n\nif __name__ == \"__main__\":\n    demo = [\n        \"Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time\",\n        \" J       0       0         0   0.00%   0               9120              Large        0      0      0         0     0.0s\",\n        \" L       0       0         0   0.00%   7710.5          7800               1.15%      12      9      0       210     0.1s\",\n    ]\n    print(incumbents(demo))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom highs_log import incumbents\n\n# A short HiGHS log for a depot schedule: header, then the progress table.\nlog = [\n    \"Presolving model\",\n    \"Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time\",\n    \"         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.0s\",\n    \" J       0       0         0   0.00%   0               5400               Large        0      0      0         0     0.0s\",\n    \" L       0       0         0   0.00%   4810            5120               6.05%       10      6      0       133     0.1s\",\n    \"         0       0         0   0.00%   4850            5120               5.27%       12      8      0       260     0.1s\",\n    \" T      40       2        18  80.00%   4950            4990               0.80%       20     11     30      2048k    0.6s\",\n    \"\",\n    \"Solving report\",\n]\n\nfor lp_iterations, plan in incumbents(log):\n    print(f\"new plan {plan} after {lp_iterations} LP iterations\")\nprint(\"as a maximization:\", incumbents(log, minimize=False))\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "fac384782df8f92e972ccbb9ae1d747b32b2f972c6595ee360ce5c1dc4a4427d",
+  "content_sha256": "6b3fde81b9ad6cf7d25f66fca3db8c10d91bcf783492f860ea13815959a7f2f1",
   "starting_code": "from __future__ import annotations\n\nimport re\n\n\ndef incumbents(log: list[str], minimize: bool = True) -> list[tuple[float, float]]:\n    \"\"\"(LP iterations, objective) each time a HiGHS MIP log's progress table shows a better plan.\"\"\"\n    # TODO: find the table, read BestSol and LpIters from each row, keep only better plans.\n    return []\n\n\nif __name__ == \"__main__\":\n    demo = [\n        \"Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time\",\n        \" J       0       0         0   0.00%   0               9120              Large        0      0      0         0     0.0s\",\n        \" L       0       0         0   0.00%   7710.5          7800               1.15%      12      9      0       210     0.1s\",\n    ]\n    print(incumbents(demo))\n",
   "exercise": {
     "main_path": "practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-02/practice-1/highs_log.py",
     "test_path": "practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-02/practice-1/test_highs_log.py",
     "run_command": [
       "python3",
-      "practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-02/practice-1/highs_log.py"
+      "practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -159,6 +177,10 @@
     },
     "concepts": [
       "a plan's moment is read from a work counter that advances, from a callback or from the log's progress table"
-    ]
+    ],
+    "files": [
+      "practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-02/practice-1/try_it.py"
   }
 }

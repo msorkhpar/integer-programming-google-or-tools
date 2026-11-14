@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Audit any solver's plan the way HiGHS's report does",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef audit(model: mathopt.Model, values: dict) -> dict[str, float]:\n    \"\"\"The largest bound, integrality and row violation of `values`, as HiGHS's report prints them.\"\"\"\n    worst = {\"bound\": 0.0, \"integrality\": 0.0, \"row\": 0.0}\n    for var in model.variables():\n        v = values[var]\n        worst[\"bound\"] = max(worst[\"bound\"], var.lower_bound - v, v - var.upper_bound)\n        if var.integer:\n            worst[\"integrality\"] = max(worst[\"integrality\"], abs(v - round(v)))\n    for row in model.linear_constraints():\n        activity = sum(row.get_coefficient(var) * values[var] for var in model.row_nonzeros(row))\n        worst[\"row\"] = max(worst[\"row\"], row.lower_bound - activity, activity - row.upper_bound)\n    return worst\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    depot = model.add_binary_variable(name=\"open_north\")\n    model.add_linear_constraint(depot <= 1, name=\"once\")\n    print(audit(model, {depot: 0.9999996}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom audit import audit\n\nmodel = mathopt.Model()\neast = model.add_binary_variable(name=\"open_east\")\nvans = model.add_variable(lb=0, ub=30, name=\"vans\")\nmodel.add_linear_constraint(vans <= 20 * east, name=\"capacity\")\nmodel.add_linear_constraint(lb=5.0, ub=18.0, expr=vans, name=\"demand\")\n\nprint(\"east 1, vans 12:\", audit(model, {east: 1.0, vans: 12.0}))\nprint(\"east 0.9999993, vans 12:\", {k: round(v, 9) for k, v in audit(model, {east: 0.9999993, vans: 12.0}).items()})\nprint(\"east 1, vans 32:\", audit(model, {east: 1.0, vans: 32.0}))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef audit(model: mathopt.Model, values: dict) -> dict[str, float]:\n    \"\"\"The largest bound, integrality and row violation of `values`, as HiGHS's report prints them.\"\"\"\n    # TODO: measure each kind of violation; 0.0 when there is none.\n    return {\"bound\": -1.0, \"integrality\": -1.0, \"row\": -1.0}\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    depot = model.add_binary_variable(name=\"open_north\")\n    model.add_linear_constraint(depot <= 1, name=\"once\")\n    print(audit(model, {depot: 0.9999996}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom audit import audit\n\nmodel = mathopt.Model()\neast = model.add_binary_variable(name=\"open_east\")\nvans = model.add_variable(lb=0, ub=30, name=\"vans\")\nmodel.add_linear_constraint(vans <= 20 * east, name=\"capacity\")\nmodel.add_linear_constraint(lb=5.0, ub=18.0, expr=vans, name=\"demand\")\n\nprint(\"east 1, vans 12:\", audit(model, {east: 1.0, vans: 12.0}))\nprint(\"east 0.9999993, vans 12:\", {k: round(v, 9) for k, v in audit(model, {east: 0.9999993, vans: 12.0}).items()})\nprint(\"east 1, vans 32:\", audit(model, {east: 1.0, vans: 32.0}))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "299f9c53b584b468b92e4f4b2cce0768f8208500143b41680bebf6953334cdd8",
+  "content_sha256": "22c1b014049d7ce8aa7f21d6558e16708aaf5e6438ee37439b9ca51e5dc8a152",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef audit(model: mathopt.Model, values: dict) -> dict[str, float]:\n    \"\"\"The largest bound, integrality and row violation of `values`, as HiGHS's report prints them.\"\"\"\n    # TODO: measure each kind of violation; 0.0 when there is none.\n    return {\"bound\": -1.0, \"integrality\": -1.0, \"row\": -1.0}\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    depot = model.add_binary_variable(name=\"open_north\")\n    model.add_linear_constraint(depot <= 1, name=\"once\")\n    print(audit(model, {depot: 0.9999996}))\n",
   "exercise": {
     "main_path": "practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-2/audit.py",
     "test_path": "practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-2/test_audit.py",
     "run_command": [
       "python3",
-      "practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-2/audit.py"
+      "practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -135,6 +153,10 @@
     },
     "concepts": [
       "SCIP warns when its translated best solution breaks a row of the model as built, while the status still says optimal"
-    ]
+    ],
+    "files": [
+      "practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-2/try_it.py"
+    ],
+    "try_file": "practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-2/try_it.py"
   }
 }

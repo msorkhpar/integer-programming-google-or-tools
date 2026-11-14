@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Cap each crew's driving",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef add_drive_limits(routing, drive_index: int, shifts: list[int]) -> None:\n    \"\"\"Each crew v drives at most shifts[v] minutes, the drive back to the yard included.\"\"\"\n    routing.AddDimensionWithVehicleCapacity(drive_index, 0, list(shifts), True, \"Drive\")\n\n\ndef build(drive: list[list[int]], shifts: list[int]):\n    \"\"\"Given: one route per crew from the yard (node 0), priced in drive minutes.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(drive), len(shifts), 0)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def minutes(from_index, to_index):\n        return drive[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    drive_index = routing.RegisterTransitCallback(minutes)\n    routing.SetArcCostEvaluatorOfAllVehicles(drive_index)\n    add_drive_limits(routing, drive_index, shifts)\n    return manager, routing\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 20, 30], [20, 0, 15], [30, 15, 0]], [60, 40])\n    print(routing.ReadAssignmentFromRoutes([[1, 2], []], True) is not None)\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom shifts import build\n\n# A dog walker's van yard (0) and four parks, in minutes.\ndrive = [\n    [0, 12, 18, 25, 9],\n    [12, 0, 7, 20, 15],\n    [18, 7, 0, 11, 22],\n    [25, 20, 11, 0, 14],\n    [9, 15, 22, 14, 0],\n]\n\n\ndef allowed(shifts, routes):\n    manager, routing = build(drive, shifts)\n    return routing.ReadAssignmentFromRoutes(routes, True) is not None\n\n\nprint(\"shifts [45, 60], routes [1, 2] and [4, 3]:\", allowed([45, 60], [[1, 2], [4, 3]]))\nprint(\"shifts [36, 60], routes [1, 2] and [4, 3]:\", allowed([36, 60], [[1, 2], [4, 3]]))\nprint(\"shifts [45, 45], routes [1, 2] and [4, 3]:\", allowed([45, 45], [[1, 2], [4, 3]]))\nprint(\"shifts [90, 30], routes [1, 2, 3, 4] and []:\", allowed([90, 30], [[1, 2, 3, 4], []]))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef add_drive_limits(routing, drive_index: int, shifts: list[int]) -> None:\n    \"\"\"Each crew v drives at most shifts[v] minutes, the drive back to the yard included.\"\"\"\n    # TODO: one dimension that adds up each crew's drive minutes, capped per crew.\n    return None\n\n\ndef build(drive: list[list[int]], shifts: list[int]):\n    \"\"\"Given: one route per crew from the yard (node 0), priced in drive minutes.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(drive), len(shifts), 0)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def minutes(from_index, to_index):\n        return drive[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    drive_index = routing.RegisterTransitCallback(minutes)\n    routing.SetArcCostEvaluatorOfAllVehicles(drive_index)\n    add_drive_limits(routing, drive_index, shifts)\n    return manager, routing\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 20, 30], [20, 0, 15], [30, 15, 0]], [60, 40])\n    print(routing.ReadAssignmentFromRoutes([[1, 2], []], True) is not None)\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom shifts import build\n\n# A dog walker's van yard (0) and four parks, in minutes.\ndrive = [\n    [0, 12, 18, 25, 9],\n    [12, 0, 7, 20, 15],\n    [18, 7, 0, 11, 22],\n    [25, 20, 11, 0, 14],\n    [9, 15, 22, 14, 0],\n]\n\n\ndef allowed(shifts, routes):\n    manager, routing = build(drive, shifts)\n    return routing.ReadAssignmentFromRoutes(routes, True) is not None\n\n\nprint(\"shifts [45, 60], routes [1, 2] and [4, 3]:\", allowed([45, 60], [[1, 2], [4, 3]]))\nprint(\"shifts [36, 60], routes [1, 2] and [4, 3]:\", allowed([36, 60], [[1, 2], [4, 3]]))\nprint(\"shifts [45, 45], routes [1, 2] and [4, 3]:\", allowed([45, 45], [[1, 2], [4, 3]]))\nprint(\"shifts [90, 30], routes [1, 2, 3, 4] and []:\", allowed([90, 30], [[1, 2, 3, 4], []]))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "9b79c206fca4862422718be2038707155d11f6f99995e26b8bfda7d9a92c190c",
+  "content_sha256": "e2c779509608c46039337a3abb8d10298eebfb20975e5badca176eaea30cdb6c",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef add_drive_limits(routing, drive_index: int, shifts: list[int]) -> None:\n    \"\"\"Each crew v drives at most shifts[v] minutes, the drive back to the yard included.\"\"\"\n    # TODO: one dimension that adds up each crew's drive minutes, capped per crew.\n    return None\n\n\ndef build(drive: list[list[int]], shifts: list[int]):\n    \"\"\"Given: one route per crew from the yard (node 0), priced in drive minutes.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(drive), len(shifts), 0)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def minutes(from_index, to_index):\n        return drive[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    drive_index = routing.RegisterTransitCallback(minutes)\n    routing.SetArcCostEvaluatorOfAllVehicles(drive_index)\n    add_drive_limits(routing, drive_index, shifts)\n    return manager, routing\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 20, 30], [20, 0, 15], [30, 15, 0]], [60, 40])\n    print(routing.ReadAssignmentFromRoutes([[1, 2], []], True) is not None)\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-1/shifts.py",
     "test_path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-1/test_shifts.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-1/shifts.py"
+      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -130,6 +148,10 @@
     },
     "concepts": [
       "a dimension's cumul grows by transit plus slack along a route and is capped by its capacity"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-1/try_it.py"
   }
 }

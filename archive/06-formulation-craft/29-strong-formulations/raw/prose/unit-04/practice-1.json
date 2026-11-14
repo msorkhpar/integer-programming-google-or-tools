@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Reformulating an inherited depot model",
   "blocks": [
     {
@@ -61,6 +61,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Depots:\n    demand: dict             # substation -> spare parts it draws per year\n    capacity: dict           # depot -> spare parts it can hold\n    fee: dict                # depot -> yearly cost of keeping it open ($k)\n    haul: dict               # (substation, depot) -> yearly hauling cost ($k)\n\n\ndef add_inherited_rules(model, x, y, d: Depots) -> None:\n    \"\"\"The colleague's rows: correct for whole plans, weak for the LP.\"\"\"\n    subs, depots = list(d.demand), list(d.capacity)\n    for j in depots:\n        model.add_linear_constraint(sum(x[i, j] for i in subs) <= len(subs) * y[j], name=f\"open_{j}\")\n        model.add_linear_constraint(sum(d.demand[i] * x[i, j] for i in subs) <= d.capacity[j], name=f\"cap_{j}\")\n\n\ndef add_rules(model, x, y, d: Depots) -> None:\n    \"\"\"The same rules, reformulated: as strong as you can make them.\"\"\"\n    subs, depots = list(d.demand), list(d.capacity)\n    for j in depots:\n        for i in subs:\n            model.add_linear_constraint(x[i, j] <= y[j], name=f\"open_{i}_{j}\")\n        model.add_linear_constraint(sum(d.demand[i] * x[i, j] for i in subs) <= d.capacity[j] * y[j],\n                                    name=f\"cap_{j}\")\n\n\ndef build(d: Depots, rules, *, integer: bool = True) -> tuple[mathopt.Model, dict, dict]:\n    \"\"\"Serve every substation from one open depot at the least yearly cost.\"\"\"\n    model = mathopt.Model(name=\"depots\")\n    x = {(i, j): model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{i}_{j}\")\n         for i in d.demand for j in d.capacity}\n    y = {j: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"y_{j}\") for j in d.capacity}\n    for i in d.demand:\n        model.add_linear_constraint(sum(x[i, j] for j in d.capacity) == 1, name=f\"served_{i}\")\n    rules(model, x, y, d)\n    model.minimize(sum(d.fee[j] * y[j] for j in d.capacity) + sum(d.haul[k] * x[k] for k in x))\n    return model, x, y\n\n\nif __name__ == \"__main__\":\n    d = Depots({\"S1\": 4, \"S2\": 3}, {\"D1\": 8, \"D2\": 8}, {\"D1\": 10, \"D2\": 12},\n               {(\"S1\", \"D1\"): 1, (\"S1\", \"D2\"): 2, (\"S2\", \"D1\"): 2, (\"S2\", \"D2\"): 1})\n    for rules in (add_inherited_rules, add_rules):\n        model, _, _ = build(d, rules, integer=False)\n        print(rules.__name__, mathopt.solve(model, mathopt.SolverType.GLOP).objective_value())\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom depots import Depots, add_inherited_rules, add_rules, build\n\nd = Depots({\"North\": 5, \"South\": 4, \"West\": 3}, {\"Mill\": 9, \"Quay\": 10},\n           {\"Mill\": 20, \"Quay\": 24},\n           {(\"North\", \"Mill\"): 2, (\"North\", \"Quay\"): 5, (\"South\", \"Mill\"): 4,\n            (\"South\", \"Quay\"): 1, (\"West\", \"Mill\"): 3, (\"West\", \"Quay\"): 3})\n\nfor rules in (add_inherited_rules, add_rules):\n    for integer in (True, False):\n        model, _, y = build(d, rules, integer=integer)\n        result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n        print(f\"{rules.__name__} integer={integer}: cost\", round(result.objective_value(), 3),\n              {j: round(result.variable_values(v), 3) for j, v in y.items()})\n"
         }
       ]
     },
@@ -73,6 +82,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Depots:\n    demand: dict             # substation -> spare parts it draws per year\n    capacity: dict           # depot -> spare parts it can hold\n    fee: dict                # depot -> yearly cost of keeping it open ($k)\n    haul: dict               # (substation, depot) -> yearly hauling cost ($k)\n\n\ndef add_inherited_rules(model, x, y, d: Depots) -> None:\n    \"\"\"The colleague's rows: correct for whole plans, weak for the LP.\"\"\"\n    subs, depots = list(d.demand), list(d.capacity)\n    for j in depots:\n        model.add_linear_constraint(sum(x[i, j] for i in subs) <= len(subs) * y[j], name=f\"open_{j}\")\n        model.add_linear_constraint(sum(d.demand[i] * x[i, j] for i in subs) <= d.capacity[j], name=f\"cap_{j}\")\n\n\ndef add_rules(model, x, y, d: Depots) -> None:\n    \"\"\"The same rules, reformulated: as strong as you can make them.\"\"\"\n    # TODO: the open and capacity rules, in their strongest form.\n    return None\n\ndef build(d: Depots, rules, *, integer: bool = True) -> tuple[mathopt.Model, dict, dict]:\n    \"\"\"Serve every substation from one open depot at the least yearly cost.\"\"\"\n    model = mathopt.Model(name=\"depots\")\n    x = {(i, j): model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{i}_{j}\")\n         for i in d.demand for j in d.capacity}\n    y = {j: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"y_{j}\") for j in d.capacity}\n    for i in d.demand:\n        model.add_linear_constraint(sum(x[i, j] for j in d.capacity) == 1, name=f\"served_{i}\")\n    rules(model, x, y, d)\n    model.minimize(sum(d.fee[j] * y[j] for j in d.capacity) + sum(d.haul[k] * x[k] for k in x))\n    return model, x, y\n\n\nif __name__ == \"__main__\":\n    d = Depots({\"S1\": 4, \"S2\": 3}, {\"D1\": 8, \"D2\": 8}, {\"D1\": 10, \"D2\": 12},\n               {(\"S1\", \"D1\"): 1, (\"S1\", \"D2\"): 2, (\"S2\", \"D1\"): 2, (\"S2\", \"D2\"): 1})\n    for rules in (add_inherited_rules, add_rules):\n        model, _, _ = build(d, rules, integer=False)\n        print(rules.__name__, mathopt.solve(model, mathopt.SolverType.GLOP).objective_value())\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom depots import Depots, add_inherited_rules, add_rules, build\n\nd = Depots({\"North\": 5, \"South\": 4, \"West\": 3}, {\"Mill\": 9, \"Quay\": 10},\n           {\"Mill\": 20, \"Quay\": 24},\n           {(\"North\", \"Mill\"): 2, (\"North\", \"Quay\"): 5, (\"South\", \"Mill\"): 4,\n            (\"South\", \"Quay\"): 1, (\"West\", \"Mill\"): 3, (\"West\", \"Quay\"): 3})\n\nfor rules in (add_inherited_rules, add_rules):\n    for integer in (True, False):\n        model, _, y = build(d, rules, integer=integer)\n        result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n        print(f\"{rules.__name__} integer={integer}: cost\", round(result.objective_value(), 3),\n              {j: round(result.variable_values(v), 3) for j, v in y.items()})\n"
     }
   ],
   "video": null,
@@ -80,8 +98,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 3,
+    "paras": 6,
+    "code": 4,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -91,14 +109,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "f2ed1cb561f5f9b5fadfa71f796b5e81943ac0096bf8c7f37ee071f7d6d2a988",
+  "content_sha256": "c407ec6338f7868077309d38ba20d6465df56e867b3b886eca9e75e285229650",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Depots:\n    demand: dict             # substation -> spare parts it draws per year\n    capacity: dict           # depot -> spare parts it can hold\n    fee: dict                # depot -> yearly cost of keeping it open ($k)\n    haul: dict               # (substation, depot) -> yearly hauling cost ($k)\n\n\ndef add_inherited_rules(model, x, y, d: Depots) -> None:\n    \"\"\"The colleague's rows: correct for whole plans, weak for the LP.\"\"\"\n    subs, depots = list(d.demand), list(d.capacity)\n    for j in depots:\n        model.add_linear_constraint(sum(x[i, j] for i in subs) <= len(subs) * y[j], name=f\"open_{j}\")\n        model.add_linear_constraint(sum(d.demand[i] * x[i, j] for i in subs) <= d.capacity[j], name=f\"cap_{j}\")\n\n\ndef add_rules(model, x, y, d: Depots) -> None:\n    \"\"\"The same rules, reformulated: as strong as you can make them.\"\"\"\n    # TODO: the open and capacity rules, in their strongest form.\n    return None\n\ndef build(d: Depots, rules, *, integer: bool = True) -> tuple[mathopt.Model, dict, dict]:\n    \"\"\"Serve every substation from one open depot at the least yearly cost.\"\"\"\n    model = mathopt.Model(name=\"depots\")\n    x = {(i, j): model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{i}_{j}\")\n         for i in d.demand for j in d.capacity}\n    y = {j: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"y_{j}\") for j in d.capacity}\n    for i in d.demand:\n        model.add_linear_constraint(sum(x[i, j] for j in d.capacity) == 1, name=f\"served_{i}\")\n    rules(model, x, y, d)\n    model.minimize(sum(d.fee[j] * y[j] for j in d.capacity) + sum(d.haul[k] * x[k] for k in x))\n    return model, x, y\n\n\nif __name__ == \"__main__\":\n    d = Depots({\"S1\": 4, \"S2\": 3}, {\"D1\": 8, \"D2\": 8}, {\"D1\": 10, \"D2\": 12},\n               {(\"S1\", \"D1\"): 1, (\"S1\", \"D2\"): 2, (\"S2\", \"D1\"): 2, (\"S2\", \"D2\"): 1})\n    for rules in (add_inherited_rules, add_rules):\n        model, _, _ = build(d, rules, integer=False)\n        print(rules.__name__, mathopt.solve(model, mathopt.SolverType.GLOP).objective_value())\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-1/depots.py",
     "test_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-1/test_depots.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-1/depots.py"
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -139,6 +157,10 @@
     },
     "concepts": [
       "fractional values in the LP solution point at the rows to strengthen"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-1/try_it.py"
   }
 }

@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A manual two-pass solve that matches a native hierarchical solve",
   "blocks": [
     {
@@ -60,6 +60,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nEXACT = mathopt.SolveParameters(relative_gap_tolerance=0.0)\nTOL = 1e-6        # numerical slack on the kept row, as in lesson 8.2.2's lexicographic.py\n\n\ndef two_pass(model: mathopt.Model, first, second, *, first_max: bool, second_max: bool,\n             abs_tol: float = 0.0, rel_tol: float = 0.0) -> tuple[float, float]:\n    \"\"\"(first, second) of the plan that optimizes `second` with `first` kept within its tolerance.\"\"\"\n    model.set_linear_objective(first, is_maximize=first_max)\n    best = mathopt.solve(model, mathopt.SolverType.HIGHS, params=EXACT).objective_value()\n    loss = max(abs_tol, rel_tol * abs(best))\n    if first_max:\n        keep = model.add_linear_constraint(first >= best - loss - TOL)\n    else:\n        keep = model.add_linear_constraint(first <= best + loss + TOL)\n    model.set_linear_objective(second, is_maximize=second_max)\n    values = mathopt.solve(model, mathopt.SolverType.HIGHS, params=EXACT).variable_values()\n    model.delete_linear_constraint(keep)\n    return mathopt.evaluate_expression(first, values), mathopt.evaluate_expression(second, values)\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = [model.add_binary_variable(name=f\"main_{i}\") for i in range(3)]\n    model.add_linear_constraint(4 * x[0] + 3 * x[1] + 2 * x[2] <= 6, name=\"budget\")\n    leaks, hours = 9 * x[0] + 7 * x[1] + 4 * x[2], 5 * x[0] + 6 * x[1] + 1 * x[2]\n    print(two_pass(model, leaks, hours, first_max=True, second_max=False, rel_tol=0.1))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom two_pass import two_pass\n\ncost = [6, 4, 4, 3, 2]\nleaks = [15, 11, 9, 6, 5]\nhours = [9, 2, 8, 6, 1]\n\nmodel = mathopt.Model(name=\"mains\")\nx = [model.add_binary_variable(name=f\"main_{i}\") for i in range(len(cost))]\nmodel.add_linear_constraint(sum(c * v for c, v in zip(cost, x)) <= 11, name=\"budget\")\nfirst = mathopt.LinearExpression() + sum(a * v for a, v in zip(leaks, x))\nsecond = mathopt.LinearExpression() + sum(h * v for h, v in zip(hours, x))\n\nfor rel in (0.0, 0.1, 0.25):\n    print(f\"max leaks within {rel:.0%}, then min hours:\",\n          two_pass(model, first, second, first_max=True, second_max=False, rel_tol=rel))\nprint(\"max leaks within 4, then min hours:\",\n      two_pass(model, first, second, first_max=True, second_max=False, abs_tol=4))\n"
         }
       ]
     },
@@ -72,6 +81,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nEXACT = mathopt.SolveParameters(relative_gap_tolerance=0.0)\n\n\ndef two_pass(model: mathopt.Model, first, second, *, first_max: bool, second_max: bool,\n             abs_tol: float = 0.0, rel_tol: float = 0.0) -> tuple[float, float]:\n    \"\"\"(first, second) of the plan that optimizes `second` with `first` kept within its tolerance.\"\"\"\n    # TODO: pass 1, the kept row, pass 2, then delete the kept row.\n    return 0.0, 0.0\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = [model.add_binary_variable(name=f\"main_{i}\") for i in range(3)]\n    model.add_linear_constraint(4 * x[0] + 3 * x[1] + 2 * x[2] <= 6, name=\"budget\")\n    leaks, hours = 9 * x[0] + 7 * x[1] + 4 * x[2], 5 * x[0] + 6 * x[1] + 1 * x[2]\n    print(two_pass(model, leaks, hours, first_max=True, second_max=False, rel_tol=0.1))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom two_pass import two_pass\n\ncost = [6, 4, 4, 3, 2]\nleaks = [15, 11, 9, 6, 5]\nhours = [9, 2, 8, 6, 1]\n\nmodel = mathopt.Model(name=\"mains\")\nx = [model.add_binary_variable(name=f\"main_{i}\") for i in range(len(cost))]\nmodel.add_linear_constraint(sum(c * v for c, v in zip(cost, x)) <= 11, name=\"budget\")\nfirst = mathopt.LinearExpression() + sum(a * v for a, v in zip(leaks, x))\nsecond = mathopt.LinearExpression() + sum(h * v for h, v in zip(hours, x))\n\nfor rel in (0.0, 0.1, 0.25):\n    print(f\"max leaks within {rel:.0%}, then min hours:\",\n          two_pass(model, first, second, first_max=True, second_max=False, rel_tol=rel))\nprint(\"max leaks within 4, then min hours:\",\n      two_pass(model, first, second, first_max=True, second_max=False, abs_tol=4))\n"
     }
   ],
   "video": null,
@@ -79,8 +97,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 6,
-    "code": 2,
+    "paras": 7,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -90,14 +108,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "427b13a775e271fd2703eaf1a5eb57970b52fd474d1e8659c6d1d1034f35e73e",
+  "content_sha256": "b7b77c8587bb51622869f445c16d8e5584d3128bcb0a38f45edd84cb32517b32",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nEXACT = mathopt.SolveParameters(relative_gap_tolerance=0.0)\n\n\ndef two_pass(model: mathopt.Model, first, second, *, first_max: bool, second_max: bool,\n             abs_tol: float = 0.0, rel_tol: float = 0.0) -> tuple[float, float]:\n    \"\"\"(first, second) of the plan that optimizes `second` with `first` kept within its tolerance.\"\"\"\n    # TODO: pass 1, the kept row, pass 2, then delete the kept row.\n    return 0.0, 0.0\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = [model.add_binary_variable(name=f\"main_{i}\") for i in range(3)]\n    model.add_linear_constraint(4 * x[0] + 3 * x[1] + 2 * x[2] <= 6, name=\"budget\")\n    leaks, hours = 9 * x[0] + 7 * x[1] + 4 * x[2], 5 * x[0] + 6 * x[1] + 1 * x[2]\n    print(two_pass(model, leaks, hours, first_max=True, second_max=False, rel_tol=0.1))\n",
   "exercise": {
     "main_path": "practice/08-multi-objective-optimization/35-lexicographic/prose/unit-02/practice-2/two_pass.py",
     "test_path": "practice/08-multi-objective-optimization/35-lexicographic/prose/unit-02/practice-2/test_two_pass.py",
     "run_command": [
       "python3",
-      "practice/08-multi-objective-optimization/35-lexicographic/prose/unit-02/practice-2/two_pass.py"
+      "practice/08-multi-objective-optimization/35-lexicographic/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -148,6 +166,10 @@
     },
     "concepts": [
       "a manual two-pass solve with a kept row whose direction follows the sense, solved to a zero gap, and the model given back"
-    ]
+    ],
+    "files": [
+      "practice/08-multi-objective-optimization/35-lexicographic/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/08-multi-objective-optimization/35-lexicographic/prose/unit-02/practice-2/try_it.py"
   }
 }

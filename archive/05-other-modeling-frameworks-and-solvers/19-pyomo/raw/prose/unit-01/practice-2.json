@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Trimming feeder lines inside their windows",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pyomo.environ as pyo\n\n\n@dataclass(frozen=True)\nclass Circuit:\n    hours: int                  # crew hours to trim it\n    risk: float                 # risk removed if it is trimmed\n    months: tuple[str, ...]     # the months it may be trimmed in\n\n\ndef trim_plan(circuits: dict[str, Circuit], crew_hours: dict[str, int]) -> tuple[float, dict[str, str]]:\n    \"\"\"The most risk the crews can remove, and the month each trimmed circuit is trimmed in.\"\"\"\n    m = pyo.ConcreteModel()\n    m.C = pyo.Set(initialize=list(circuits))\n    m.M = pyo.Set(initialize=list(crew_hours))\n    m.A = pyo.Set(dimen=2, initialize=[(c, k) for c, circuit in circuits.items() for k in circuit.months\n                                       if k in crew_hours])     # a month with no crew hours is no option\n    m.hours = pyo.Param(m.C, initialize={c: circuit.hours for c, circuit in circuits.items()})\n    m.risk = pyo.Param(m.C, initialize={c: circuit.risk for c, circuit in circuits.items()})\n    m.cap = pyo.Param(m.M, initialize=crew_hours)\n    m.x = pyo.Var(m.A, domain=pyo.Binary)\n\n    def once_rule(m, c):\n        terms = [m.x[c, k] for (d, k) in m.A if d == c]\n        if not terms:\n            return pyo.Constraint.Skip\n        return sum(terms) <= 1\n    m.once = pyo.Constraint(m.C, rule=once_rule)\n\n    def crews_rule(m, k):\n        terms = [m.hours[c] * m.x[c, j] for (c, j) in m.A if j == k]\n        if not terms:\n            return pyo.Constraint.Skip\n        return sum(terms) <= m.cap[k]\n    m.crews = pyo.Constraint(m.M, rule=crews_rule)\n\n    m.removed = pyo.Objective(expr=sum(m.risk[c] * m.x[c, k] for (c, k) in m.A), sense=pyo.maximize)\n    solver = pyo.SolverFactory(\"appsi_highs\")\n    solver.config.mip_gap = 0.0\n    solver.solve(m)\n    plan = {c: k for (c, k) in m.A if pyo.value(m.x[c, k]) > 0.5}\n    return pyo.value(m.removed), plan\n\n\nif __name__ == \"__main__\":\n    lines = {\"L1\": Circuit(60, 9.0, (\"Apr\", \"May\")), \"L2\": Circuit(50, 7.0, (\"Apr\",)),\n             \"L3\": Circuit(40, 4.0, (\"May\", \"Jun\"))}\n    print(trim_plan(lines, {\"Apr\": 80, \"May\": 60, \"Jun\": 30}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\n# Pyomo logs every set it builds and the whole solver log; keep its own logger to warnings.\nlogging.getLogger(\"pyomo\").setLevel(logging.WARNING)\n\nfrom trim import Circuit, trim_plan\n\n# Circuit(crew hours, risk removed, months it may be trimmed in)\ncircuits = {\"G1\": Circuit(50, 6.0, (\"Mar\", \"Apr\")), \"G2\": Circuit(40, 5.5, (\"Mar\",)),\n            \"G3\": Circuit(30, 4.0, (\"Apr\", \"May\")), \"G4\": Circuit(45, 6.5, (\"May\",))}\nfor hours in ({\"Mar\": 90, \"Apr\": 50, \"May\": 50}, {\"Mar\": 50, \"Apr\": 30, \"May\": 40}):\n    value, plan = trim_plan(circuits, hours)\n    print(f\"crew hours {hours}: risk removed {round(value, 2)}, months {plan}\")\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pyomo.environ as pyo\n\n\n@dataclass(frozen=True)\nclass Circuit:\n    hours: int                  # crew hours to trim it\n    risk: float                 # risk removed if it is trimmed\n    months: tuple[str, ...]     # the months it may be trimmed in\n\n\ndef trim_plan(circuits: dict[str, Circuit], crew_hours: dict[str, int]) -> tuple[float, dict[str, str]]:\n    \"\"\"The most risk the crews can remove, and the month each trimmed circuit is trimmed in.\"\"\"\n    # TODO: Sets for circuits, months and allowed (circuit, month) pairs; Params; x over the pairs;\n    #       the once and crews rows; the objective; solve with appsi_highs and read the plan.\n    return 0.0, {}\n\n\nif __name__ == \"__main__\":\n    lines = {\"L1\": Circuit(60, 9.0, (\"Apr\", \"May\")), \"L2\": Circuit(50, 7.0, (\"Apr\",)),\n             \"L3\": Circuit(40, 4.0, (\"May\", \"Jun\"))}\n    print(trim_plan(lines, {\"Apr\": 80, \"May\": 60, \"Jun\": 30}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\n# Pyomo logs every set it builds and the whole solver log; keep its own logger to warnings.\nlogging.getLogger(\"pyomo\").setLevel(logging.WARNING)\n\nfrom trim import Circuit, trim_plan\n\n# Circuit(crew hours, risk removed, months it may be trimmed in)\ncircuits = {\"G1\": Circuit(50, 6.0, (\"Mar\", \"Apr\")), \"G2\": Circuit(40, 5.5, (\"Mar\",)),\n            \"G3\": Circuit(30, 4.0, (\"Apr\", \"May\")), \"G4\": Circuit(45, 6.5, (\"May\",))}\nfor hours in ({\"Mar\": 90, \"Apr\": 50, \"May\": 50}, {\"Mar\": 50, \"Apr\": 30, \"May\": 40}):\n    value, plan = trim_plan(circuits, hours)\n    print(f\"crew hours {hours}: risk removed {round(value, 2)}, months {plan}\")\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "d077e5a9c9ee527c5fa07b7ff1f34c19e7432d8438c098627e2536dfd870c1a0",
+  "content_sha256": "ae2889d36bca458e69abb9939b5132602a42bacf1e776a61da1b0dc3cb62e186",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nimport pyomo.environ as pyo\n\n\n@dataclass(frozen=True)\nclass Circuit:\n    hours: int                  # crew hours to trim it\n    risk: float                 # risk removed if it is trimmed\n    months: tuple[str, ...]     # the months it may be trimmed in\n\n\ndef trim_plan(circuits: dict[str, Circuit], crew_hours: dict[str, int]) -> tuple[float, dict[str, str]]:\n    \"\"\"The most risk the crews can remove, and the month each trimmed circuit is trimmed in.\"\"\"\n    # TODO: Sets for circuits, months and allowed (circuit, month) pairs; Params; x over the pairs;\n    #       the once and crews rows; the objective; solve with appsi_highs and read the plan.\n    return 0.0, {}\n\n\nif __name__ == \"__main__\":\n    lines = {\"L1\": Circuit(60, 9.0, (\"Apr\", \"May\")), \"L2\": Circuit(50, 7.0, (\"Apr\",)),\n             \"L3\": Circuit(40, 4.0, (\"May\", \"Jun\"))}\n    print(trim_plan(lines, {\"Apr\": 80, \"May\": 60, \"Jun\": 30}))\n",
   "exercise": {
     "main_path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-2/trim.py",
     "test_path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-2/test_trim.py",
     "run_command": [
       "python3",
-      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-2/trim.py"
+      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -141,6 +159,10 @@
       "one row per index from a rule, and indices that get none",
       "an index set that lists only the allowed pairs",
       "declaring each variable family with its domain"
-    ]
+    ],
+    "files": [
+      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-01/practice-2/try_it.py"
   }
 }

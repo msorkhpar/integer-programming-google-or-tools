@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Which limits refuse the next job",
   "blocks": [
     {
@@ -51,6 +51,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Limit:\n    name: str\n    use: dict[str, float]       # job -> how much of this limit the job uses\n    cap: float\n\n\ndef used(limit: Limit, jobs: set[str]) -> float:\n    return sum(limit.use.get(job, 0.0) for job in jobs)\n\n\ndef refusals(limits: list[Limit], plan: set[str], candidates: list[str]) -> dict[str, list[str]]:\n    \"\"\"For each candidate job: the limits that adding it alone to the plan would break, sorted by name.\"\"\"\n    out = {}\n    for job in candidates:\n        jobs = plan | {job}\n        out[job] = sorted(limit.name for limit in limits if used(limit, jobs) - limit.cap > 1e-9)\n    return out\n\n\ndef full_but_not_tight(limits: list[Limit], plan: set[str], candidates: list[str]) -> list[str]:\n    \"\"\"Limits with room left at the plan that still refuse at least one candidate, sorted by name.\"\"\"\n    refusing = {name for names in refusals(limits, plan, candidates).values() for name in names}\n    return sorted(limit.name for limit in limits\n                  if limit.name in refusing and limit.cap - used(limit, plan) > 1e-9)\n\n\nif __name__ == \"__main__\":\n    fund = Limit(\"capital_fund\", {\"roof\": 180, \"boiler\": 220}, 300)\n    print(refusals([fund], {\"roof\"}, [\"boiler\"]))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom refusals import Limit, full_but_not_tight, refusals\n\nlimits = [\n    Limit(\"works_fund\", {\"bridge\": 250, \"tunnel\": 300, \"lights\": 80, \"kerbs\": 40}, 600),\n    Limit(\"crew_months\", {\"bridge\": 5, \"tunnel\": 6, \"lights\": 2, \"kerbs\": 1}, 10),\n    Limit(\"one_big_job\", {\"bridge\": 1, \"tunnel\": 1}, 1),\n]\nplan = {\"bridge\", \"lights\"}\n\nfor job, broken in refusals(limits, plan, [\"tunnel\", \"kerbs\"]).items():\n    print(f\"limits broken by adding {job}:\", broken)\nprint(\"limits with room that refuse tunnel:\", full_but_not_tight(limits, plan, [\"tunnel\"]))\n"
         }
       ]
     },
@@ -63,6 +72,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Limit:\n    name: str\n    use: dict[str, float]       # job -> how much of this limit the job uses\n    cap: float\n\n\ndef used(limit: Limit, jobs: set[str]) -> float:\n    return sum(limit.use.get(job, 0.0) for job in jobs)\n\n\ndef refusals(limits: list[Limit], plan: set[str], candidates: list[str]) -> dict[str, list[str]]:\n    \"\"\"For each candidate job: the limits that adding it alone to the plan would break, sorted by name.\"\"\"\n    # TODO: try each candidate on top of the plan.\n    return {}\n\n\ndef full_but_not_tight(limits: list[Limit], plan: set[str], candidates: list[str]) -> list[str]:\n    \"\"\"Limits with room left at the plan that still refuse at least one candidate, sorted by name.\"\"\"\n    # TODO: combine refusals() with the room each limit has at the plan.\n    return []\n\n\nif __name__ == \"__main__\":\n    fund = Limit(\"capital_fund\", {\"roof\": 180, \"boiler\": 220}, 300)\n    print(refusals([fund], {\"roof\"}, [\"boiler\"]))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom refusals import Limit, full_but_not_tight, refusals\n\nlimits = [\n    Limit(\"works_fund\", {\"bridge\": 250, \"tunnel\": 300, \"lights\": 80, \"kerbs\": 40}, 600),\n    Limit(\"crew_months\", {\"bridge\": 5, \"tunnel\": 6, \"lights\": 2, \"kerbs\": 1}, 10),\n    Limit(\"one_big_job\", {\"bridge\": 1, \"tunnel\": 1}, 1),\n]\nplan = {\"bridge\", \"lights\"}\n\nfor job, broken in refusals(limits, plan, [\"tunnel\", \"kerbs\"]).items():\n    print(f\"limits broken by adding {job}:\", broken)\nprint(\"limits with room that refuse tunnel:\", full_but_not_tight(limits, plan, [\"tunnel\"]))\n"
     }
   ],
   "video": null,
@@ -70,8 +88,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -81,14 +99,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "d043fa57906124aa04c30ecf2fd7b558eaa55860bb597cf3d478cd6969e48942",
+  "content_sha256": "5cc77c5994ccfe92fcab7b3a483831194849b512868c522c9c562abef4ed7326",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Limit:\n    name: str\n    use: dict[str, float]       # job -> how much of this limit the job uses\n    cap: float\n\n\ndef used(limit: Limit, jobs: set[str]) -> float:\n    return sum(limit.use.get(job, 0.0) for job in jobs)\n\n\ndef refusals(limits: list[Limit], plan: set[str], candidates: list[str]) -> dict[str, list[str]]:\n    \"\"\"For each candidate job: the limits that adding it alone to the plan would break, sorted by name.\"\"\"\n    # TODO: try each candidate on top of the plan.\n    return {}\n\n\ndef full_but_not_tight(limits: list[Limit], plan: set[str], candidates: list[str]) -> list[str]:\n    \"\"\"Limits with room left at the plan that still refuse at least one candidate, sorted by name.\"\"\"\n    # TODO: combine refusals() with the room each limit has at the plan.\n    return []\n\n\nif __name__ == \"__main__\":\n    fund = Limit(\"capital_fund\", {\"roof\": 180, \"boiler\": 220}, 300)\n    print(refusals([fund], {\"roof\"}, [\"boiler\"]))\n",
   "exercise": {
     "main_path": "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-2/refusals.py",
     "test_path": "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-2/test_refusals.py",
     "run_command": [
       "python3",
-      "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-2/refusals.py"
+      "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -139,6 +157,10 @@
     },
     "concepts": [
       "a row with slack can refuse every whole project that might be added, so the report lists what each row refuses"
-    ]
+    ],
+    "files": [
+      "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-2/try_it.py"
   }
 }

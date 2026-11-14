@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Progress lines as events",
   "blocks": [
     {
@@ -64,6 +64,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport re\n\nEVENT = re.compile(r\"^#(\\d+|Bound|Done)\\s+\\S+\\s*(.*)$\")\nRANGE = re.compile(r\"best:(\\S+)\\s+next:\\[(\\S+),(\\S+)\\]\\s*(\\S*)\")\n\n\ndef number(text: str) -> int | None:\n    return None if \"inf\" in text else int(text)\n\n\ndef events(log: str) -> list[tuple[str, int | None, int | None, str]]:\n    \"\"\"(kind, best, bound, worker) per progress line of a maximization; kind is solution, bound or done.\"\"\"\n    out = []\n    for line in log.splitlines():\n        found = EVENT.match(line)\n        if not found:\n            continue\n        tag, rest = found.groups()\n        kind = \"solution\" if tag.isdigit() else tag.lower()\n        progress = RANGE.match(rest)\n        if progress:\n            best, _, high, worker = progress.groups()\n            out.append((kind, number(best), number(high), worker))\n        else:\n            out.append((kind, None, None, rest.split()[0] if rest else \"\"))\n    return out\n\n\ndef stopped_by_a_limit(log: str) -> bool:\n    \"\"\"True if the search never reached its #Done line.\"\"\"\n    return not any(kind == \"done\" for kind, *_ in events(log))\n\n\nif __name__ == \"__main__\":\n    print(events(\"#1       0.10s best:208873 next:[208874,225336] main\\n#Done    0.14s main\"))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom progress import events, stopped_by_a_limit\n\n# Made-up progress lines of a delivery-rostering model (minimized), shaped like CP-SAT's.\nlog = \"\"\"#Bound   0.01s best:inf   next:[120,2400] initial_domain\n#1       0.04s best:1900 next:[120,1899] main\n#Bound   0.07s best:1900 next:[640,1899] main (probing)\n#2       0.11s best:980 next:[640,979] main\n#Done    0.20s main\n\"\"\"\nfor event in events(log):\n    print(\"event:\", event)\nprint(\"stopped by a limit (full log):\", stopped_by_a_limit(log))\nprint(\"stopped by a limit (first 3 lines):\", stopped_by_a_limit(\"\\n\".join(log.splitlines()[:3])))\n"
         }
       ]
     },
@@ -76,6 +85,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport re\n\nEVENT = re.compile(r\"^#(\\d+|Bound|Done)\\s+\\S+\\s*(.*)$\")\nRANGE = re.compile(r\"best:(\\S+)\\s+next:\\[(\\S+),(\\S+)\\]\\s*(\\S*)\")\n\n\ndef number(text: str) -> int | None:\n    return None if \"inf\" in text else int(text)\n\n\ndef events(log: str) -> list[tuple[str, int | None, int | None, str]]:\n    \"\"\"(kind, best, bound, worker) per progress line of a maximization; kind is solution, bound or done.\"\"\"\n    # TODO: one tuple per #N, #Bound and #Done line.\n    return []\n\n\ndef stopped_by_a_limit(log: str) -> bool:\n    \"\"\"True if the search never reached its #Done line.\"\"\"\n    return False\n\n\nif __name__ == \"__main__\":\n    print(events(\"#1       0.10s best:208873 next:[208874,225336] main\\n#Done    0.14s main\"))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom progress import events, stopped_by_a_limit\n\n# Made-up progress lines of a delivery-rostering model (minimized), shaped like CP-SAT's.\nlog = \"\"\"#Bound   0.01s best:inf   next:[120,2400] initial_domain\n#1       0.04s best:1900 next:[120,1899] main\n#Bound   0.07s best:1900 next:[640,1899] main (probing)\n#2       0.11s best:980 next:[640,979] main\n#Done    0.20s main\n\"\"\"\nfor event in events(log):\n    print(\"event:\", event)\nprint(\"stopped by a limit (full log):\", stopped_by_a_limit(log))\nprint(\"stopped by a limit (first 3 lines):\", stopped_by_a_limit(\"\\n\".join(log.splitlines()[:3])))\n"
     }
   ],
   "video": null,
@@ -83,8 +101,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -94,14 +112,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "1c4aaab439af7b17748ff6f613ce0aa846a71712f348659655132368b252dd60",
+  "content_sha256": "33342c3cf89bd1a03316685cf06a13db866e9acc9a0b4d9f2d260d8820f6830e",
   "starting_code": "from __future__ import annotations\n\nimport re\n\nEVENT = re.compile(r\"^#(\\d+|Bound|Done)\\s+\\S+\\s*(.*)$\")\nRANGE = re.compile(r\"best:(\\S+)\\s+next:\\[(\\S+),(\\S+)\\]\\s*(\\S*)\")\n\n\ndef number(text: str) -> int | None:\n    return None if \"inf\" in text else int(text)\n\n\ndef events(log: str) -> list[tuple[str, int | None, int | None, str]]:\n    \"\"\"(kind, best, bound, worker) per progress line of a maximization; kind is solution, bound or done.\"\"\"\n    # TODO: one tuple per #N, #Bound and #Done line.\n    return []\n\n\ndef stopped_by_a_limit(log: str) -> bool:\n    \"\"\"True if the search never reached its #Done line.\"\"\"\n    return False\n\n\nif __name__ == \"__main__\":\n    print(events(\"#1       0.10s best:208873 next:[208874,225336] main\\n#Done    0.14s main\"))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-04/practice-2/progress.py",
     "test_path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-04/practice-2/test_progress.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-04/practice-2/progress.py"
+      "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-04/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -147,6 +165,10 @@
     },
     "concepts": [
       "each progress line is a plan, a bound or the end, with the best value, the bound and the worker"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-04/practice-2/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-04/practice-2/try_it.py"
   }
 }

@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Solve the model and read its answer",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    must_do: bool = False\n\n\ndef solve_plan(projects: list[Project], budget: int) -> tuple[str, float | None, frozenset[str] | None]:\n    \"\"\"Build the selection model, solve it with HiGHS, and read the answer status first.\"\"\"\n    model = mathopt.Model(name=\"selection\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in projects) <= budget, name=\"budget\")\n    for p in projects:\n        if p.must_do:\n            model.add_linear_constraint(x[p.pid] == 1, name=f\"must_{p.pid}\")\n    model.maximize(sum(p.value * x[p.pid] for p in projects))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    status = result.termination.reason.name\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return status, None, None\n    plan = frozenset(pid for pid, var in x.items() if result.variable_values(var) > 0.5)\n    return status, result.objective_value(), plan\n\n\nif __name__ == \"__main__\":\n    demo = [Project(\"A\", 50, 80, must_do=True), Project(\"B\", 30, 40), Project(\"C\", 20, 35)]\n    print(solve_plan(demo, 90))\n    print(solve_plan(demo, 40))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom solve import Project, solve_plan\n\n# Four dock repairs; L1 is ordered by the port authority.\ndocks = [\n    Project(\"L1\", 40, 50, must_do=True),\n    Project(\"L2\", 35, 60),\n    Project(\"L3\", 25, 41),\n    Project(\"L4\", 20, 22),\n]\n\nprint(\"budget 100:\", solve_plan(docks, 100))\nprint(\"budget 65:\", solve_plan(docks, 65))\nprint(\"budget 30:\", solve_plan(docks, 30))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    must_do: bool = False\n\n\ndef solve_plan(projects: list[Project], budget: int) -> tuple[str, float | None, frozenset[str] | None]:\n    \"\"\"Build the selection model, solve it with HiGHS, and read the answer status first.\"\"\"\n    # TODO: a model, one binary per project, the budget and must-do rows, the objective,\n    # then mathopt.solve(..., mathopt.SolverType.HIGHS) and its status before any value.\n    return \"NOT_SOLVED\", None, None\n\n\nif __name__ == \"__main__\":\n    demo = [Project(\"A\", 50, 80, must_do=True), Project(\"B\", 30, 40), Project(\"C\", 20, 35)]\n    print(solve_plan(demo, 90))\n    print(solve_plan(demo, 40))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom solve import Project, solve_plan\n\n# Four dock repairs; L1 is ordered by the port authority.\ndocks = [\n    Project(\"L1\", 40, 50, must_do=True),\n    Project(\"L2\", 35, 60),\n    Project(\"L3\", 25, 41),\n    Project(\"L4\", 20, 22),\n]\n\nprint(\"budget 100:\", solve_plan(docks, 100))\nprint(\"budget 65:\", solve_plan(docks, 65))\nprint(\"budget 30:\", solve_plan(docks, 30))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "63dca90b22c2553627288cdd8d96815362ccbdd09e65eb4e12e1cf0183e27a75",
+  "content_sha256": "facc8811bf0c9d794b59eddfd7d8a06467e2919cbd84060731ae5598fba4891d",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    must_do: bool = False\n\n\ndef solve_plan(projects: list[Project], budget: int) -> tuple[str, float | None, frozenset[str] | None]:\n    \"\"\"Build the selection model, solve it with HiGHS, and read the answer status first.\"\"\"\n    # TODO: a model, one binary per project, the budget and must-do rows, the objective,\n    # then mathopt.solve(..., mathopt.SolverType.HIGHS) and its status before any value.\n    return \"NOT_SOLVED\", None, None\n\n\nif __name__ == \"__main__\":\n    demo = [Project(\"A\", 50, 80, must_do=True), Project(\"B\", 30, 40), Project(\"C\", 20, 35)]\n    print(solve_plan(demo, 90))\n    print(solve_plan(demo, 40))\n",
   "exercise": {
     "main_path": "practice/01-foundations/01-optimization-mindset/prose/unit-03/practice-1/solve.py",
     "test_path": "practice/01-foundations/01-optimization-mindset/prose/unit-03/practice-1/test_solve.py",
     "run_command": [
       "python3",
-      "practice/01-foundations/01-optimization-mindset/prose/unit-03/practice-1/solve.py"
+      "practice/01-foundations/01-optimization-mindset/prose/unit-03/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -137,6 +155,10 @@
       "is_integer turns the LP's fractions into whole projects, which is what makes the model a MILP",
       "a MathOpt program is a model, variables with their domains, named rows, one objective and a solve",
       "a solve's status is read before its values, and INFEASIBLE means no plan satisfies every rule"
-    ]
+    ],
+    "files": [
+      "practice/01-foundations/01-optimization-mindset/prose/unit-03/practice-1/try_it.py"
+    ],
+    "try_file": "practice/01-foundations/01-optimization-mindset/prose/unit-03/practice-1/try_it.py"
   }
 }

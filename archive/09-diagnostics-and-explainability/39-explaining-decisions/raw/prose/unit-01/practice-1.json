@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Slack and binding rows of a fleet plan",
   "blocks": [
     {
@@ -60,6 +60,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Row:\n    name: str\n    coefs: dict[str, float]     # variable -> coefficient\n    sense: str                  # \"<=\", \">=\" or \"==\"\n    rhs: float\n\n\ndef slack(row: Row, plan: dict[str, float]) -> float:\n    \"\"\"Room left at the plan: >= 0 when the row holds, 0 when it binds, < 0 when it is broken.\"\"\"\n    activity = sum(c * plan.get(var, 0.0) for var, c in row.coefs.items())\n    if row.sense == \"<=\":\n        return row.rhs - activity\n    if row.sense == \">=\":\n        return activity - row.rhs\n    return -abs(activity - row.rhs)\n\n\ndef binding(rows: list[Row], plan: dict[str, float], tol: float = 1e-6) -> list[str]:\n    \"\"\"Names of the rows the plan keeps with no slack left, in the order given.\"\"\"\n    return [row.name for row in rows if abs(slack(row, plan)) <= tol]\n\n\nif __name__ == \"__main__\":\n    depot = Row(\"depot_space\", {\"bus_a\": 12, \"bus_b\": 9}, \"<=\", 40)\n    print(slack(depot, {\"bus_a\": 2, \"bus_b\": 1}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom slacks import Row, binding, slack\n\nrows = [\n    Row(\"yard_bays\", {\"tram_x\": 10, \"tram_y\": 8}, \"<=\", 50),\n    Row(\"low_floor_min\", {\"tram_y\": 1, \"tram_z\": 1}, \">=\", 3),\n    Row(\"depot_lease\", {\"lease\": 1}, \"==\", 1),\n]\nplan = {\"tram_x\": 2, \"tram_y\": 2, \"tram_z\": 1, \"lease\": 1}\n\nfor row in rows:\n    print(f\"slack of {row.name}:\", slack(row, plan))\nprint(\"binding rows:\", binding(rows, plan))\nprint(\"binding rows, lease 0:\", binding(rows, {**plan, \"lease\": 0}))\n"
         }
       ]
     },
@@ -72,6 +81,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Row:\n    name: str\n    coefs: dict[str, float]     # variable -> coefficient\n    sense: str                  # \"<=\", \">=\" or \"==\"\n    rhs: float\n\n\ndef slack(row: Row, plan: dict[str, float]) -> float:\n    \"\"\"Room left at the plan: >= 0 when the row holds, 0 when it binds, < 0 when it is broken.\"\"\"\n    # TODO: the activity of the row at the plan, then the room left, by the row's sense.\n    return 0.0\n\n\ndef binding(rows: list[Row], plan: dict[str, float], tol: float = 1e-6) -> list[str]:\n    \"\"\"Names of the rows the plan keeps with no slack left, in the order given.\"\"\"\n    # TODO: use slack().\n    return []\n\n\nif __name__ == \"__main__\":\n    depot = Row(\"depot_space\", {\"bus_a\": 12, \"bus_b\": 9}, \"<=\", 40)\n    print(slack(depot, {\"bus_a\": 2, \"bus_b\": 1}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom slacks import Row, binding, slack\n\nrows = [\n    Row(\"yard_bays\", {\"tram_x\": 10, \"tram_y\": 8}, \"<=\", 50),\n    Row(\"low_floor_min\", {\"tram_y\": 1, \"tram_z\": 1}, \">=\", 3),\n    Row(\"depot_lease\", {\"lease\": 1}, \"==\", 1),\n]\nplan = {\"tram_x\": 2, \"tram_y\": 2, \"tram_z\": 1, \"lease\": 1}\n\nfor row in rows:\n    print(f\"slack of {row.name}:\", slack(row, plan))\nprint(\"binding rows:\", binding(rows, plan))\nprint(\"binding rows, lease 0:\", binding(rows, {**plan, \"lease\": 0}))\n"
     }
   ],
   "video": null,
@@ -79,8 +97,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -90,14 +108,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "8c7b62363d917f6a7b0c2359bd42c07aa6ead2d08c5b7f7af606669ceb27ef40",
+  "content_sha256": "03adae1f21f9c07604887ec3ab7205f0f14cd7d689b4624d57e8ab436b3a7f8a",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Row:\n    name: str\n    coefs: dict[str, float]     # variable -> coefficient\n    sense: str                  # \"<=\", \">=\" or \"==\"\n    rhs: float\n\n\ndef slack(row: Row, plan: dict[str, float]) -> float:\n    \"\"\"Room left at the plan: >= 0 when the row holds, 0 when it binds, < 0 when it is broken.\"\"\"\n    # TODO: the activity of the row at the plan, then the room left, by the row's sense.\n    return 0.0\n\n\ndef binding(rows: list[Row], plan: dict[str, float], tol: float = 1e-6) -> list[str]:\n    \"\"\"Names of the rows the plan keeps with no slack left, in the order given.\"\"\"\n    # TODO: use slack().\n    return []\n\n\nif __name__ == \"__main__\":\n    depot = Row(\"depot_space\", {\"bus_a\": 12, \"bus_b\": 9}, \"<=\", 40)\n    print(slack(depot, {\"bus_a\": 2, \"bus_b\": 1}))\n",
   "exercise": {
     "main_path": "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-1/slacks.py",
     "test_path": "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-1/test_slacks.py",
     "run_command": [
       "python3",
-      "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-1/slacks.py"
+      "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -149,6 +167,10 @@
     "concepts": [
       "a row binds when the plan keeps it with zero slack, within a tolerance",
       "a row's slack is measured from the plan and the row's sense and bound, with no help from the solver"
-    ]
+    ],
+    "files": [
+      "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-1/try_it.py"
+    ],
+    "try_file": "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-01/practice-1/try_it.py"
   }
 }

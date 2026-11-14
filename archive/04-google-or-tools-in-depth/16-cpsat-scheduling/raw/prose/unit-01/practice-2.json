@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Buses through the depot's bays",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef plan_depot(buses: dict[str, list[tuple[str, int]]]) -> dict[tuple[str, int], int]:\n    \"\"\"Start hour of each step (bus, k), so the last bus leaves as early as possible.\"\"\"\n    horizon = sum(hours for steps in buses.values() for _, hours in steps)\n    model = cp_model.CpModel()\n    start, on_bay, last_ends = {}, {}, []\n    for bus, steps in buses.items():\n        for k, (bay, hours) in enumerate(steps):\n            start[bus, k] = model.new_int_var(0, horizon, f\"start_{bus}_{k}\")\n            interval = model.new_fixed_size_interval_var(start[bus, k], hours, f\"{bus}_{k}\")\n            on_bay.setdefault(bay, []).append(interval)\n        for k in range(len(steps) - 1):\n            model.add(start[bus, k + 1] >= start[bus, k] + steps[k][1])\n        last_ends.append(start[bus, len(steps) - 1] + steps[-1][1])\n    for intervals in on_bay.values():\n        model.add_no_overlap(intervals)\n\n    makespan = model.new_int_var(0, horizon, \"makespan\")\n    model.add_max_equality(makespan, last_ends)\n    model.minimize(makespan)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.solve(model)\n    return {key: solver.value(var) for key, var in start.items()}\n\n\nif __name__ == \"__main__\":\n    print(plan_depot({\"bus1\": [(\"wash\", 1), (\"service\", 3)], \"bus2\": [(\"service\", 2), (\"wash\", 1)]}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom depot import plan_depot\n\nbuses = {\n    \"route7\": [(\"wash\", 1), (\"service\", 2), (\"inspect\", 1)],\n    \"route9\": [(\"service\", 3), (\"wash\", 1)],\n    \"route12\": [(\"inspect\", 2), (\"wash\", 2)],\n}\n\nstart = plan_depot(buses)\nfor (bus, k), hour in sorted(start.items()):\n    print(f\"{bus} step {k} ({buses[bus][k][0]}) starts at hour:\", hour)\nprint(\"last bus leaves at hour:\", max(start[b, len(s) - 1] + s[-1][1] for b, s in buses.items()))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef plan_depot(buses: dict[str, list[tuple[str, int]]]) -> dict[tuple[str, int], int]:\n    \"\"\"Start hour of each step (bus, k), so the last bus leaves as early as possible.\"\"\"\n    # TODO: an interval per step, a NoOverlap per bay, an order row per pair of steps of a bus,\n    # and minimize the latest end. Every start below is a placeholder.\n    return {(bus, k): -1 for bus, steps in buses.items() for k in range(len(steps))}\n\n\nif __name__ == \"__main__\":\n    print(plan_depot({\"bus1\": [(\"wash\", 1), (\"service\", 3)], \"bus2\": [(\"service\", 2), (\"wash\", 1)]}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom depot import plan_depot\n\nbuses = {\n    \"route7\": [(\"wash\", 1), (\"service\", 2), (\"inspect\", 1)],\n    \"route9\": [(\"service\", 3), (\"wash\", 1)],\n    \"route12\": [(\"inspect\", 2), (\"wash\", 2)],\n}\n\nstart = plan_depot(buses)\nfor (bus, k), hour in sorted(start.items()):\n    print(f\"{bus} step {k} ({buses[bus][k][0]}) starts at hour:\", hour)\nprint(\"last bus leaves at hour:\", max(start[b, len(s) - 1] + s[-1][1] for b, s in buses.items()))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "90f800705795b0d9b02ef56bdd1eb41964867615e622b05ca83932e9da17b683",
+  "content_sha256": "6704726a39fca715f00479685d4e2769dd328f84ccaf79020d19e6f3e5152e0e",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef plan_depot(buses: dict[str, list[tuple[str, int]]]) -> dict[tuple[str, int], int]:\n    \"\"\"Start hour of each step (bus, k), so the last bus leaves as early as possible.\"\"\"\n    # TODO: an interval per step, a NoOverlap per bay, an order row per pair of steps of a bus,\n    # and minimize the latest end. Every start below is a placeholder.\n    return {(bus, k): -1 for bus, steps in buses.items() for k in range(len(steps))}\n\n\nif __name__ == \"__main__\":\n    print(plan_depot({\"bus1\": [(\"wash\", 1), (\"service\", 3)], \"bus2\": [(\"service\", 2), (\"wash\", 1)]}))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-2/depot.py",
     "test_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-2/test_depot.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-2/depot.py"
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -135,6 +153,10 @@
     },
     "concepts": [
       "the job shop has one NoOverlap per machine and one precedence row per pair of consecutive steps"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-01/practice-2/try_it.py"
   }
 }
