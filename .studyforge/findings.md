@@ -1,6 +1,6 @@
 # Findings log — the integer-programming course's build and publish, 2026-11
 
-Read first: the integration catalogue at d8c5148c366f19e314bcec3e0a5002ce86e6cdc1e11b0b7fa885f200952f36f6
+Read first: the integration catalogue at 747c0beba417cf81f8142dce3083ace6e77387a9ea52cf5dab7c3002be32b064
 
 ⛔ Written by the run before it is declared done. Every finding asks: *could a skill have generated this?*
 
@@ -130,3 +130,28 @@ Read first: the integration catalogue at d8c5148c366f19e314bcec3e0a5002ce86e6cdc
 
   - *measured:* the keys in the served page — the course repository's docs/FINDINGS.md F42
   - *could a skill have generated this?* **no** — adopted: a correct but surprising consequence of an offline static site
+
+### IPOT/26 `[structural]` — The try-it Run became a rule after the course was built, so 448 practices were given a try_it.py by hand: eight agents wrote them into exercise-src/, a course-side script checked each in the runner, and every page was re-gated
+
+  - *measured:* validate reported no-try-it on every code practice at StudyForge 865d47c8 and 0 findings after the retrofit — the course's validate runs, 2026-11-14
+  - *could a skill have generated this?* **yes** — exercises: every authored practice carries a try_file from the tryit skeleton (StudyForge 865d47c8); a course authored after it never needs the retrofit
+
+### IPOT/27 `[structural]` — A project step cannot carry a try-it file: project_draft builds the draft with Run on the step's entry point and no try_file, so the course set try_file to the entry (main.py) on the draft it returned
+
+  - *measured:* the 30 project-step bundles, re-gated with try_file main.py — scripts/exercises.py project_practice
+  - *could a skill have generated this?* **yes** — exercises project: project_draft should name the entry point (or a manifest-declared file) as the step's try_file
+
+### IPOT/28 `[structural]` — ship is additive: a page already shipped is reused and never gated again, so a change to the practices' own sources re-gated nothing and wrote nothing; the course added a regate command that gates each page again and writes its bundles back in place
+
+  - *measured:* ship over every module finished at once with no file changed — the retrofit's ship log
+  - *could a skill have generated this?* **yes** — exercises corpus: the page fingerprint should cover the drafts' source files, or the skill should offer a re-gate pass that refuses a page whose shipped set would change
+
+### IPOT/29 `[local]` — A try-it example used /home/demo as a sample HOME, and the personal-data gate refused that page's practices at re-gate
+
+  - *measured:* the refusal names blocks[5].blocks[2].text of 21-gurobipy unit 4 practice 1 — the retrofit's regate log; fixed with /srv/learner
+  - *could a skill have generated this?* **yes** — catalogue: the sample-addresses entry should name home-shaped filesystem paths beside addresses and hosts, and the try-it brief should say so
+
+### IPOT/30 `[local]` — repin stopped twice: a PYTHONPATH pointing at the framework checkout shadowed the wheel it had just installed, so the hand-over refused the pin; then the execution step asked for --platform, which a profiled corpus always needs
+
+  - *measured:* the two refusals — the retrofit's repin log
+  - *could a skill have generated this?* **yes** — onboarding repin: refuse at the start when PYTHONPATH shadows the installed library, and when a profiled corpus has no --platform
