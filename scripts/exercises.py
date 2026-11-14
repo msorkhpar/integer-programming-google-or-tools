@@ -15,10 +15,12 @@ Each practice is written once, as files, under `exercise-src/<module>/<lesson>/`
     <name>/reference.py       the worked solution
     <name>/tests.py           the tests (copied to the workspace as `test_file`)
     <name>/plants.json        {case id: [[old, new], ...]}: each edge's wrong solution, as edits of the reference
+    <name>/try_it.py          what Run executes beside the reader's file: a call on a fresh example and its prints
     quiz/quiz.json            {"title", "questions": [{id, stem, heading, options: [{id, text, correct, says}]}]}
     quiz/readings.json        the independent readers' answers (Q1 key picked, Q2 page-free pick, Q3 refutations)
 
-A project practice (section 14) is instead a folder with two files, and the snapshots it names:
+A project practice (section 14) is instead a folder with two files, and the snapshots it names
+(its Run is the step's own entry point, so that file is its try-it file):
 
     <name>/project.json       StudyForge's project manifest: the before/after snapshots (steps/NN-1, steps/NN),
                               the entry point and expected report, the blueprint, the step's cases and plants
@@ -38,6 +40,7 @@ import shutil
 import subprocess
 import sys
 import uuid
+from dataclasses import replace
 from pathlib import Path
 
 from studyforge.address import Address
@@ -45,8 +48,10 @@ from studyforge.exercise import EDGE, MAIN, Case, Origin
 from studyforge.exercise.gates.quiz import Q1, Q3, WHOLE_QUESTION, Judgement, page_free, question_digest
 from studyforge.exercise.quiz import Option, Question
 from studyforge.skills.exercises import (
-    Aspect, Brief, CodeDraft, Page, PlantSpec, QuizDraft, Ran, Replacement, author_corpus, author_page, take,
+    Aspect, Brief, CodeDraft, EditedFile, Page, PlantSpec, QuizDraft, Ran, Replacement, author_corpus, author_page,
+    take,
 )
+from studyforge.skills.exercises import tryit
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "exercise-src"
@@ -124,9 +129,12 @@ def code_draft(brief: Brief) -> CodeDraft:
     plants = {}
     for cid, edits in json.loads(text(folder / "plants.json")).items():
         plants[cid] = PlantSpec(tuple(Replacement(main, old, new) for old, new in edits))
+    try_name = tryit.TRYIT_FILE["python"]
+    tried = text(folder / try_name)
     return CodeDraft(
         title=meta["title"], lang="python", main_file=main, test_file=test_file,
-        run_command=("python3", f"{ws}/{main}"),
+        run_command=tryit.run_command("python", ws),
+        files={try_name: EditedFile(tried, tried)}, try_file=try_name,
         test_command=("python3", "-m", "pytest", "-q", "-p", "no:cacheprovider",
                       f"--junitxml={ws}/target/report.xml", f"{ws}/{test_file}"),
         cases=cases, report="target/report.xml",
@@ -141,7 +149,13 @@ def project_practice(manifest: Path, brief: Brief) -> CodeDraft:
     """A project practice: StudyForge builds the draft from the manifest and its two snapshots."""
     # Imported here so a StudyForge without project practices still drives every other practice.
     from studyforge.skills.exercises.project import project_draft
-    return project_draft(manifest, brief.places.workspace, origin=Origin(brief.page.path, None))
+    draft = project_draft(manifest, brief.places.workspace, origin=Origin(brief.page.path, None))
+    # Run executes the step's entry point, a reader-edited file that prints the planner's report
+    # with no tests: that file is the step's try-it file.
+    entry = draft.run_command[-1].removeprefix(f"{brief.places.workspace}/")
+    if entry not in draft.files:
+        raise SystemExit(f"{manifest}: the entry point {entry!r} is not one of the step's files")
+    return replace(draft, try_file=entry)
 
 
 def questions_of(page: Page, name: str) -> tuple[Question, ...]:
@@ -214,6 +228,8 @@ def readings_brief(slug: str) -> dict:
 
 
 def runner_image() -> str:
+    if os.environ.get("RUNNER_IMAGE"):
+        return os.environ["RUNNER_IMAGE"]
     toolchain = Path(os.environ.get("TOOLCHAIN", ROOT.parent / "code-server-toolchain"))
     return subprocess.run(
         [sys.executable, str(toolchain / "docker/profile_packages/package_build.py"), "--root", str(toolchain),
