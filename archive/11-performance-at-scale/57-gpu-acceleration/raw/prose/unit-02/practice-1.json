@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A fallback chain that never crashes and never settles",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\n\ndef solve_with_fallback(model, solvers: list[dict], gpu: bool):\n    \"\"\"Try each solver in order and return (the first Optimal result or None, what happened to each).\n\n    A solver is {\"name\": str, \"needs_gpu\": bool, \"solve\": callable(model) -> dict with a \"status\"}.\n    \"\"\"\n    log = []\n    for solver in solvers:\n        if solver[\"needs_gpu\"] and not gpu:\n            log.append(f\"{solver['name']}: skipped (no GPU)\")\n            continue\n        try:\n            result = solver[\"solve\"](model)\n        except Exception:\n            log.append(f\"{solver['name']}: error\")\n            continue\n        log.append(f\"{solver['name']}: {result['status']}\")\n        if result[\"status\"] == \"Optimal\":\n            return result, log\n    return None, log\n\n\nif __name__ == \"__main__\":\n    cpu = {\"name\": \"cpu\", \"needs_gpu\": False, \"solve\": lambda m: {\"status\": \"Optimal\", \"objective\": 1.0}}\n    print(solve_with_fallback(None, [cpu], gpu=False))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom fallback import solve_with_fallback\n\n\ndef solver(name, needs_gpu, status=None, fails=False):\n    def solve(model):\n        if fails:\n            raise MemoryError(\"device out of memory\")\n        return {\"status\": status, \"objective\": 42.0, \"by\": name}\n    return {\"name\": name, \"needs_gpu\": needs_gpu, \"solve\": solve}\n\n\nchain = [solver(\"cuopt\", True, fails=True), solver(\"highs-pdlp\", True, \"Time limit reached\"),\n         solver(\"highs-ipm\", False, \"Optimal\"), solver(\"highs-simplex\", False, \"Optimal\")]\n\nfor gpu in (True, False):\n    result, log = solve_with_fallback(\"transport lp\", chain, gpu=gpu)\n    print(f\"gpu={gpu}: answer by\", None if result is None else result[\"by\"], \"| log:\", log)\nresult, log = solve_with_fallback(\"transport lp\", chain[:2], gpu=True)\nprint(\"gpu solvers only, gpu=True: answer\", result, \"| log:\", log)\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\n\ndef solve_with_fallback(model, solvers: list[dict], gpu: bool):\n    \"\"\"Try each solver in order and return (the first Optimal result or None, what happened to each).\n\n    A solver is {\"name\": str, \"needs_gpu\": bool, \"solve\": callable(model) -> dict with a \"status\"}.\n    \"\"\"\n    # TODO: skip GPU solvers without a GPU, survive a solver that raises, accept only \"Optimal\".\n    return None, []\n\nif __name__ == \"__main__\":\n    cpu = {\"name\": \"cpu\", \"needs_gpu\": False, \"solve\": lambda m: {\"status\": \"Optimal\", \"objective\": 1.0}}\n    print(solve_with_fallback(None, [cpu], gpu=False))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom fallback import solve_with_fallback\n\n\ndef solver(name, needs_gpu, status=None, fails=False):\n    def solve(model):\n        if fails:\n            raise MemoryError(\"device out of memory\")\n        return {\"status\": status, \"objective\": 42.0, \"by\": name}\n    return {\"name\": name, \"needs_gpu\": needs_gpu, \"solve\": solve}\n\n\nchain = [solver(\"cuopt\", True, fails=True), solver(\"highs-pdlp\", True, \"Time limit reached\"),\n         solver(\"highs-ipm\", False, \"Optimal\"), solver(\"highs-simplex\", False, \"Optimal\")]\n\nfor gpu in (True, False):\n    result, log = solve_with_fallback(\"transport lp\", chain, gpu=gpu)\n    print(f\"gpu={gpu}: answer by\", None if result is None else result[\"by\"], \"| log:\", log)\nresult, log = solve_with_fallback(\"transport lp\", chain[:2], gpu=True)\nprint(\"gpu solvers only, gpu=True: answer\", result, \"| log:\", log)\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "6638163574dde0a9dd15334f125e660c41b3b2b156af4a574dcaca222a4486d6",
+  "content_sha256": "659b2e2dcac5b5d84f6d0dfa963fd227f8ae339ce215ad4e23eb3ceedb5dbfa4",
   "starting_code": "from __future__ import annotations\n\n\ndef solve_with_fallback(model, solvers: list[dict], gpu: bool):\n    \"\"\"Try each solver in order and return (the first Optimal result or None, what happened to each).\n\n    A solver is {\"name\": str, \"needs_gpu\": bool, \"solve\": callable(model) -> dict with a \"status\"}.\n    \"\"\"\n    # TODO: skip GPU solvers without a GPU, survive a solver that raises, accept only \"Optimal\".\n    return None, []\n\nif __name__ == \"__main__\":\n    cpu = {\"name\": \"cpu\", \"needs_gpu\": False, \"solve\": lambda m: {\"status\": \"Optimal\", \"objective\": 1.0}}\n    print(solve_with_fallback(None, [cpu], gpu=False))\n",
   "exercise": {
     "main_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-1/fallback.py",
     "test_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-1/test_fallback.py",
     "run_command": [
       "python3",
-      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-1/fallback.py"
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -140,6 +158,10 @@
     },
     "concepts": [
       "a solve skips GPU solvers without a GPU, survives one that fails, and accepts only an optimal answer"
-    ]
+    ],
+    "files": [
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-1/try_it.py"
   }
 }

@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A pump with a minimum flow and no rated maximum",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef pump_variables(model: mathopt.Model) -> tuple[mathopt.Variable, mathopt.Variable]:\n    \"\"\"The pump's flow (no upper bound: the station has no rated maximum on record) and its on/off binary.\"\"\"\n    flow = model.add_variable(lb=0, ub=math.inf, name=\"flow\")\n    on = model.add_binary_variable(name=\"on\")\n    return flow, on\n\n\ndef add_pump_rules(model: mathopt.Model, flow: mathopt.Variable, on: mathopt.Variable, min_flow: float) -> None:\n    \"\"\"An idle pump moves nothing; a running pump moves at least `min_flow`.\"\"\"\n    model.add_indicator_constraint(indicator=on, activate_on_zero=True, implied_constraint=flow <= 0,\n                                   name=\"idle_moves_nothing\")\n    model.add_indicator_constraint(indicator=on, implied_constraint=flow >= min_flow, name=\"running_minimum\")\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    flow, on = pump_variables(model)\n    add_pump_rules(model, flow, on, 20)\n    print(model.get_num_indicator_constraints(), \"indicator constraints\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom pump import add_pump_rules, pump_variables\n\n\ndef allowed(flow_value, running, min_flow=35):\n    model = mathopt.Model()\n    flow, on = pump_variables(model)\n    add_pump_rules(model, flow, on, min_flow)\n    flow.lower_bound = flow.upper_bound = flow_value\n    on.lower_bound = on.upper_bound = running\n    result = mathopt.solve(model, mathopt.SolverType.GSCIP)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"idle, flow 0:\", allowed(0, 0))\nprint(\"idle, flow 8:\", allowed(8, 0))\nprint(\"running, flow 35:\", allowed(35, 1))\nprint(\"running, flow 30:\", allowed(30, 1))\nprint(\"running, flow 250000:\", allowed(250_000, 1))\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef pump_variables(model: mathopt.Model) -> tuple[mathopt.Variable, mathopt.Variable]:\n    \"\"\"The pump's flow (no upper bound: the station has no rated maximum on record) and its on/off binary.\"\"\"\n    flow = model.add_variable(lb=0, ub=math.inf, name=\"flow\")\n    on = model.add_binary_variable(name=\"on\")\n    return flow, on\n\n\ndef add_pump_rules(model: mathopt.Model, flow: mathopt.Variable, on: mathopt.Variable, min_flow: float) -> None:\n    \"\"\"An idle pump moves nothing; a running pump moves at least `min_flow`.\"\"\"\n    # TODO: your rules, as indicator constraints.\n    return None\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    flow, on = pump_variables(model)\n    add_pump_rules(model, flow, on, 20)\n    print(model.get_num_indicator_constraints(), \"indicator constraints\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom pump import add_pump_rules, pump_variables\n\n\ndef allowed(flow_value, running, min_flow=35):\n    model = mathopt.Model()\n    flow, on = pump_variables(model)\n    add_pump_rules(model, flow, on, min_flow)\n    flow.lower_bound = flow.upper_bound = flow_value\n    on.lower_bound = on.upper_bound = running\n    result = mathopt.solve(model, mathopt.SolverType.GSCIP)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"idle, flow 0:\", allowed(0, 0))\nprint(\"idle, flow 8:\", allowed(8, 0))\nprint(\"running, flow 35:\", allowed(35, 1))\nprint(\"running, flow 30:\", allowed(30, 1))\nprint(\"running, flow 250000:\", allowed(250_000, 1))\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "5e35a8bfc9628d94369d97209d5c7128e6e45810cf06931f80b05e3ad88f3031",
+  "content_sha256": "09bcf771aa97dbd8a653510bbde14055e3eae362a8ac477d1cc12d1eb8b19e60",
   "starting_code": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef pump_variables(model: mathopt.Model) -> tuple[mathopt.Variable, mathopt.Variable]:\n    \"\"\"The pump's flow (no upper bound: the station has no rated maximum on record) and its on/off binary.\"\"\"\n    flow = model.add_variable(lb=0, ub=math.inf, name=\"flow\")\n    on = model.add_binary_variable(name=\"on\")\n    return flow, on\n\n\ndef add_pump_rules(model: mathopt.Model, flow: mathopt.Variable, on: mathopt.Variable, min_flow: float) -> None:\n    \"\"\"An idle pump moves nothing; a running pump moves at least `min_flow`.\"\"\"\n    # TODO: your rules, as indicator constraints.\n    return None\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    flow, on = pump_variables(model)\n    add_pump_rules(model, flow, on, 20)\n    print(model.get_num_indicator_constraints(), \"indicator constraints\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-03/practice-1/pump.py",
     "test_path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-03/practice-1/test_pump.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-03/practice-1/pump.py"
+      "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-03/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -135,6 +153,10 @@
     "concepts": [
       "MathOpt's add_indicator_constraint states that a row holds when a binary takes a given value",
       "HiGHS refuses indicator constraints and SCIP solves them"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-03/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-03/practice-1/try_it.py"
   }
 }

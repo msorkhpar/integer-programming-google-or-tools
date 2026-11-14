@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Protection testing after a substation build",
   "blocks": [
     {
@@ -69,6 +69,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n\n\ndef add_testing_rules(model: mathopt.Model, x: dict, projects: list[Project], years: tuple[int, ...],\n                      testing: dict[str, tuple[str, int]]) -> None:\n    \"\"\"Testing never before its station, and started within k years of it inside the plan.\"\"\"\n    by_id = {p.pid: p for p in projects}\n\n    def begun(pid: str, year: int):\n        return mathopt.LinearExpression(sum(x[pid, u] for u in by_id[pid].starts if u <= year))\n\n    for test, (station, k) in testing.items():\n        for t in by_id[test].starts:\n            model.add_linear_constraint(begun(test, t) <= begun(station, t), name=f\"not_before_{test}_{t}\")\n        for t in years:\n            model.add_linear_constraint(begun(test, t) >= begun(station, t - k), name=f\"deadline_{test}_{t}\")\n\n\ndef build(projects: list[Project], years: tuple[int, ...],\n          testing: dict[str, tuple[str, int]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"testing\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_testing_rules(model, x, projects, years, testing)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    years = (2027, 2028, 2029)\n    projects = [Project(\"SUB\", years), Project(\"TEST\", years)]\n    model, x = build(projects, years, {\"TEST\": (\"SUB\", 1)})\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom testing import Project, build\n\n# Two substations and their relay testing, 2027 to 2030.\nyears = (2027, 2028, 2029, 2030)\nprojects = [Project(\"SUB-E\", (2027, 2028, 2029)), Project(\"TEST-E\", years),\n            Project(\"SUB-W\", (2028, 2029)), Project(\"TEST-W\", (2029, 2030))]\ntesting = {\"TEST-E\": (\"SUB-E\", 1), \"TEST-W\": (\"SUB-W\", 3)}\n\ndef accepted(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(plan):\n    model, x = build(projects, years, testing)\n    for key, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0\n    return accepted(model)\n\n\nprint(\"SUB-E 2028, TEST-E 2029:\", allowed({(\"SUB-E\", 2028), (\"TEST-E\", 2029)}))\nprint(\"SUB-E 2028, TEST-E 2030:\", allowed({(\"SUB-E\", 2028), (\"TEST-E\", 2030)}))\nprint(\"SUB-E 2028 alone:\", allowed({(\"SUB-E\", 2028)}))\nprint(\"SUB-E 2029, TEST-E 2028:\", allowed({(\"SUB-E\", 2029), (\"TEST-E\", 2028)}))\nprint(\"SUB-W 2028 alone:\", allowed({(\"SUB-W\", 2028)}))\nprint(\"nothing built:\", allowed(set()))\n"
         }
       ]
     },
@@ -81,6 +90,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n\n\ndef add_testing_rules(model: mathopt.Model, x: dict, projects: list[Project], years: tuple[int, ...],\n                      testing: dict[str, tuple[str, int]]) -> None:\n    \"\"\"Testing never before its station, and started within k years of it inside the plan.\"\"\"\n    # TODO: the \"not before\" rows and the deadline rows.\n    return None\n\n\ndef build(projects: list[Project], years: tuple[int, ...],\n          testing: dict[str, tuple[str, int]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"testing\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_testing_rules(model, x, projects, years, testing)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    years = (2027, 2028, 2029)\n    projects = [Project(\"SUB\", years), Project(\"TEST\", years)]\n    model, x = build(projects, years, {\"TEST\": (\"SUB\", 1)})\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom testing import Project, build\n\n# Two substations and their relay testing, 2027 to 2030.\nyears = (2027, 2028, 2029, 2030)\nprojects = [Project(\"SUB-E\", (2027, 2028, 2029)), Project(\"TEST-E\", years),\n            Project(\"SUB-W\", (2028, 2029)), Project(\"TEST-W\", (2029, 2030))]\ntesting = {\"TEST-E\": (\"SUB-E\", 1), \"TEST-W\": (\"SUB-W\", 3)}\n\ndef accepted(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(plan):\n    model, x = build(projects, years, testing)\n    for key, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0\n    return accepted(model)\n\n\nprint(\"SUB-E 2028, TEST-E 2029:\", allowed({(\"SUB-E\", 2028), (\"TEST-E\", 2029)}))\nprint(\"SUB-E 2028, TEST-E 2030:\", allowed({(\"SUB-E\", 2028), (\"TEST-E\", 2030)}))\nprint(\"SUB-E 2028 alone:\", allowed({(\"SUB-E\", 2028)}))\nprint(\"SUB-E 2029, TEST-E 2028:\", allowed({(\"SUB-E\", 2029), (\"TEST-E\", 2028)}))\nprint(\"SUB-W 2028 alone:\", allowed({(\"SUB-W\", 2028)}))\nprint(\"nothing built:\", allowed(set()))\n"
     }
   ],
   "video": null,
@@ -88,8 +106,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 6,
-    "code": 2,
+    "paras": 7,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -99,14 +117,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "e91e90c463073717383c81b1fec7efc3d7c97234aeb6bd20b6ecb47b34518f02",
+  "content_sha256": "61a9ffb4a4259a56d4636d6c17aebdff770e31fdab8a087b165b3676e605c213",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n\n\ndef add_testing_rules(model: mathopt.Model, x: dict, projects: list[Project], years: tuple[int, ...],\n                      testing: dict[str, tuple[str, int]]) -> None:\n    \"\"\"Testing never before its station, and started within k years of it inside the plan.\"\"\"\n    # TODO: the \"not before\" rows and the deadline rows.\n    return None\n\n\ndef build(projects: list[Project], years: tuple[int, ...],\n          testing: dict[str, tuple[str, int]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"testing\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_testing_rules(model, x, projects, years, testing)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    years = (2027, 2028, 2029)\n    projects = [Project(\"SUB\", years), Project(\"TEST\", years)]\n    model, x = build(projects, years, {\"TEST\": (\"SUB\", 1)})\n    print(model.get_num_linear_constraints(), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-2/testing.py",
     "test_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-2/test_testing.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-2/testing.py"
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -157,6 +175,10 @@
     },
     "concepts": [
       "a maximum lag bounds the child's running total from below, with a switch when the child may be left out"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-2/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-2/try_it.py"
   }
 }

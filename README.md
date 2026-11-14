@@ -22,7 +22,7 @@ It holds 715 practices: 478 to write in code, graded by a real runner, and 237 s
 
 ![A practice open in its workspace: the statement on the left, the editor on the right](.studyforge/images/readme/practice.webp)
 
-**Quizzes graded in the page.** A short quiz has a few questions with one answer each. Choose, press **Check answers**, and each choice is explained right or wrong. Nothing is sent anywhere: the page grades it.
+**Quizzes graded in the page.** A short quiz shows one question at a time. Choose an answer and it is explained right or wrong at once; move with **Previous** and **Next**, then press **Finish quiz** to see every answer's verdict. Nothing is sent anywhere: the page grades it.
 
 ![A quiz answered in the page, with the explanation of the chosen answer](.studyforge/images/readme/quiz.webp)
 
@@ -95,7 +95,7 @@ To see what is running: `docker compose -f compose.pull.yaml ps`. Use the same
 | What | Where |
 |---|---|
 | The study site | http://127.0.0.1:8765/ |
-| The editor, which the site opens inside each practice | http://127.0.0.1:8443/ |
+| The editor, which the site opens inside each practice | http://127.0.0.1:8444/ |
 
 Both listen on this machine only. To use other ports, copy `course.env` to
 `.env` and change `COURSE_SITE_PORT` and `COURSE_EDITOR_PORT`.

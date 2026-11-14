@@ -9,7 +9,7 @@
   "unit": 7,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "What a decision costs",
   "blocks": [
     {
@@ -48,6 +48,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nEXACT = mathopt.SolveParameters(relative_gap_tolerance=0.0, absolute_gap_tolerance=0.0)\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    value: int\n    cost: int\n    must_do: bool = False\n\n\ndef build(projects: list[Project], budget: int) -> tuple[mathopt.Model, dict]:\n    \"\"\"Given: the one-budget selection with its must-dos.\"\"\"\n    model = mathopt.Model(name=\"selection\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in projects) <= budget, name=\"budget\")\n    for p in projects:\n        if p.must_do:\n            model.add_linear_constraint(x[p.pid] == 1, name=f\"must_{p.pid}\")\n    model.maximize(sum(p.value * x[p.pid] for p in projects))\n    return model, x\n\n\ndef decision_costs(projects: list[Project], budget: int) -> dict[str, float | None]:\n    \"\"\"For each project, what the best plan loses when its decision is reversed; None if the rules refuse it.\"\"\"\n    model, x = build(projects, budget)\n    base = mathopt.solve(model, mathopt.SolverType.HIGHS, params=EXACT)\n    best = base.objective_value()\n    funded = {pid: base.variable_values(v) > 0.5 for pid, v in x.items()}\n    costs: dict[str, float | None] = {}\n    for p in projects:\n        var = x[p.pid]\n        low, high = var.lower_bound, var.upper_bound\n        target = 0.0 if funded[p.pid] else 1.0\n        var.lower_bound = var.upper_bound = target\n        result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=EXACT)\n        if result.termination.reason == mathopt.TerminationReason.OPTIMAL:\n            costs[p.pid] = best - result.objective_value()\n        else:\n            costs[p.pid] = None\n        var.lower_bound, var.upper_bound = low, high\n    return costs\n\n\nif __name__ == \"__main__\":\n    print(decision_costs([Project(\"A\", 60, 30), Project(\"B\", 50, 20), Project(\"C\", 40, 20)], 50))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom costs import Project, decision_costs\n\n# A bus company's depot works.\nworks = [\n    Project(\"Roof\", 45, 25),\n    Project(\"Wash\", 35, 20),\n    Project(\"Pits\", 30, 25),\n    Project(\"Fence\", 8, 10, must_do=True),\n]\n\nfor budget in (55, 70, 10):\n    costs = decision_costs(works, budget)\n    print(f\"budget {budget}:\", {pid: None if c is None else round(c, 2) for pid, c in costs.items()})\n"
         }
       ]
     },
@@ -60,6 +69,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nEXACT = mathopt.SolveParameters(relative_gap_tolerance=0.0, absolute_gap_tolerance=0.0)\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    value: int\n    cost: int\n    must_do: bool = False\n\n\ndef build(projects: list[Project], budget: int) -> tuple[mathopt.Model, dict]:\n    \"\"\"Given: the one-budget selection with its must-dos.\"\"\"\n    model = mathopt.Model(name=\"selection\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in projects) <= budget, name=\"budget\")\n    for p in projects:\n        if p.must_do:\n            model.add_linear_constraint(x[p.pid] == 1, name=f\"must_{p.pid}\")\n    model.maximize(sum(p.value * x[p.pid] for p in projects))\n    return model, x\n\n\ndef decision_costs(projects: list[Project], budget: int) -> dict[str, float | None]:\n    \"\"\"For each project, what the best plan loses when its decision is reversed; None if the rules refuse it.\"\"\"\n    # TODO: solve once, then reverse each decision in turn and re-solve.\n    return {p.pid: 0.0 for p in projects}\n\n\nif __name__ == \"__main__\":\n    print(decision_costs([Project(\"A\", 60, 30), Project(\"B\", 50, 20), Project(\"C\", 40, 20)], 50))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom costs import Project, decision_costs\n\n# A bus company's depot works.\nworks = [\n    Project(\"Roof\", 45, 25),\n    Project(\"Wash\", 35, 20),\n    Project(\"Pits\", 30, 25),\n    Project(\"Fence\", 8, 10, must_do=True),\n]\n\nfor budget in (55, 70, 10):\n    costs = decision_costs(works, budget)\n    print(f\"budget {budget}:\", {pid: None if c is None else round(c, 2) for pid, c in costs.items()})\n"
     }
   ],
   "video": null,
@@ -67,8 +85,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 2,
-    "code": 1,
+    "paras": 3,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -78,14 +96,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "ad91fd500e90baa198d92a05f6caf68f0ad808249e376a37d11fcf01207bb43e",
+  "content_sha256": "ac527d20fef1d47e4fcbcbe0dd5a1eefcb78ea66bfa1ce83cfff7ba6c4c31836",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nEXACT = mathopt.SolveParameters(relative_gap_tolerance=0.0, absolute_gap_tolerance=0.0)\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    value: int\n    cost: int\n    must_do: bool = False\n\n\ndef build(projects: list[Project], budget: int) -> tuple[mathopt.Model, dict]:\n    \"\"\"Given: the one-budget selection with its must-dos.\"\"\"\n    model = mathopt.Model(name=\"selection\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in projects) <= budget, name=\"budget\")\n    for p in projects:\n        if p.must_do:\n            model.add_linear_constraint(x[p.pid] == 1, name=f\"must_{p.pid}\")\n    model.maximize(sum(p.value * x[p.pid] for p in projects))\n    return model, x\n\n\ndef decision_costs(projects: list[Project], budget: int) -> dict[str, float | None]:\n    \"\"\"For each project, what the best plan loses when its decision is reversed; None if the rules refuse it.\"\"\"\n    # TODO: solve once, then reverse each decision in turn and re-solve.\n    return {p.pid: 0.0 for p in projects}\n\n\nif __name__ == \"__main__\":\n    print(decision_costs([Project(\"A\", 60, 30), Project(\"B\", 50, 20), Project(\"C\", 40, 20)], 50))\n",
   "exercise": {
     "main_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-1/costs.py",
     "test_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-1/test_costs.py",
     "run_command": [
       "python3",
-      "practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-1/costs.py"
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -132,6 +150,10 @@
     "concepts": [
       "price each reversal as the value the best plan loses, or None when the rules refuse it",
       "reverse one decision at a time through its variable's bounds on one built model"
-    ]
+    ],
+    "files": [
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-1/try_it.py"
+    ],
+    "try_file": "practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-1/try_it.py"
   }
 }

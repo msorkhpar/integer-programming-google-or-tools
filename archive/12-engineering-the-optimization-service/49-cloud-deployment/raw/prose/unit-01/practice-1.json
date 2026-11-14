@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Settings for the crew-roster worker",
   "blocks": [
     {
@@ -77,6 +77,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom typing import Mapping\n\nCREDENTIAL_WORDS = (\"SECRET\", \"PASSWORD\", \"ACCESS_KEY\")\n\n\ndef whole(text: str, name: str, low: int, high: int, problems: list[str]) -> int | None:\n    \"\"\"`text` as a whole number in [low, high], or None with a problem added.\"\"\"\n    try:\n        value = int(text)\n    except ValueError:\n        problems.append(f\"{name}={text!r} is not a whole number\")\n        return None\n    if not low <= value <= high:\n        problems.append(f\"{name} {value} is outside {low}-{high}\")\n        return None\n    return value\n\n\ndef read_settings(env: Mapping[str, str]) -> tuple[dict | None, list[str]]:\n    \"\"\"The roster worker's settings from its environment, or None and every problem found.\"\"\"\n    problems: list[str] = []\n    bucket = env.get(\"ROSTER_BUCKET\", \"\")\n    if not bucket:\n        problems.append(\"ROSTER_BUCKET is not set\")\n    season = None\n    if not env.get(\"SEASON\"):\n        problems.append(\"SEASON is not set\")\n    else:\n        season = whole(env[\"SEASON\"], \"SEASON\", 2025, 2040, problems)\n    crews = whole(env.get(\"CREWS\", \"4\"), \"CREWS\", 1, 50, problems)\n    dry = env.get(\"DRY_RUN\", \"false\").lower()\n    if dry not in (\"true\", \"false\"):\n        problems.append(f\"DRY_RUN={env['DRY_RUN']!r} is not true or false\")\n    for name in sorted(env):\n        if any(word in name for word in CREDENTIAL_WORDS):\n            problems.append(f\"{name} must not be set: use the job role\")\n    if problems:\n        return None, problems\n    return {\"bucket\": bucket, \"season\": season, \"crews\": crews, \"dry_run\": dry == \"true\"}, []\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom roster_settings import read_settings\n\nfull = {\"ROSTER_BUCKET\": \"crews-demo\", \"SEASON\": \"2034\", \"CREWS\": \"7\", \"DRY_RUN\": \"False\"}\nprint(\"full environment:\", read_settings(full))\nprint(\"bucket and season only:\", read_settings({\"ROSTER_BUCKET\": \"crews-demo\", \"SEASON\": \"2029\"}))\nprint(\"season soon, crews 80:\", read_settings({\"ROSTER_BUCKET\": \"crews-demo\", \"SEASON\": \"soon\", \"CREWS\": \"80\"}))\nprint(\"with MAP_ACCESS_KEY set:\", read_settings({**full, \"MAP_ACCESS_KEY\": \"placeholder\"}))\n"
         }
       ]
     },
@@ -89,6 +98,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom typing import Mapping\n\nCREDENTIAL_WORDS = (\"SECRET\", \"PASSWORD\", \"ACCESS_KEY\")\n\n\ndef whole(text: str, name: str, low: int, high: int, problems: list[str]) -> int | None:\n    \"\"\"`text` as a whole number in [low, high], or None with a problem added.\"\"\"\n    # TODO: parse the number; add \"NAME='text' is not a whole number\" or \"NAME value is outside low-high\".\n    return None\n\n\ndef read_settings(env: Mapping[str, str]) -> tuple[dict | None, list[str]]:\n    \"\"\"The roster worker's settings from its environment, or None and every problem found.\"\"\"\n    problems: list[str] = []\n    # TODO: check every variable, collect every problem, and only then decide.\n    return {}, problems\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom roster_settings import read_settings\n\nfull = {\"ROSTER_BUCKET\": \"crews-demo\", \"SEASON\": \"2034\", \"CREWS\": \"7\", \"DRY_RUN\": \"False\"}\nprint(\"full environment:\", read_settings(full))\nprint(\"bucket and season only:\", read_settings({\"ROSTER_BUCKET\": \"crews-demo\", \"SEASON\": \"2029\"}))\nprint(\"season soon, crews 80:\", read_settings({\"ROSTER_BUCKET\": \"crews-demo\", \"SEASON\": \"soon\", \"CREWS\": \"80\"}))\nprint(\"with MAP_ACCESS_KEY set:\", read_settings({**full, \"MAP_ACCESS_KEY\": \"placeholder\"}))\n"
     }
   ],
   "video": null,
@@ -96,8 +114,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 1,
     "lists": 0,
     "images": 0,
@@ -107,14 +125,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "f9142549cbe56ba55745a24881defbbb8814749490aec2bc1b2cd851ddb125d3",
+  "content_sha256": "4160f0279f414900c6772730fa89bbc9f1de4b12c8179dc8a21ced4bc75e349b",
   "starting_code": "from __future__ import annotations\n\nfrom typing import Mapping\n\nCREDENTIAL_WORDS = (\"SECRET\", \"PASSWORD\", \"ACCESS_KEY\")\n\n\ndef whole(text: str, name: str, low: int, high: int, problems: list[str]) -> int | None:\n    \"\"\"`text` as a whole number in [low, high], or None with a problem added.\"\"\"\n    # TODO: parse the number; add \"NAME='text' is not a whole number\" or \"NAME value is outside low-high\".\n    return None\n\n\ndef read_settings(env: Mapping[str, str]) -> tuple[dict | None, list[str]]:\n    \"\"\"The roster worker's settings from its environment, or None and every problem found.\"\"\"\n    problems: list[str] = []\n    # TODO: check every variable, collect every problem, and only then decide.\n    return {}, problems\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-1/roster_settings.py",
     "test_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-1/test_roster_settings.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-1/roster_settings.py"
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -175,6 +193,10 @@
     },
     "concepts": [
       "settings read from environment variables and checked all at once before work starts"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-1/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-01/practice-1/try_it.py"
   }
 }

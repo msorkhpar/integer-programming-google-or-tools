@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Spot the variable with no ceiling, before the solve",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef free_to_grow(model: mathopt.Model) -> list[str]:\n    \"\"\"Names of the variables the objective pushes in a direction that no bound and no row limits.\"\"\"\n    sense = 1.0 if model.objective.is_maximize else -1.0\n    limited_up, limited_down = set(), set()\n    for row in model.linear_constraints():\n        has_upper, has_lower = not math.isinf(row.upper_bound), not math.isinf(row.lower_bound)\n        for term in row.terms():\n            if term.coefficient > 0:\n                if has_upper:\n                    limited_up.add(term.variable)\n                if has_lower:\n                    limited_down.add(term.variable)\n            elif term.coefficient < 0:\n                if has_lower:\n                    limited_up.add(term.variable)\n                if has_upper:\n                    limited_down.add(term.variable)\n    found = []\n    for v in model.variables():\n        push = sense * model.objective.get_linear_coefficient(v)\n        if push > 0 and math.isinf(v.upper_bound) and v not in limited_up:\n            found.append(v.name)\n        elif push < 0 and math.isinf(v.lower_bound) and v not in limited_down:\n            found.append(v.name)\n    return sorted(found)\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    order = model.add_variable(lb=0, name=\"order_gloves\")\n    refund = model.add_variable(lb=0, name=\"supplier_refund\")\n    model.add_linear_constraint(order <= 500, name=\"storage\")\n    model.maximize(2 * refund - order)\n    print(free_to_grow(model))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom growth import free_to_grow\n\nm = mathopt.Model()\nnurses = m.add_variable(lb=0, ub=25, name=\"nurses\")\ngrant = m.add_variable(lb=0, name=\"grant\")\novertime = m.add_variable(lb=0, name=\"overtime\")\nloan = m.add_variable(lb=-10, ub=float(\"inf\"), name=\"loan\")\nm.add_linear_constraint(overtime - nurses <= 30, name=\"overtime_cap\")\nm.maximize(4 * nurses + 2 * grant + overtime - loan)\n\nprint(\"free to grow:\", free_to_grow(m))\ngrant.upper_bound = 500\nprint(\"with grant capped at 500:\", free_to_grow(m))\nm.minimize(4 * nurses + 2 * grant + overtime - loan)\nprint(\"same terms, minimized:\", free_to_grow(m))\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef free_to_grow(model: mathopt.Model) -> list[str]:\n    \"\"\"Names of the variables the objective pushes in a direction that no bound and no row limits.\"\"\"\n    # TODO: for each variable, decide which way the objective pushes it, then whether a bound\n    # or some row stops it going that way. Return the names of those nothing stops, sorted.\n    return []\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    order = model.add_variable(lb=0, name=\"order_gloves\")\n    refund = model.add_variable(lb=0, name=\"supplier_refund\")\n    model.add_linear_constraint(order <= 500, name=\"storage\")\n    model.maximize(2 * refund - order)\n    print(free_to_grow(model))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom growth import free_to_grow\n\nm = mathopt.Model()\nnurses = m.add_variable(lb=0, ub=25, name=\"nurses\")\ngrant = m.add_variable(lb=0, name=\"grant\")\novertime = m.add_variable(lb=0, name=\"overtime\")\nloan = m.add_variable(lb=-10, ub=float(\"inf\"), name=\"loan\")\nm.add_linear_constraint(overtime - nurses <= 30, name=\"overtime_cap\")\nm.maximize(4 * nurses + 2 * grant + overtime - loan)\n\nprint(\"free to grow:\", free_to_grow(m))\ngrant.upper_bound = 500\nprint(\"with grant capped at 500:\", free_to_grow(m))\nm.minimize(4 * nurses + 2 * grant + overtime - loan)\nprint(\"same terms, minimized:\", free_to_grow(m))\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "0656347ca3c997f4f6061abb99da252884af198a13bfda20c75cc0dbffdd529e",
+  "content_sha256": "9acaa3394fcfd0dc4572c5d99fa233b0d2f2ae2cc3814c078c76c75ffc32d9b7",
   "starting_code": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef free_to_grow(model: mathopt.Model) -> list[str]:\n    \"\"\"Names of the variables the objective pushes in a direction that no bound and no row limits.\"\"\"\n    # TODO: for each variable, decide which way the objective pushes it, then whether a bound\n    # or some row stops it going that way. Return the names of those nothing stops, sorted.\n    return []\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    order = model.add_variable(lb=0, name=\"order_gloves\")\n    refund = model.add_variable(lb=0, name=\"supplier_refund\")\n    model.add_linear_constraint(order <= 500, name=\"storage\")\n    model.maximize(2 * refund - order)\n    print(free_to_grow(model))\n",
   "exercise": {
     "main_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-1/growth.py",
     "test_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-1/test_growth.py",
     "run_command": [
       "python3",
-      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-1/growth.py"
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -139,6 +157,10 @@
     },
     "concepts": [
       "a variable pushed by the objective, with no bound or row against it on that side, runs away"
-    ]
+    ],
+    "files": [
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-1/try_it.py"
+    ],
+    "try_file": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-01/practice-1/try_it.py"
   }
 }

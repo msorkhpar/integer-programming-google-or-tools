@@ -9,7 +9,7 @@
   "unit": 7,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Carry-over cash and a regional floor",
   "blocks": [
     {
@@ -48,6 +48,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    region: str\n    starts: tuple[int, ...]\n    cost: tuple[int, ...]       # $k in its first, second, ... year of work\n    value: int = 10\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project]) -> dict:\n    \"\"\"Given: x[(pid, year)] for every allowed start year, and each project starts at most once.\"\"\"\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    return x\n\n\ndef spend(x: dict, projects: list[Project], year: int):\n    \"\"\"Given: what the projects spend in one year, as an expression (0 when nothing can be spent).\"\"\"\n    return sum(p.cost[year - t] * x[p.pid, t] for p in projects for t in p.starts if 0 <= year - t < len(p.cost))\n\n\ndef add_cash_rules(model: mathopt.Model, x: dict, projects: list[Project], budgets: dict[int, int],\n                   carry_share: float, floors: dict[str, int]) -> None:\n    \"\"\"Carry-over cash rows with a cap on what each year carries out, and a minimum spend per region.\"\"\"\n    years = sorted(budgets)\n    carry = {y: model.add_variable(lb=0, name=f\"carry_{y}\") for y in years}\n    for i, y in enumerate(years):\n        incoming = carry[years[i - 1]] if i else 0\n        model.add_linear_constraint(spend(x, projects, y) + carry[y] - incoming <= budgets[y], name=f\"cash_{y}\")\n        model.add_linear_constraint(carry[y] <= carry_share * budgets[y], name=f\"carry_cap_{y}\")\n    for region, floor in floors.items():\n        members = [p for p in projects if p.region == region]\n        total = mathopt.LinearExpression() + sum(spend(x, members, y) for y in years)\n        model.add_linear_constraint(total >= floor, name=f\"floor_{region}\")\n\n\ndef build(projects: list[Project], budgets: dict[int, int], carry_share: float,\n          floors: dict[str, int]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"carry-over\")\n    x = start_variables(model, projects)\n    add_cash_rules(model, x, projects, budgets, carry_share, floors)\n    model.maximize(sum(p.value * x[p.pid, t] for p in projects for t in p.starts))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Project(\"N1\", \"N\", (2027, 2028), (60,))], {2027: 50, 2028: 50}, 0.5, {\"N\": 60})\n    print(mathopt.solve(model, mathopt.SolverType.HIGHS).termination.reason.name)\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom cash import Project, build\n\n# A harbour board's capital works, $k.\nworks = [\n    Project(\"E1\", \"East\", (2031, 2032), (70,)),\n    Project(\"E2\", \"East\", (2032, 2033), (30, 30)),\n    Project(\"W1\", \"West\", (2031, 2032), (110,)),\n    Project(\"W2\", \"West\", (2033,), (80,)),\n]\nbudgets = {2031: 80, 2032: 80, 2033: 80}\n\n\ndef allowed(plan, carry_share=0.5, floors=None):\n    model, x = build(works, budgets, carry_share, floors or {})\n    for (pid, t), var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if plan.get(pid) == t else 0.0\n    return mathopt.solve(model, mathopt.SolverType.HIGHS).termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"W1 2032 alone, carry 50%:\", allowed({\"W1\": 2032}))\nprint(\"W1 2032 alone, carry 25%:\", allowed({\"W1\": 2032}, carry_share=0.25))\nprint(\"W1 2031 alone:\", allowed({\"W1\": 2031}))\nprint(\"E1 2031, W2 2033, East floor 60:\", allowed({\"E1\": 2031, \"W2\": 2033}, floors={\"East\": 60}))\nprint(\"W2 2033 alone, East floor 60:\", allowed({\"W2\": 2033}, floors={\"East\": 60}))\n"
         }
       ]
     },
@@ -60,6 +69,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    region: str\n    starts: tuple[int, ...]\n    cost: tuple[int, ...]       # $k in its first, second, ... year of work\n    value: int = 10\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project]) -> dict:\n    \"\"\"Given: x[(pid, year)] for every allowed start year, and each project starts at most once.\"\"\"\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    return x\n\n\ndef spend(x: dict, projects: list[Project], year: int):\n    \"\"\"Given: what the projects spend in one year, as an expression (0 when nothing can be spent).\"\"\"\n    return sum(p.cost[year - t] * x[p.pid, t] for p in projects for t in p.starts if 0 <= year - t < len(p.cost))\n\n\ndef add_cash_rules(model: mathopt.Model, x: dict, projects: list[Project], budgets: dict[int, int],\n                   carry_share: float, floors: dict[str, int]) -> None:\n    \"\"\"Carry-over cash rows with a cap on what each year carries out, and a minimum spend per region.\"\"\"\n    # TODO: the carry variables and the rows of your formulation.\n    return None\n\n\ndef build(projects: list[Project], budgets: dict[int, int], carry_share: float,\n          floors: dict[str, int]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"carry-over\")\n    x = start_variables(model, projects)\n    add_cash_rules(model, x, projects, budgets, carry_share, floors)\n    model.maximize(sum(p.value * x[p.pid, t] for p in projects for t in p.starts))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Project(\"N1\", \"N\", (2027, 2028), (60,))], {2027: 50, 2028: 50}, 0.5, {\"N\": 60})\n    print(mathopt.solve(model, mathopt.SolverType.HIGHS).termination.reason.name)\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom cash import Project, build\n\n# A harbour board's capital works, $k.\nworks = [\n    Project(\"E1\", \"East\", (2031, 2032), (70,)),\n    Project(\"E2\", \"East\", (2032, 2033), (30, 30)),\n    Project(\"W1\", \"West\", (2031, 2032), (110,)),\n    Project(\"W2\", \"West\", (2033,), (80,)),\n]\nbudgets = {2031: 80, 2032: 80, 2033: 80}\n\n\ndef allowed(plan, carry_share=0.5, floors=None):\n    model, x = build(works, budgets, carry_share, floors or {})\n    for (pid, t), var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if plan.get(pid) == t else 0.0\n    return mathopt.solve(model, mathopt.SolverType.HIGHS).termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"W1 2032 alone, carry 50%:\", allowed({\"W1\": 2032}))\nprint(\"W1 2032 alone, carry 25%:\", allowed({\"W1\": 2032}, carry_share=0.25))\nprint(\"W1 2031 alone:\", allowed({\"W1\": 2031}))\nprint(\"E1 2031, W2 2033, East floor 60:\", allowed({\"E1\": 2031, \"W2\": 2033}, floors={\"East\": 60}))\nprint(\"W2 2033 alone, East floor 60:\", allowed({\"W2\": 2033}, floors={\"East\": 60}))\n"
     }
   ],
   "video": null,
@@ -67,8 +85,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 2,
-    "code": 1,
+    "paras": 3,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -78,14 +96,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "2912aba489d6a7bc7e1413e6ea8486b6a8c0303cf313374fe16d8c8e9186502d",
+  "content_sha256": "b45d0facdcd9dfd65ad7fcd2f1be50614563dec36da7084a96fa47c274a4a8a4",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    region: str\n    starts: tuple[int, ...]\n    cost: tuple[int, ...]       # $k in its first, second, ... year of work\n    value: int = 10\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project]) -> dict:\n    \"\"\"Given: x[(pid, year)] for every allowed start year, and each project starts at most once.\"\"\"\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    return x\n\n\ndef spend(x: dict, projects: list[Project], year: int):\n    \"\"\"Given: what the projects spend in one year, as an expression (0 when nothing can be spent).\"\"\"\n    return sum(p.cost[year - t] * x[p.pid, t] for p in projects for t in p.starts if 0 <= year - t < len(p.cost))\n\n\ndef add_cash_rules(model: mathopt.Model, x: dict, projects: list[Project], budgets: dict[int, int],\n                   carry_share: float, floors: dict[str, int]) -> None:\n    \"\"\"Carry-over cash rows with a cap on what each year carries out, and a minimum spend per region.\"\"\"\n    # TODO: the carry variables and the rows of your formulation.\n    return None\n\n\ndef build(projects: list[Project], budgets: dict[int, int], carry_share: float,\n          floors: dict[str, int]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"carry-over\")\n    x = start_variables(model, projects)\n    add_cash_rules(model, x, projects, budgets, carry_share, floors)\n    model.maximize(sum(p.value * x[p.pid, t] for p in projects for t in p.starts))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Project(\"N1\", \"N\", (2027, 2028), (60,))], {2027: 50, 2028: 50}, 0.5, {\"N\": 60})\n    print(mathopt.solve(model, mathopt.SolverType.HIGHS).termination.reason.name)\n",
   "exercise": {
     "main_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-2/cash.py",
     "test_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-2/test_cash.py",
     "run_command": [
       "python3",
-      "practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-2/cash.py"
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -141,6 +159,10 @@
     },
     "concepts": [
       "write carry-over cash rows, a cap on what each year carries out, and a spend floor per region"
-    ]
+    ],
+    "files": [
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-2/try_it.py"
+    ],
+    "try_file": "practice/15-mock-interviews/53-mock-interviews/prose/unit-07/practice-2/try_it.py"
   }
 }

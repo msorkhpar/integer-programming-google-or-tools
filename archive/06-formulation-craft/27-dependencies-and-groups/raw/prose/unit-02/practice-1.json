@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A rail line's signal bundles and platforms",
   "blocks": [
     {
@@ -68,6 +68,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n\n\ndef add_works_rules(model: mathopt.Model, x: dict, projects: list[Project], blocks: list[list[str]],\n                    platforms: dict[str, list[str]]) -> None:\n    \"\"\"Signal blocks done whole and in one year; each platform after one of its track upgrades.\"\"\"\n    starts = {p.pid: p.starts for p in projects}\n    for block in blocks:\n        lead = block[0]\n        shared = set(starts[lead]).intersection(*(starts[m] for m in block[1:]))\n        for member in block:\n            for t in starts[member]:\n                if t not in shared:\n                    x[member, t].upper_bound = 0\n        for member in block[1:]:\n            for t in shared:\n                model.add_linear_constraint(x[member, t] == x[lead, t], name=f\"block_{member}_{t}\")\n    for platform, tracks in platforms.items():\n        for t in starts[platform]:\n            platform_by = sum(x[platform, u] for u in starts[platform] if u <= t)\n            track_by = sum(x[k, u] for k in tracks for u in starts[k] if u <= t - 1)\n            model.add_linear_constraint(platform_by <= track_by, name=f\"carried_{platform}_{t}\")\n\n\ndef build(projects: list[Project], blocks: list[list[str]],\n          platforms: dict[str, list[str]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"rail-works\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_works_rules(model, x, projects, blocks, platforms)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"SIG1\", (2027, 2028)), Project(\"SIG2\", (2028,)), Project(\"PLAT\", (2029,)),\n                Project(\"TRK\", (2027, 2028))]\n    model, x = build(projects, [[\"SIG1\", \"SIG2\"]], {\"PLAT\": [\"TRK\"]})\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom rail import Project, build\n\nworks = [\n    Project(\"SIG-X1\", (2031, 2032)),\n    Project(\"SIG-X2\", (2032, 2033)),\n    Project(\"STN-E\", (2032, 2033)),\n    Project(\"TRK-9\", (2031, 2032, 2033)),\n]\nblocks = [[\"SIG-X1\", \"SIG-X2\"]]\nplatforms = {\"STN-E\": [\"TRK-9\"]}\n\ndef solve_ok(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(plan):\n    model, x = build(works, blocks, platforms)\n    for key, var in x.items():\n        value = 1.0 if key in plan else 0.0\n        if value > var.upper_bound:\n            return False\n        var.lower_bound = var.upper_bound = value\n    return solve_ok(model)\n\n\nprint(\"SIG-X1 and SIG-X2 in 2032:\", allowed({(\"SIG-X1\", 2032), (\"SIG-X2\", 2032)}))\nprint(\"SIG-X1 in 2031 alone:\", allowed({(\"SIG-X1\", 2031)}))\nprint(\"SIG-X1 2031, SIG-X2 2032:\", allowed({(\"SIG-X1\", 2031), (\"SIG-X2\", 2032)}))\nprint(\"TRK-9 2031, STN-E 2032:\", allowed({(\"TRK-9\", 2031), (\"STN-E\", 2032)}))\nprint(\"TRK-9 2032, STN-E 2032:\", allowed({(\"TRK-9\", 2032), (\"STN-E\", 2032)}))\n"
         }
       ]
     },
@@ -80,6 +89,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n\n\ndef add_works_rules(model: mathopt.Model, x: dict, projects: list[Project], blocks: list[list[str]],\n                    platforms: dict[str, list[str]]) -> None:\n    \"\"\"Signal blocks done whole and in one year; each platform after one of its track upgrades.\"\"\"\n    # TODO: the block rows and the platform rows.\n    return None\n\n\ndef build(projects: list[Project], blocks: list[list[str]],\n          platforms: dict[str, list[str]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"rail-works\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_works_rules(model, x, projects, blocks, platforms)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"SIG1\", (2027, 2028)), Project(\"SIG2\", (2028,)), Project(\"PLAT\", (2029,)),\n                Project(\"TRK\", (2027, 2028))]\n    model, x = build(projects, [[\"SIG1\", \"SIG2\"]], {\"PLAT\": [\"TRK\"]})\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom rail import Project, build\n\nworks = [\n    Project(\"SIG-X1\", (2031, 2032)),\n    Project(\"SIG-X2\", (2032, 2033)),\n    Project(\"STN-E\", (2032, 2033)),\n    Project(\"TRK-9\", (2031, 2032, 2033)),\n]\nblocks = [[\"SIG-X1\", \"SIG-X2\"]]\nplatforms = {\"STN-E\": [\"TRK-9\"]}\n\ndef solve_ok(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(plan):\n    model, x = build(works, blocks, platforms)\n    for key, var in x.items():\n        value = 1.0 if key in plan else 0.0\n        if value > var.upper_bound:\n            return False\n        var.lower_bound = var.upper_bound = value\n    return solve_ok(model)\n\n\nprint(\"SIG-X1 and SIG-X2 in 2032:\", allowed({(\"SIG-X1\", 2032), (\"SIG-X2\", 2032)}))\nprint(\"SIG-X1 in 2031 alone:\", allowed({(\"SIG-X1\", 2031)}))\nprint(\"SIG-X1 2031, SIG-X2 2032:\", allowed({(\"SIG-X1\", 2031), (\"SIG-X2\", 2032)}))\nprint(\"TRK-9 2031, STN-E 2032:\", allowed({(\"TRK-9\", 2031), (\"STN-E\", 2032)}))\nprint(\"TRK-9 2032, STN-E 2032:\", allowed({(\"TRK-9\", 2032), (\"STN-E\", 2032)}))\n"
     }
   ],
   "video": null,
@@ -87,8 +105,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 6,
-    "code": 2,
+    "paras": 7,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -98,14 +116,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "b8097d8b972b9428a312615b00ace5cab9608b0e1abd3ab03039777313e277b0",
+  "content_sha256": "f9fc5199daab524bff49f7fb80342021c15a666d40ec2b30838aa0b25bd6d459",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]\n\n\ndef add_works_rules(model: mathopt.Model, x: dict, projects: list[Project], blocks: list[list[str]],\n                    platforms: dict[str, list[str]]) -> None:\n    \"\"\"Signal blocks done whole and in one year; each platform after one of its track upgrades.\"\"\"\n    # TODO: the block rows and the platform rows.\n    return None\n\n\ndef build(projects: list[Project], blocks: list[list[str]],\n          platforms: dict[str, list[str]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"rail-works\")\n    x = {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_works_rules(model, x, projects, blocks, platforms)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"SIG1\", (2027, 2028)), Project(\"SIG2\", (2028,)), Project(\"PLAT\", (2029,)),\n                Project(\"TRK\", (2027, 2028))]\n    model, x = build(projects, [[\"SIG1\", \"SIG2\"]], {\"PLAT\": [\"TRK\"]})\n    print(model.get_num_linear_constraints(), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-02/practice-1/rail.py",
     "test_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-02/practice-1/test_rail.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-02/practice-1/rail.py"
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -158,6 +176,10 @@
       "a bundle ties each member's started sum to one member's",
       "a child may have started by a year only if its parent, or one of its parents, had started by then",
       "a same-year bundle ties start variables year by year and fixes the years not every member can use"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-02/practice-1/try_it.py"
   }
 }

@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "One selection function for every MILP solver",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport pandas as pd\nfrom ortools.math_opt.python import mathopt\n\nLP_ONLY = (mathopt.SolverType.GLOP, mathopt.SolverType.PDLP)\n\n\ndef solve_selection(df: pd.DataFrame, budget: float, solver: mathopt.SolverType) -> tuple[float, list[str]]:\n    \"\"\"The best plan's value and its sorted project ids, on any MILP solver MathOpt drives.\"\"\"\n    if solver in LP_ONLY:\n        raise ValueError(f\"{solver.name} solves LPs only; this model has yes/no variables\")\n    model = mathopt.Model(name=\"selection\")\n    x = {row.project_id: model.add_binary_variable(name=f\"x_{row.project_id}\") for row in df.itertuples()}\n    model.add_linear_constraint(\n        mathopt.fast_sum(row.cost * x[row.project_id] for row in df.itertuples()) <= budget, name=\"budget\")\n    for row in df.itertuples():\n        if row.must_do:\n            model.add_linear_constraint(x[row.project_id] == 1, name=f\"must_{row.project_id}\")\n    model.maximize(mathopt.fast_sum(row.value * x[row.project_id] for row in df.itertuples()))\n    result = mathopt.solve(model, solver)\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        raise RuntimeError(f\"no optimal plan: {result.termination.reason.name}\")\n    chosen = sorted(pid for pid, var in x.items() if result.variable_values(var) > 0.5)\n    return result.objective_value(), chosen\n\n\nif __name__ == \"__main__\":\n    parks = pd.DataFrame({\"project_id\": [\"A\", \"B\", \"C\"], \"cost\": [40, 30, 50],\n                          \"value\": [55, 35, 60], \"must_do\": [False, True, False]})\n    print(solve_selection(parks, 80, mathopt.SolverType.HIGHS))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport pandas as pd\nfrom ortools.math_opt.python import mathopt\n\nfrom selection import solve_selection\n\nS = mathopt.SolverType\ncourts = pd.DataFrame({\n    \"project_id\": [\"Lark\", \"Wren\", \"Kite\", \"Rook\", \"Tern\"],\n    \"cost\": [30, 22, 45, 18, 26],\n    \"value\": [41, 27, 58, 20, 33],\n    \"must_do\": [False, False, False, True, False],\n})\n\nfor solver in (S.HIGHS, S.GSCIP, S.CP_SAT):\n    print(f\"budget 90 on {solver.name}:\", solve_selection(courts, 90, solver))\nprint(\"budget 60 on HIGHS:\", solve_selection(courts, 60, S.HIGHS))\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport pandas as pd\nfrom ortools.math_opt.python import mathopt\n\nLP_ONLY = (mathopt.SolverType.GLOP, mathopt.SolverType.PDLP)\n\n\ndef solve_selection(df: pd.DataFrame, budget: float, solver: mathopt.SolverType) -> tuple[float, list[str]]:\n    \"\"\"The best plan's value and its sorted project ids, on any MILP solver MathOpt drives.\"\"\"\n    # TODO: refuse LP-only solvers, build the model, solve with `solver`, check the reason, read the plan.\n    return 0.0, []\n\n\nif __name__ == \"__main__\":\n    parks = pd.DataFrame({\"project_id\": [\"A\", \"B\", \"C\"], \"cost\": [40, 30, 50],\n                          \"value\": [55, 35, 60], \"must_do\": [False, True, False]})\n    print(solve_selection(parks, 80, mathopt.SolverType.HIGHS))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport pandas as pd\nfrom ortools.math_opt.python import mathopt\n\nfrom selection import solve_selection\n\nS = mathopt.SolverType\ncourts = pd.DataFrame({\n    \"project_id\": [\"Lark\", \"Wren\", \"Kite\", \"Rook\", \"Tern\"],\n    \"cost\": [30, 22, 45, 18, 26],\n    \"value\": [41, 27, 58, 20, 33],\n    \"must_do\": [False, False, False, True, False],\n})\n\nfor solver in (S.HIGHS, S.GSCIP, S.CP_SAT):\n    print(f\"budget 90 on {solver.name}:\", solve_selection(courts, 90, solver))\nprint(\"budget 60 on HIGHS:\", solve_selection(courts, 60, S.HIGHS))\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 2,
+    "paras": 4,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "fd0f5938f5d68ce8c900cb56b7af3cf7a6d57c3276aff07aaee7aa4202ce05ec",
+  "content_sha256": "215a4c7e052cf6e5bdbda794105a124c60a428a4b764bee14185e908c5cd8166",
   "starting_code": "from __future__ import annotations\n\nimport pandas as pd\nfrom ortools.math_opt.python import mathopt\n\nLP_ONLY = (mathopt.SolverType.GLOP, mathopt.SolverType.PDLP)\n\n\ndef solve_selection(df: pd.DataFrame, budget: float, solver: mathopt.SolverType) -> tuple[float, list[str]]:\n    \"\"\"The best plan's value and its sorted project ids, on any MILP solver MathOpt drives.\"\"\"\n    # TODO: refuse LP-only solvers, build the model, solve with `solver`, check the reason, read the plan.\n    return 0.0, []\n\n\nif __name__ == \"__main__\":\n    parks = pd.DataFrame({\"project_id\": [\"A\", \"B\", \"C\"], \"cost\": [40, 30, 50],\n                          \"value\": [55, 35, 60], \"must_do\": [False, True, False]})\n    print(solve_selection(parks, 80, mathopt.SolverType.HIGHS))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-1/selection.py",
     "test_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-1/test_selection.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-1/selection.py"
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -149,6 +167,10 @@
     },
     "concepts": [
       "the solver is the second argument of mathopt.solve and never part of the model"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-1/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-03/practice-1/try_it.py"
   }
 }

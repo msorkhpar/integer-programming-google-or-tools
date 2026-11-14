@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Split a port's maintenance budget and read the answer",
   "blocks": [
     {
@@ -61,6 +61,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nTOL = 1e-6\n\n\n@dataclass(frozen=True)\nclass Terminal:\n    name: str\n    value: float          # value returned per $k spent\n    hours_per_k: float    # dock-crew hours per $k of work\n    hours: float          # dock-crew hours available\n    floor: float = 0      # least it must get, $k (0: no floor)\n\n\ndef split(terminals: list[Terminal], budget: float):\n    \"\"\"Solve the split LP with GLOP. Returns (status, value, amounts, full rows).\"\"\"\n    model = mathopt.Model(name=\"terminal split\")\n    x = {t.name: model.add_variable(lb=0, name=f\"x_{t.name}\") for t in terminals}\n    rows = [model.add_linear_constraint(sum(x.values()) <= budget, name=\"budget\")]\n    for t in terminals:\n        rows.append(model.add_linear_constraint(t.hours_per_k * x[t.name] <= t.hours, name=f\"labour_{t.name}\"))\n        if t.floor > 0:\n            rows.append(model.add_linear_constraint(x[t.name] >= t.floor, name=f\"floor_{t.name}\"))\n    model.maximize(sum(t.value * x[t.name] for t in terminals))\n    result = mathopt.solve(model, mathopt.SolverType.GLOP)\n    status = result.termination.reason.name\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return status, None, None, None\n    values = result.variable_values()\n    amounts = {name: values[v] for name, v in x.items()}\n    full = set()\n    for row in rows:\n        a = sum(term.coefficient * values[term.variable] for term in row.terms())\n        if abs(a - row.upper_bound) <= TOL or abs(a - row.lower_bound) <= TOL:\n            full.add(row.name)\n    return status, result.objective_value(), amounts, full\n\n\nif __name__ == \"__main__\":\n    port = [Terminal(\"north\", 1.2, 2, 400), Terminal(\"south\", 0.9, 1, 300), Terminal(\"east\", 0.7, 4, 800)]\n    print(split(port, 600))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom split import Terminal, split\n\ndef r(v):\n    return v if v is None else round(v, 2)\n\n\nyard = [Terminal(\"west\", 1.5, 3, 300), Terminal(\"pier\", 1.1, 1, 250), Terminal(\"quay\", 0.6, 2, 500)]\n\nfor budget in (400, 150):\n    status, value, amounts, full = split(yard, budget)\n    print(f\"budget {budget}:\", status, r(value), amounts and {k: r(v) for k, v in amounts.items()})\n    print(f\"full rows at budget {budget}:\", full and sorted(full))\nfloors = [Terminal(\"west\", 1.5, 3, 300, 90), Terminal(\"pier\", 1.1, 1, 250, 90)]\nprint(\"floors 90 + 90 at budget 150:\", split(floors, 150))\n"
         }
       ]
     },
@@ -73,6 +82,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nTOL = 1e-6\n\n\n@dataclass(frozen=True)\nclass Terminal:\n    name: str\n    value: float          # value returned per $k spent\n    hours_per_k: float    # dock-crew hours per $k of work\n    hours: float          # dock-crew hours available\n    floor: float = 0      # least it must get, $k (0: no floor)\n\n\ndef split(terminals: list[Terminal], budget: float):\n    \"\"\"Solve the split LP with GLOP. Returns (status, value, amounts, full rows).\"\"\"\n    # TODO: the model of the statement (variables, rows, objective), a GLOP solve, the status first,\n    # then the value, the amounts and the names of the full rows.\n    return \"NOT_SOLVED\", None, None, None\n\nif __name__ == \"__main__\":\n    port = [Terminal(\"north\", 1.2, 2, 400), Terminal(\"south\", 0.9, 1, 300), Terminal(\"east\", 0.7, 4, 800)]\n    print(split(port, 600))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom split import Terminal, split\n\ndef r(v):\n    return v if v is None else round(v, 2)\n\n\nyard = [Terminal(\"west\", 1.5, 3, 300), Terminal(\"pier\", 1.1, 1, 250), Terminal(\"quay\", 0.6, 2, 500)]\n\nfor budget in (400, 150):\n    status, value, amounts, full = split(yard, budget)\n    print(f\"budget {budget}:\", status, r(value), amounts and {k: r(v) for k, v in amounts.items()})\n    print(f\"full rows at budget {budget}:\", full and sorted(full))\nfloors = [Terminal(\"west\", 1.5, 3, 300, 90), Terminal(\"pier\", 1.1, 1, 250, 90)]\nprint(\"floors 90 + 90 at budget 150:\", split(floors, 150))\n"
     }
   ],
   "video": null,
@@ -80,8 +98,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -91,14 +109,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "04e4403a79d0b27700b66513f6a06dde3d57d81eade9460dae925a74e49273c5",
+  "content_sha256": "a6f1e364c2cdc4248d59c30a09075af818d0e77a4a2d94ad28ce4aca0c360f06",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nTOL = 1e-6\n\n\n@dataclass(frozen=True)\nclass Terminal:\n    name: str\n    value: float          # value returned per $k spent\n    hours_per_k: float    # dock-crew hours per $k of work\n    hours: float          # dock-crew hours available\n    floor: float = 0      # least it must get, $k (0: no floor)\n\n\ndef split(terminals: list[Terminal], budget: float):\n    \"\"\"Solve the split LP with GLOP. Returns (status, value, amounts, full rows).\"\"\"\n    # TODO: the model of the statement (variables, rows, objective), a GLOP solve, the status first,\n    # then the value, the amounts and the names of the full rows.\n    return \"NOT_SOLVED\", None, None, None\n\nif __name__ == \"__main__\":\n    port = [Terminal(\"north\", 1.2, 2, 400), Terminal(\"south\", 0.9, 1, 300), Terminal(\"east\", 0.7, 4, 800)]\n    print(split(port, 600))\n",
   "exercise": {
     "main_path": "practice/02-linear-programming/04-lp-modeling/prose/unit-01/practice-2/split.py",
     "test_path": "practice/02-linear-programming/04-lp-modeling/prose/unit-01/practice-2/test_split.py",
     "run_command": [
       "python3",
-      "practice/02-linear-programming/04-lp-modeling/prose/unit-01/practice-2/split.py"
+      "practice/02-linear-programming/04-lp-modeling/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -155,6 +173,10 @@
     "concepts": [
       "an amount of money is a continuous variable whose lower bound must be stated",
       "a solve is read status first, then amounts, then each row's activity against its bound"
-    ]
+    ],
+    "files": [
+      "practice/02-linear-programming/04-lp-modeling/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/02-linear-programming/04-lp-modeling/prose/unit-01/practice-2/try_it.py"
   }
 }

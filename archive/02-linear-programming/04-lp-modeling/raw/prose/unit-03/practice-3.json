@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 3,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Carry a parks budget across years",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef plan_spending(budgets: dict[int, float], work: dict[int, float], value: dict[int, float], max_carry: float):\n    \"\"\"Spend each year's budget, with carry-over into the next year. Returns (status, value, spend, carry).\"\"\"\n    years = sorted(budgets)\n    model = mathopt.Model(name=\"parks carry-over\")\n    x = {y: model.add_variable(lb=0, ub=work[y], name=f\"x_{y}\") for y in years}\n    carry = {}\n    for y in years:\n        carry[y] = model.add_variable(lb=0, ub=max_carry * budgets[y], name=f\"r_{y}\")\n    for i, y in enumerate(years):\n        incoming = carry[years[i - 1]] if i else 0\n        model.add_linear_constraint(x[y] + carry[y] <= budgets[y] + incoming, name=f\"cash_{y}\")\n    model.maximize(sum(value[y] * x[y] for y in years))\n    result = mathopt.solve(model, mathopt.SolverType.GLOP)\n    status = result.termination.reason.name\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return status, None, None, None\n    spend = {y: result.variable_values(x[y]) for y in years}\n    return status, result.objective_value(), spend, {y: result.variable_values(carry[y]) for y in years}\n\n\nif __name__ == \"__main__\":\n    print(plan_spending({2030: 100, 2031: 100}, {2030: 60, 2031: 150}, {2030: 1.0, 2031: 0.9}, 0.5))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom carry import plan_spending\n\ndef r(v):\n    return v if v is None else round(v, 2)\n\n\nbudgets = {2040: 80, 2041: 80, 2042: 80}\nwork = {2040: 40, 2041: 110, 2042: 100}\nvalue = {2040: 1.2, 2041: 1.0, 2042: 0.7}\n\nfor max_carry in (0.5, 0.1):\n    status, total, spend, carry = plan_spending(budgets, work, value, max_carry)\n    print(f\"max carry {max_carry}:\", status, r(total))\n    print(f\"  spend at max carry {max_carry}:\", spend and {y: r(s) for y, s in spend.items()})\n    print(f\"  carry at max carry {max_carry}:\", carry and {y: r(c) for y, c in carry.items()})\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef plan_spending(budgets: dict[int, float], work: dict[int, float], value: dict[int, float], max_carry: float):\n    \"\"\"Spend each year's budget, with carry-over into the next year. Returns (status, value, spend, carry).\"\"\"\n    # TODO: spend and carry variables with their bounds, one cash row per year, the objective,\n    # a GLOP solve, and the status before any value.\n    return \"NOT_SOLVED\", None, None, None\n\nif __name__ == \"__main__\":\n    print(plan_spending({2030: 100, 2031: 100}, {2030: 60, 2031: 150}, {2030: 1.0, 2031: 0.9}, 0.5))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom carry import plan_spending\n\ndef r(v):\n    return v if v is None else round(v, 2)\n\n\nbudgets = {2040: 80, 2041: 80, 2042: 80}\nwork = {2040: 40, 2041: 110, 2042: 100}\nvalue = {2040: 1.2, 2041: 1.0, 2042: 0.7}\n\nfor max_carry in (0.5, 0.1):\n    status, total, spend, carry = plan_spending(budgets, work, value, max_carry)\n    print(f\"max carry {max_carry}:\", status, r(total))\n    print(f\"  spend at max carry {max_carry}:\", spend and {y: r(s) for y, s in spend.items()})\n    print(f\"  carry at max carry {max_carry}:\", carry and {y: r(c) for y, c in carry.items()})\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "9e759ad1a0f40a324ae644a5f831173aa34a4f99a72a5914af2d176eec155d65",
+  "content_sha256": "0175168688c26bdcd41cd7aacd68bb5537ccc7bca1a1fb8826912ead96e3acbd",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef plan_spending(budgets: dict[int, float], work: dict[int, float], value: dict[int, float], max_carry: float):\n    \"\"\"Spend each year's budget, with carry-over into the next year. Returns (status, value, spend, carry).\"\"\"\n    # TODO: spend and carry variables with their bounds, one cash row per year, the objective,\n    # a GLOP solve, and the status before any value.\n    return \"NOT_SOLVED\", None, None, None\n\nif __name__ == \"__main__\":\n    print(plan_spending({2030: 100, 2031: 100}, {2030: 60, 2031: 150}, {2030: 1.0, 2031: 0.9}, 0.5))\n",
   "exercise": {
     "main_path": "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-3/carry.py",
     "test_path": "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-3/test_carry.py",
     "run_command": [
       "python3",
-      "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-3/carry.py"
+      "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-3/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -135,6 +153,10 @@
     },
     "concepts": [
       "carried money is a bounded variable that appears in two neighbouring years' cash rows"
-    ]
+    ],
+    "files": [
+      "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-3/try_it.py"
+    ],
+    "try_file": "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-3/try_it.py"
   }
 }

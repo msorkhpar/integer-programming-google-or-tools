@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Kegs and kilograms: one dimension per load",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef add_loads(routing, manager, demands: dict[str, list[int]], capacities: dict[str, list[int]]) -> None:\n    \"\"\"One dimension per kind of load, named after it: demands[kind][node] is what a stop adds,\n    capacities[kind][v] is the most vehicle v may carry of that kind.\"\"\"\n    for kind, demand in demands.items():\n        def load(from_index, demand=demand):\n            return demand[manager.IndexToNode(from_index)]\n\n        handle = routing.RegisterUnaryTransitCallback(load)\n        routing.AddDimensionWithVehicleCapacity(handle, 0, capacities[kind], True, kind)\n\n\ndef build(distance: list[list[int]], vehicles: int, demands, capacities):\n    \"\"\"Given: one route per vehicle from the depot (node 0), priced by distance.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(distance), vehicles, 0)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def arc(from_index, to_index):\n        return distance[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    routing.SetArcCostEvaluatorOfAllVehicles(routing.RegisterTransitCallback(arc))\n    add_loads(routing, manager, demands, capacities)\n    return manager, routing\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 4, 5], [4, 0, 3], [5, 3, 0]], 1,\n                             {\"crates\": [0, 2, 3], \"kg\": [0, 40, 70]}, {\"crates\": [6], \"kg\": [100]})\n    print(routing.ReadAssignmentFromRoutes([[1, 2]], True) is not None)\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom loads import build\n\n# A bakery's two vans and four cafes.\ndistance = [\n    [0, 4, 6, 3, 7],\n    [4, 0, 2, 5, 6],\n    [6, 2, 0, 4, 3],\n    [3, 5, 4, 0, 5],\n    [7, 6, 3, 5, 0],\n]\ntrays = [0, 5, 3, 4, 2]\nlitres = [0, 20, 40, 10, 30]\n\n\ndef allowed(routes, demands, capacities):\n    manager, routing = build(distance, 2, demands, capacities)\n    return routing.ReadAssignmentFromRoutes(routes, True) is not None\n\n\nprint(\"trays only, caps 8 and 8, routes [1, 2] [3, 4]:\", allowed([[1, 2], [3, 4]], {\"trays\": trays}, {\"trays\": [8, 8]}))\nprint(\"trays only, caps 7 and 8, routes [1, 2] [3, 4]:\", allowed([[1, 2], [3, 4]], {\"trays\": trays}, {\"trays\": [7, 8]}))\nboth = {\"trays\": trays, \"litres\": litres}\nprint(\"trays and litres, litre caps 60 and 40:\", allowed([[1, 2], [3, 4]], both, {\"trays\": [8, 8], \"litres\": [60, 40]}))\nprint(\"trays and litres, litre caps 50 and 40:\", allowed([[1, 2], [3, 4]], both, {\"trays\": [8, 8], \"litres\": [50, 40]}))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef add_loads(routing, manager, demands: dict[str, list[int]], capacities: dict[str, list[int]]) -> None:\n    \"\"\"One dimension per kind of load, named after it: demands[kind][node] is what a stop adds,\n    capacities[kind][v] is the most vehicle v may carry of that kind.\"\"\"\n    # TODO: for each kind, a unary demand callback and a capacity dimension named after the kind.\n    return None\n\n\ndef build(distance: list[list[int]], vehicles: int, demands, capacities):\n    \"\"\"Given: one route per vehicle from the depot (node 0), priced by distance.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(distance), vehicles, 0)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def arc(from_index, to_index):\n        return distance[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    routing.SetArcCostEvaluatorOfAllVehicles(routing.RegisterTransitCallback(arc))\n    add_loads(routing, manager, demands, capacities)\n    return manager, routing\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 4, 5], [4, 0, 3], [5, 3, 0]], 1,\n                             {\"crates\": [0, 2, 3], \"kg\": [0, 40, 70]}, {\"crates\": [6], \"kg\": [100]})\n    print(routing.ReadAssignmentFromRoutes([[1, 2]], True) is not None)\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom loads import build\n\n# A bakery's two vans and four cafes.\ndistance = [\n    [0, 4, 6, 3, 7],\n    [4, 0, 2, 5, 6],\n    [6, 2, 0, 4, 3],\n    [3, 5, 4, 0, 5],\n    [7, 6, 3, 5, 0],\n]\ntrays = [0, 5, 3, 4, 2]\nlitres = [0, 20, 40, 10, 30]\n\n\ndef allowed(routes, demands, capacities):\n    manager, routing = build(distance, 2, demands, capacities)\n    return routing.ReadAssignmentFromRoutes(routes, True) is not None\n\n\nprint(\"trays only, caps 8 and 8, routes [1, 2] [3, 4]:\", allowed([[1, 2], [3, 4]], {\"trays\": trays}, {\"trays\": [8, 8]}))\nprint(\"trays only, caps 7 and 8, routes [1, 2] [3, 4]:\", allowed([[1, 2], [3, 4]], {\"trays\": trays}, {\"trays\": [7, 8]}))\nboth = {\"trays\": trays, \"litres\": litres}\nprint(\"trays and litres, litre caps 60 and 40:\", allowed([[1, 2], [3, 4]], both, {\"trays\": [8, 8], \"litres\": [60, 40]}))\nprint(\"trays and litres, litre caps 50 and 40:\", allowed([[1, 2], [3, 4]], both, {\"trays\": [8, 8], \"litres\": [50, 40]}))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "53437f3495e9f2a6d7e2f3e20a6cd633ef0a498fbeac11ebe3447d7261e3a548",
+  "content_sha256": "a968559a8b462d16482f83b75e5201eebe70193d47f5481f8d964cf390125d8c",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef add_loads(routing, manager, demands: dict[str, list[int]], capacities: dict[str, list[int]]) -> None:\n    \"\"\"One dimension per kind of load, named after it: demands[kind][node] is what a stop adds,\n    capacities[kind][v] is the most vehicle v may carry of that kind.\"\"\"\n    # TODO: for each kind, a unary demand callback and a capacity dimension named after the kind.\n    return None\n\n\ndef build(distance: list[list[int]], vehicles: int, demands, capacities):\n    \"\"\"Given: one route per vehicle from the depot (node 0), priced by distance.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(distance), vehicles, 0)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def arc(from_index, to_index):\n        return distance[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    routing.SetArcCostEvaluatorOfAllVehicles(routing.RegisterTransitCallback(arc))\n    add_loads(routing, manager, demands, capacities)\n    return manager, routing\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 4, 5], [4, 0, 3], [5, 3, 0]], 1,\n                             {\"crates\": [0, 2, 3], \"kg\": [0, 40, 70]}, {\"crates\": [6], \"kg\": [100]})\n    print(routing.ReadAssignmentFromRoutes([[1, 2]], True) is not None)\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-2/loads.py",
     "test_path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-2/test_loads.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-2/loads.py"
+      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -135,6 +153,10 @@
     },
     "concepts": [
       "a load limit is a dimension fed by a unary demand callback, with one capacity per vehicle"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-02/practice-2/try_it.py"
   }
 }

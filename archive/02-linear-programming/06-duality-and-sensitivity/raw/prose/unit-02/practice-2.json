@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Certify a plan from complementary slackness",
   "blocks": [
     {
@@ -68,6 +68,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport numpy as np\n\n\ndef certify(value: dict[str, float], rows: dict[str, tuple[dict[str, float], str, float]],\n            plan: dict[str, float], tol: float = 1e-6) -> dict[str, float] | None:\n    \"\"\"The prices that prove `plan` optimal, or None if complementary slackness shows it is not.\"\"\"\n    def activity(coeffs):\n        return sum(c * plan[a] for a, c in coeffs.items())\n\n    binding = [name for name, (coeffs, _, rhs) in rows.items() if abs(activity(coeffs) - rhs) <= tol]\n    used = [a for a in value if plan[a] > tol]\n    matrix = np.array([[rows[name][0].get(a, 0) for name in binding] for a in used], dtype=float)\n    solved = np.linalg.solve(matrix, np.array([value[a] for a in used], dtype=float))\n    prices = {name: 0.0 for name in rows}\n    prices.update(zip(binding, map(float, solved)))\n    for name, (_, sense, _) in rows.items():\n        if (sense == \"<=\" and prices[name] < -tol) or (sense == \">=\" and prices[name] > tol):\n            return None\n    for a in value:\n        reduced = value[a] - sum(coeffs.get(a, 0) * prices[name] for name, (coeffs, _, _) in rows.items())\n        if reduced > tol:\n            return None\n    return prices\n\n\nif __name__ == \"__main__\":\n    value = {\"posters\": 4, \"flyers\": 3}\n    rows = {\"press\": ({\"posters\": 1, \"flyers\": 1}, \"<=\", 10), \"paper\": ({\"posters\": 1}, \"<=\", 6)}\n    print(certify(value, rows, {\"posters\": 6, \"flyers\": 4}))\n    print(certify(value, rows, {\"posters\": 0, \"flyers\": 10}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom certify import certify\n\n# A joinery's week: tables, chairs and shelves, profit per batch.\nvalue = {\"tables\": 5, \"chairs\": 3, \"shelves\": 2}\nrows = {\n    \"saw\": ({\"tables\": 2, \"chairs\": 1, \"shelves\": 1}, \"<=\", 14),\n    \"glue\": ({\"tables\": 1, \"chairs\": 1}, \"<=\", 8),\n}\nprint(\"plan tables 6, chairs 2, shelves 0:\", certify(value, rows, {\"tables\": 6, \"chairs\": 2, \"shelves\": 0}))\nprint(\"plan tables 7, chairs 0, shelves 0:\", certify(value, rows, {\"tables\": 7, \"chairs\": 0, \"shelves\": 0}))\n"
         }
       ]
     },
@@ -80,6 +89,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport numpy as np\n\n\ndef certify(value: dict[str, float], rows: dict[str, tuple[dict[str, float], str, float]],\n            plan: dict[str, float], tol: float = 1e-6) -> dict[str, float] | None:\n    \"\"\"The prices that prove `plan` optimal, or None if complementary slackness shows it is not.\"\"\"\n    # TODO: price 0 on rows with slack; solve \"reduced cost = 0\" for the used products with\n    # np.linalg.solve; then check every price's sign and every reduced cost.\n    return None\n\n\nif __name__ == \"__main__\":\n    value = {\"posters\": 4, \"flyers\": 3}\n    rows = {\"press\": ({\"posters\": 1, \"flyers\": 1}, \"<=\", 10), \"paper\": ({\"posters\": 1}, \"<=\", 6)}\n    print(certify(value, rows, {\"posters\": 6, \"flyers\": 4}))\n    print(certify(value, rows, {\"posters\": 0, \"flyers\": 10}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom certify import certify\n\n# A joinery's week: tables, chairs and shelves, profit per batch.\nvalue = {\"tables\": 5, \"chairs\": 3, \"shelves\": 2}\nrows = {\n    \"saw\": ({\"tables\": 2, \"chairs\": 1, \"shelves\": 1}, \"<=\", 14),\n    \"glue\": ({\"tables\": 1, \"chairs\": 1}, \"<=\", 8),\n}\nprint(\"plan tables 6, chairs 2, shelves 0:\", certify(value, rows, {\"tables\": 6, \"chairs\": 2, \"shelves\": 0}))\nprint(\"plan tables 7, chairs 0, shelves 0:\", certify(value, rows, {\"tables\": 7, \"chairs\": 0, \"shelves\": 0}))\n"
     }
   ],
   "video": null,
@@ -87,8 +105,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 6,
-    "code": 2,
+    "paras": 7,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -98,14 +116,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "85705611d39b7822b3bdf7e731f25615b88a7c64fea45ea06168383ed6ed0d23",
+  "content_sha256": "cd13d9c5d3e7c4c6f17d004ce9424b8f87d1b32d6a588da19e89b0cecc46295e",
   "starting_code": "from __future__ import annotations\n\nimport numpy as np\n\n\ndef certify(value: dict[str, float], rows: dict[str, tuple[dict[str, float], str, float]],\n            plan: dict[str, float], tol: float = 1e-6) -> dict[str, float] | None:\n    \"\"\"The prices that prove `plan` optimal, or None if complementary slackness shows it is not.\"\"\"\n    # TODO: price 0 on rows with slack; solve \"reduced cost = 0\" for the used products with\n    # np.linalg.solve; then check every price's sign and every reduced cost.\n    return None\n\n\nif __name__ == \"__main__\":\n    value = {\"posters\": 4, \"flyers\": 3}\n    rows = {\"press\": ({\"posters\": 1, \"flyers\": 1}, \"<=\", 10), \"paper\": ({\"posters\": 1}, \"<=\", 6)}\n    print(certify(value, rows, {\"posters\": 6, \"flyers\": 4}))\n    print(certify(value, rows, {\"posters\": 0, \"flyers\": 10}))\n",
   "exercise": {
     "main_path": "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-02/practice-2/certify.py",
     "test_path": "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-02/practice-2/test_certify.py",
     "run_command": [
       "python3",
-      "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-02/practice-2/certify.py"
+      "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -146,6 +164,10 @@
     },
     "concepts": [
       "prices derived from a plan by complementary slackness prove it optimal when they are dual feasible"
-    ]
+    ],
+    "files": [
+      "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-02/practice-2/try_it.py"
   }
 }

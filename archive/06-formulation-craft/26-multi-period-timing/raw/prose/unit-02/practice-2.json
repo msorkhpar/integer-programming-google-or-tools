@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Keep the workload steady",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost_profile: tuple[int, ...]     # spend in each year of work, start year first\n    starts: tuple[int, ...]           # the years it may start in\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project]) -> dict:\n    return {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n\n\ndef yearly_spend(projects: list[Project], x: dict, years: list[int]) -> dict:\n    \"\"\"{year: what the plan spends that year}, as linear expressions in the start variables.\"\"\"\n    spend = {y: mathopt.LinearExpression() for y in years}\n    for p in projects:\n        for t in p.starts:\n            for k, c in enumerate(p.cost_profile):\n                if t + k in spend:\n                    spend[t + k] += c * x[p.pid, t]\n    return spend\n\n\ndef add_steady_spend(model: mathopt.Model, spend: dict, years: list[int], max_step: int) -> None:\n    \"\"\"From each year of the plan to the next, total spend rises or falls by at most `max_step`.\"\"\"\n    for before, after in zip(years, years[1:]):\n        model.add_linear_constraint(spend[after] - spend[before] <= max_step, name=f\"rise_{after}\")\n        model.add_linear_constraint(spend[before] - spend[after] <= max_step, name=f\"fall_{after}\")\n\n\ndef allowed(projects: list[Project], years: list[int], max_step: int, schedule: dict[str, int]) -> bool:\n    \"\"\"Fix the schedule {pid: start year} (every other start variable at 0) and ask whether it is allowed.\"\"\"\n    model = mathopt.Model(name=\"steady\")\n    x = start_variables(model, projects)\n    for (pid, t), var in x.items():\n        value = 1.0 if schedule.get(pid) == t else 0.0\n        var.lower_bound = value\n        var.upper_bound = value\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_steady_spend(model, yearly_spend(projects, x, years), years, max_step)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nif __name__ == \"__main__\":\n    mains = [Project(\"M1\", (100, 100), (2027, 2028))]\n    print(allowed(mains, [2027, 2028, 2029], 150, {\"M1\": 2027}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom steady import Project, allowed\n\n# Lining projects: id, spend per year of work, allowed start years.\nyears = [2031, 2032, 2033]\nworks = [\n    Project(\"L1\", (70, 70), (2031, 2032)),\n    Project(\"L2\", (150,), (2031, 2032, 2033)),\n    Project(\"L3\", (40,), (2031, 2032, 2033)),\n]\n\nprint(\"L1 2031, L3 2033 at step 80:\", allowed(works, years, 80, {\"L1\": 2031, \"L3\": 2033}))\nprint(\"L2 2032 at step 80:\", allowed(works, years, 80, {\"L2\": 2032}))\nprint(\"L2 2032 at step 150:\", allowed(works, years, 150, {\"L2\": 2032}))\nprint(\"L1 2032, L3 2031 at step 30:\", allowed(works, years, 30, {\"L1\": 2032, \"L3\": 2031}))\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost_profile: tuple[int, ...]     # spend in each year of work, start year first\n    starts: tuple[int, ...]           # the years it may start in\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project]) -> dict:\n    return {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n\n\ndef yearly_spend(projects: list[Project], x: dict, years: list[int]) -> dict:\n    \"\"\"{year: what the plan spends that year}, as linear expressions in the start variables.\"\"\"\n    spend = {y: mathopt.LinearExpression() for y in years}\n    for p in projects:\n        for t in p.starts:\n            for k, c in enumerate(p.cost_profile):\n                if t + k in spend:\n                    spend[t + k] += c * x[p.pid, t]\n    return spend\n\n\ndef add_steady_spend(model: mathopt.Model, spend: dict, years: list[int], max_step: int) -> None:\n    \"\"\"From each year of the plan to the next, total spend rises or falls by at most `max_step`.\"\"\"\n    # TODO: your rows, written with the expressions in `spend`.\n    return None\n\n\ndef allowed(projects: list[Project], years: list[int], max_step: int, schedule: dict[str, int]) -> bool:\n    \"\"\"Fix the schedule {pid: start year} (every other start variable at 0) and ask whether it is allowed.\"\"\"\n    model = mathopt.Model(name=\"steady\")\n    x = start_variables(model, projects)\n    for (pid, t), var in x.items():\n        value = 1.0 if schedule.get(pid) == t else 0.0\n        var.lower_bound = value\n        var.upper_bound = value\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_steady_spend(model, yearly_spend(projects, x, years), years, max_step)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nif __name__ == \"__main__\":\n    mains = [Project(\"M1\", (100, 100), (2027, 2028))]\n    print(allowed(mains, [2027, 2028, 2029], 150, {\"M1\": 2027}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom steady import Project, allowed\n\n# Lining projects: id, spend per year of work, allowed start years.\nyears = [2031, 2032, 2033]\nworks = [\n    Project(\"L1\", (70, 70), (2031, 2032)),\n    Project(\"L2\", (150,), (2031, 2032, 2033)),\n    Project(\"L3\", (40,), (2031, 2032, 2033)),\n]\n\nprint(\"L1 2031, L3 2033 at step 80:\", allowed(works, years, 80, {\"L1\": 2031, \"L3\": 2033}))\nprint(\"L2 2032 at step 80:\", allowed(works, years, 80, {\"L2\": 2032}))\nprint(\"L2 2032 at step 150:\", allowed(works, years, 150, {\"L2\": 2032}))\nprint(\"L1 2032, L3 2031 at step 30:\", allowed(works, years, 30, {\"L1\": 2032, \"L3\": 2031}))\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "a019879245521498f828eb9dfb088ffcc4e066e9dec9453b839afbb69b7aa8b8",
+  "content_sha256": "f456e7e4c39717d4850d8280193cf7ac9b775ebd24ec8afcd70c0672d791f2f1",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost_profile: tuple[int, ...]     # spend in each year of work, start year first\n    starts: tuple[int, ...]           # the years it may start in\n\n\ndef start_variables(model: mathopt.Model, projects: list[Project]) -> dict:\n    return {(p.pid, t): model.add_binary_variable(name=f\"x_{p.pid}_{t}\") for p in projects for t in p.starts}\n\n\ndef yearly_spend(projects: list[Project], x: dict, years: list[int]) -> dict:\n    \"\"\"{year: what the plan spends that year}, as linear expressions in the start variables.\"\"\"\n    spend = {y: mathopt.LinearExpression() for y in years}\n    for p in projects:\n        for t in p.starts:\n            for k, c in enumerate(p.cost_profile):\n                if t + k in spend:\n                    spend[t + k] += c * x[p.pid, t]\n    return spend\n\n\ndef add_steady_spend(model: mathopt.Model, spend: dict, years: list[int], max_step: int) -> None:\n    \"\"\"From each year of the plan to the next, total spend rises or falls by at most `max_step`.\"\"\"\n    # TODO: your rows, written with the expressions in `spend`.\n    return None\n\n\ndef allowed(projects: list[Project], years: list[int], max_step: int, schedule: dict[str, int]) -> bool:\n    \"\"\"Fix the schedule {pid: start year} (every other start variable at 0) and ask whether it is allowed.\"\"\"\n    model = mathopt.Model(name=\"steady\")\n    x = start_variables(model, projects)\n    for (pid, t), var in x.items():\n        value = 1.0 if schedule.get(pid) == t else 0.0\n        var.lower_bound = value\n        var.upper_bound = value\n    for p in projects:\n        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) <= 1, name=f\"once_{p.pid}\")\n    add_steady_spend(model, yearly_spend(projects, x, years), years, max_step)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nif __name__ == \"__main__\":\n    mains = [Project(\"M1\", (100, 100), (2027, 2028))]\n    print(allowed(mains, [2027, 2028, 2029], 150, {\"M1\": 2027}))\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-02/practice-2/steady.py",
     "test_path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-02/practice-2/test_steady.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-02/practice-2/steady.py"
+      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -144,6 +162,10 @@
     },
     "concepts": [
       "a rule about how much the plan spends is a row written on the shared yearly spend expressions"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-02/practice-2/try_it.py"
   }
 }

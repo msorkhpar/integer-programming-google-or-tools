@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 3,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Shrink a clash to a minimal one",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Rule:\n    name: str\n    terms: dict[str, int]       # variable name -> coefficient\n    sense: str                  # \"<=\" or \">=\"\n    rhs: int\n\n\ndef add_rule(model: cp_model.CpModel, var: dict[str, cp_model.IntVar], rule: Rule):\n    expr = sum(coef * var[name] for name, coef in rule.terms.items())\n    return model.add(expr <= rule.rhs) if rule.sense == \"<=\" else model.add(expr >= rule.rhs)\n\n\ndef clashing_rules(variables: dict[str, tuple[int, int]], rules: list[Rule]) -> list[str]:\n    \"\"\"Given: the rules CP-SAT names as sufficient for infeasibility; [] if they can all hold.\"\"\"\n    model = cp_model.CpModel()\n    var = {name: model.new_int_var(low, high, name) for name, (low, high) in variables.items()}\n    flag = {}\n    for rule in rules:\n        flag[rule.name] = model.new_bool_var(f\"flag_{rule.name}\")\n        add_rule(model, var, rule).only_enforce_if(flag[rule.name])\n    model.add_assumptions(list(flag.values()))\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    if solver.solve(model) != cp_model.INFEASIBLE:\n        return []\n    by_index = {f.index: name for name, f in flag.items()}\n    return sorted(by_index[i] for i in solver.sufficient_assumptions_for_infeasibility())\n\n\ndef feasible(variables: dict[str, tuple[int, int]], rules: list[Rule]) -> bool:\n    \"\"\"Given: can these rules all hold at once?\"\"\"\n    model = cp_model.CpModel()\n    var = {name: model.new_int_var(low, high, name) for name, (low, high) in variables.items()}\n    for rule in rules:\n        add_rule(model, var, rule)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    return solver.solve(model) in (cp_model.OPTIMAL, cp_model.FEASIBLE)\n\n\ndef minimal_clash(variables: dict[str, tuple[int, int]], rules: list[Rule]) -> list[str]:\n    \"\"\"A clash from which no rule can be dropped without the rest becoming feasible; [] if none.\"\"\"\n    clash = clashing_rules(variables, rules)\n    by_name = {r.name: r for r in rules}\n    kept = list(clash)\n    for name in clash:\n        trial = [n for n in kept if n != name]\n        if not feasible(variables, [by_name[n] for n in trial]):\n            kept.remove(name)\n    return kept\n\n\nif __name__ == \"__main__\":\n    crews = {\"north\": (2, 6)}\n    print(minimal_clash(crews, [Rule(\"a\", {\"north\": 1}, \"<=\", 3), Rule(\"b\", {\"north\": 1}, \">=\", 5)]))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom depot_rules import Rule, minimal_clash\n\n# Crew counts (low, high) for three depots.\ncrews = {\"quay\": (0, 5), \"mill\": (0, 5), \"fort\": (0, 5)}\nall_cap = Rule(\"all_cap\", {\"quay\": 1, \"mill\": 1, \"fort\": 1}, \"<=\", 12)\nmill_max = Rule(\"mill_max\", {\"mill\": 1}, \"<=\", 1)\nmill_min = Rule(\"mill_min\", {\"mill\": 1}, \">=\", 3)\npair = Rule(\"quay_fort_min\", {\"quay\": 1, \"fort\": 1}, \">=\", 6)\nprint(\"all_cap, quay_fort_min, mill_max, mill_min:\", minimal_clash(crews, [all_cap, pair, mill_max, mill_min]))\nprint(\"all_cap, quay_fort_min, mill_max:\", minimal_clash(crews, [all_cap, pair, mill_max]))\nprint(\"all_cap at 5 with quay_fort_min, mill_min:\",\n      minimal_clash(crews, [Rule(\"all_cap\", all_cap.terms, \"<=\", 5), pair, mill_min]))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Rule:\n    name: str\n    terms: dict[str, int]       # variable name -> coefficient\n    sense: str                  # \"<=\" or \">=\"\n    rhs: int\n\n\ndef add_rule(model: cp_model.CpModel, var: dict[str, cp_model.IntVar], rule: Rule):\n    expr = sum(coef * var[name] for name, coef in rule.terms.items())\n    return model.add(expr <= rule.rhs) if rule.sense == \"<=\" else model.add(expr >= rule.rhs)\n\n\ndef clashing_rules(variables: dict[str, tuple[int, int]], rules: list[Rule]) -> list[str]:\n    \"\"\"Given: the rules CP-SAT names as sufficient for infeasibility; [] if they can all hold.\"\"\"\n    model = cp_model.CpModel()\n    var = {name: model.new_int_var(low, high, name) for name, (low, high) in variables.items()}\n    flag = {}\n    for rule in rules:\n        flag[rule.name] = model.new_bool_var(f\"flag_{rule.name}\")\n        add_rule(model, var, rule).only_enforce_if(flag[rule.name])\n    model.add_assumptions(list(flag.values()))\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    if solver.solve(model) != cp_model.INFEASIBLE:\n        return []\n    by_index = {f.index: name for name, f in flag.items()}\n    return sorted(by_index[i] for i in solver.sufficient_assumptions_for_infeasibility())\n\n\ndef feasible(variables: dict[str, tuple[int, int]], rules: list[Rule]) -> bool:\n    \"\"\"Given: can these rules all hold at once?\"\"\"\n    model = cp_model.CpModel()\n    var = {name: model.new_int_var(low, high, name) for name, (low, high) in variables.items()}\n    for rule in rules:\n        add_rule(model, var, rule)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    return solver.solve(model) in (cp_model.OPTIMAL, cp_model.FEASIBLE)\n\n\ndef minimal_clash(variables: dict[str, tuple[int, int]], rules: list[Rule]) -> list[str]:\n    \"\"\"A clash from which no rule can be dropped without the rest becoming feasible; [] if none.\"\"\"\n    # TODO: start from clashing_rules, then drop each rule the rest can do without.\n    return []\n\n\nif __name__ == \"__main__\":\n    crews = {\"north\": (2, 6)}\n    print(minimal_clash(crews, [Rule(\"a\", {\"north\": 1}, \"<=\", 3), Rule(\"b\", {\"north\": 1}, \">=\", 5)]))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom depot_rules import Rule, minimal_clash\n\n# Crew counts (low, high) for three depots.\ncrews = {\"quay\": (0, 5), \"mill\": (0, 5), \"fort\": (0, 5)}\nall_cap = Rule(\"all_cap\", {\"quay\": 1, \"mill\": 1, \"fort\": 1}, \"<=\", 12)\nmill_max = Rule(\"mill_max\", {\"mill\": 1}, \"<=\", 1)\nmill_min = Rule(\"mill_min\", {\"mill\": 1}, \">=\", 3)\npair = Rule(\"quay_fort_min\", {\"quay\": 1, \"fort\": 1}, \">=\", 6)\nprint(\"all_cap, quay_fort_min, mill_max, mill_min:\", minimal_clash(crews, [all_cap, pair, mill_max, mill_min]))\nprint(\"all_cap, quay_fort_min, mill_max:\", minimal_clash(crews, [all_cap, pair, mill_max]))\nprint(\"all_cap at 5 with quay_fort_min, mill_min:\",\n      minimal_clash(crews, [Rule(\"all_cap\", all_cap.terms, \"<=\", 5), pair, mill_min]))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "15aa93bdbd992c7b44734eab35f09482387079357c8d0f91fef7f9e75bfe7f61",
+  "content_sha256": "6050690c3da7e91f21f7f7ecc7f51830122504a7232eabcf7d9f3a6b6452d1ec",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Rule:\n    name: str\n    terms: dict[str, int]       # variable name -> coefficient\n    sense: str                  # \"<=\" or \">=\"\n    rhs: int\n\n\ndef add_rule(model: cp_model.CpModel, var: dict[str, cp_model.IntVar], rule: Rule):\n    expr = sum(coef * var[name] for name, coef in rule.terms.items())\n    return model.add(expr <= rule.rhs) if rule.sense == \"<=\" else model.add(expr >= rule.rhs)\n\n\ndef clashing_rules(variables: dict[str, tuple[int, int]], rules: list[Rule]) -> list[str]:\n    \"\"\"Given: the rules CP-SAT names as sufficient for infeasibility; [] if they can all hold.\"\"\"\n    model = cp_model.CpModel()\n    var = {name: model.new_int_var(low, high, name) for name, (low, high) in variables.items()}\n    flag = {}\n    for rule in rules:\n        flag[rule.name] = model.new_bool_var(f\"flag_{rule.name}\")\n        add_rule(model, var, rule).only_enforce_if(flag[rule.name])\n    model.add_assumptions(list(flag.values()))\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    if solver.solve(model) != cp_model.INFEASIBLE:\n        return []\n    by_index = {f.index: name for name, f in flag.items()}\n    return sorted(by_index[i] for i in solver.sufficient_assumptions_for_infeasibility())\n\n\ndef feasible(variables: dict[str, tuple[int, int]], rules: list[Rule]) -> bool:\n    \"\"\"Given: can these rules all hold at once?\"\"\"\n    model = cp_model.CpModel()\n    var = {name: model.new_int_var(low, high, name) for name, (low, high) in variables.items()}\n    for rule in rules:\n        add_rule(model, var, rule)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    return solver.solve(model) in (cp_model.OPTIMAL, cp_model.FEASIBLE)\n\n\ndef minimal_clash(variables: dict[str, tuple[int, int]], rules: list[Rule]) -> list[str]:\n    \"\"\"A clash from which no rule can be dropped without the rest becoming feasible; [] if none.\"\"\"\n    # TODO: start from clashing_rules, then drop each rule the rest can do without.\n    return []\n\n\nif __name__ == \"__main__\":\n    crews = {\"north\": (2, 6)}\n    print(minimal_clash(crews, [Rule(\"a\", {\"north\": 1}, \"<=\", 3), Rule(\"b\", {\"north\": 1}, \">=\", 5)]))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-3/depot_rules.py",
     "test_path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-3/test_depot_rules.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-3/depot_rules.py"
+      "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-3/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -130,6 +148,10 @@
     },
     "concepts": [
       "a deletion filter drops each rule whose removal leaves the rest infeasible"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-3/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-3/try_it.py"
   }
 }

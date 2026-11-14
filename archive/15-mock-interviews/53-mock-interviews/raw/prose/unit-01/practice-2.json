@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Pipe renewals under spread budgets",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Renewal:\n    rid: str\n    starts: tuple[int, ...]            # the years it may start in\n    cost: tuple[int, ...]              # $k spent in its first, second, ... year of work\n    value: int = 10\n    parent: str | None = None          # may start only `lag` years after this renewal starts\n    lag: int = 0                       # start to start, in years\n    group: str | None = None           # alternatives for one main share a group\n\n\ndef start_variables(model: mathopt.Model, renewals: list[Renewal]) -> dict:\n    \"\"\"x[(rid, year)] = 1 when the renewal starts in that year; only years in its window exist.\"\"\"\n    return {(r.rid, t): model.add_binary_variable(name=f\"x_{r.rid}_{t}\") for r in renewals for t in r.starts}\n\n\ndef add_once_rows(model: mathopt.Model, x: dict, renewals: list[Renewal]) -> None:\n    \"\"\"Given: each renewal starts at most once.\"\"\"\n    for r in renewals:\n        model.add_linear_constraint(sum(x[r.rid, t] for t in r.starts) <= 1, name=f\"once_{r.rid}\")\n\n\ndef add_rules(model: mathopt.Model, x: dict, renewals: list[Renewal], budgets: dict[int, int]) -> None:\n    \"\"\"The budget of every year, every predecessor with its lag, and every alternative group.\"\"\"\n    for y, cap in budgets.items():\n        terms = [r.cost[y - t] * x[r.rid, t] for r in renewals for t in r.starts if 0 <= y - t < len(r.cost)]\n        if terms:\n            model.add_linear_constraint(sum(terms) <= cap, name=f\"budget_{y}\")\n\n    by_id = {r.rid: r for r in renewals}\n    for c in renewals:\n        if c.parent is None:\n            continue\n        p = by_id[c.parent]\n        for t in c.starts:\n            child_by = sum(x[c.rid, u] for u in c.starts if u <= t)\n            parent_by = [x[p.rid, s] for s in p.starts if s <= t - c.lag]\n            model.add_linear_constraint(child_by - sum(parent_by) <= 0, name=f\"after_{c.rid}_{t}\")\n\n    groups: dict[str, list[Renewal]] = {}\n    for r in renewals:\n        if r.group is not None:\n            groups.setdefault(r.group, []).append(r)\n    for g, members in groups.items():\n        model.add_linear_constraint(sum(x[r.rid, t] for r in members for t in r.starts) <= 1, name=f\"alt_{g}\")\n\n\ndef build(renewals: list[Renewal], budgets: dict[int, int]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"pipe-renewals\")\n    x = start_variables(model, renewals)\n    add_once_rows(model, x, renewals)\n    add_rules(model, x, renewals, budgets)\n    model.maximize(sum(r.value * x[r.rid, t] for r in renewals for t in r.starts))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    mains = [Renewal(\"R1\", (2027, 2028), (40, 40)), Renewal(\"R2\", (2028,), (30,), parent=\"R1\", lag=1)]\n    model, x = build(mains, {2027: 50, 2028: 50})\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nimport datetime\n\nfrom ortools.math_opt.python import mathopt\n\nfrom renewals import Renewal, build\n\n# A town's sewer relinings, $k.\nrelinings = [\n    Renewal(\"S1\", (2031, 2032), (60, 20), value=30),\n    Renewal(\"S2\", (2031, 2032), (45,), value=18),\n    Renewal(\"S3\", (2032, 2033), (25,), value=12, parent=\"S1\", lag=1),\n    Renewal(\"S4\", (2032, 2033), (35,), value=15, group=\"Main-9\"),\n    Renewal(\"S5\", (2032, 2033), (30,), value=14, group=\"Main-9\"),\n]\nbudgets = {2031: 80, 2032: 80, 2033: 80}\n\n\ndef allowed(plan):\n    model, x = build(relinings, budgets)\n    for (rid, t), var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if plan.get(rid) == t else 0.0\n    return mathopt.solve(model, mathopt.SolverType.HIGHS).termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"S1 2031, S3 2032, S4 2033:\", allowed({\"S1\": 2031, \"S3\": 2032, \"S4\": 2033}))\nprint(\"S1 2031, S2 2031:\", allowed({\"S1\": 2031, \"S2\": 2031}))\nprint(\"S1 2032, S3 2032:\", allowed({\"S1\": 2032, \"S3\": 2032}))\nprint(\"S4 2032, S5 2033:\", allowed({\"S4\": 2032, \"S5\": 2033}))\nmodel, x = build(relinings, budgets)\nresult = mathopt.solve(model, mathopt.SolverType.HIGHS, params=mathopt.SolveParameters(time_limit=datetime.timedelta(seconds=10)))\nprint(\"best value:\", round(result.objective_value()), \"starts:\", sorted(k for k, v in x.items() if result.variable_values(v) > 0.5))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Renewal:\n    rid: str\n    starts: tuple[int, ...]            # the years it may start in\n    cost: tuple[int, ...]              # $k spent in its first, second, ... year of work\n    value: int = 10\n    parent: str | None = None          # may start only `lag` years after this renewal starts\n    lag: int = 0                       # start to start, in years\n    group: str | None = None           # alternatives for one main share a group\n\n\ndef start_variables(model: mathopt.Model, renewals: list[Renewal]) -> dict:\n    \"\"\"x[(rid, year)] = 1 when the renewal starts in that year; only years in its window exist.\"\"\"\n    return {(r.rid, t): model.add_binary_variable(name=f\"x_{r.rid}_{t}\") for r in renewals for t in r.starts}\n\n\ndef add_once_rows(model: mathopt.Model, x: dict, renewals: list[Renewal]) -> None:\n    \"\"\"Given: each renewal starts at most once.\"\"\"\n    for r in renewals:\n        model.add_linear_constraint(sum(x[r.rid, t] for t in r.starts) <= 1, name=f\"once_{r.rid}\")\n\n\ndef add_rules(model: mathopt.Model, x: dict, renewals: list[Renewal], budgets: dict[int, int]) -> None:\n    \"\"\"The budget of every year, every predecessor with its lag, and every alternative group.\"\"\"\n    # TODO: write the formulation's rows here.\n    return None\n\n\ndef build(renewals: list[Renewal], budgets: dict[int, int]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"pipe-renewals\")\n    x = start_variables(model, renewals)\n    add_once_rows(model, x, renewals)\n    add_rules(model, x, renewals, budgets)\n    model.maximize(sum(r.value * x[r.rid, t] for r in renewals for t in r.starts))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    mains = [Renewal(\"R1\", (2027, 2028), (40, 40)), Renewal(\"R2\", (2028,), (30,), parent=\"R1\", lag=1)]\n    model, x = build(mains, {2027: 50, 2028: 50})\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nimport datetime\n\nfrom ortools.math_opt.python import mathopt\n\nfrom renewals import Renewal, build\n\n# A town's sewer relinings, $k.\nrelinings = [\n    Renewal(\"S1\", (2031, 2032), (60, 20), value=30),\n    Renewal(\"S2\", (2031, 2032), (45,), value=18),\n    Renewal(\"S3\", (2032, 2033), (25,), value=12, parent=\"S1\", lag=1),\n    Renewal(\"S4\", (2032, 2033), (35,), value=15, group=\"Main-9\"),\n    Renewal(\"S5\", (2032, 2033), (30,), value=14, group=\"Main-9\"),\n]\nbudgets = {2031: 80, 2032: 80, 2033: 80}\n\n\ndef allowed(plan):\n    model, x = build(relinings, budgets)\n    for (rid, t), var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if plan.get(rid) == t else 0.0\n    return mathopt.solve(model, mathopt.SolverType.HIGHS).termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"S1 2031, S3 2032, S4 2033:\", allowed({\"S1\": 2031, \"S3\": 2032, \"S4\": 2033}))\nprint(\"S1 2031, S2 2031:\", allowed({\"S1\": 2031, \"S2\": 2031}))\nprint(\"S1 2032, S3 2032:\", allowed({\"S1\": 2032, \"S3\": 2032}))\nprint(\"S4 2032, S5 2033:\", allowed({\"S4\": 2032, \"S5\": 2033}))\nmodel, x = build(relinings, budgets)\nresult = mathopt.solve(model, mathopt.SolverType.HIGHS, params=mathopt.SolveParameters(time_limit=datetime.timedelta(seconds=10)))\nprint(\"best value:\", round(result.objective_value()), \"starts:\", sorted(k for k, v in x.items() if result.variable_values(v) > 0.5))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "1da3e65fb54ec003dc8bb7ec5f2d34bee6c4c80b5be63c3b61476dc7b4a4cb82",
+  "content_sha256": "bf86bbce26227567fd31a8dc7816230aa003f1a4e3133f7bffeb0d8f7613dee1",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Renewal:\n    rid: str\n    starts: tuple[int, ...]            # the years it may start in\n    cost: tuple[int, ...]              # $k spent in its first, second, ... year of work\n    value: int = 10\n    parent: str | None = None          # may start only `lag` years after this renewal starts\n    lag: int = 0                       # start to start, in years\n    group: str | None = None           # alternatives for one main share a group\n\n\ndef start_variables(model: mathopt.Model, renewals: list[Renewal]) -> dict:\n    \"\"\"x[(rid, year)] = 1 when the renewal starts in that year; only years in its window exist.\"\"\"\n    return {(r.rid, t): model.add_binary_variable(name=f\"x_{r.rid}_{t}\") for r in renewals for t in r.starts}\n\n\ndef add_once_rows(model: mathopt.Model, x: dict, renewals: list[Renewal]) -> None:\n    \"\"\"Given: each renewal starts at most once.\"\"\"\n    for r in renewals:\n        model.add_linear_constraint(sum(x[r.rid, t] for t in r.starts) <= 1, name=f\"once_{r.rid}\")\n\n\ndef add_rules(model: mathopt.Model, x: dict, renewals: list[Renewal], budgets: dict[int, int]) -> None:\n    \"\"\"The budget of every year, every predecessor with its lag, and every alternative group.\"\"\"\n    # TODO: write the formulation's rows here.\n    return None\n\n\ndef build(renewals: list[Renewal], budgets: dict[int, int]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"pipe-renewals\")\n    x = start_variables(model, renewals)\n    add_once_rows(model, x, renewals)\n    add_rules(model, x, renewals, budgets)\n    model.maximize(sum(r.value * x[r.rid, t] for r in renewals for t in r.starts))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    mains = [Renewal(\"R1\", (2027, 2028), (40, 40)), Renewal(\"R2\", (2028,), (30,), parent=\"R1\", lag=1)]\n    model, x = build(mains, {2027: 50, 2028: 50})\n    print(len(list(model.linear_constraints())), \"rows\")\n",
   "exercise": {
     "main_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-01/practice-2/renewals.py",
     "test_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-01/practice-2/test_renewals.py",
     "run_command": [
       "python3",
-      "practice/15-mock-interviews/53-mock-interviews/prose/unit-01/practice-2/renewals.py"
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -151,6 +169,10 @@
     "concepts": [
       "add spread budget rows, lagged predecessor rows and one at-most-one row per alternative group",
       "write the formulation first, then code it so HiGHS accepts exactly the plans that keep every rule"
-    ]
+    ],
+    "files": [
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/15-mock-interviews/53-mock-interviews/prose/unit-01/practice-2/try_it.py"
   }
 }

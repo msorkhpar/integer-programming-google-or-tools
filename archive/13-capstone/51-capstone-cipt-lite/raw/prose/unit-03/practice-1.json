@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "NPV by start year from a benefit stream",
   "blocks": [
     {
@@ -60,6 +60,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport math\n\n\ndef discount(amount: float, year: int, first_year: int, rate: float) -> float:\n    \"\"\"What `amount` paid in calendar year `year` is worth on the first plan year.\"\"\"\n    return amount / (1 + rate) ** (year - first_year)\n\n\ndef npv(project: dict, forecast: dict, start: int, years: list[int], rate: float) -> float:\n    \"\"\"NPV on the first plan year (`years[0]`) of the project started in `start`.\"\"\"\n    first_year = years[0]\n    value = 0.0\n    for k, cost in enumerate(project[\"cost\"]):\n        value -= discount(cost, start + k, first_year, rate)\n    in_service = start + len(project[\"cost\"])\n    shrink = (1 - forecast[\"decay\"]) ** (start - project[\"earliest\"])\n    for k, benefit in enumerate(forecast[\"benefits\"]):\n        value += discount(benefit * shrink, in_service + k, first_year, rate)\n    return value\n\n\ndef npv_table(snapshot: dict, forecast: dict) -> dict[tuple[str, int], int]:\n    \"\"\"{(project id, start year): NPV in whole $k} for every start in each project's window.\"\"\"\n    table = {}\n    for pid, project in snapshot[\"projects\"].items():\n        for t in range(project[\"earliest\"], project[\"latest\"] + 1):\n            value = npv(project, forecast[pid], t, snapshot[\"years\"], snapshot[\"rate\"])\n            table[pid, t] = math.floor(value + 0.5)\n    return table\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"years\": [2027, 2028, 2029], \"rate\": 0.05,\n                \"projects\": {\"J1\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2028}}}\n    print(npv_table(snapshot, {\"J1\": {\"benefits\": [60, 60], \"decay\": 0.1}}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom npv import npv_table\n\n# Two invented projects, money in $k.\nsnapshot = {\n    \"years\": [2031, 2032, 2033], \"rate\": 0.06,\n    \"projects\": {\n        \"M1\": {\"cost\": [120], \"earliest\": 2031, \"latest\": 2033},\n        \"M2\": {\"cost\": [60, 60], \"earliest\": 2031, \"latest\": 2032},\n    },\n}\nforecast = {\"M1\": {\"benefits\": [50, 50, 50], \"decay\": 0.0},\n            \"M2\": {\"benefits\": [45, 45, 45, 45], \"decay\": 0.08}}\n\ntable = npv_table(snapshot, forecast)\nprint(\"starts in the table:\", len(table))\nfor (pid, start), value in table.items():\n    print(f\"NPV of {pid} started {start}:\", value)\n"
         }
       ]
     },
@@ -72,6 +81,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport math\n\n\ndef discount(amount: float, year: int, first_year: int, rate: float) -> float:\n    \"\"\"What `amount` paid in calendar year `year` is worth on the first plan year.\"\"\"\n    return amount / (1 + rate) ** (year - first_year)\n\n\ndef npv(project: dict, forecast: dict, start: int, years: list[int], rate: float) -> float:\n    \"\"\"NPV on the first plan year (`years[0]`) of the project started in `start`.\"\"\"\n    # TODO: minus every cost, plus every benefit of the forecast, each discounted from its own year.\n    return 0.0\n\n\ndef npv_table(snapshot: dict, forecast: dict) -> dict[tuple[str, int], int]:\n    \"\"\"{(project id, start year): NPV in whole $k} for every start in each project's window.\"\"\"\n    # TODO: one entry per start year in each project's window.\n    return {}\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"years\": [2027, 2028, 2029], \"rate\": 0.05,\n                \"projects\": {\"J1\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2028}}}\n    print(npv_table(snapshot, {\"J1\": {\"benefits\": [60, 60], \"decay\": 0.1}}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom npv import npv_table\n\n# Two invented projects, money in $k.\nsnapshot = {\n    \"years\": [2031, 2032, 2033], \"rate\": 0.06,\n    \"projects\": {\n        \"M1\": {\"cost\": [120], \"earliest\": 2031, \"latest\": 2033},\n        \"M2\": {\"cost\": [60, 60], \"earliest\": 2031, \"latest\": 2032},\n    },\n}\nforecast = {\"M1\": {\"benefits\": [50, 50, 50], \"decay\": 0.0},\n            \"M2\": {\"benefits\": [45, 45, 45, 45], \"decay\": 0.08}}\n\ntable = npv_table(snapshot, forecast)\nprint(\"starts in the table:\", len(table))\nfor (pid, start), value in table.items():\n    print(f\"NPV of {pid} started {start}:\", value)\n"
     }
   ],
   "video": null,
@@ -79,8 +97,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -90,14 +108,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "91d78aad054f9367cf224b8399fcd5824ce067d3d3d1b0d6b2fa85efaf665732",
+  "content_sha256": "b169a91005d99ebe414bde5877a28a212aee1bd9557ac338473af77ef060e584",
   "starting_code": "from __future__ import annotations\n\nimport math\n\n\ndef discount(amount: float, year: int, first_year: int, rate: float) -> float:\n    \"\"\"What `amount` paid in calendar year `year` is worth on the first plan year.\"\"\"\n    return amount / (1 + rate) ** (year - first_year)\n\n\ndef npv(project: dict, forecast: dict, start: int, years: list[int], rate: float) -> float:\n    \"\"\"NPV on the first plan year (`years[0]`) of the project started in `start`.\"\"\"\n    # TODO: minus every cost, plus every benefit of the forecast, each discounted from its own year.\n    return 0.0\n\n\ndef npv_table(snapshot: dict, forecast: dict) -> dict[tuple[str, int], int]:\n    \"\"\"{(project id, start year): NPV in whole $k} for every start in each project's window.\"\"\"\n    # TODO: one entry per start year in each project's window.\n    return {}\n\n\nif __name__ == \"__main__\":\n    snapshot = {\"years\": [2027, 2028, 2029], \"rate\": 0.05,\n                \"projects\": {\"J1\": {\"cost\": [100], \"earliest\": 2027, \"latest\": 2028}}}\n    print(npv_table(snapshot, {\"J1\": {\"benefits\": [60, 60], \"decay\": 0.1}}))\n",
   "exercise": {
     "main_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-03/practice-1/npv.py",
     "test_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-03/practice-1/test_npv.py",
     "run_command": [
       "python3",
-      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-03/practice-1/npv.py"
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-03/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -153,6 +171,10 @@
     },
     "concepts": [
       "start-year NPV coefficients from a benefit stream, every start discounted to the plan's first year"
-    ]
+    ],
+    "files": [
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-03/practice-1/try_it.py"
+    ],
+    "try_file": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-03/practice-1/try_it.py"
   }
 }

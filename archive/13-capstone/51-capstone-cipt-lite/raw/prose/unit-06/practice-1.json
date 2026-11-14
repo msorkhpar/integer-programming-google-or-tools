@@ -9,7 +9,7 @@
   "unit": 6,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A content-addressed snapshot store in S3",
   "blocks": [
     {
@@ -77,6 +77,15 @@
           "type": "code",
           "lang": "python",
           "text": "\"\"\"Milestone 6: a content-addressed snapshot store in S3.\n\nEach snapshot is stored once, as `snapshots/<sha256>.json`, and checked again on every read. A\nsnapshot is a dict in the milestones' shape; its year keys are integers in Python and strings in\nJSON. The practice portfolio is invented for a fictional utility.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport hashlib\nimport json\n\nfrom botocore.exceptions import ClientError\n\n\nclass Corrupted(Exception):\n    \"\"\"A stored object no longer hashes to the digest in its name.\"\"\"\n\n\nclass NotStored(Exception):\n    \"\"\"No snapshot is stored under this digest.\"\"\"\n\n\ndef canonical(snapshot: dict) -> bytes:\n    \"\"\"The snapshot as bytes: sorted keys, no spaces, ASCII only. JSON writes the year keys as text.\"\"\"\n    return json.dumps(snapshot, sort_keys=True, separators=(\",\", \":\"), ensure_ascii=True).encode(\"ascii\")\n\n\ndef by_year(table: dict) -> dict:\n    return {int(year): amount for year, amount in table.items()}\n\n\ndef from_json(data: bytes) -> dict:\n    \"\"\"The snapshot back from its bytes, every year key an integer again.\"\"\"\n    snap = json.loads(data)\n    snap[\"budget\"] = by_year(snap[\"budget\"])\n    snap[\"region_budget\"] = {r: by_year(t) for r, t in snap[\"region_budget\"].items()}\n    snap[\"crews\"] = {p: by_year(t) for p, t in snap[\"crews\"].items()}\n    for job in snap[\"projects\"].values():\n        job[\"npv\"] = by_year(job[\"npv\"])\n    return snap\n\n\ndef key_of(digest: str) -> str:\n    return f\"snapshots/{digest}.json\"\n\n\ndef stored(s3, bucket: str, digest: str) -> bool:\n    try:\n        s3.head_object(Bucket=bucket, Key=key_of(digest))\n        return True\n    except ClientError as error:\n        if error.response[\"Error\"][\"Code\"] in (\"404\", \"NoSuchKey\", \"NotFound\"):\n            return False\n        raise\n\n\ndef put_snapshot(s3, bucket: str, snapshot: dict) -> str:\n    \"\"\"Store the snapshot under its digest, once; return the digest.\"\"\"\n    data = canonical(snapshot)\n    digest = hashlib.sha256(data).hexdigest()\n    if not stored(s3, bucket, digest):\n        s3.put_object(Bucket=bucket, Key=key_of(digest), Body=data, ContentType=\"application/json\")\n    return digest\n\n\ndef get_snapshot(s3, bucket: str, digest: str) -> dict:\n    \"\"\"The snapshot stored under `digest`, re-hashed before it is trusted.\"\"\"\n    if not stored(s3, bucket, digest):\n        raise NotStored(digest)\n    data = s3.get_object(Bucket=bucket, Key=key_of(digest))[\"Body\"].read()\n    if hashlib.sha256(data).hexdigest() != digest:\n        raise Corrupted(f\"{key_of(digest)} no longer hashes to its name\")\n    return from_json(data)\n\n\nif __name__ == \"__main__\":\n    print(canonical({\"years\": [2027], \"budget\": {2027: 100}}).decode(\"ascii\"))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nimport os\n\nfor library in (\"boto3\", \"botocore\", \"moto\", \"urllib3\", \"werkzeug\"):\n    logging.getLogger(library).setLevel(logging.WARNING)\nfor name in (\"AWS_ACCESS_KEY_ID\", \"AWS_SECRET_ACCESS_KEY\"):\n    os.environ[name] = \"testing\"\nos.environ[\"AWS_DEFAULT_REGION\"] = \"us-east-1\"\n\nimport boto3  # noqa: E402\nfrom moto import mock_aws  # noqa: E402\n\nfrom s3_store import Corrupted, NotStored, canonical, get_snapshot, put_snapshot  # noqa: E402\n\nsnapshot = {\n    \"years\": [2031], \"rate\": 0.04, \"budget\": {2031: 500},\n    \"region_budget\": {\"East\": {2031: 300}}, \"crews\": {\"lines\": {2031: 4}}, \"floor\": {\"East\": 50},\n    \"projects\": {\"K1\": {\"cost\": [120], \"earliest\": 2031, \"latest\": 2031, \"npv\": {2031: 66}}},\n}\n\nwith mock_aws():\n    s3 = boto3.client(\"s3\", region_name=\"us-east-1\")\n    s3.create_bucket(Bucket=\"demo-snapshots\")\n    digest = put_snapshot(s3, \"demo-snapshots\", snapshot)\n    print(\"digest:\", digest)\n    print(\"digest of a second put:\", put_snapshot(s3, \"demo-snapshots\", snapshot))\n    print(\"read back equal:\", get_snapshot(s3, \"demo-snapshots\", digest) == snapshot)\n    s3.put_object(Bucket=\"demo-snapshots\", Key=f\"snapshots/{digest}.json\", Body=b\"{}\")\n    for key in (digest, \"0\" * 64):\n        try:\n            get_snapshot(s3, \"demo-snapshots\", key)\n            print(f\"read {key[:8]}: no error\")\n        except (Corrupted, NotStored) as error:\n            print(f\"read {key[:8]}:\", type(error).__name__, error)\n"
         }
       ]
     },
@@ -89,6 +98,15 @@
       "type": "code",
       "lang": "python",
       "text": "\"\"\"Milestone 6: a content-addressed snapshot store in S3.\n\nEach snapshot is stored once, as `snapshots/<sha256>.json`, and checked again on every read. A\nsnapshot is a dict in the milestones' shape; its year keys are integers in Python and strings in\nJSON. The practice portfolio is invented for a fictional utility.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport hashlib\nimport json\n\nfrom botocore.exceptions import ClientError\n\n\nclass Corrupted(Exception):\n    \"\"\"A stored object no longer hashes to the digest in its name.\"\"\"\n\n\nclass NotStored(Exception):\n    \"\"\"No snapshot is stored under this digest.\"\"\"\n\n\ndef canonical(snapshot: dict) -> bytes:\n    \"\"\"The snapshot as bytes: sorted keys, no spaces, ASCII only. JSON writes the year keys as text.\"\"\"\n    # TODO\n    return b\"\"\n\n\ndef from_json(data: bytes) -> dict:\n    \"\"\"The snapshot back from its bytes, every year key an integer again.\"\"\"\n    # TODO\n    return {}\n\n\ndef put_snapshot(s3, bucket: str, snapshot: dict) -> str:\n    \"\"\"Store the snapshot under its digest, once; return the digest.\"\"\"\n    # TODO: head_object first; put_object only if nothing is stored under that key.\n    return \"\"\n\n\ndef get_snapshot(s3, bucket: str, digest: str) -> dict:\n    \"\"\"The snapshot stored under `digest`, re-hashed before it is trusted.\"\"\"\n    # TODO\n    return {}\n\n\nif __name__ == \"__main__\":\n    print(canonical({\"years\": [2027], \"budget\": {2027: 100}}).decode(\"ascii\"))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nimport os\n\nfor library in (\"boto3\", \"botocore\", \"moto\", \"urllib3\", \"werkzeug\"):\n    logging.getLogger(library).setLevel(logging.WARNING)\nfor name in (\"AWS_ACCESS_KEY_ID\", \"AWS_SECRET_ACCESS_KEY\"):\n    os.environ[name] = \"testing\"\nos.environ[\"AWS_DEFAULT_REGION\"] = \"us-east-1\"\n\nimport boto3  # noqa: E402\nfrom moto import mock_aws  # noqa: E402\n\nfrom s3_store import Corrupted, NotStored, canonical, get_snapshot, put_snapshot  # noqa: E402\n\nsnapshot = {\n    \"years\": [2031], \"rate\": 0.04, \"budget\": {2031: 500},\n    \"region_budget\": {\"East\": {2031: 300}}, \"crews\": {\"lines\": {2031: 4}}, \"floor\": {\"East\": 50},\n    \"projects\": {\"K1\": {\"cost\": [120], \"earliest\": 2031, \"latest\": 2031, \"npv\": {2031: 66}}},\n}\n\nwith mock_aws():\n    s3 = boto3.client(\"s3\", region_name=\"us-east-1\")\n    s3.create_bucket(Bucket=\"demo-snapshots\")\n    digest = put_snapshot(s3, \"demo-snapshots\", snapshot)\n    print(\"digest:\", digest)\n    print(\"digest of a second put:\", put_snapshot(s3, \"demo-snapshots\", snapshot))\n    print(\"read back equal:\", get_snapshot(s3, \"demo-snapshots\", digest) == snapshot)\n    s3.put_object(Bucket=\"demo-snapshots\", Key=f\"snapshots/{digest}.json\", Body=b\"{}\")\n    for key in (digest, \"0\" * 64):\n        try:\n            get_snapshot(s3, \"demo-snapshots\", key)\n            print(f\"read {key[:8]}: no error\")\n        except (Corrupted, NotStored) as error:\n            print(f\"read {key[:8]}:\", type(error).__name__, error)\n"
     }
   ],
   "video": null,
@@ -96,8 +114,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 1,
     "lists": 0,
     "images": 0,
@@ -107,14 +125,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "04089c6848946979b554a953b93d74c6ee60769daea164433712fa5969461357",
+  "content_sha256": "674bca4d1a959ca62c27bc300ac567a4b07d76322223bc5086e8470b599f55ae",
   "starting_code": "\"\"\"Milestone 6: a content-addressed snapshot store in S3.\n\nEach snapshot is stored once, as `snapshots/<sha256>.json`, and checked again on every read. A\nsnapshot is a dict in the milestones' shape; its year keys are integers in Python and strings in\nJSON. The practice portfolio is invented for a fictional utility.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport hashlib\nimport json\n\nfrom botocore.exceptions import ClientError\n\n\nclass Corrupted(Exception):\n    \"\"\"A stored object no longer hashes to the digest in its name.\"\"\"\n\n\nclass NotStored(Exception):\n    \"\"\"No snapshot is stored under this digest.\"\"\"\n\n\ndef canonical(snapshot: dict) -> bytes:\n    \"\"\"The snapshot as bytes: sorted keys, no spaces, ASCII only. JSON writes the year keys as text.\"\"\"\n    # TODO\n    return b\"\"\n\n\ndef from_json(data: bytes) -> dict:\n    \"\"\"The snapshot back from its bytes, every year key an integer again.\"\"\"\n    # TODO\n    return {}\n\n\ndef put_snapshot(s3, bucket: str, snapshot: dict) -> str:\n    \"\"\"Store the snapshot under its digest, once; return the digest.\"\"\"\n    # TODO: head_object first; put_object only if nothing is stored under that key.\n    return \"\"\n\n\ndef get_snapshot(s3, bucket: str, digest: str) -> dict:\n    \"\"\"The snapshot stored under `digest`, re-hashed before it is trusted.\"\"\"\n    # TODO\n    return {}\n\n\nif __name__ == \"__main__\":\n    print(canonical({\"years\": [2027], \"budget\": {2027: 100}}).decode(\"ascii\"))\n",
   "exercise": {
     "main_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-1/s3_store.py",
     "test_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-1/test_s3_store.py",
     "run_command": [
       "python3",
-      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-1/s3_store.py"
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -170,6 +188,10 @@
     },
     "concepts": [
       "snapshots stored in S3 once under their content hash and checked again on every read, tested against moto"
-    ]
+    ],
+    "files": [
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-1/try_it.py"
+    ],
+    "try_file": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-06/practice-1/try_it.py"
   }
 }

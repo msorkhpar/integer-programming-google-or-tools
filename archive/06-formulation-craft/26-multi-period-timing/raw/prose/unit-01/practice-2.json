@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Read the start years, and refuse what is not a schedule",
   "blocks": [
     {
@@ -55,6 +55,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]          # the years it may start in, earliest first\n\n\nclass ScheduleError(ValueError):\n    \"\"\"The values are not a schedule: a value is not whole, or a project starts twice.\"\"\"\n\n\ndef read_starts(values: dict[tuple[str, int], float], projects: list[Project],\n                tol: float = 1e-6) -> dict[str, int | None]:\n    \"\"\"Each project's start year, or None if it is not funded.\"\"\"\n    starts: dict[str, int | None] = {}\n    for p in projects:\n        chosen = []\n        for t in p.starts:\n            v = values[p.pid, t]\n            if abs(v - 1) <= tol:\n                chosen.append(t)\n            elif abs(v) > tol:\n                raise ScheduleError(f\"x[{p.pid},{t}] = {v} is not a whole number\")\n        if len(chosen) > 1:\n            raise ScheduleError(f\"{p.pid} starts in {chosen}\")\n        starts[p.pid] = chosen[0] if chosen else None\n    return starts\n\n\ndef deferrals(starts: dict[str, int | None], projects: list[Project]) -> dict[str, int]:\n    \"\"\"Years each funded project starts after its earliest allowed year; on-time projects are left out.\"\"\"\n    late = {}\n    for p in projects:\n        year = starts.get(p.pid)\n        if year is not None and year > min(p.starts):\n            late[p.pid] = year - min(p.starts)\n    return late\n\n\nif __name__ == \"__main__\":\n    demo = [Project(\"W1\", (2027, 2028)), Project(\"W2\", (2028,))]\n    values = {(\"W1\", 2027): 0.0, (\"W1\", 2028): 1.0, (\"W2\", 2028): 0.0}\n    found = read_starts(values, demo)\n    print(found, deferrals(found, demo))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom starts import Project, ScheduleError, deferrals, read_starts\n\nmains = [Project(\"R1\", (2030, 2031)), Project(\"R2\", (2030, 2031, 2032)), Project(\"R3\", (2031,))]\n\nvalues = {(\"R1\", 2030): 0.0, (\"R1\", 2031): 0.9999998,\n          (\"R2\", 2030): 0.0, (\"R2\", 2031): 0.0, (\"R2\", 2032): 1.0,\n          (\"R3\", 2031): 2e-8}\nstarts = read_starts(values, mains)\nprint(\"start years:\", starts)\nprint(\"deferrals:\", deferrals(starts, mains))\n\nhalf = dict(values)\nhalf[\"R3\", 2031] = 0.5\ntry:\n    print(\"with R3 at 0.5:\", read_starts(half, mains))\nexcept ScheduleError as err:\n    print(\"with R3 at 0.5: ScheduleError\", err)\n"
         }
       ]
     },
@@ -67,6 +76,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]          # the years it may start in, earliest first\n\n\nclass ScheduleError(ValueError):\n    \"\"\"The values are not a schedule: a value is not whole, or a project starts twice.\"\"\"\n\n\ndef read_starts(values: dict[tuple[str, int], float], projects: list[Project],\n                tol: float = 1e-6) -> dict[str, int | None]:\n    \"\"\"Each project's start year, or None if it is not funded.\"\"\"\n    # TODO: read each project's start from its values, and refuse values that are not a schedule.\n    return {}\n\n\ndef deferrals(starts: dict[str, int | None], projects: list[Project]) -> dict[str, int]:\n    \"\"\"Years each funded project starts after its earliest allowed year; on-time projects are left out.\"\"\"\n    # TODO: compare each funded project's start with its earliest allowed year.\n    return {}\n\n\nif __name__ == \"__main__\":\n    demo = [Project(\"W1\", (2027, 2028)), Project(\"W2\", (2028,))]\n    values = {(\"W1\", 2027): 0.0, (\"W1\", 2028): 1.0, (\"W2\", 2028): 0.0}\n    found = read_starts(values, demo)\n    print(found, deferrals(found, demo))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom starts import Project, ScheduleError, deferrals, read_starts\n\nmains = [Project(\"R1\", (2030, 2031)), Project(\"R2\", (2030, 2031, 2032)), Project(\"R3\", (2031,))]\n\nvalues = {(\"R1\", 2030): 0.0, (\"R1\", 2031): 0.9999998,\n          (\"R2\", 2030): 0.0, (\"R2\", 2031): 0.0, (\"R2\", 2032): 1.0,\n          (\"R3\", 2031): 2e-8}\nstarts = read_starts(values, mains)\nprint(\"start years:\", starts)\nprint(\"deferrals:\", deferrals(starts, mains))\n\nhalf = dict(values)\nhalf[\"R3\", 2031] = 0.5\ntry:\n    print(\"with R3 at 0.5:\", read_starts(half, mains))\nexcept ScheduleError as err:\n    print(\"with R3 at 0.5: ScheduleError\", err)\n"
     }
   ],
   "video": null,
@@ -74,8 +92,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -85,14 +103,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "6874926e7e41eaf78b58a7406781cdfb14bd8e8d480823550bbe467ace091a96",
+  "content_sha256": "52e4c6484c11c4193659215ee3938f4273c0b48be90924a15c3d47058dfc6b73",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    starts: tuple[int, ...]          # the years it may start in, earliest first\n\n\nclass ScheduleError(ValueError):\n    \"\"\"The values are not a schedule: a value is not whole, or a project starts twice.\"\"\"\n\n\ndef read_starts(values: dict[tuple[str, int], float], projects: list[Project],\n                tol: float = 1e-6) -> dict[str, int | None]:\n    \"\"\"Each project's start year, or None if it is not funded.\"\"\"\n    # TODO: read each project's start from its values, and refuse values that are not a schedule.\n    return {}\n\n\ndef deferrals(starts: dict[str, int | None], projects: list[Project]) -> dict[str, int]:\n    \"\"\"Years each funded project starts after its earliest allowed year; on-time projects are left out.\"\"\"\n    # TODO: compare each funded project's start with its earliest allowed year.\n    return {}\n\n\nif __name__ == \"__main__\":\n    demo = [Project(\"W1\", (2027, 2028)), Project(\"W2\", (2028,))]\n    values = {(\"W1\", 2027): 0.0, (\"W1\", 2028): 1.0, (\"W2\", 2028): 0.0}\n    found = read_starts(values, demo)\n    print(found, deferrals(found, demo))\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-2/starts.py",
     "test_path": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-2/test_starts.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-2/starts.py"
+      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -148,6 +166,10 @@
     },
     "concepts": [
       "the schedule is read from the start variables whose values are 1 within the solver's tolerance"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/26-multi-period-timing/prose/unit-01/practice-2/try_it.py"
   }
 }

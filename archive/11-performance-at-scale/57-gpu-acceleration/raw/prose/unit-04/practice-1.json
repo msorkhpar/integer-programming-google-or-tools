@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Which reruns owe you the same bits?",
   "blocks": [
     {
@@ -55,6 +55,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nSAME = (\"inputs\", \"device\", \"solver\", \"method\", \"threads\", \"tolerance\", \"versions\")\n\n\ndef bits_promised(a: dict, b: dict) -> bool:\n    \"\"\"True when run b repeats run a's configuration exactly and that configuration repeats bit for bit.\"\"\"\n    if any(a[k] != b[k] for k in SAME):\n        return False\n    if a[\"method\"] == \"concurrent\":                  # a race: the winner can change between runs\n        return False\n    if a[\"solver\"] == \"cuopt\" and a[\"kind\"] == \"milp\":   # cuOpt MILP plans did not repeat with any setting\n        return False\n    return True\n\n\ndef verdict(a: dict, b: dict, tol: float) -> str:\n    \"\"\"'identical', 'within tolerance', 'different' or 'not comparable'.\"\"\"\n    if a[\"inputs\"] != b[\"inputs\"]:\n        return \"not comparable\"\n    if bits_promised(a, b):\n        return \"identical\" if (a[\"digest\"], a[\"objective\"]) == (b[\"digest\"], b[\"objective\"]) else \"different\"\n    close = abs(a[\"objective\"] - b[\"objective\"]) <= tol * max(1.0, abs(a[\"objective\"]))\n    return \"within tolerance\" if close else \"different\"\n\n\nif __name__ == \"__main__\":\n    run = {\"inputs\": \"lp-7\", \"device\": \"cpu\", \"solver\": \"highs\", \"method\": \"simplex\", \"threads\": 1, \"tolerance\": 1e-7,\n           \"versions\": \"1.14.0\", \"kind\": \"lp\", \"objective\": 10.0, \"digest\": \"ab\"}\n    print(verdict(run, dict(run), 1e-6))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom repeats import bits_promised, verdict\n\n\ndef run(**changes):\n    base = {\"inputs\": \"depot-lp-v3\", \"device\": \"cpu\", \"solver\": \"highs\", \"method\": \"ipm\", \"threads\": 1,\n            \"tolerance\": 1e-8, \"versions\": \"highspy 1.14.0\", \"kind\": \"lp\", \"objective\": 7_340.25, \"digest\": \"c0\"}\n    return {**base, **changes}\n\n\nprint(\"same run twice:\", verdict(run(), run(), 1e-6))\nprint(\"same config, digest c1:\", verdict(run(), run(digest=\"c1\"), 1e-6))\nprint(\"gpu pdlp, objective 7340.2500001:\", verdict(run(), run(device=\"gpu\", method=\"pdlp\", objective=7_340.2500001), 1e-6))\nprint(\"gpu pdlp, objective 7341:\", verdict(run(), run(device=\"gpu\", method=\"pdlp\", objective=7_341.0), 1e-6))\nprint(\"inputs depot-lp-v4:\", verdict(run(), run(inputs=\"depot-lp-v4\"), 1e-6))\nprint(\"bits promised, cuopt milp twice:\", bits_promised(run(solver=\"cuopt\", kind=\"milp\", method=\"milp\"),\n                                                         run(solver=\"cuopt\", kind=\"milp\", method=\"milp\")))\n"
         }
       ]
     },
@@ -67,6 +76,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nSAME = (\"inputs\", \"device\", \"solver\", \"method\", \"threads\", \"tolerance\", \"versions\")\n\n\ndef bits_promised(a: dict, b: dict) -> bool:\n    \"\"\"True when run b repeats run a's configuration exactly and that configuration repeats bit for bit.\"\"\"\n    # TODO: the same configuration, and one that repeats.\n    return False\n\n\ndef verdict(a: dict, b: dict, tol: float) -> str:\n    \"\"\"'identical', 'within tolerance', 'different' or 'not comparable'.\"\"\"\n    # TODO: inputs first, then bits where they were promised, else the tolerance.\n    return \"\"\n\n\nif __name__ == \"__main__\":\n    run = {\"inputs\": \"lp-7\", \"device\": \"cpu\", \"solver\": \"highs\", \"method\": \"simplex\", \"threads\": 1, \"tolerance\": 1e-7,\n           \"versions\": \"1.14.0\", \"kind\": \"lp\", \"objective\": 10.0, \"digest\": \"ab\"}\n    print(verdict(run, dict(run), 1e-6))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom repeats import bits_promised, verdict\n\n\ndef run(**changes):\n    base = {\"inputs\": \"depot-lp-v3\", \"device\": \"cpu\", \"solver\": \"highs\", \"method\": \"ipm\", \"threads\": 1,\n            \"tolerance\": 1e-8, \"versions\": \"highspy 1.14.0\", \"kind\": \"lp\", \"objective\": 7_340.25, \"digest\": \"c0\"}\n    return {**base, **changes}\n\n\nprint(\"same run twice:\", verdict(run(), run(), 1e-6))\nprint(\"same config, digest c1:\", verdict(run(), run(digest=\"c1\"), 1e-6))\nprint(\"gpu pdlp, objective 7340.2500001:\", verdict(run(), run(device=\"gpu\", method=\"pdlp\", objective=7_340.2500001), 1e-6))\nprint(\"gpu pdlp, objective 7341:\", verdict(run(), run(device=\"gpu\", method=\"pdlp\", objective=7_341.0), 1e-6))\nprint(\"inputs depot-lp-v4:\", verdict(run(), run(inputs=\"depot-lp-v4\"), 1e-6))\nprint(\"bits promised, cuopt milp twice:\", bits_promised(run(solver=\"cuopt\", kind=\"milp\", method=\"milp\"),\n                                                         run(solver=\"cuopt\", kind=\"milp\", method=\"milp\")))\n"
     }
   ],
   "video": null,
@@ -74,8 +92,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -85,14 +103,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "c21cbce1dbbeea3c995da3397f4d28c9e733deb21a1fa9317df7bdf225983d7f",
+  "content_sha256": "401825ff4c57b989688ddeb2daccdac75945d0b4c6fac8b922621c5e1fa5f08a",
   "starting_code": "from __future__ import annotations\n\nSAME = (\"inputs\", \"device\", \"solver\", \"method\", \"threads\", \"tolerance\", \"versions\")\n\n\ndef bits_promised(a: dict, b: dict) -> bool:\n    \"\"\"True when run b repeats run a's configuration exactly and that configuration repeats bit for bit.\"\"\"\n    # TODO: the same configuration, and one that repeats.\n    return False\n\n\ndef verdict(a: dict, b: dict, tol: float) -> str:\n    \"\"\"'identical', 'within tolerance', 'different' or 'not comparable'.\"\"\"\n    # TODO: inputs first, then bits where they were promised, else the tolerance.\n    return \"\"\n\n\nif __name__ == \"__main__\":\n    run = {\"inputs\": \"lp-7\", \"device\": \"cpu\", \"solver\": \"highs\", \"method\": \"simplex\", \"threads\": 1, \"tolerance\": 1e-7,\n           \"versions\": \"1.14.0\", \"kind\": \"lp\", \"objective\": 10.0, \"digest\": \"ab\"}\n    print(verdict(run, dict(run), 1e-6))\n",
   "exercise": {
     "main_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-1/repeats.py",
     "test_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-1/test_repeats.py",
     "run_command": [
       "python3",
-      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-1/repeats.py"
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -148,6 +166,10 @@
     },
     "concepts": [
       "bits are owed only by a rerun of one configuration that repeats; races, cuOpt MILPs and other thread counts are held to a tolerance"
-    ]
+    ],
+    "files": [
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-1/try_it.py"
+    ],
+    "try_file": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-1/try_it.py"
   }
 }

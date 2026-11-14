@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Blend gravel to a fines window",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Pit:\n    name: str\n    price: float      # $ per ton\n    fines: float      # fines content, % of weight\n    tons: float       # tons the pit can supply\n\n\ndef mix(pits: list[Pit], tons: float, low: float, high: float):\n    \"\"\"Cheapest blend of `tons` tons whose average fines content lies in [low, high].\"\"\"\n    model = mathopt.Model(name=\"gravel blend\")\n    t = {p.name: model.add_variable(lb=0, ub=p.tons, name=f\"t_{p.name}\") for p in pits}\n    model.add_linear_constraint(sum(t.values()) == tons, name=\"tons\")\n    model.add_linear_constraint(sum((p.fines - high) * t[p.name] for p in pits) <= 0, name=\"fines_max\")\n    model.add_linear_constraint(sum((p.fines - low) * t[p.name] for p in pits) >= 0, name=\"fines_min\")\n    model.minimize(sum(p.price * t[p.name] for p in pits))\n    result = mathopt.solve(model, mathopt.SolverType.GLOP)\n    status = result.termination.reason.name\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return status, None, None\n    return status, result.objective_value(), {name: result.variable_values(v) for name, v in t.items()}\n\n\nif __name__ == \"__main__\":\n    pits = [Pit(\"A\", 12, 4, 500), Pit(\"B\", 9, 9, 600), Pit(\"C\", 7, 14, 400)]\n    print(mix(pits, 1000, 6, 10))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom blend import Pit, mix\n\ndef r(v):\n    return v if v is None else round(v, 2)\n\n\nquarries = [Pit(\"North\", 14, 3, 400), Pit(\"Mill\", 10, 8, 500), Pit(\"River\", 6, 15, 300)]\n\nstatus, cost, tons = mix(quarries, 600, 5, 9)\nprint(\"600 tons, fines 5..9:\", status, r(cost), tons and {k: r(v) for k, v in tons.items()})\nstatus, cost, tons = mix(quarries, 800, 7, 12)\nprint(\"800 tons, fines 7..12:\", status, r(cost), tons and {k: r(v) for k, v in tons.items()})\nprint(\"600 tons, fines 1..2:\", mix(quarries, 600, 1, 2))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Pit:\n    name: str\n    price: float      # $ per ton\n    fines: float      # fines content, % of weight\n    tons: float       # tons the pit can supply\n\n\ndef mix(pits: list[Pit], tons: float, low: float, high: float):\n    \"\"\"Cheapest blend of `tons` tons whose average fines content lies in [low, high].\"\"\"\n    # TODO: the model of the statement, a GLOP solve, and the status before any value.\n    return \"NOT_SOLVED\", None, None\n\nif __name__ == \"__main__\":\n    pits = [Pit(\"A\", 12, 4, 500), Pit(\"B\", 9, 9, 600), Pit(\"C\", 7, 14, 400)]\n    print(mix(pits, 1000, 6, 10))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom blend import Pit, mix\n\ndef r(v):\n    return v if v is None else round(v, 2)\n\n\nquarries = [Pit(\"North\", 14, 3, 400), Pit(\"Mill\", 10, 8, 500), Pit(\"River\", 6, 15, 300)]\n\nstatus, cost, tons = mix(quarries, 600, 5, 9)\nprint(\"600 tons, fines 5..9:\", status, r(cost), tons and {k: r(v) for k, v in tons.items()})\nstatus, cost, tons = mix(quarries, 800, 7, 12)\nprint(\"800 tons, fines 7..12:\", status, r(cost), tons and {k: r(v) for k, v in tons.items()})\nprint(\"600 tons, fines 1..2:\", mix(quarries, 600, 1, 2))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "0a18a19e2a478a08248a6913e9c8afa8085602c8c6d85ee5b4ed3a8532d12ae7",
+  "content_sha256": "50c1067d3bf46f11675a3cf68fff529097baa80dd1ff81708f8b6504f8d6b691",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Pit:\n    name: str\n    price: float      # $ per ton\n    fines: float      # fines content, % of weight\n    tons: float       # tons the pit can supply\n\n\ndef mix(pits: list[Pit], tons: float, low: float, high: float):\n    \"\"\"Cheapest blend of `tons` tons whose average fines content lies in [low, high].\"\"\"\n    # TODO: the model of the statement, a GLOP solve, and the status before any value.\n    return \"NOT_SOLVED\", None, None\n\nif __name__ == \"__main__\":\n    pits = [Pit(\"A\", 12, 4, 500), Pit(\"B\", 9, 9, 600), Pit(\"C\", 7, 14, 400)]\n    print(mix(pits, 1000, 6, 10))\n",
   "exercise": {
     "main_path": "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-1/blend.py",
     "test_path": "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-1/test_blend.py",
     "run_command": [
       "python3",
-      "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-1/blend.py"
+      "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -135,6 +153,10 @@
     },
     "concepts": [
       "an average-quality rule is multiplied by the total and written as one row per limit"
-    ]
+    ],
+    "files": [
+      "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-1/try_it.py"
+    ],
+    "try_file": "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-1/try_it.py"
   }
 }

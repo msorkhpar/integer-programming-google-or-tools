@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "The price of reversing a renovation decision",
   "blocks": [
     {
@@ -61,6 +61,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Renovation:\n    name: str\n    cost: int           # $k\n    value: int          # $k of benefit\n    mandatory: bool = False\n\n\ndef build(items: list[Renovation], budget: int) -> tuple[mathopt.Model, dict[str, mathopt.Variable]]:\n    \"\"\"The library board's model: pick renovations within the budget; mandatory ones always.\"\"\"\n    model = mathopt.Model(name=\"renovations\")\n    x = {r.name: model.add_binary_variable(name=f\"x_{r.name}\") for r in items}\n    model.add_linear_constraint(sum(r.cost * x[r.name] for r in items) <= budget, name=\"budget\")\n    for r in items:\n        if r.mandatory:\n            model.add_linear_constraint(x[r.name] == 1, name=f\"must_{r.name}\")\n    model.maximize(sum(r.value * x[r.name] for r in items))\n    return model, x\n\n\ndef best(model: mathopt.Model, x: dict[str, mathopt.Variable]) -> tuple[float, set[str]] | None:\n    \"\"\"(best value, chosen names), or None when the model has no feasible plan.\"\"\"\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS,\n                           params=mathopt.SolveParameters(relative_gap_tolerance=0.0))   # a proven optimum\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    return result.objective_value(), {name for name, v in x.items() if result.variable_values(v) > 0.5}\n\n\ndef forcing_cost(items: list[Renovation], budget: int, name: str) -> dict:\n    \"\"\"Reverse the best plan's decision on `name`, re-solve, and say what it costs and what changes.\"\"\"\n    model, x = build(items, budget)\n    base_value, base_plan = best(model, x)\n    action = \"out\" if name in base_plan else \"in\"\n    forced_model, fx = build(items, budget)\n    forced_model.add_linear_constraint(fx[name] == (0 if action == \"out\" else 1), name=f\"{action}_{name}\")\n    forced = best(forced_model, fx)\n    if forced is None:\n        return {\"action\": action, \"cost\": None, \"dropped\": [], \"added\": []}\n    value, plan = forced\n    return {\"action\": action, \"cost\": round(base_value - value),\n            \"dropped\": sorted(base_plan - plan), \"added\": sorted(plan - base_plan)}\n\n\nif __name__ == \"__main__\":\n    items = [Renovation(\"roof\", 40, 60), Renovation(\"lift\", 30, 20, mandatory=True)]\n    print(forcing_cost(items, 60, \"roof\"))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom renovations import Renovation, forcing_cost\n\nmuseum = [\n    Renovation(\"gallery_roof\", 30, 50),\n    Renovation(\"cafe_fitout\", 25, 30),\n    Renovation(\"archive_hvac\", 35, 45),\n    Renovation(\"lobby_floor\", 20, 18),\n    Renovation(\"fire_doors\", 10, 2, mandatory=True),\n]\nbudget = 80\n\nfor name in [\"lobby_floor\", \"gallery_roof\", \"fire_doors\"]:\n    print(f\"reverse {name} at budget {budget}:\", forcing_cost(museum, budget, name))\n"
         }
       ]
     },
@@ -73,6 +82,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Renovation:\n    name: str\n    cost: int           # $k\n    value: int          # $k of benefit\n    mandatory: bool = False\n\n\ndef build(items: list[Renovation], budget: int) -> tuple[mathopt.Model, dict[str, mathopt.Variable]]:\n    \"\"\"The library board's model: pick renovations within the budget; mandatory ones always.\"\"\"\n    model = mathopt.Model(name=\"renovations\")\n    x = {r.name: model.add_binary_variable(name=f\"x_{r.name}\") for r in items}\n    model.add_linear_constraint(sum(r.cost * x[r.name] for r in items) <= budget, name=\"budget\")\n    for r in items:\n        if r.mandatory:\n            model.add_linear_constraint(x[r.name] == 1, name=f\"must_{r.name}\")\n    model.maximize(sum(r.value * x[r.name] for r in items))\n    return model, x\n\n\ndef best(model: mathopt.Model, x: dict[str, mathopt.Variable]) -> tuple[float, set[str]] | None:\n    \"\"\"(best value, chosen names), or None when the model has no feasible plan.\"\"\"\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS,\n                           params=mathopt.SolveParameters(relative_gap_tolerance=0.0))   # a proven optimum\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    return result.objective_value(), {name for name, v in x.items() if result.variable_values(v) > 0.5}\n\n\ndef forcing_cost(items: list[Renovation], budget: int, name: str) -> dict:\n    \"\"\"Reverse the best plan's decision on `name`, re-solve, and say what it costs and what changes.\"\"\"\n    # TODO: solve the board's model, write the forcing as a named row, re-solve, compare.\n    return {\"action\": \"in\", \"cost\": 0, \"dropped\": [], \"added\": []}\n\nif __name__ == \"__main__\":\n    items = [Renovation(\"roof\", 40, 60), Renovation(\"lift\", 30, 20, mandatory=True)]\n    print(forcing_cost(items, 60, \"roof\"))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom renovations import Renovation, forcing_cost\n\nmuseum = [\n    Renovation(\"gallery_roof\", 30, 50),\n    Renovation(\"cafe_fitout\", 25, 30),\n    Renovation(\"archive_hvac\", 35, 45),\n    Renovation(\"lobby_floor\", 20, 18),\n    Renovation(\"fire_doors\", 10, 2, mandatory=True),\n]\nbudget = 80\n\nfor name in [\"lobby_floor\", \"gallery_roof\", \"fire_doors\"]:\n    print(f\"reverse {name} at budget {budget}:\", forcing_cost(museum, budget, name))\n"
     }
   ],
   "video": null,
@@ -80,8 +98,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -91,14 +109,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "ae84e62fdd5d891a1283ae6aebdd32c2b57852377135debe24aa3cea6b353517",
+  "content_sha256": "ab326b583faedf8c5489673ab675b0b5891cac1cf747040144b54be22f6710ce",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Renovation:\n    name: str\n    cost: int           # $k\n    value: int          # $k of benefit\n    mandatory: bool = False\n\n\ndef build(items: list[Renovation], budget: int) -> tuple[mathopt.Model, dict[str, mathopt.Variable]]:\n    \"\"\"The library board's model: pick renovations within the budget; mandatory ones always.\"\"\"\n    model = mathopt.Model(name=\"renovations\")\n    x = {r.name: model.add_binary_variable(name=f\"x_{r.name}\") for r in items}\n    model.add_linear_constraint(sum(r.cost * x[r.name] for r in items) <= budget, name=\"budget\")\n    for r in items:\n        if r.mandatory:\n            model.add_linear_constraint(x[r.name] == 1, name=f\"must_{r.name}\")\n    model.maximize(sum(r.value * x[r.name] for r in items))\n    return model, x\n\n\ndef best(model: mathopt.Model, x: dict[str, mathopt.Variable]) -> tuple[float, set[str]] | None:\n    \"\"\"(best value, chosen names), or None when the model has no feasible plan.\"\"\"\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS,\n                           params=mathopt.SolveParameters(relative_gap_tolerance=0.0))   # a proven optimum\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    return result.objective_value(), {name for name, v in x.items() if result.variable_values(v) > 0.5}\n\n\ndef forcing_cost(items: list[Renovation], budget: int, name: str) -> dict:\n    \"\"\"Reverse the best plan's decision on `name`, re-solve, and say what it costs and what changes.\"\"\"\n    # TODO: solve the board's model, write the forcing as a named row, re-solve, compare.\n    return {\"action\": \"in\", \"cost\": 0, \"dropped\": [], \"added\": []}\n\nif __name__ == \"__main__\":\n    items = [Renovation(\"roof\", 40, 60), Renovation(\"lift\", 30, 20, mandatory=True)]\n    print(forcing_cost(items, 60, \"roof\"))\n",
   "exercise": {
     "main_path": "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-02/practice-1/renovations.py",
     "test_path": "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-02/practice-1/test_renovations.py",
     "run_command": [
       "python3",
-      "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-02/practice-1/renovations.py"
+      "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -145,6 +163,10 @@
     "concepts": [
       "the cost of a decision is the best value lost when the opposite decision is forced and the model re-solved",
       "a forcing is a named row added to a fresh copy of the model, never an edit of the solved plan"
-    ]
+    ],
+    "files": [
+      "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/09-diagnostics-and-explainability/39-explaining-decisions/prose/unit-02/practice-1/try_it.py"
   }
 }

@@ -158,6 +158,32 @@ def solve_with_fallback(model, solvers: list[dict], gpu: bool):
 if __name__ == &quot;__main__&quot;:
     cpu = {&quot;name&quot;: &quot;cpu&quot;, &quot;needs_gpu&quot;: False, &quot;solve&quot;: lambda m: {&quot;status&quot;: &quot;Optimal&quot;, &quot;objective&quot;: 1.0}}
     print(solve_with_fallback(None, [cpu], gpu=False))
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from fallback import solve_with_fallback
+
+
+def solver(name, needs_gpu, status=None, fails=False):
+    def solve(model):
+        if fails:
+            raise MemoryError(&quot;device out of memory&quot;)
+        return {&quot;status&quot;: status, &quot;objective&quot;: 42.0, &quot;by&quot;: name}
+    return {&quot;name&quot;: name, &quot;needs_gpu&quot;: needs_gpu, &quot;solve&quot;: solve}
+
+
+chain = [solver(&quot;cuopt&quot;, True, fails=True), solver(&quot;highs-pdlp&quot;, True, &quot;Time limit reached&quot;),
+         solver(&quot;highs-ipm&quot;, False, &quot;Optimal&quot;), solver(&quot;highs-simplex&quot;, False, &quot;Optimal&quot;)]
+
+for gpu in (True, False):
+    result, log = solve_with_fallback(&quot;transport lp&quot;, chain, gpu=gpu)
+    print(f&quot;gpu={gpu}: answer by&quot;, None if result is None else result[&quot;by&quot;], &quot;| log:&quot;, log)
+result, log = solve_with_fallback(&quot;transport lp&quot;, chain[:2], gpu=True)
+print(&quot;gpu solvers only, gpu=True: answer&quot;, result, &quot;| log:&quot;, log)
 </code></pre></figure></details>
 <h2 id="practice-prose-b7">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -175,10 +201,37 @@ if __name__ == &quot;__main__&quot;:
     cpu = {&quot;name&quot;: &quot;cpu&quot;, &quot;needs_gpu&quot;: False, &quot;solve&quot;: lambda m: {&quot;status&quot;: &quot;Optimal&quot;, &quot;objective&quot;: 1.0}}
     print(solve_with_fallback(None, [cpu], gpu=False))
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from fallback import solve_with_fallback
+
+
+def solver(name, needs_gpu, status=None, fails=False):
+    def solve(model):
+        if fails:
+            raise MemoryError(&quot;device out of memory&quot;)
+        return {&quot;status&quot;: status, &quot;objective&quot;: 42.0, &quot;by&quot;: name}
+    return {&quot;name&quot;: name, &quot;needs_gpu&quot;: needs_gpu, &quot;solve&quot;: solve}
+
+
+chain = [solver(&quot;cuopt&quot;, True, fails=True), solver(&quot;highs-pdlp&quot;, True, &quot;Time limit reached&quot;),
+         solver(&quot;highs-ipm&quot;, False, &quot;Optimal&quot;), solver(&quot;highs-simplex&quot;, False, &quot;Optimal&quot;)]
+
+for gpu in (True, False):
+    result, log = solve_with_fallback(&quot;transport lp&quot;, chain, gpu=gpu)
+    print(f&quot;gpu={gpu}: answer by&quot;, None if result is None else result[&quot;by&quot;], &quot;| log:&quot;, log)
+result, log = solve_with_fallback(&quot;transport lp&quot;, chain[:2], gpu=True)
+print(&quot;gpu solvers only, gpu=True: answer&quot;, result, &quot;| log:&quot;, log)
+</code></pre></figure>
 </section>
 <section data-practice="11-performance-at-scale/57-gpu-acceleration/unit-02/practice-prose" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-1/fallback.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-1/fallback.py</code> and <code>practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-1/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-1/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>
@@ -261,6 +314,26 @@ def check_runs(runs: list[dict], tol: float) -&gt; list[str]:
 
 if __name__ == &quot;__main__&quot;:
     print(check_runs([{&quot;device&quot;: &quot;cpu&quot;, &quot;solver&quot;: &quot;ipm&quot;, &quot;objective&quot;: 10.0, &quot;digest&quot;: &quot;a&quot;}], 1e-6))
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from runs import check_runs
+
+
+def run(device, solver, objective, digest):
+    return {&quot;device&quot;: device, &quot;solver&quot;: solver, &quot;objective&quot;: objective, &quot;digest&quot;: digest}
+
+
+agree = [run(&quot;cpu&quot;, &quot;simplex&quot;, 250.0, &quot;aa11&quot;), run(&quot;cpu&quot;, &quot;ipm&quot;, 250.0000001, &quot;bb22&quot;),
+         run(&quot;gpu&quot;, &quot;pdlp&quot;, 250.00002, &quot;cc33&quot;), run(&quot;gpu&quot;, &quot;pdlp&quot;, 250.00002, &quot;cc33&quot;)]
+print(&quot;four runs near 250, tol 1e-6:&quot;, check_runs(agree, 1e-6))
+print(&quot;same runs, tol 1e-8:&quot;, check_runs(agree, 1e-8))
+print(&quot;a pdlp repeat with another digest:&quot;, check_runs(agree + [run(&quot;gpu&quot;, &quot;pdlp&quot;, 250.00002, &quot;dd44&quot;)], 1e-6))
+print(&quot;gpu runs only:&quot;, check_runs(agree[2:], 1e-6))
 </code></pre></figure></details>
 <h2 id="practice-prose-2-b6">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -277,10 +350,31 @@ def check_runs(runs: list[dict], tol: float) -&gt; list[str]:
 if __name__ == &quot;__main__&quot;:
     print(check_runs([{&quot;device&quot;: &quot;cpu&quot;, &quot;solver&quot;: &quot;ipm&quot;, &quot;objective&quot;: 10.0, &quot;digest&quot;: &quot;a&quot;}], 1e-6))
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from runs import check_runs
+
+
+def run(device, solver, objective, digest):
+    return {&quot;device&quot;: device, &quot;solver&quot;: solver, &quot;objective&quot;: objective, &quot;digest&quot;: digest}
+
+
+agree = [run(&quot;cpu&quot;, &quot;simplex&quot;, 250.0, &quot;aa11&quot;), run(&quot;cpu&quot;, &quot;ipm&quot;, 250.0000001, &quot;bb22&quot;),
+         run(&quot;gpu&quot;, &quot;pdlp&quot;, 250.00002, &quot;cc33&quot;), run(&quot;gpu&quot;, &quot;pdlp&quot;, 250.00002, &quot;cc33&quot;)]
+print(&quot;four runs near 250, tol 1e-6:&quot;, check_runs(agree, 1e-6))
+print(&quot;same runs, tol 1e-8:&quot;, check_runs(agree, 1e-8))
+print(&quot;a pdlp repeat with another digest:&quot;, check_runs(agree + [run(&quot;gpu&quot;, &quot;pdlp&quot;, 250.00002, &quot;dd44&quot;)], 1e-6))
+print(&quot;gpu runs only:&quot;, check_runs(agree[2:], 1e-6))
+</code></pre></figure>
 </section>
 <section data-practice="11-performance-at-scale/57-gpu-acceleration/unit-02/practice-prose-2" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-2/runs.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-2/runs.py</code> and <code>practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-2/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-02/practice-2/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>

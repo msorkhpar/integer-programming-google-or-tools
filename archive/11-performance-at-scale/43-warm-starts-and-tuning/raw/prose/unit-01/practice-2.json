@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A greedy renewal plan as a start",
   "blocks": [
     {
@@ -55,6 +55,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    cost: int                        # $k, all spent in the year the job is done\n    value: int                       # $k of benefit, whatever the year\n    years: tuple[int, ...]           # the years it may be done in, earliest first\n    must: bool = False\n\n\ndef greedy_plan(jobs: list[Job], budget: dict[int, int]) -> dict[str, int]:\n    \"\"\"Must-do jobs first, then the rest by value per $k (ties by name), each in its earliest year that still fits.\"\"\"\n    left = dict(budget)\n    plan = {}\n    order = sorted(jobs, key=lambda j: (not j.must, -j.value / j.cost, j.name))\n    for job in order:\n        for year in job.years:\n            if job.cost <= left.get(year, 0):\n                plan[job.name] = year\n                left[year] -= job.cost\n                break\n    return plan\n\n\ndef as_hint(x: dict[tuple[str, int], mathopt.Variable], plan: dict[str, int]) -> mathopt.SolutionHint:\n    \"\"\"The plan as a complete start: 1 for each (job, year) the plan uses, 0 for every other variable.\"\"\"\n    return mathopt.SolutionHint(variable_values={v: 1.0 if plan.get(name) == year else 0.0\n                                                 for (name, year), v in x.items()})\n\n\nif __name__ == \"__main__\":\n    jobs = [Job(\"main-st\", 300, 900, (2028, 2029), must=True), Job(\"elm-ave\", 200, 500, (2028,))]\n    print(greedy_plan(jobs, {2028: 400, 2029: 300}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom renewal import Job, as_hint, greedy_plan\n\nyears = (2031, 2032)\njobs = [Job(\"birch\", 250, 500, years), Job(\"cedar\", 150, 450, years),\n        Job(\"maple\", 300, 400, (2031,), must=True), Job(\"hazel\", 100, 120, years)]\nbudget = {2031: 450, 2032: 300}\n\nplan = greedy_plan(jobs, budget)\nprint(\"greedy plan, budgets 450/300:\", plan)\n\nmodel = mathopt.Model()\nx = {(j.name, y): model.add_binary_variable(name=f\"x_{j.name}_{y}\") for j in jobs for y in j.years}\nhint = as_hint(x, plan)\nprint(\"hint values set to 1:\", sorted(v.name for v, value in hint.variable_values.items() if value == 1.0))\nprint(\"hint size:\", len(hint.variable_values))\n"
         }
       ]
     },
@@ -67,6 +76,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    cost: int                        # $k, all spent in the year the job is done\n    value: int                       # $k of benefit, whatever the year\n    years: tuple[int, ...]           # the years it may be done in, earliest first\n    must: bool = False\n\n\ndef greedy_plan(jobs: list[Job], budget: dict[int, int]) -> dict[str, int]:\n    \"\"\"Must-do jobs first, then the rest by value per $k (ties by name), each in its earliest year that still fits.\"\"\"\n    # TODO: write the rule down first, then fill the plan one job at a time.\n    return {}\n\n\ndef as_hint(x: dict[tuple[str, int], mathopt.Variable], plan: dict[str, int]) -> mathopt.SolutionHint:\n    \"\"\"The plan as a complete start: 1 for each (job, year) the plan uses, 0 for every other variable.\"\"\"\n    # TODO: one value for each variable in x.\n    return mathopt.SolutionHint()\n\n\nif __name__ == \"__main__\":\n    jobs = [Job(\"main-st\", 300, 900, (2028, 2029), must=True), Job(\"elm-ave\", 200, 500, (2028,))]\n    print(greedy_plan(jobs, {2028: 400, 2029: 300}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom renewal import Job, as_hint, greedy_plan\n\nyears = (2031, 2032)\njobs = [Job(\"birch\", 250, 500, years), Job(\"cedar\", 150, 450, years),\n        Job(\"maple\", 300, 400, (2031,), must=True), Job(\"hazel\", 100, 120, years)]\nbudget = {2031: 450, 2032: 300}\n\nplan = greedy_plan(jobs, budget)\nprint(\"greedy plan, budgets 450/300:\", plan)\n\nmodel = mathopt.Model()\nx = {(j.name, y): model.add_binary_variable(name=f\"x_{j.name}_{y}\") for j in jobs for y in j.years}\nhint = as_hint(x, plan)\nprint(\"hint values set to 1:\", sorted(v.name for v, value in hint.variable_values.items() if value == 1.0))\nprint(\"hint size:\", len(hint.variable_values))\n"
     }
   ],
   "video": null,
@@ -74,8 +92,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -85,14 +103,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "53a35dca8a4d59f2b703257d0d41bb705cd6fbd350c9e709907c4aa379968ca8",
+  "content_sha256": "ad5afdad1462080473bdab6135a441a074c0c8e67499c8dc77ab0a86cfd6efa0",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    cost: int                        # $k, all spent in the year the job is done\n    value: int                       # $k of benefit, whatever the year\n    years: tuple[int, ...]           # the years it may be done in, earliest first\n    must: bool = False\n\n\ndef greedy_plan(jobs: list[Job], budget: dict[int, int]) -> dict[str, int]:\n    \"\"\"Must-do jobs first, then the rest by value per $k (ties by name), each in its earliest year that still fits.\"\"\"\n    # TODO: write the rule down first, then fill the plan one job at a time.\n    return {}\n\n\ndef as_hint(x: dict[tuple[str, int], mathopt.Variable], plan: dict[str, int]) -> mathopt.SolutionHint:\n    \"\"\"The plan as a complete start: 1 for each (job, year) the plan uses, 0 for every other variable.\"\"\"\n    # TODO: one value for each variable in x.\n    return mathopt.SolutionHint()\n\n\nif __name__ == \"__main__\":\n    jobs = [Job(\"main-st\", 300, 900, (2028, 2029), must=True), Job(\"elm-ave\", 200, 500, (2028,))]\n    print(greedy_plan(jobs, {2028: 400, 2029: 300}))\n",
   "exercise": {
     "main_path": "practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-01/practice-2/renewal.py",
     "test_path": "practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-01/practice-2/test_renewal.py",
     "run_command": [
       "python3",
-      "practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-01/practice-2/renewal.py"
+      "practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -158,6 +176,10 @@
     },
     "concepts": [
       "a start is checked against this cycle's rows and built to be feasible, here greedily, before a solver sees it"
-    ]
+    ],
+    "files": [
+      "practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/11-performance-at-scale/43-warm-starts-and-tuning/prose/unit-01/practice-2/try_it.py"
   }
 }

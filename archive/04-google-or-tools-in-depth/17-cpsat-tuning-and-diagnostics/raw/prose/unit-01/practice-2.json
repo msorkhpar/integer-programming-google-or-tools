@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "An LNS loop over districts",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    district: str\n    value: int      # risk points removed\n    hours: int      # crew-hours\n\n\ndef build(jobs: list[Job], hours: int) -> tuple[cp_model.CpModel, dict[str, cp_model.IntVar]]:\n    \"\"\"Given: the week's model. pick[j] = 1 runs job j; the crews have `hours` in total.\"\"\"\n    model = cp_model.CpModel()\n    pick = {j.name: model.new_bool_var(f\"pick_{j.name}\") for j in jobs}\n    model.add(sum(j.hours * pick[j.name] for j in jobs) <= hours)\n    model.maximize(sum(j.value * pick[j.name] for j in jobs))\n    return model, pick\n\n\ndef improve(jobs: list[Job], hours: int, plan: set[str], free: set[str]) -> set[str]:\n    \"\"\"Given: one LNS step, the best plan that keeps every job outside `free` as `plan` has it.\"\"\"\n    model, pick = build(jobs, hours)\n    for name, var in pick.items():\n        model.add_hint(var, 1 if name in plan else 0)\n        if name not in free:\n            model.add(var == (1 if name in plan else 0))\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.solve(model)\n    return {name for name, var in pick.items() if solver.value(var)}\n\n\ndef value(jobs: list[Job], plan: set[str]) -> int:\n    return sum(j.value for j in jobs if j.name in plan)\n\n\ndef lns(jobs: list[Job], hours: int, start: set[str], rounds: list[set[str]]) -> tuple[set[str], list[int]]:\n    \"\"\"Run one step per neighborhood in `rounds`. Return the final plan and the value after each round.\"\"\"\n    current = set(start)\n    history = [value(jobs, current)]\n    for free in rounds:\n        candidate = improve(jobs, hours, current, free)\n        if value(jobs, candidate) > value(jobs, current):\n            current = candidate\n        history.append(value(jobs, current))\n    return current, history\n\n\nif __name__ == \"__main__\":\n    week = [Job(\"N1\", \"north\", 50, 20), Job(\"N3\", \"north\", 30, 15), Job(\"S3\", \"south\", 20, 5)]\n    print(lns(week, 30, {\"N3\", \"S3\"}, [{\"N1\", \"N3\"}]))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom week_lns import Job, lns\n\n# Six pump-station checks; 40 crew-hours in the week.\nweek = [Job(\"W1\", \"west\", 45, 15), Job(\"W2\", \"west\", 35, 10), Job(\"C1\", \"centre\", 30, 10),\n        Job(\"C2\", \"centre\", 15, 5), Job(\"H1\", \"harbour\", 40, 20), Job(\"H2\", \"harbour\", 10, 5)]\nstart = {\"W1\", \"C2\", \"H2\"}\nwest, centre, harbour = {\"W1\", \"W2\"}, {\"C1\", \"C2\"}, {\"H1\", \"H2\"}\n\nplan, history = lns(week, 40, start, [harbour, west, centre])\nprint(\"rounds harbour, west, centre -> history:\", history)\nprint(\"final plan:\", sorted(plan))\nplan, history = lns(week, 40, start, [])\nprint(\"no rounds -> history:\", history, \"plan:\", sorted(plan))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    district: str\n    value: int      # risk points removed\n    hours: int      # crew-hours\n\n\ndef build(jobs: list[Job], hours: int) -> tuple[cp_model.CpModel, dict[str, cp_model.IntVar]]:\n    \"\"\"Given: the week's model. pick[j] = 1 runs job j; the crews have `hours` in total.\"\"\"\n    model = cp_model.CpModel()\n    pick = {j.name: model.new_bool_var(f\"pick_{j.name}\") for j in jobs}\n    model.add(sum(j.hours * pick[j.name] for j in jobs) <= hours)\n    model.maximize(sum(j.value * pick[j.name] for j in jobs))\n    return model, pick\n\n\ndef improve(jobs: list[Job], hours: int, plan: set[str], free: set[str]) -> set[str]:\n    \"\"\"Given: one LNS step, the best plan that keeps every job outside `free` as `plan` has it.\"\"\"\n    model, pick = build(jobs, hours)\n    for name, var in pick.items():\n        model.add_hint(var, 1 if name in plan else 0)\n        if name not in free:\n            model.add(var == (1 if name in plan else 0))\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.solve(model)\n    return {name for name, var in pick.items() if solver.value(var)}\n\n\ndef value(jobs: list[Job], plan: set[str]) -> int:\n    return sum(j.value for j in jobs if j.name in plan)\n\n\ndef lns(jobs: list[Job], hours: int, start: set[str], rounds: list[set[str]]) -> tuple[set[str], list[int]]:\n    \"\"\"Run one step per neighborhood in `rounds`. Return the final plan and the value after each round.\"\"\"\n    # TODO: one improve() per neighborhood, keeping the better plan each time.\n    return set(), [0] * (len(rounds) + 1)\n\n\nif __name__ == \"__main__\":\n    week = [Job(\"N1\", \"north\", 50, 20), Job(\"N3\", \"north\", 30, 15), Job(\"S3\", \"south\", 20, 5)]\n    print(lns(week, 30, {\"N3\", \"S3\"}, [{\"N1\", \"N3\"}]))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom week_lns import Job, lns\n\n# Six pump-station checks; 40 crew-hours in the week.\nweek = [Job(\"W1\", \"west\", 45, 15), Job(\"W2\", \"west\", 35, 10), Job(\"C1\", \"centre\", 30, 10),\n        Job(\"C2\", \"centre\", 15, 5), Job(\"H1\", \"harbour\", 40, 20), Job(\"H2\", \"harbour\", 10, 5)]\nstart = {\"W1\", \"C2\", \"H2\"}\nwest, centre, harbour = {\"W1\", \"W2\"}, {\"C1\", \"C2\"}, {\"H1\", \"H2\"}\n\nplan, history = lns(week, 40, start, [harbour, west, centre])\nprint(\"rounds harbour, west, centre -> history:\", history)\nprint(\"final plan:\", sorted(plan))\nplan, history = lns(week, 40, start, [])\nprint(\"no rounds -> history:\", history, \"plan:\", sorted(plan))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "8ff72ab3be0328cbfdf179f05b4db1b141a2747ff0ded6243e17539f9dd04826",
+  "content_sha256": "92f1a7712bde1d21d70b115a977fad3ee128414be1b16a0500252ee4d6c39446",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    district: str\n    value: int      # risk points removed\n    hours: int      # crew-hours\n\n\ndef build(jobs: list[Job], hours: int) -> tuple[cp_model.CpModel, dict[str, cp_model.IntVar]]:\n    \"\"\"Given: the week's model. pick[j] = 1 runs job j; the crews have `hours` in total.\"\"\"\n    model = cp_model.CpModel()\n    pick = {j.name: model.new_bool_var(f\"pick_{j.name}\") for j in jobs}\n    model.add(sum(j.hours * pick[j.name] for j in jobs) <= hours)\n    model.maximize(sum(j.value * pick[j.name] for j in jobs))\n    return model, pick\n\n\ndef improve(jobs: list[Job], hours: int, plan: set[str], free: set[str]) -> set[str]:\n    \"\"\"Given: one LNS step, the best plan that keeps every job outside `free` as `plan` has it.\"\"\"\n    model, pick = build(jobs, hours)\n    for name, var in pick.items():\n        model.add_hint(var, 1 if name in plan else 0)\n        if name not in free:\n            model.add(var == (1 if name in plan else 0))\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.solve(model)\n    return {name for name, var in pick.items() if solver.value(var)}\n\n\ndef value(jobs: list[Job], plan: set[str]) -> int:\n    return sum(j.value for j in jobs if j.name in plan)\n\n\ndef lns(jobs: list[Job], hours: int, start: set[str], rounds: list[set[str]]) -> tuple[set[str], list[int]]:\n    \"\"\"Run one step per neighborhood in `rounds`. Return the final plan and the value after each round.\"\"\"\n    # TODO: one improve() per neighborhood, keeping the better plan each time.\n    return set(), [0] * (len(rounds) + 1)\n\n\nif __name__ == \"__main__\":\n    week = [Job(\"N1\", \"north\", 50, 20), Job(\"N3\", \"north\", 30, 15), Job(\"S3\", \"south\", 20, 5)]\n    print(lns(week, 30, {\"N3\", \"S3\"}, [{\"N1\", \"N3\"}]))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-01/practice-2/week_lns.py",
     "test_path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-01/practice-2/test_week_lns.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-01/practice-2/week_lns.py"
+      "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -130,6 +148,10 @@
     },
     "concepts": [
       "an LNS loop starts each step from the best plan so far and keeps only improvements"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-01/practice-2/try_it.py"
   }
 }

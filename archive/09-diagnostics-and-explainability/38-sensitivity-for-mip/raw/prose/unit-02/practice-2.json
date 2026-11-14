@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Which way a fixed-integer price holds",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef fix_plan(model: mathopt.Model, result: mathopt.SolveResult) -> None:\n    \"\"\"Fix every integer variable at its value in `result`, and make it continuous.\"\"\"\n    for v in model.variables():\n        if v.integer:\n            value = round(result.variable_values(v))\n            v.integer = False\n            v.lower_bound = value\n            v.upper_bound = value\n\n\ndef price_directions(model: mathopt.Model, result: mathopt.SolveResult, row_name: str, step: float) -> dict:\n    \"\"\"The fixed-integer price of a <= row, and whether it forecasts the fixed plan's change for +step and -step.\"\"\"\n    fix_plan(model, result)\n    row = next(r for r in model.linear_constraints() if r.name == row_name)\n    base = mathopt.solve(model, mathopt.SolverType.GLOP)\n    price, limit = base.dual_values(row), row.upper_bound\n    answer = {\"price\": price}\n    for label, change in ((\"up\", step), (\"down\", -step)):\n        row.upper_bound = limit + change                  # from the original limit each time\n        moved = mathopt.solve(model, mathopt.SolverType.GLOP)\n        answer[label] = (moved.termination.reason == mathopt.TerminationReason.OPTIMAL\n                         and abs(moved.objective_value() - base.objective_value() - price * change) <= 1e-6)\n    row.upper_bound = limit\n    return answer\n\n\nif __name__ == \"__main__\":\n    m = mathopt.Model()\n    north = m.add_binary_variable(name=\"north\")\n    overtime = m.add_variable(lb=0, ub=20, name=\"overtime\")\n    m.add_linear_constraint(40 * north + overtime <= 50, name=\"budget\")\n    m.maximize(60 * north + 0.5 * overtime)\n    print(price_directions(m, mathopt.solve(m, mathopt.SolverType.HIGHS), \"budget\", 5))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom direction import price_directions\n\ndepots = {\"west\": (35, 50), \"quay\": (20, 26)}\n\n\ndef solved(budget, cap):\n    m = mathopt.Model()\n    x = {s: m.add_binary_variable(name=s) for s in depots}\n    overtime = m.add_variable(lb=0, ub=cap, name=\"overtime\")\n    m.add_linear_constraint(sum(c * x[s] for s, (c, _) in depots.items()) + overtime <= budget, name=\"budget\")\n    m.maximize(sum(v * x[s] for s, (_, v) in depots.items()) + 0.25 * overtime)\n    return m, mathopt.solve(m, mathopt.SolverType.HIGHS)\n\n\nm, result = solved(budget=60, cap=10)\nprint(\"budget 60, overtime cap 10, step 3:\", price_directions(m, result, \"budget\", 3))\nm, result = solved(budget=60, cap=5)\nprint(\"budget 60, overtime cap 5, step 3:\", price_directions(m, result, \"budget\", 3))\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef fix_plan(model: mathopt.Model, result: mathopt.SolveResult) -> None:\n    \"\"\"Fix every integer variable at its value in `result`, and make it continuous.\"\"\"\n    for v in model.variables():\n        if v.integer:\n            value = round(result.variable_values(v))\n            v.integer = False\n            v.lower_bound = value\n            v.upper_bound = value\n\n\ndef price_directions(model: mathopt.Model, result: mathopt.SolveResult, row_name: str, step: float) -> dict:\n    \"\"\"The fixed-integer price of a <= row, and whether it forecasts the fixed plan's change for +step and -step.\"\"\"\n    # TODO: say which steps should hold each way, then fix the plan, read the price and test both ways.\n    return {\"price\": 0.0, \"up\": False, \"down\": False}\n\n\nif __name__ == \"__main__\":\n    m = mathopt.Model()\n    north = m.add_binary_variable(name=\"north\")\n    overtime = m.add_variable(lb=0, ub=20, name=\"overtime\")\n    m.add_linear_constraint(40 * north + overtime <= 50, name=\"budget\")\n    m.maximize(60 * north + 0.5 * overtime)\n    print(price_directions(m, mathopt.solve(m, mathopt.SolverType.HIGHS), \"budget\", 5))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom direction import price_directions\n\ndepots = {\"west\": (35, 50), \"quay\": (20, 26)}\n\n\ndef solved(budget, cap):\n    m = mathopt.Model()\n    x = {s: m.add_binary_variable(name=s) for s in depots}\n    overtime = m.add_variable(lb=0, ub=cap, name=\"overtime\")\n    m.add_linear_constraint(sum(c * x[s] for s, (c, _) in depots.items()) + overtime <= budget, name=\"budget\")\n    m.maximize(sum(v * x[s] for s, (_, v) in depots.items()) + 0.25 * overtime)\n    return m, mathopt.solve(m, mathopt.SolverType.HIGHS)\n\n\nm, result = solved(budget=60, cap=10)\nprint(\"budget 60, overtime cap 10, step 3:\", price_directions(m, result, \"budget\", 3))\nm, result = solved(budget=60, cap=5)\nprint(\"budget 60, overtime cap 5, step 3:\", price_directions(m, result, \"budget\", 3))\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "8de52e5067f1b19cb43b52c64ebeb2f571904ed4f95ca562f30667fb4b18a6da",
+  "content_sha256": "a3e6ea202a495cf80ad6cf263904a9282bdc8894d64ec0329b06a6a5911bf5b0",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef fix_plan(model: mathopt.Model, result: mathopt.SolveResult) -> None:\n    \"\"\"Fix every integer variable at its value in `result`, and make it continuous.\"\"\"\n    for v in model.variables():\n        if v.integer:\n            value = round(result.variable_values(v))\n            v.integer = False\n            v.lower_bound = value\n            v.upper_bound = value\n\n\ndef price_directions(model: mathopt.Model, result: mathopt.SolveResult, row_name: str, step: float) -> dict:\n    \"\"\"The fixed-integer price of a <= row, and whether it forecasts the fixed plan's change for +step and -step.\"\"\"\n    # TODO: say which steps should hold each way, then fix the plan, read the price and test both ways.\n    return {\"price\": 0.0, \"up\": False, \"down\": False}\n\n\nif __name__ == \"__main__\":\n    m = mathopt.Model()\n    north = m.add_binary_variable(name=\"north\")\n    overtime = m.add_variable(lb=0, ub=20, name=\"overtime\")\n    m.add_linear_constraint(40 * north + overtime <= 50, name=\"budget\")\n    m.maximize(60 * north + 0.5 * overtime)\n    print(price_directions(m, mathopt.solve(m, mathopt.SolverType.HIGHS), \"budget\", 5))\n",
   "exercise": {
     "main_path": "practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-2/direction.py",
     "test_path": "practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-2/test_direction.py",
     "run_command": [
       "python3",
-      "practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-2/direction.py"
+      "practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -139,6 +157,10 @@
     },
     "concepts": [
       "the directions and sizes of change a fixed-integer price forecasts"
-    ]
+    ],
+    "files": [
+      "practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/09-diagnostics-and-explainability/38-sensitivity-for-mip/prose/unit-02/practice-2/try_it.py"
   }
 }

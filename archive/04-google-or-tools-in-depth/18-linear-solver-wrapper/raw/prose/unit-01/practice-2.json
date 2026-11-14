@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Read a solve safely",
   "blocks": [
     {
@@ -61,6 +61,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.linear_solver import pywraplp\n\nNAMES = {pywraplp.Solver.OPTIMAL: \"OPTIMAL\", pywraplp.Solver.FEASIBLE: \"FEASIBLE\",\n         pywraplp.Solver.INFEASIBLE: \"INFEASIBLE\", pywraplp.Solver.UNBOUNDED: \"UNBOUNDED\",\n         pywraplp.Solver.ABNORMAL: \"ABNORMAL\", pywraplp.Solver.MODEL_INVALID: \"MODEL_INVALID\",\n         pywraplp.Solver.NOT_SOLVED: \"NOT_SOLVED\"}\n\n\ndef outcome(solver: pywraplp.Solver, status: int, x: dict) -> dict:\n    \"\"\"What a report may say about a solve: the status by name, and a value and plan only if there is one.\"\"\"\n    has_solution = status in (pywraplp.Solver.OPTIMAL, pywraplp.Solver.FEASIBLE)\n    return {\n        \"status\": NAMES[status],\n        \"value\": solver.Objective().Value() if has_solution else None,\n        \"plan\": {name: var.solution_value() for name, var in x.items()} if has_solution else None,\n    }\n\n\ndef crews_model(need: int, most: int):\n    \"\"\"Hire crews of two kinds, at most `most` of each, to cover `need`; a small model to try outcome() on.\"\"\"\n    solver = pywraplp.Solver.CreateSolver(\"SCIP\")\n    x = {\"line\": solver.IntVar(0, most, \"line\"), \"field\": solver.IntVar(0, most, \"field\")}\n    solver.Add(2 * x[\"line\"] + x[\"field\"] >= need, \"cover\")\n    solver.Minimize(5 * x[\"line\"] + 3 * x[\"field\"])\n    return solver, x\n\n\nif __name__ == \"__main__\":\n    solver, x = crews_model(need=7, most=5)\n    print(outcome(solver, solver.Solve(), x))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.linear_solver import pywraplp\n\nfrom report import crews_model, outcome\n\n# Line crews cover 2 sites, field crews 1; at most `most` of each.\nsolver, x = crews_model(need=9, most=6)\nprint(\"need 9, most 6:\", outcome(solver, solver.Solve(), x))\nsolver, x = crews_model(need=25, most=6)\nprint(\"need 25, most 6:\", outcome(solver, solver.Solve(), x))\nsolver, x = crews_model(need=4, most=3)\nsolver.Solve()\nprint(\"need 4, most 3, read as FEASIBLE:\", outcome(solver, pywraplp.Solver.FEASIBLE, x))\n"
         }
       ]
     },
@@ -73,6 +82,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.linear_solver import pywraplp\n\nNAMES = {pywraplp.Solver.OPTIMAL: \"OPTIMAL\", pywraplp.Solver.FEASIBLE: \"FEASIBLE\",\n         pywraplp.Solver.INFEASIBLE: \"INFEASIBLE\", pywraplp.Solver.UNBOUNDED: \"UNBOUNDED\",\n         pywraplp.Solver.ABNORMAL: \"ABNORMAL\", pywraplp.Solver.MODEL_INVALID: \"MODEL_INVALID\",\n         pywraplp.Solver.NOT_SOLVED: \"NOT_SOLVED\"}\n\n\ndef outcome(solver: pywraplp.Solver, status: int, x: dict) -> dict:\n    \"\"\"What a report may say about a solve: the status by name, and a value and plan only if there is one.\"\"\"\n    # TODO: name the status; give a value and a plan only when the solve has a solution.\n    return {\"status\": \"\", \"value\": None, \"plan\": None}\n\n\ndef crews_model(need: int, most: int):\n    \"\"\"Hire crews of two kinds, at most `most` of each, to cover `need`; a small model to try outcome() on.\"\"\"\n    solver = pywraplp.Solver.CreateSolver(\"SCIP\")\n    x = {\"line\": solver.IntVar(0, most, \"line\"), \"field\": solver.IntVar(0, most, \"field\")}\n    solver.Add(2 * x[\"line\"] + x[\"field\"] >= need, \"cover\")\n    solver.Minimize(5 * x[\"line\"] + 3 * x[\"field\"])\n    return solver, x\n\n\nif __name__ == \"__main__\":\n    solver, x = crews_model(need=7, most=5)\n    print(outcome(solver, solver.Solve(), x))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.linear_solver import pywraplp\n\nfrom report import crews_model, outcome\n\n# Line crews cover 2 sites, field crews 1; at most `most` of each.\nsolver, x = crews_model(need=9, most=6)\nprint(\"need 9, most 6:\", outcome(solver, solver.Solve(), x))\nsolver, x = crews_model(need=25, most=6)\nprint(\"need 25, most 6:\", outcome(solver, solver.Solve(), x))\nsolver, x = crews_model(need=4, most=3)\nsolver.Solve()\nprint(\"need 4, most 3, read as FEASIBLE:\", outcome(solver, pywraplp.Solver.FEASIBLE, x))\n"
     }
   ],
   "video": null,
@@ -80,8 +98,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -91,14 +109,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "3857893626632945d43a0f6b2062678ac00464c210e031145ad2b5d116d0cf91",
+  "content_sha256": "ba788491b31800caa784f7915f37a096a708d5795d64d4004d1054b10eaf54ea",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.linear_solver import pywraplp\n\nNAMES = {pywraplp.Solver.OPTIMAL: \"OPTIMAL\", pywraplp.Solver.FEASIBLE: \"FEASIBLE\",\n         pywraplp.Solver.INFEASIBLE: \"INFEASIBLE\", pywraplp.Solver.UNBOUNDED: \"UNBOUNDED\",\n         pywraplp.Solver.ABNORMAL: \"ABNORMAL\", pywraplp.Solver.MODEL_INVALID: \"MODEL_INVALID\",\n         pywraplp.Solver.NOT_SOLVED: \"NOT_SOLVED\"}\n\n\ndef outcome(solver: pywraplp.Solver, status: int, x: dict) -> dict:\n    \"\"\"What a report may say about a solve: the status by name, and a value and plan only if there is one.\"\"\"\n    # TODO: name the status; give a value and a plan only when the solve has a solution.\n    return {\"status\": \"\", \"value\": None, \"plan\": None}\n\n\ndef crews_model(need: int, most: int):\n    \"\"\"Hire crews of two kinds, at most `most` of each, to cover `need`; a small model to try outcome() on.\"\"\"\n    solver = pywraplp.Solver.CreateSolver(\"SCIP\")\n    x = {\"line\": solver.IntVar(0, most, \"line\"), \"field\": solver.IntVar(0, most, \"field\")}\n    solver.Add(2 * x[\"line\"] + x[\"field\"] >= need, \"cover\")\n    solver.Minimize(5 * x[\"line\"] + 3 * x[\"field\"])\n    return solver, x\n\n\nif __name__ == \"__main__\":\n    solver, x = crews_model(need=7, most=5)\n    print(outcome(solver, solver.Solve(), x))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-01/practice-2/report.py",
     "test_path": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-01/practice-2/test_report.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-01/practice-2/report.py"
+      "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -144,6 +162,10 @@
     },
     "concepts": [
       "a solve's values are read only after a status that has a solution"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-01/practice-2/try_it.py"
   }
 }

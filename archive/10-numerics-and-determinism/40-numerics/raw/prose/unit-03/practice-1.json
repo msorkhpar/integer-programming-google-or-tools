@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Scan a nightly HiGHS log for numerical warnings",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nKINDS = {\"(bound viol.)\": \"bound\", \"(int. viol.)\": \"integrality\", \"(row viol.)\": \"row\"}\n\n\ndef scan(lines: list[str], max_span: float = 1e6) -> list[str]:\n    \"\"\"The numerical findings of a HiGHS log, in the order their lines appear.\"\"\"\n    findings: list[str] = []\n    for line in lines:\n        text = line.strip()\n        if text.startswith(\"WARNING:\"):\n            findings.append(\"warning: \" + text[len(\"WARNING:\"):].strip())\n        elif text.startswith(\"Matrix\"):\n            low, high = (float(v) for v in text[text.index(\"[\") + 1:text.index(\"]\")].split(\",\"))\n            if high / low > max_span:\n                findings.append(f\"matrix span {high / low:.0e}\")\n        else:\n            for marker, kind in KINDS.items():\n                value = text.split()[0] if text.endswith(marker) else None\n                if value is not None and float(value) > 0:\n                    findings.append(f\"{kind} violation {value}\")\n    return findings\n\n\nif __name__ == \"__main__\":\n    print(scan([\"WARNING: Problem has some excessively large costs\", \"  Matrix  [1e-01, 1e+09]\",\n                \"                    8.89e-07 (int. viol.)\"]))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom scan import scan\n\nlog = [\n    \"MIP roster has 120 rows; 300 cols; 900 nonzeros; 280 integer variables (280 binary)\",\n    \"Coefficient ranges:\",\n    \"  Matrix  [5e-03, 2e+07]\",\n    \"  Cost    [1e+00, 5e+04]\",\n    \"WARNING: Problem has some excessively large costs\",\n    \"  Solution status   feasible\",\n    \"                    2.5e-06 (row viol.)\",\n    \"                    0 (bound viol.)\",\n]\nprint(\"findings, roster log:\", scan(log))\nprint(\"findings, roster log, span limit 1e10:\", scan(log, max_span=1e10))\nprint(\"findings, matrix line alone:\", scan([\"  Matrix  [1e+00, 4e+02]\"]))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nKINDS = {\"(bound viol.)\": \"bound\", \"(int. viol.)\": \"integrality\", \"(row viol.)\": \"row\"}\n\n\ndef scan(lines: list[str], max_span: float = 1e6) -> list[str]:\n    \"\"\"The numerical findings of a HiGHS log, in the order their lines appear.\"\"\"\n    findings: list[str] = []\n    # TODO: warnings, a matrix span above max_span, and violations above 0.\n    return findings\n\n\nif __name__ == \"__main__\":\n    print(scan([\"WARNING: Problem has some excessively large costs\", \"  Matrix  [1e-01, 1e+09]\",\n                \"                    8.89e-07 (int. viol.)\"]))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom scan import scan\n\nlog = [\n    \"MIP roster has 120 rows; 300 cols; 900 nonzeros; 280 integer variables (280 binary)\",\n    \"Coefficient ranges:\",\n    \"  Matrix  [5e-03, 2e+07]\",\n    \"  Cost    [1e+00, 5e+04]\",\n    \"WARNING: Problem has some excessively large costs\",\n    \"  Solution status   feasible\",\n    \"                    2.5e-06 (row viol.)\",\n    \"                    0 (bound viol.)\",\n]\nprint(\"findings, roster log:\", scan(log))\nprint(\"findings, roster log, span limit 1e10:\", scan(log, max_span=1e10))\nprint(\"findings, matrix line alone:\", scan([\"  Matrix  [1e+00, 4e+02]\"]))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "1108aa8261cf0c2e3e9a935716c7504ddeb2db274a1b599ee06453dc7ac808e5",
+  "content_sha256": "eccc26182dcc8ce3b1a71583fd568ea7441b52437c32db55f145dd235601e19b",
   "starting_code": "from __future__ import annotations\n\nKINDS = {\"(bound viol.)\": \"bound\", \"(int. viol.)\": \"integrality\", \"(row viol.)\": \"row\"}\n\n\ndef scan(lines: list[str], max_span: float = 1e6) -> list[str]:\n    \"\"\"The numerical findings of a HiGHS log, in the order their lines appear.\"\"\"\n    findings: list[str] = []\n    # TODO: warnings, a matrix span above max_span, and violations above 0.\n    return findings\n\n\nif __name__ == \"__main__\":\n    print(scan([\"WARNING: Problem has some excessively large costs\", \"  Matrix  [1e-01, 1e+09]\",\n                \"                    8.89e-07 (int. viol.)\"]))\n",
   "exercise": {
     "main_path": "practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-1/scan.py",
     "test_path": "practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-1/test_scan.py",
     "run_command": [
       "python3",
-      "practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-1/scan.py"
+      "practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -136,6 +154,10 @@
     "concepts": [
       "the report's violation lines are the solver's own measure of its plan, and nonzero values point at what to inspect",
       "HiGHS warns about large costs and bounds but not about the matrix, so the ranges are read directly"
-    ]
+    ],
+    "files": [
+      "practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-1/try_it.py"
+    ],
+    "try_file": "practice/10-numerics-and-determinism/40-numerics/prose/unit-03/practice-1/try_it.py"
   }
 }

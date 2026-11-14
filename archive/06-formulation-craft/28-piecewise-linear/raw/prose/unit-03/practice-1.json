@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A treatment plant expanded in stages, each finished before the next",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_stage_order(model: mathopt.Model, built: list[mathopt.Variable], widths: list[float]) -> None:\n    \"\"\"Stage k may begin only when stage k - 1 is finished.\"\"\"\n    for k in range(len(widths) - 1):\n        done = model.add_binary_variable(name=f\"done_{k}\")                     # stage k is finished\n        model.add_linear_constraint(widths[k] * done <= built[k], name=f\"finished_{k}\")\n        model.add_linear_constraint(built[k + 1] <= widths[k + 1] * done, name=f\"may_begin_{k + 1}\")\n\n\ndef build(widths: list[float]) -> tuple[mathopt.Model, list[mathopt.Variable]]:\n    model = mathopt.Model(name=\"expansion\")\n    built = [model.add_variable(lb=0, ub=w, name=f\"built_{k}\") for k, w in enumerate(widths)]\n    add_stage_order(model, built, widths)\n    model.maximize(sum(built))\n    return model, built\n\n\nif __name__ == \"__main__\":\n    model, built = build([4.0, 3.0, 5.0])\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom expansion import build\n\nwidths = [6.0, 2.0, 3.0]   # ML/day added by each of three stages\n\n\ndef allowed(plan):\n    model, built = build(widths)\n    for var, value in zip(built, plan):\n        var.lower_bound = var.upper_bound = value\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"plan 6, 1, 0:\", allowed([6.0, 1.0, 0.0]))\nprint(\"plan 5, 1, 0:\", allowed([5.0, 1.0, 0.0]))\nprint(\"plan 6, 2, 2.5:\", allowed([6.0, 2.0, 2.5]))\nprint(\"plan 6, 0, 1:\", allowed([6.0, 0.0, 1.0]))\nprint(\"plan 3, 0, 0:\", allowed([3.0, 0.0, 0.0]))\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_stage_order(model: mathopt.Model, built: list[mathopt.Variable], widths: list[float]) -> None:\n    \"\"\"Stage k may begin only when stage k - 1 is finished.\"\"\"\n    # TODO: one binary per stage boundary, and the two rows that tie it to the stages around it.\n    return None\n\n\ndef build(widths: list[float]) -> tuple[mathopt.Model, list[mathopt.Variable]]:\n    model = mathopt.Model(name=\"expansion\")\n    built = [model.add_variable(lb=0, ub=w, name=f\"built_{k}\") for k, w in enumerate(widths)]\n    add_stage_order(model, built, widths)\n    model.maximize(sum(built))\n    return model, built\n\n\nif __name__ == \"__main__\":\n    model, built = build([4.0, 3.0, 5.0])\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom expansion import build\n\nwidths = [6.0, 2.0, 3.0]   # ML/day added by each of three stages\n\n\ndef allowed(plan):\n    model, built = build(widths)\n    for var, value in zip(built, plan):\n        var.lower_bound = var.upper_bound = value\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"plan 6, 1, 0:\", allowed([6.0, 1.0, 0.0]))\nprint(\"plan 5, 1, 0:\", allowed([5.0, 1.0, 0.0]))\nprint(\"plan 6, 2, 2.5:\", allowed([6.0, 2.0, 2.5]))\nprint(\"plan 6, 0, 1:\", allowed([6.0, 0.0, 1.0]))\nprint(\"plan 3, 0, 0:\", allowed([3.0, 0.0, 0.0]))\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "7f9a5a5de7f08b4cbe3b86f6b996de677aed7bbf925d8aad29de9b79d81bc8a1",
+  "content_sha256": "686a74405966caec7228113e135c3e62b2b27c614c90699eb1d7ca24c2912e42",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_stage_order(model: mathopt.Model, built: list[mathopt.Variable], widths: list[float]) -> None:\n    \"\"\"Stage k may begin only when stage k - 1 is finished.\"\"\"\n    # TODO: one binary per stage boundary, and the two rows that tie it to the stages around it.\n    return None\n\n\ndef build(widths: list[float]) -> tuple[mathopt.Model, list[mathopt.Variable]]:\n    model = mathopt.Model(name=\"expansion\")\n    built = [model.add_variable(lb=0, ub=w, name=f\"built_{k}\") for k, w in enumerate(widths)]\n    add_stage_order(model, built, widths)\n    model.maximize(sum(built))\n    return model, built\n\n\nif __name__ == \"__main__\":\n    model, built = build([4.0, 3.0, 5.0])\n    print(model.get_num_linear_constraints(), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-03/practice-1/expansion.py",
     "test_path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-03/practice-1/test_expansion.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-03/practice-1/expansion.py"
+      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-03/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -134,6 +152,10 @@
     },
     "concepts": [
       "an ordering rule written with one binary per boundary between stages"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-03/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-03/practice-1/try_it.py"
   }
 }

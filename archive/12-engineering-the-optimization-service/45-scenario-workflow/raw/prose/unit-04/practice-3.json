@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 3,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Which years' spend changed between two runs",
   "blocks": [
     {
@@ -43,6 +43,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport sqlite3\n\nSCHEMA = \"\"\"\nCREATE TABLE run_start (run_id INTEGER NOT NULL, project TEXT NOT NULL, start_year INTEGER NOT NULL,\n                        PRIMARY KEY (run_id, project)) STRICT;\nCREATE TABLE cost (project TEXT NOT NULL, year_offset INTEGER NOT NULL, amount INTEGER NOT NULL,\n                   PRIMARY KEY (project, year_offset)) STRICT;\n\"\"\"\n\nSPEND_DIFF = \"\"\"\nWITH spend AS (\n    SELECT r.run_id, r.start_year + c.year_offset AS year, sum(c.amount) AS amount\n    FROM run_start AS r JOIN cost AS c ON c.project = r.project\n    WHERE r.run_id IN (:a, :b)\n    GROUP BY r.run_id, year\n)\nSELECT coalesce(a.year, b.year) AS year, coalesce(a.amount, 0) AS a_spend, coalesce(b.amount, 0) AS b_spend\nFROM (SELECT year, amount FROM spend WHERE run_id = :a) AS a\nFULL OUTER JOIN (SELECT year, amount FROM spend WHERE run_id = :b) AS b ON a.year = b.year\nWHERE coalesce(a.amount, 0) <> coalesce(b.amount, 0)\nORDER BY year\n\"\"\"\n\n\ndef spend_diff(conn: sqlite3.Connection, a: int, b: int) -> list[tuple[int, int, int]]:\n    \"\"\"(year, run a's spend, run b's spend) for every year whose spend differs, in year order.\"\"\"\n    return [tuple(row) for row in conn.execute(SPEND_DIFF, {\"a\": a, \"b\": b})]\n\n\nif __name__ == \"__main__\":\n    conn = sqlite3.connect(\":memory:\")\n    conn.executescript(SCHEMA)\n    conn.executemany(\"INSERT INTO cost VALUES (?, ?, ?)\", [(\"M-1\", 0, 300), (\"M-1\", 1, 200)])\n    conn.executemany(\"INSERT INTO run_start VALUES (?, ?, ?)\", [(1, \"M-1\", 2027), (2, \"M-1\", 2028)])\n    print(spend_diff(conn, 1, 2))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport sqlite3\n\nfrom spend import SCHEMA, spend_diff\n\nconn = sqlite3.connect(\":memory:\")\nconn.executescript(SCHEMA)\nconn.executemany(\"INSERT INTO cost VALUES (?, ?, ?)\",\n                 [(\"R-1\", 0, 100), (\"R-1\", 1, 60), (\"R-2\", 0, 80), (\"R-3\", 0, 120)])\nconn.executemany(\"INSERT INTO run_start VALUES (?, ?, ?)\", [\n    (7, \"R-1\", 2031), (7, \"R-2\", 2032),\n    (8, \"R-1\", 2032), (8, \"R-2\", 2032), (8, \"R-3\", 2034),\n])\nprint(\"run 7 vs run 8:\", spend_diff(conn, 7, 8))\nprint(\"run 8 vs run 7:\", spend_diff(conn, 8, 7))\nprint(\"run 7 vs itself:\", spend_diff(conn, 7, 7))\n"
         }
       ]
     },
@@ -55,6 +64,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport sqlite3\n\nSCHEMA = \"\"\"\nCREATE TABLE run_start (run_id INTEGER NOT NULL, project TEXT NOT NULL, start_year INTEGER NOT NULL,\n                        PRIMARY KEY (run_id, project)) STRICT;\nCREATE TABLE cost (project TEXT NOT NULL, year_offset INTEGER NOT NULL, amount INTEGER NOT NULL,\n                   PRIMARY KEY (project, year_offset)) STRICT;\n\"\"\"\n\nSPEND_DIFF = \"\"\"\nSELECT NULL AS year, NULL AS a_spend, NULL AS b_spend WHERE 0\n\"\"\"\n\n\ndef spend_diff(conn: sqlite3.Connection, a: int, b: int) -> list[tuple[int, int, int]]:\n    \"\"\"(year, run a's spend, run b's spend) for every year whose spend differs, in year order.\"\"\"\n    return [tuple(row) for row in conn.execute(SPEND_DIFF, {\"a\": a, \"b\": b})]\n\n\nif __name__ == \"__main__\":\n    conn = sqlite3.connect(\":memory:\")\n    conn.executescript(SCHEMA)\n    conn.executemany(\"INSERT INTO cost VALUES (?, ?, ?)\", [(\"M-1\", 0, 300), (\"M-1\", 1, 200)])\n    conn.executemany(\"INSERT INTO run_start VALUES (?, ?, ?)\", [(1, \"M-1\", 2027), (2, \"M-1\", 2028)])\n    print(spend_diff(conn, 1, 2))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport sqlite3\n\nfrom spend import SCHEMA, spend_diff\n\nconn = sqlite3.connect(\":memory:\")\nconn.executescript(SCHEMA)\nconn.executemany(\"INSERT INTO cost VALUES (?, ?, ?)\",\n                 [(\"R-1\", 0, 100), (\"R-1\", 1, 60), (\"R-2\", 0, 80), (\"R-3\", 0, 120)])\nconn.executemany(\"INSERT INTO run_start VALUES (?, ?, ?)\", [\n    (7, \"R-1\", 2031), (7, \"R-2\", 2032),\n    (8, \"R-1\", 2032), (8, \"R-2\", 2032), (8, \"R-3\", 2034),\n])\nprint(\"run 7 vs run 8:\", spend_diff(conn, 7, 8))\nprint(\"run 8 vs run 7:\", spend_diff(conn, 8, 7))\nprint(\"run 7 vs itself:\", spend_diff(conn, 7, 7))\n"
     }
   ],
   "video": null,
@@ -62,8 +80,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -73,14 +91,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "fd541df06e937738aacc20a5d82cfcb30b1c10789f64fe71d7a826f51afe5fbf",
+  "content_sha256": "ac1d7594b193970d36ced568ad52e3c60696bcc56dc4b5bdbbe8a95fee7a5961",
   "starting_code": "from __future__ import annotations\n\nimport sqlite3\n\nSCHEMA = \"\"\"\nCREATE TABLE run_start (run_id INTEGER NOT NULL, project TEXT NOT NULL, start_year INTEGER NOT NULL,\n                        PRIMARY KEY (run_id, project)) STRICT;\nCREATE TABLE cost (project TEXT NOT NULL, year_offset INTEGER NOT NULL, amount INTEGER NOT NULL,\n                   PRIMARY KEY (project, year_offset)) STRICT;\n\"\"\"\n\nSPEND_DIFF = \"\"\"\nSELECT NULL AS year, NULL AS a_spend, NULL AS b_spend WHERE 0\n\"\"\"\n\n\ndef spend_diff(conn: sqlite3.Connection, a: int, b: int) -> list[tuple[int, int, int]]:\n    \"\"\"(year, run a's spend, run b's spend) for every year whose spend differs, in year order.\"\"\"\n    return [tuple(row) for row in conn.execute(SPEND_DIFF, {\"a\": a, \"b\": b})]\n\n\nif __name__ == \"__main__\":\n    conn = sqlite3.connect(\":memory:\")\n    conn.executescript(SCHEMA)\n    conn.executemany(\"INSERT INTO cost VALUES (?, ?, ?)\", [(\"M-1\", 0, 300), (\"M-1\", 1, 200)])\n    conn.executemany(\"INSERT INTO run_start VALUES (?, ?, ?)\", [(1, \"M-1\", 2027), (2, \"M-1\", 2028)])\n    print(spend_diff(conn, 1, 2))\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-3/spend.py",
     "test_path": "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-3/test_spend.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-3/spend.py"
+      "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-3/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -126,6 +144,10 @@
     },
     "concepts": [
       "a full outer join compares two runs and keeps rows present on one side only"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-3/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-3/try_it.py"
   }
 }

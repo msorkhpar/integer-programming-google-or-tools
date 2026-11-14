@@ -9,7 +9,7 @@
   "unit": 6,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A ferry operator's dry-dock overrides",
   "blocks": [
     {
@@ -64,6 +64,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Vessel:\n    vid: str\n    years: tuple[int, ...]\n\n\ndef apply_overrides(x: dict, vessels: list[Vessel], overrides: list[tuple]) -> list:\n    \"\"\"Lock, ban and deadline overrides as bounds on x; return what undoes them.\"\"\"\n    years = {v.vid: v.years for v in vessels}\n    changes = []\n    for kind, vid, *rest in overrides:\n        for t in years[vid]:\n            low, high = x[vid, t].lower_bound, x[vid, t].upper_bound\n            changes.append((x[vid, t], low, high))\n            closed = kind == \"ban\" or (kind == \"lock\" and t != rest[0]) or (kind == \"by\" and t > rest[0])\n            high = 0 if closed else high\n            low = 1 if kind == \"lock\" and t == rest[0] else low\n            x[vid, t].lower_bound, x[vid, t].upper_bound = low, high\n    return changes\n\n\ndef undo_overrides(changes: list) -> None:\n    \"\"\"Put back every bound that `apply_overrides` changed.\"\"\"\n    for var, low, high in reversed(changes):\n        (var.lower_bound, var.upper_bound) = (low, high)\n\n\ndef build(vessels: list[Vessel]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"dry-docks\")\n    x = {(v.vid, t): model.add_binary_variable(name=f\"x_{v.vid}_{t}\") for v in vessels for t in v.years}\n    for v in vessels:\n        model.add_linear_constraint(sum(x[v.vid, t] for t in v.years) <= 1, name=f\"once_{v.vid}\")\n    return model, x\n\n\nif __name__ == \"__main__\":\n    vessels = [Vessel(\"ISLA\", (2027, 2028, 2029))]\n    model, x = build(vessels)\n    changes = apply_overrides(x, vessels, [(\"by\", \"ISLA\", 2028)])\n    print(x[\"ISLA\", 2029].upper_bound)\n    undo_overrides(changes)\n    print(x[\"ISLA\", 2029].upper_bound)\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom docks import Vessel, apply_overrides, build, undo_overrides\n\n# Three ferries, docking years 2027 to 2030.\nvessels = [Vessel(\"TERN\", (2027, 2028, 2029, 2030)), Vessel(\"GULL\", (2028, 2029)),\n           Vessel(\"KITE\", (2027, 2028, 2029, 2030))]\noverrides = [(\"lock\", \"TERN\", 2028), (\"ban\", \"GULL\"), (\"by\", \"KITE\", 2028)]\n\n\ndef bounds(x):\n    return {f\"{v} {t}\": (var.lower_bound, var.upper_bound) for (v, t), var in sorted(x.items())}\n\n\nmodel, x = build(vessels)\nbefore = bounds(x)\nchanges = apply_overrides(x, vessels, overrides)\nafter = bounds(x)\nfor key in (\"TERN 2027\", \"TERN 2028\", \"GULL 2029\", \"KITE 2028\", \"KITE 2030\"):\n    print(f\"{key} bounds after overrides:\", after[key])\nundo_overrides(changes)\nprint(\"bounds back after undo:\", bounds(x) == before)\n"
         }
       ]
     },
@@ -76,6 +85,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Vessel:\n    vid: str\n    years: tuple[int, ...]\n\n\ndef apply_overrides(x: dict, vessels: list[Vessel], overrides: list[tuple]) -> list:\n    \"\"\"Lock, ban and deadline overrides as bounds on x; return what undoes them.\"\"\"\n    # TODO: set the bounds each override needs, and record what you change.\n    return []\n\n\ndef undo_overrides(changes: list) -> None:\n    \"\"\"Put back every bound that `apply_overrides` changed.\"\"\"\n    # TODO: restore the recorded bounds.\n    return None\n\n\ndef build(vessels: list[Vessel]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"dry-docks\")\n    x = {(v.vid, t): model.add_binary_variable(name=f\"x_{v.vid}_{t}\") for v in vessels for t in v.years}\n    for v in vessels:\n        model.add_linear_constraint(sum(x[v.vid, t] for t in v.years) <= 1, name=f\"once_{v.vid}\")\n    return model, x\n\n\nif __name__ == \"__main__\":\n    vessels = [Vessel(\"ISLA\", (2027, 2028, 2029))]\n    model, x = build(vessels)\n    changes = apply_overrides(x, vessels, [(\"by\", \"ISLA\", 2028)])\n    print(x[\"ISLA\", 2029].upper_bound)\n    undo_overrides(changes)\n    print(x[\"ISLA\", 2029].upper_bound)\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom docks import Vessel, apply_overrides, build, undo_overrides\n\n# Three ferries, docking years 2027 to 2030.\nvessels = [Vessel(\"TERN\", (2027, 2028, 2029, 2030)), Vessel(\"GULL\", (2028, 2029)),\n           Vessel(\"KITE\", (2027, 2028, 2029, 2030))]\noverrides = [(\"lock\", \"TERN\", 2028), (\"ban\", \"GULL\"), (\"by\", \"KITE\", 2028)]\n\n\ndef bounds(x):\n    return {f\"{v} {t}\": (var.lower_bound, var.upper_bound) for (v, t), var in sorted(x.items())}\n\n\nmodel, x = build(vessels)\nbefore = bounds(x)\nchanges = apply_overrides(x, vessels, overrides)\nafter = bounds(x)\nfor key in (\"TERN 2027\", \"TERN 2028\", \"GULL 2029\", \"KITE 2028\", \"KITE 2030\"):\n    print(f\"{key} bounds after overrides:\", after[key])\nundo_overrides(changes)\nprint(\"bounds back after undo:\", bounds(x) == before)\n"
     }
   ],
   "video": null,
@@ -83,8 +101,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 0,
     "lists": 2,
     "images": 0,
@@ -94,14 +112,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "fd9a37a13a21f5cc501a5b0f74054930b03889193ca9af5abad17cd41c9b6192",
+  "content_sha256": "5083738c3ae7241304ceb85bd7351de28fee8c3399ba1eb0724884100389d84b",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Vessel:\n    vid: str\n    years: tuple[int, ...]\n\n\ndef apply_overrides(x: dict, vessels: list[Vessel], overrides: list[tuple]) -> list:\n    \"\"\"Lock, ban and deadline overrides as bounds on x; return what undoes them.\"\"\"\n    # TODO: set the bounds each override needs, and record what you change.\n    return []\n\n\ndef undo_overrides(changes: list) -> None:\n    \"\"\"Put back every bound that `apply_overrides` changed.\"\"\"\n    # TODO: restore the recorded bounds.\n    return None\n\n\ndef build(vessels: list[Vessel]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"dry-docks\")\n    x = {(v.vid, t): model.add_binary_variable(name=f\"x_{v.vid}_{t}\") for v in vessels for t in v.years}\n    for v in vessels:\n        model.add_linear_constraint(sum(x[v.vid, t] for t in v.years) <= 1, name=f\"once_{v.vid}\")\n    return model, x\n\n\nif __name__ == \"__main__\":\n    vessels = [Vessel(\"ISLA\", (2027, 2028, 2029))]\n    model, x = build(vessels)\n    changes = apply_overrides(x, vessels, [(\"by\", \"ISLA\", 2028)])\n    print(x[\"ISLA\", 2029].upper_bound)\n    undo_overrides(changes)\n    print(x[\"ISLA\", 2029].upper_bound)\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-06/practice-1/docks.py",
     "test_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-06/practice-1/test_docks.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-06/practice-1/docks.py"
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-06/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -158,6 +176,10 @@
     "concepts": [
       "an override on start variables changes their bounds, and only an override on a sum needs a row",
       "an override records the bounds it changed so that restoring them undoes it"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-06/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-06/practice-1/try_it.py"
   }
 }

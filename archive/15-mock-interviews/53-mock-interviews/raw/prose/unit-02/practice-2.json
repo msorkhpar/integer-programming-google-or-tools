@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "One inspection crew",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    duration: int        # whole weeks; started in week s, it works weeks s .. s + duration - 1\n    release: int         # it may not start before this week\n    deadline: int        # its end, start + duration, is at most this week\n\n\ndef start_variables(model: cp_model.CpModel, jobs: list[Job], horizon: int) -> dict[str, cp_model.IntVar]:\n    \"\"\"Given: one integer start week per job, from its release to the last start that ends by the horizon.\"\"\"\n    return {j.name: model.new_int_var(j.release, horizon - j.duration, f\"start_{j.name}\") for j in jobs}\n\n\ndef add_rules(model: cp_model.CpModel, start: dict, jobs: list[Job], blocked: list[tuple[int, int]]) -> None:\n    \"\"\"One crew: no two jobs at once, no work in a blocked period (first, last week), every deadline met.\"\"\"\n    intervals = [model.new_fixed_size_interval_var(start[j.name], j.duration, f\"work_{j.name}\") for j in jobs]\n    for first, last in blocked:\n        intervals.append(model.new_fixed_size_interval_var(first, last - first + 1, f\"blocked_{first}_{last}\"))\n    model.add_no_overlap(intervals)\n    for j in jobs:\n        model.add(start[j.name] + j.duration <= j.deadline)\n\n\ndef build(jobs: list[Job], blocked: list[tuple[int, int]], horizon: int) -> tuple[cp_model.CpModel, dict]:\n    model = cp_model.CpModel()\n    start = start_variables(model, jobs, horizon)\n    add_rules(model, start, jobs, blocked)\n    model.minimize(sum(start[j.name] + j.duration for j in jobs))\n    return model, start\n\n\nif __name__ == \"__main__\":\n    model, start = build([Job(\"A\", 2, 0, 6), Job(\"B\", 1, 0, 6)], [(2, 3)], 10)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    print(solver.status_name(solver.solve(model)), {n: solver.value(v) for n, v in start.items()})\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.sat.python import cp_model\n\nfrom crew import Job, build\n\njobs = [Job(\"Pump\", 2, 0, 8), Job(\"Valve\", 3, 1, 12), Job(\"Tank\", 1, 4, 15)]\nblocked = [(3, 4)]\n\n\ndef allowed(starts):\n    model, start = build(jobs, blocked, 16)\n    for name, week in starts.items():\n        model.add(start[name] == week)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.parameters.max_time_in_seconds = 5\n    return solver.solve(model) in (cp_model.OPTIMAL, cp_model.FEASIBLE)\n\n\nprint(\"Pump 0, Valve 5, Tank 8:\", allowed({\"Pump\": 0, \"Valve\": 5, \"Tank\": 8}))\nprint(\"Pump 0, Valve 1, Tank 8:\", allowed({\"Pump\": 0, \"Valve\": 1, \"Tank\": 8}))\nprint(\"Pump 2, Valve 5, Tank 8:\", allowed({\"Pump\": 2, \"Valve\": 5, \"Tank\": 8}))\nprint(\"Pump 6, Valve 9, Tank 12:\", allowed({\"Pump\": 6, \"Valve\": 9, \"Tank\": 12}))\nmodel, start = build(jobs, blocked, 16)\nsolver = cp_model.CpSolver()\nsolver.parameters.num_workers = 1\nsolver.parameters.max_time_in_seconds = 5\nstatus = solver.solve(model)\nprint(\"free schedule:\", solver.status_name(status), {n: solver.value(v) for n, v in start.items()})\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    duration: int        # whole weeks; started in week s, it works weeks s .. s + duration - 1\n    release: int         # it may not start before this week\n    deadline: int        # its end, start + duration, is at most this week\n\n\ndef start_variables(model: cp_model.CpModel, jobs: list[Job], horizon: int) -> dict[str, cp_model.IntVar]:\n    \"\"\"Given: one integer start week per job, from its release to the last start that ends by the horizon.\"\"\"\n    return {j.name: model.new_int_var(j.release, horizon - j.duration, f\"start_{j.name}\") for j in jobs}\n\n\ndef add_rules(model: cp_model.CpModel, start: dict, jobs: list[Job], blocked: list[tuple[int, int]]) -> None:\n    \"\"\"One crew: no two jobs at once, no work in a blocked period (first, last week), every deadline met.\"\"\"\n    # TODO: the crew's intervals, the blocked periods and the deadlines.\n    return None\n\n\ndef build(jobs: list[Job], blocked: list[tuple[int, int]], horizon: int) -> tuple[cp_model.CpModel, dict]:\n    model = cp_model.CpModel()\n    start = start_variables(model, jobs, horizon)\n    add_rules(model, start, jobs, blocked)\n    model.minimize(sum(start[j.name] + j.duration for j in jobs))\n    return model, start\n\n\nif __name__ == \"__main__\":\n    model, start = build([Job(\"A\", 2, 0, 6), Job(\"B\", 1, 0, 6)], [(2, 3)], 10)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    print(solver.status_name(solver.solve(model)), {n: solver.value(v) for n, v in start.items()})\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.sat.python import cp_model\n\nfrom crew import Job, build\n\njobs = [Job(\"Pump\", 2, 0, 8), Job(\"Valve\", 3, 1, 12), Job(\"Tank\", 1, 4, 15)]\nblocked = [(3, 4)]\n\n\ndef allowed(starts):\n    model, start = build(jobs, blocked, 16)\n    for name, week in starts.items():\n        model.add(start[name] == week)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.parameters.max_time_in_seconds = 5\n    return solver.solve(model) in (cp_model.OPTIMAL, cp_model.FEASIBLE)\n\n\nprint(\"Pump 0, Valve 5, Tank 8:\", allowed({\"Pump\": 0, \"Valve\": 5, \"Tank\": 8}))\nprint(\"Pump 0, Valve 1, Tank 8:\", allowed({\"Pump\": 0, \"Valve\": 1, \"Tank\": 8}))\nprint(\"Pump 2, Valve 5, Tank 8:\", allowed({\"Pump\": 2, \"Valve\": 5, \"Tank\": 8}))\nprint(\"Pump 6, Valve 9, Tank 12:\", allowed({\"Pump\": 6, \"Valve\": 9, \"Tank\": 12}))\nmodel, start = build(jobs, blocked, 16)\nsolver = cp_model.CpSolver()\nsolver.parameters.num_workers = 1\nsolver.parameters.max_time_in_seconds = 5\nstatus = solver.solve(model)\nprint(\"free schedule:\", solver.status_name(status), {n: solver.value(v) for n, v in start.items()})\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "a154b9d0e70e9f8d679fabbc46c21ae52c2638faaa57a5f1f00f1349268e83ff",
+  "content_sha256": "1b4c7a3d4f005614e67a5de6cbf4c878a749544ca16bfc0ccf0105dcafa76b58",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass Job:\n    name: str\n    duration: int        # whole weeks; started in week s, it works weeks s .. s + duration - 1\n    release: int         # it may not start before this week\n    deadline: int        # its end, start + duration, is at most this week\n\n\ndef start_variables(model: cp_model.CpModel, jobs: list[Job], horizon: int) -> dict[str, cp_model.IntVar]:\n    \"\"\"Given: one integer start week per job, from its release to the last start that ends by the horizon.\"\"\"\n    return {j.name: model.new_int_var(j.release, horizon - j.duration, f\"start_{j.name}\") for j in jobs}\n\n\ndef add_rules(model: cp_model.CpModel, start: dict, jobs: list[Job], blocked: list[tuple[int, int]]) -> None:\n    \"\"\"One crew: no two jobs at once, no work in a blocked period (first, last week), every deadline met.\"\"\"\n    # TODO: the crew's intervals, the blocked periods and the deadlines.\n    return None\n\n\ndef build(jobs: list[Job], blocked: list[tuple[int, int]], horizon: int) -> tuple[cp_model.CpModel, dict]:\n    model = cp_model.CpModel()\n    start = start_variables(model, jobs, horizon)\n    add_rules(model, start, jobs, blocked)\n    model.minimize(sum(start[j.name] + j.duration for j in jobs))\n    return model, start\n\n\nif __name__ == \"__main__\":\n    model, start = build([Job(\"A\", 2, 0, 6), Job(\"B\", 1, 0, 6)], [(2, 3)], 10)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    print(solver.status_name(solver.solve(model)), {n: solver.value(v) for n, v in start.items()})\n",
   "exercise": {
     "main_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-02/practice-2/crew.py",
     "test_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-02/practice-2/test_crew.py",
     "run_command": [
       "python3",
-      "practice/15-mock-interviews/53-mock-interviews/prose/unit-02/practice-2/crew.py"
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -150,6 +168,10 @@
     },
     "concepts": [
       "schedule one crew's jobs as CP-SAT intervals, with release weeks, blocked weeks and deadlines"
-    ]
+    ],
+    "files": [
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/15-mock-interviews/53-mock-interviews/prose/unit-02/practice-2/try_it.py"
   }
 }

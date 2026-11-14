@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "An audit table for several formulations",
   "blocks": [
     {
@@ -57,6 +57,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom typing import Callable\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef audit(variants: dict[str, Callable[[bool], mathopt.Model]], optimum: float) -> list[dict]:\n    \"\"\"One line per formulation, in the order given: size, LP bound, root bound and share of gap closed.\n\n    `variants[name](integer)` builds that formulation, as a MILP or (integer=False) as its LP\n    relaxation. `optimum` is the best plan's value. The share of the gap closed is measured against\n    the first variant, the one inherited.\n    \"\"\"\n    lines = []\n    for name, build in variants.items():\n        milp = build(True)\n        lp = mathopt.solve(build(False), mathopt.SolverType.GLOP).objective_value()\n        root = mathopt.solve(milp, mathopt.SolverType.HIGHS,\n                             params=mathopt.SolveParameters(node_limit=1)).best_objective_bound()\n        lines.append({\"name\": name, \"variables\": sum(1 for _ in milp.variables()),\n                      \"rows\": sum(1 for _ in milp.linear_constraints()), \"lp\": lp, \"root\": root})\n    first = lines[0][\"lp\"]\n    for line in lines:\n        line[\"closed\"] = (first - line[\"lp\"]) / (first - optimum) if first != optimum else 1.0\n    return lines\n\n\nif __name__ == \"__main__\":\n    def one(integer):\n        model = mathopt.Model()\n        a = model.add_variable(lb=0, ub=1, is_integer=integer)\n        model.add_linear_constraint(2 * a <= 1)\n        model.maximize(a)\n        return model\n\n    print(audit({\"only\": one}, 0.0))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom audit import audit\n\n\ndef variant(extra_pair: bool, one_row: bool):\n    def build(integer):\n        model = mathopt.Model()\n        p, q, r = (model.add_variable(lb=0, ub=1, is_integer=integer, name=n) for n in \"pqr\")\n        if one_row:\n            model.add_linear_constraint(p + q + r <= 1)\n        else:\n            model.add_linear_constraint(2 * p + 2 * q + 2 * r <= 3)\n        if extra_pair:\n            model.add_linear_constraint(q + r <= 1)\n        model.maximize(6 * p + 5 * q + 2 * r)\n        return model\n    return build\n\n\nvariants = {\"weak\": variant(False, False), \"pair q-r\": variant(True, False), \"clique\": variant(False, True)}\nfor line in audit(variants, optimum=6):\n    print(f\"{line['name']}: vars {line['variables']} rows {line['rows']} lp {line['lp']:.3f}\"\n          f\" root {line['root']:.3f} closed {line['closed']:.3f}\")\n"
         }
       ]
     },
@@ -69,6 +78,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom typing import Callable\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef audit(variants: dict[str, Callable[[bool], mathopt.Model]], optimum: float) -> list[dict]:\n    \"\"\"One line per formulation, in the order given: size, LP bound, root bound and share of gap closed.\n\n    `variants[name](integer)` builds that formulation, as a MILP or (integer=False) as its LP\n    relaxation. `optimum` is the best plan's value. The share of the gap closed is measured against\n    the first variant, the one inherited.\n    \"\"\"\n    # TODO: measure each variant.\n    return []\n\n\nif __name__ == \"__main__\":\n    def one(integer):\n        model = mathopt.Model()\n        a = model.add_variable(lb=0, ub=1, is_integer=integer)\n        model.add_linear_constraint(2 * a <= 1)\n        model.maximize(a)\n        return model\n\n    print(audit({\"only\": one}, 0.0))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom audit import audit\n\n\ndef variant(extra_pair: bool, one_row: bool):\n    def build(integer):\n        model = mathopt.Model()\n        p, q, r = (model.add_variable(lb=0, ub=1, is_integer=integer, name=n) for n in \"pqr\")\n        if one_row:\n            model.add_linear_constraint(p + q + r <= 1)\n        else:\n            model.add_linear_constraint(2 * p + 2 * q + 2 * r <= 3)\n        if extra_pair:\n            model.add_linear_constraint(q + r <= 1)\n        model.maximize(6 * p + 5 * q + 2 * r)\n        return model\n    return build\n\n\nvariants = {\"weak\": variant(False, False), \"pair q-r\": variant(True, False), \"clique\": variant(False, True)}\nfor line in audit(variants, optimum=6):\n    print(f\"{line['name']}: vars {line['variables']} rows {line['rows']} lp {line['lp']:.3f}\"\n          f\" root {line['root']:.3f} closed {line['closed']:.3f}\")\n"
     }
   ],
   "video": null,
@@ -76,8 +94,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -87,14 +105,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "405e316a62067a947ab7ec6fc7233a3257c91071fcb276517def3ae57f484185",
+  "content_sha256": "bc2a0f016e55cb1651fba80910cb593f468990f938eeefcdf64cc632406735cf",
   "starting_code": "from __future__ import annotations\n\nfrom typing import Callable\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef audit(variants: dict[str, Callable[[bool], mathopt.Model]], optimum: float) -> list[dict]:\n    \"\"\"One line per formulation, in the order given: size, LP bound, root bound and share of gap closed.\n\n    `variants[name](integer)` builds that formulation, as a MILP or (integer=False) as its LP\n    relaxation. `optimum` is the best plan's value. The share of the gap closed is measured against\n    the first variant, the one inherited.\n    \"\"\"\n    # TODO: measure each variant.\n    return []\n\n\nif __name__ == \"__main__\":\n    def one(integer):\n        model = mathopt.Model()\n        a = model.add_variable(lb=0, ub=1, is_integer=integer)\n        model.add_linear_constraint(2 * a <= 1)\n        model.maximize(a)\n        return model\n\n    print(audit({\"only\": one}, 0.0))\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-2/audit.py",
     "test_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-2/test_audit.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-2/audit.py"
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -141,6 +159,10 @@
     "concepts": [
       "size, LP bound and root bound are recorded for each step before any long solve",
       "whether a reformulation is faster is measured with the production solver and tolerance"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-2/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/29-strong-formulations/prose/unit-04/practice-2/try_it.py"
   }
 }

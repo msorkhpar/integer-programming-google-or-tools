@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Cuts for a minimum-inspection row",
   "blocks": [
     {
@@ -61,6 +61,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef separate_floor(km: dict[str, int], floor: int, xstar: dict[str, float]) -> list[str] | None:\n    \"\"\"A set of lines the LP point under-uses although every plan meeting the floor needs one of them.\n\n    A set C is needed when the lines outside it add up to less than the floor: then every plan that\n    inspects at least `floor` km includes a line of C, so sum over C of x >= 1 holds for whole plans.\n    Returns the needed set with the smallest LP sum when that sum is below 1, else None.\n    \"\"\"\n    total = sum(km.values())\n    model = mathopt.Model(name=\"separate-floor\")\n    z = {i: model.add_binary_variable(name=f\"z_{i}\") for i in km}           # z_i = 1: line i is in C\n    # Outside C: total - sum km_i z_i <= floor - 1, since lengths are whole kilometres.\n    model.add_linear_constraint(sum(km[i] * z[i] for i in km) >= total - floor + 1, name=\"needed\")\n    model.minimize(sum(xstar[i] * z[i] for i in km))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    needed = [i for i in km if result.variable_values(z[i]) > 0.5]\n    return needed if sum(xstar[i] for i in needed) < 1 - 1e-9 else None\n\n\nif __name__ == \"__main__\":\n    print(separate_floor({\"L1\": 10, \"L2\": 3, \"L3\": 2}, 8, {\"L1\": 0.5, \"L2\": 1.0, \"L3\": 1.0}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom inspection import separate_floor\n\nkm = {\"North\": 14, \"East\": 4, \"West\": 3, \"South\": 2}\n\nprint(\"floor 10, North at 0.3:\", separate_floor(km, 10, {\"North\": 0.3, \"East\": 0.8, \"West\": 0.9, \"South\": 1.0}))\nprint(\"floor 10, whole plan North+South:\", separate_floor(km, 10, {\"North\": 1.0, \"East\": 0.0, \"West\": 0.0, \"South\": 1.0}))\nprint(\"floor 9, North at 0.5:\", separate_floor(km, 9, {\"North\": 0.5, \"East\": 1.0, \"West\": 1.0, \"South\": 1.0}))\n"
         }
       ]
     },
@@ -73,6 +82,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef separate_floor(km: dict[str, int], floor: int, xstar: dict[str, float]) -> list[str] | None:\n    \"\"\"A set of lines the LP point under-uses although every plan meeting the floor needs one of them.\n\n    A set C is needed when the lines outside it add up to less than the floor: then every plan that\n    inspects at least `floor` km includes a line of C, so sum over C of x >= 1 holds for whole plans.\n    Returns the needed set with the smallest LP sum when that sum is below 1, else None.\n    \"\"\"\n    # TODO: find the needed set the LP point under-uses most.\n    return None\n\nif __name__ == \"__main__\":\n    print(separate_floor({\"L1\": 10, \"L2\": 3, \"L3\": 2}, 8, {\"L1\": 0.5, \"L2\": 1.0, \"L3\": 1.0}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom inspection import separate_floor\n\nkm = {\"North\": 14, \"East\": 4, \"West\": 3, \"South\": 2}\n\nprint(\"floor 10, North at 0.3:\", separate_floor(km, 10, {\"North\": 0.3, \"East\": 0.8, \"West\": 0.9, \"South\": 1.0}))\nprint(\"floor 10, whole plan North+South:\", separate_floor(km, 10, {\"North\": 1.0, \"East\": 0.0, \"West\": 0.0, \"South\": 1.0}))\nprint(\"floor 9, North at 0.5:\", separate_floor(km, 9, {\"North\": 0.5, \"East\": 1.0, \"West\": 1.0, \"South\": 1.0}))\n"
     }
   ],
   "video": null,
@@ -80,8 +98,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 3,
+    "paras": 6,
+    "code": 4,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -91,14 +109,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "217efc8cf05adc63f1e0c7526df11985d9fa782adcff69e18ad1f45c4de2acd2",
+  "content_sha256": "b60c6850af10dbf0a6ce1a448a6d270e310777ef9cfd8c90d5c1b040412baa83",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef separate_floor(km: dict[str, int], floor: int, xstar: dict[str, float]) -> list[str] | None:\n    \"\"\"A set of lines the LP point under-uses although every plan meeting the floor needs one of them.\n\n    A set C is needed when the lines outside it add up to less than the floor: then every plan that\n    inspects at least `floor` km includes a line of C, so sum over C of x >= 1 holds for whole plans.\n    Returns the needed set with the smallest LP sum when that sum is below 1, else None.\n    \"\"\"\n    # TODO: find the needed set the LP point under-uses most.\n    return None\n\nif __name__ == \"__main__\":\n    print(separate_floor({\"L1\": 10, \"L2\": 3, \"L3\": 2}, 8, {\"L1\": 0.5, \"L2\": 1.0, \"L3\": 1.0}))\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-2/inspection.py",
     "test_path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-2/test_inspection.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-2/inspection.py"
+      "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -144,6 +162,10 @@
     },
     "concepts": [
       "the most broken cover is found by a small knapsack over the LP values"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-2/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-03/practice-2/try_it.py"
   }
 }

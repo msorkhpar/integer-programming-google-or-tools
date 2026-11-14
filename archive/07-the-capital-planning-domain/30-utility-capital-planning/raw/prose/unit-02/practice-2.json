@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "The rows a gas utility's project appears in",
   "blocks": [
     {
@@ -71,6 +71,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    program: str\n    earliest: int\n    latest: int\n    duration: int                  # years of work\n    must_do: bool = False\n    alt_group: str | None = None\n    parent: str | None = None\n    lag: int = 0\n\n\ndef rows_for(pid: str, projects: list[Project], years: list[int]) -> set[str]:\n    \"\"\"The names of every row in which one of project `pid`'s start variables appears.\"\"\"\n    p = next(q for q in projects if q.pid == pid)\n    starts = range(p.earliest, p.latest + 1)\n    rows = {f\"must_{pid}\" if p.must_do else f\"once_{pid}\"}\n    if p.alt_group:\n        rows.add(f\"alt_{p.alt_group}\")\n    if p.parent:\n        rows |= {f\"after_{pid}_{t}\" for t in starts}\n    for c in projects:\n        if c.parent == pid:\n            rows |= {f\"after_{c.pid}_{t}\" for t in range(c.earliest, c.latest + 1) if t - c.lag >= p.earliest}\n    for t in starts:\n        for k in range(p.duration):\n            if t + k in years:\n                rows |= {f\"budget_{t + k}\", f\"crew_{p.program}_{t + k}\"}\n    return rows\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"S1\", \"substations\", 2027, 2028, 2), Project(\"S2\", \"substations\", 2029, 2029, 1, parent=\"S1\", lag=1)]\n    print(sorted(rows_for(\"S1\", projects, [2027, 2028, 2029])))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom rows import Project, rows_for\n\nyears = [2030, 2031, 2032, 2033]\nprojects = [Project(\"T1\", \"transformers\", 2030, 2031, 2),\n            Project(\"T2\", \"transformers\", 2032, 2033, 1, parent=\"T1\", lag=1),\n            Project(\"B1\", \"breakers\", 2031, 2031, 1, must_do=True),\n            Project(\"C1\", \"cables\", 2033, 2033, 1, alt_group=\"K\"),\n            Project(\"C2\", \"cables\", 2033, 2033, 1, alt_group=\"K\")]\n\nfor pid in (\"T1\", \"T2\", \"B1\", \"C2\"):\n    print(f\"rows of {pid}:\", sorted(rows_for(pid, projects, years)))\n"
         }
       ]
     },
@@ -83,6 +92,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    program: str\n    earliest: int\n    latest: int\n    duration: int                  # years of work\n    must_do: bool = False\n    alt_group: str | None = None\n    parent: str | None = None\n    lag: int = 0\n\n\ndef rows_for(pid: str, projects: list[Project], years: list[int]) -> set[str]:\n    \"\"\"The names of every row in which one of project `pid`'s start variables appears.\"\"\"\n    # TODO: go through the model's rows one kind at a time. The empty set is a placeholder.\n    return set()\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"S1\", \"substations\", 2027, 2028, 2), Project(\"S2\", \"substations\", 2029, 2029, 1, parent=\"S1\", lag=1)]\n    print(sorted(rows_for(\"S1\", projects, [2027, 2028, 2029])))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom rows import Project, rows_for\n\nyears = [2030, 2031, 2032, 2033]\nprojects = [Project(\"T1\", \"transformers\", 2030, 2031, 2),\n            Project(\"T2\", \"transformers\", 2032, 2033, 1, parent=\"T1\", lag=1),\n            Project(\"B1\", \"breakers\", 2031, 2031, 1, must_do=True),\n            Project(\"C1\", \"cables\", 2033, 2033, 1, alt_group=\"K\"),\n            Project(\"C2\", \"cables\", 2033, 2033, 1, alt_group=\"K\")]\n\nfor pid in (\"T1\", \"T2\", \"B1\", \"C2\"):\n    print(f\"rows of {pid}:\", sorted(rows_for(pid, projects, years)))\n"
     }
   ],
   "video": null,
@@ -90,8 +108,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 1,
+    "paras": 6,
+    "code": 2,
     "tables": 0,
     "lists": 2,
     "images": 0,
@@ -101,14 +119,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "4487688082b214c15e623f283a0f959cf6bd46babab1850ea308de469a206e29",
+  "content_sha256": "191373b5ec9a3a964fbaece191da1d9f529d4d2a5cdc10460dac50ecf6f9f35d",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    program: str\n    earliest: int\n    latest: int\n    duration: int                  # years of work\n    must_do: bool = False\n    alt_group: str | None = None\n    parent: str | None = None\n    lag: int = 0\n\n\ndef rows_for(pid: str, projects: list[Project], years: list[int]) -> set[str]:\n    \"\"\"The names of every row in which one of project `pid`'s start variables appears.\"\"\"\n    # TODO: go through the model's rows one kind at a time. The empty set is a placeholder.\n    return set()\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"S1\", \"substations\", 2027, 2028, 2), Project(\"S2\", \"substations\", 2029, 2029, 1, parent=\"S1\", lag=1)]\n    print(sorted(rows_for(\"S1\", projects, [2027, 2028, 2029])))\n",
   "exercise": {
     "main_path": "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-02/practice-2/rows.py",
     "test_path": "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-02/practice-2/test_rows.py",
     "run_command": [
       "python3",
-      "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-02/practice-2/rows.py"
+      "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -159,6 +177,10 @@
     },
     "concepts": [
       "each project's attributes decide which once, must, alternative, precedence, budget and crew rows it appears in"
-    ]
+    ],
+    "files": [
+      "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-02/practice-2/try_it.py"
   }
 }

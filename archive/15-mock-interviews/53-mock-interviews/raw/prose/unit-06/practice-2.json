@@ -9,7 +9,7 @@
   "unit": 6,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Projects under a budget, crews and regional caps",
   "blocks": [
     {
@@ -49,6 +49,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int            # $k\n    crew: int            # crew-weeks\n    region: str\n    value: int = 0\n\n\n@dataclass(frozen=True)\nclass Limits:\n    budget: int\n    crew: int\n    region_cap: dict[str, int]\n    conflicts: list[tuple[str, str]] = field(default_factory=list)   # not both\n    needs: list[tuple[str, str]] = field(default_factory=list)       # (a, b): a only if b\n\n\ndef add_rules(model: mathopt.Model, x: dict, projects: list[Project], limits: Limits) -> None:\n    \"\"\"Budget, crew-weeks, a cap per region, conflicting pairs and needs.\"\"\"\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in projects) <= limits.budget, name=\"budget\")\n    model.add_linear_constraint(sum(p.crew * x[p.pid] for p in projects) <= limits.crew, name=\"crews\")\n    for region, cap in limits.region_cap.items():\n        members = [x[p.pid] for p in projects if p.region == region]\n        if members:\n            model.add_linear_constraint(sum(members) <= cap, name=f\"region_{region}\")\n    for a, b in limits.conflicts:\n        model.add_linear_constraint(x[a] + x[b] <= 1, name=f\"conflict_{a}_{b}\")\n    for a, b in limits.needs:\n        model.add_linear_constraint(x[a] - x[b] <= 0, name=f\"needs_{a}_{b}\")\n\n\ndef build(projects: list[Project], limits: Limits) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"tower-upgrades\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    add_rules(model, x, projects, limits)\n    model.maximize(sum(p.value * x[p.pid] for p in projects))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Project(\"A\", 40, 3, \"N\", 10), Project(\"B\", 30, 2, \"N\", 8)], Limits(60, 4, {\"N\": 1}))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    print(result.termination.reason.name, result.objective_value())\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom upgrades import Limits, Project, build\n\n# A ferry operator's pier upgrades.\npiers = [\n    Project(\"P1\", 50, 2, \"East\", 14),\n    Project(\"P2\", 35, 3, \"East\", 11),\n    Project(\"P3\", 25, 2, \"West\", 7),\n    Project(\"P4\", 40, 4, \"West\", 13),\n    Project(\"P5\", 15, 1, \"North\", 5),\n]\nlimits = Limits(budget=110, crew=8, region_cap={\"East\": 1, \"West\": 2, \"North\": 1},\n                conflicts=[(\"P1\", \"P4\")], needs=[(\"P5\", \"P3\")])\n\n\ndef allowed(plan):\n    model, x = build(piers, limits)\n    for pid, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if pid in plan else 0.0\n    return mathopt.solve(model, mathopt.SolverType.HIGHS).termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nfor plan in ({\"P1\", \"P3\", \"P5\"}, {\"P1\", \"P2\"}, {\"P1\", \"P4\"}, {\"P5\"}, {\"P2\", \"P3\", \"P4\"}):\n    print(f\"plan {sorted(plan)}:\", allowed(plan))\nmodel, x = build(piers, limits)\nresult = mathopt.solve(model, mathopt.SolverType.HIGHS)\nprint(\"best value:\", round(result.objective_value()), sorted(p for p, v in x.items() if result.variable_values(v) > 0.5))\n"
         }
       ]
     },
@@ -61,6 +70,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int            # $k\n    crew: int            # crew-weeks\n    region: str\n    value: int = 0\n\n\n@dataclass(frozen=True)\nclass Limits:\n    budget: int\n    crew: int\n    region_cap: dict[str, int]\n    conflicts: list[tuple[str, str]] = field(default_factory=list)   # not both\n    needs: list[tuple[str, str]] = field(default_factory=list)       # (a, b): a only if b\n\n\ndef add_rules(model: mathopt.Model, x: dict, projects: list[Project], limits: Limits) -> None:\n    \"\"\"Budget, crew-weeks, a cap per region, conflicting pairs and needs.\"\"\"\n    # TODO: the rows of your formulation.\n    return None\n\n\ndef build(projects: list[Project], limits: Limits) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"tower-upgrades\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    add_rules(model, x, projects, limits)\n    model.maximize(sum(p.value * x[p.pid] for p in projects))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Project(\"A\", 40, 3, \"N\", 10), Project(\"B\", 30, 2, \"N\", 8)], Limits(60, 4, {\"N\": 1}))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    print(result.termination.reason.name, result.objective_value())\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom upgrades import Limits, Project, build\n\n# A ferry operator's pier upgrades.\npiers = [\n    Project(\"P1\", 50, 2, \"East\", 14),\n    Project(\"P2\", 35, 3, \"East\", 11),\n    Project(\"P3\", 25, 2, \"West\", 7),\n    Project(\"P4\", 40, 4, \"West\", 13),\n    Project(\"P5\", 15, 1, \"North\", 5),\n]\nlimits = Limits(budget=110, crew=8, region_cap={\"East\": 1, \"West\": 2, \"North\": 1},\n                conflicts=[(\"P1\", \"P4\")], needs=[(\"P5\", \"P3\")])\n\n\ndef allowed(plan):\n    model, x = build(piers, limits)\n    for pid, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if pid in plan else 0.0\n    return mathopt.solve(model, mathopt.SolverType.HIGHS).termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nfor plan in ({\"P1\", \"P3\", \"P5\"}, {\"P1\", \"P2\"}, {\"P1\", \"P4\"}, {\"P5\"}, {\"P2\", \"P3\", \"P4\"}):\n    print(f\"plan {sorted(plan)}:\", allowed(plan))\nmodel, x = build(piers, limits)\nresult = mathopt.solve(model, mathopt.SolverType.HIGHS)\nprint(\"best value:\", round(result.objective_value()), sorted(p for p, v in x.items() if result.variable_values(v) > 0.5))\n"
     }
   ],
   "video": null,
@@ -68,8 +86,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 2,
-    "code": 1,
+    "paras": 3,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -79,14 +97,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "e78cc9db82ece9c23b891f45b3cbdd886e70db5ef80fd2b201274709222d406a",
+  "content_sha256": "cde3e5fac53578ef2cc6698c64b0bcd76a7b1cc449b298cbacfb446ff80c041b",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int            # $k\n    crew: int            # crew-weeks\n    region: str\n    value: int = 0\n\n\n@dataclass(frozen=True)\nclass Limits:\n    budget: int\n    crew: int\n    region_cap: dict[str, int]\n    conflicts: list[tuple[str, str]] = field(default_factory=list)   # not both\n    needs: list[tuple[str, str]] = field(default_factory=list)       # (a, b): a only if b\n\n\ndef add_rules(model: mathopt.Model, x: dict, projects: list[Project], limits: Limits) -> None:\n    \"\"\"Budget, crew-weeks, a cap per region, conflicting pairs and needs.\"\"\"\n    # TODO: the rows of your formulation.\n    return None\n\n\ndef build(projects: list[Project], limits: Limits) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"tower-upgrades\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    add_rules(model, x, projects, limits)\n    model.maximize(sum(p.value * x[p.pid] for p in projects))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Project(\"A\", 40, 3, \"N\", 10), Project(\"B\", 30, 2, \"N\", 8)], Limits(60, 4, {\"N\": 1}))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    print(result.termination.reason.name, result.objective_value())\n",
   "exercise": {
     "main_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-2/upgrades.py",
     "test_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-2/test_upgrades.py",
     "run_command": [
       "python3",
-      "practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-2/upgrades.py"
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -148,6 +166,10 @@
     "concepts": [
       "budget and crew-week rows on one binary per project",
       "regional caps, conflicting pairs and one-way needs as rows, formulation first"
-    ]
+    ],
+    "files": [
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-2/try_it.py"
+    ],
+    "try_file": "practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-2/try_it.py"
   }
 }

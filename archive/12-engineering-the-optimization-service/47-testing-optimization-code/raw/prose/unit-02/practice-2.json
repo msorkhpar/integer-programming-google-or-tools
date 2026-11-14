@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A strategy for feasible water-main instances",
   "blocks": [
     {
@@ -63,6 +63,15 @@
           "type": "code",
           "lang": "python",
           "text": "\"\"\"A Hypothesis strategy for water-main selection instances that always have a valid plan.\n\nAn instance is a dict:\n    \"cost\":   {project: (capital $k, operating $k)}\n    \"budget\": (capital budget $k, operating budget $k)\n    \"must\":   [projects that must be funded]\n    \"needs\":  {project: [its prerequisites]}, every project a key\n    \"value\":  {project: value}\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom hypothesis import strategies as st\n\n\n@st.composite\ndef instances(draw) -> dict:\n    names = [f\"w{k}\" for k in range(1, draw(st.integers(1, 6)) + 1)]\n    cost, needs, value, chosen = {}, {}, {}, set()\n    for k, name in enumerate(names):\n        cost[name] = (draw(st.integers(1, 40)), draw(st.integers(1, 10)))\n        value[name] = draw(st.integers(1, 20))\n        earlier = names[:k]\n        needs[name] = draw(st.lists(st.sampled_from(earlier), unique=True, max_size=2)) if earlier else []\n        if all(q in chosen for q in needs[name]) and draw(st.booleans()):\n            chosen.add(name)\n    must = [p for p in names if p in chosen and draw(st.booleans())]\n    capital = sum(cost[p][0] for p in chosen) + draw(st.integers(0, 30))\n    operating = sum(cost[p][1] for p in chosen) + draw(st.integers(0, 8))\n    return {\"cost\": cost, \"budget\": (capital, operating), \"must\": must, \"needs\": needs, \"value\": value}\n\n\nif __name__ == \"__main__\":\n    print(instances().example())\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom hypothesis import given, settings\n\nfrom water_strategy import instances\n\ndrawn = []\n\n\n@settings(max_examples=4, derandomize=True, database=None, deadline=None)\n@given(instances())\ndef collect(instance):\n    drawn.append(instance)\n\n\ncollect()\nfor n, instance in enumerate(drawn[:4], 1):\n    print(f\"instance {n}: budget {instance['budget']}, must {instance['must']}, needs {instance['needs']}\")\n"
         }
       ]
     },
@@ -75,6 +84,15 @@
       "type": "code",
       "lang": "python",
       "text": "\"\"\"A Hypothesis strategy for water-main selection instances that always have a valid plan.\n\nAn instance is a dict:\n    \"cost\":   {project: (capital $k, operating $k)}\n    \"budget\": (capital budget $k, operating budget $k)\n    \"must\":   [projects that must be funded]\n    \"needs\":  {project: [its prerequisites]}, every project a key\n    \"value\":  {project: value}\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom hypothesis import strategies as st\n\n\n@st.composite\ndef instances(draw) -> dict:\n    # TODO: draw a valid plan first, then build the data around it.\n    return {\"cost\": {}, \"budget\": (0, 0), \"must\": [], \"needs\": {}, \"value\": {}}\n\nif __name__ == \"__main__\":\n    print(instances().example())\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom hypothesis import given, settings\n\nfrom water_strategy import instances\n\ndrawn = []\n\n\n@settings(max_examples=4, derandomize=True, database=None, deadline=None)\n@given(instances())\ndef collect(instance):\n    drawn.append(instance)\n\n\ncollect()\nfor n, instance in enumerate(drawn[:4], 1):\n    print(f\"instance {n}: budget {instance['budget']}, must {instance['must']}, needs {instance['needs']}\")\n"
     }
   ],
   "video": null,
@@ -82,8 +100,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -93,14 +111,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "7f4b71b5707ff79a41e7171df6b439eccb5fe48b27b6d596fb8f9778e876e686",
+  "content_sha256": "ffe0c19ceecc30bfbe675f6380158ca2c9682878cde51ea2ca4945121cae9239",
   "starting_code": "\"\"\"A Hypothesis strategy for water-main selection instances that always have a valid plan.\n\nAn instance is a dict:\n    \"cost\":   {project: (capital $k, operating $k)}\n    \"budget\": (capital budget $k, operating budget $k)\n    \"must\":   [projects that must be funded]\n    \"needs\":  {project: [its prerequisites]}, every project a key\n    \"value\":  {project: value}\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom hypothesis import strategies as st\n\n\n@st.composite\ndef instances(draw) -> dict:\n    # TODO: draw a valid plan first, then build the data around it.\n    return {\"cost\": {}, \"budget\": (0, 0), \"must\": [], \"needs\": {}, \"value\": {}}\n\nif __name__ == \"__main__\":\n    print(instances().example())\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-02/practice-2/water_strategy.py",
     "test_path": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-02/practice-2/test_water_strategy.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-02/practice-2/water_strategy.py"
+      "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -146,6 +164,10 @@
     },
     "concepts": [
       "a strategy draws a valid plan first and builds budgets and must-dos around it"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/47-testing-optimization-code/prose/unit-02/practice-2/try_it.py"
   }
 }

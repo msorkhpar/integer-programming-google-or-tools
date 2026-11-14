@@ -162,6 +162,45 @@ if __name__ == &quot;__main__&quot;:
     projects = [Project(&quot;F1&quot;, &quot;Ash&quot;, (300, 200), (2027, 2028)), Project(&quot;F2&quot;, &quot;Ash&quot;, (250,), (2027,))]
     model, x = build(projects, (2027, 2028, 2029), {&quot;Ash&quot;: 400}, {&quot;Ash&quot;: 700}, {(&quot;Ash&quot;, 2028): 300})
     print(model.get_num_linear_constraints(), &quot;rows&quot;)
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from counties import Project, build
+
+# Fiber projects in two counties, 2027 to 2029, in $k.
+years = (2027, 2028, 2029)
+projects = [Project(&quot;E1&quot;, &quot;Elm&quot;, (300, 100), (2027, 2028)), Project(&quot;E2&quot;, &quot;Elm&quot;, (200,), (2027, 2028, 2029)),
+            Project(&quot;E3&quot;, &quot;Elm&quot;, (350,), (2028, 2029)), Project(&quot;O1&quot;, &quot;Oak&quot;, (400,), (2027, 2028, 2029)),
+            Project(&quot;O2&quot;, &quot;Oak&quot;, (100, 100), (2027, 2028))]
+floor = {&quot;Elm&quot;: 500, &quot;Oak&quot;: 200}
+cap = {&quot;Elm&quot;: 800}
+yearly_cap = {(&quot;Elm&quot;, 2028): 400}
+
+def accepted(model):
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+def allowed(plan):
+    model, x = build(projects, years, floor, cap, yearly_cap)
+    for key, var in x.items():
+        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0
+    return accepted(model)
+
+
+print(&quot;E1 2027, E2 2029, O1 2027:&quot;, allowed({(&quot;E1&quot;, 2027), (&quot;E2&quot;, 2029), (&quot;O1&quot;, 2027)}))
+print(&quot;E1 2027, O1 2027:&quot;, allowed({(&quot;E1&quot;, 2027), (&quot;O1&quot;, 2027)}))
+print(&quot;E1 2027, E2 2027, E3 2029, O2 2027:&quot;, allowed({(&quot;E1&quot;, 2027), (&quot;E2&quot;, 2027), (&quot;E3&quot;, 2029), (&quot;O2&quot;, 2027)}))
+print(&quot;E1 2027, E3 2028, O1 2029:&quot;, allowed({(&quot;E1&quot;, 2027), (&quot;E3&quot;, 2028), (&quot;O1&quot;, 2029)}))
 </code></pre></figure></details>
 <h2 id="practice-prose-b11">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -201,10 +240,50 @@ if __name__ == &quot;__main__&quot;:
     model, x = build(projects, (2027, 2028, 2029), {&quot;Ash&quot;: 400}, {&quot;Ash&quot;: 700}, {(&quot;Ash&quot;, 2028): 300})
     print(model.get_num_linear_constraints(), &quot;rows&quot;)
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from counties import Project, build
+
+# Fiber projects in two counties, 2027 to 2029, in $k.
+years = (2027, 2028, 2029)
+projects = [Project(&quot;E1&quot;, &quot;Elm&quot;, (300, 100), (2027, 2028)), Project(&quot;E2&quot;, &quot;Elm&quot;, (200,), (2027, 2028, 2029)),
+            Project(&quot;E3&quot;, &quot;Elm&quot;, (350,), (2028, 2029)), Project(&quot;O1&quot;, &quot;Oak&quot;, (400,), (2027, 2028, 2029)),
+            Project(&quot;O2&quot;, &quot;Oak&quot;, (100, 100), (2027, 2028))]
+floor = {&quot;Elm&quot;: 500, &quot;Oak&quot;: 200}
+cap = {&quot;Elm&quot;: 800}
+yearly_cap = {(&quot;Elm&quot;, 2028): 400}
+
+def accepted(model):
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+def allowed(plan):
+    model, x = build(projects, years, floor, cap, yearly_cap)
+    for key, var in x.items():
+        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0
+    return accepted(model)
+
+
+print(&quot;E1 2027, E2 2029, O1 2027:&quot;, allowed({(&quot;E1&quot;, 2027), (&quot;E2&quot;, 2029), (&quot;O1&quot;, 2027)}))
+print(&quot;E1 2027, O1 2027:&quot;, allowed({(&quot;E1&quot;, 2027), (&quot;O1&quot;, 2027)}))
+print(&quot;E1 2027, E2 2027, E3 2029, O2 2027:&quot;, allowed({(&quot;E1&quot;, 2027), (&quot;E2&quot;, 2027), (&quot;E3&quot;, 2029), (&quot;O2&quot;, 2027)}))
+print(&quot;E1 2027, E3 2028, O1 2029:&quot;, allowed({(&quot;E1&quot;, 2027), (&quot;E3&quot;, 2028), (&quot;O1&quot;, 2029)}))
+</code></pre></figure>
 </section>
 <section data-practice="06-formulation-craft/27-dependencies-and-groups/unit-05/practice-prose" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-1/counties.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-1/counties.py</code> and <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-1/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-1/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>
@@ -314,6 +393,42 @@ if __name__ == &quot;__main__&quot;:
     projects = [Project(&quot;PIPE&quot;, &quot;maintenance&quot;, 300), Project(&quot;TANK&quot;, &quot;growth&quot;, 500)]
     model, x = build(projects, 900, 0.8, 0.3, 0.5)
     print(model.get_num_linear_constraints(), &quot;rows&quot;)
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from board import Project, build
+
+# A water board's candidates, cost in $k.
+projects = [Project(&quot;R1&quot;, &quot;maintenance&quot;, 180), Project(&quot;R2&quot;, &quot;maintenance&quot;, 220),
+            Project(&quot;R3&quot;, &quot;maintenance&quot;, 90), Project(&quot;N1&quot;, &quot;growth&quot;, 350),
+            Project(&quot;N2&quot;, &quot;growth&quot;, 200), Project(&quot;N3&quot;, &quot;growth&quot;, 60)]
+
+def accepted(model):
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+def allowed(plan, budget=900, use=0.7, low=0.35, high=0.6):
+    model, x = build(projects, budget, use, low, high)
+    for pid, var in x.items():
+        var.lower_bound = var.upper_bound = 1.0 if pid in plan else 0.0
+    return accepted(model)
+
+
+print(&quot;R1 R2 N1 at budget 900:&quot;, allowed({&quot;R1&quot;, &quot;R2&quot;, &quot;N1&quot;}))
+print(&quot;R1 N1 at budget 900:&quot;, allowed({&quot;R1&quot;, &quot;N1&quot;}))
+print(&quot;R1 R2 R3 N1 N3 at budget 900:&quot;, allowed({&quot;R1&quot;, &quot;R2&quot;, &quot;R3&quot;, &quot;N1&quot;, &quot;N3&quot;}))
+print(&quot;R1 R2 R3 N2 at budget 900:&quot;, allowed({&quot;R1&quot;, &quot;R2&quot;, &quot;R3&quot;, &quot;N2&quot;}))
+print(&quot;R3 N1 N2 N3 at budget 900:&quot;, allowed({&quot;R3&quot;, &quot;N1&quot;, &quot;N2&quot;, &quot;N3&quot;}))
 </code></pre></figure></details>
 <h2 id="practice-prose-2-b10">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -350,10 +465,47 @@ if __name__ == &quot;__main__&quot;:
     model, x = build(projects, 900, 0.8, 0.3, 0.5)
     print(model.get_num_linear_constraints(), &quot;rows&quot;)
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from board import Project, build
+
+# A water board's candidates, cost in $k.
+projects = [Project(&quot;R1&quot;, &quot;maintenance&quot;, 180), Project(&quot;R2&quot;, &quot;maintenance&quot;, 220),
+            Project(&quot;R3&quot;, &quot;maintenance&quot;, 90), Project(&quot;N1&quot;, &quot;growth&quot;, 350),
+            Project(&quot;N2&quot;, &quot;growth&quot;, 200), Project(&quot;N3&quot;, &quot;growth&quot;, 60)]
+
+def accepted(model):
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+def allowed(plan, budget=900, use=0.7, low=0.35, high=0.6):
+    model, x = build(projects, budget, use, low, high)
+    for pid, var in x.items():
+        var.lower_bound = var.upper_bound = 1.0 if pid in plan else 0.0
+    return accepted(model)
+
+
+print(&quot;R1 R2 N1 at budget 900:&quot;, allowed({&quot;R1&quot;, &quot;R2&quot;, &quot;N1&quot;}))
+print(&quot;R1 N1 at budget 900:&quot;, allowed({&quot;R1&quot;, &quot;N1&quot;}))
+print(&quot;R1 R2 R3 N1 N3 at budget 900:&quot;, allowed({&quot;R1&quot;, &quot;R2&quot;, &quot;R3&quot;, &quot;N1&quot;, &quot;N3&quot;}))
+print(&quot;R1 R2 R3 N2 at budget 900:&quot;, allowed({&quot;R1&quot;, &quot;R2&quot;, &quot;R3&quot;, &quot;N2&quot;}))
+print(&quot;R3 N1 N2 N3 at budget 900:&quot;, allowed({&quot;R3&quot;, &quot;N1&quot;, &quot;N2&quot;, &quot;N3&quot;}))
+</code></pre></figure>
 </section>
 <section data-practice="06-formulation-craft/27-dependencies-and-groups/unit-05/practice-prose-2" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-2/board.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-2/board.py</code> and <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-2/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-05/practice-2/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>

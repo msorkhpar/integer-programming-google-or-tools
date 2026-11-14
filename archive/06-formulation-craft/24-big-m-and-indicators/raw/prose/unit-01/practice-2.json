@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A loading dock with an overflow yard",
   "blocks": [
     {
@@ -64,6 +64,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n# orders[order][option] = pallets that option unloads at dock D (0 if it uses another dock)\nOrders = dict[str, dict[str, int]]\n\n\ndef choice_variables(model: mathopt.Model, orders: Orders) -> dict:\n    \"\"\"choose[order, option] = 1: the order ships this week by that option. At most one per order.\"\"\"\n    choose = {(o, opt): model.add_binary_variable(name=f\"choose_{o}_{opt}\") for o, options in orders.items()\n              for opt in options}\n    for o, options in orders.items():\n        model.add_linear_constraint(sum(choose[o, opt] for opt in options) <= 1, name=f\"one_{o}\")\n    return choose\n\n\ndef dock_m(orders: Orders, capacity: int) -> int:\n    \"\"\"The smallest M for dock D's row that the one-option-per-order rows justify.\"\"\"\n    most = sum(max(options.values()) for options in orders.values())\n    return max(0, most - capacity)\n\n\ndef add_dock_row(model: mathopt.Model, choose: dict, orders: Orders, capacity: int,\n                 overflow: mathopt.Variable) -> None:\n    \"\"\"Pallets unloaded at dock D stay within `capacity`, unless the overflow yard is opened.\"\"\"\n    load = sum(pallets * choose[o, opt] for o, options in orders.items() for opt, pallets in options.items())\n    model.add_linear_constraint(load <= capacity + dock_m(orders, capacity) * overflow, name=\"dock_D\")\n\n\nif __name__ == \"__main__\":\n    orders = {\"O1\": {\"small\": 4, \"big\": 9}, \"O2\": {\"small\": 3, \"big\": 7}}\n    print(\"M =\", dock_m(orders, 10))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom dock import add_dock_row, choice_variables, dock_m\n\n# Pallets per shipping option for three orders; the dock holds 10.\norders = {\"R1\": {\"crate\": 3, \"pallet\": 6}, \"R2\": {\"crate\": 2, \"pallet\": 5}, \"R3\": {\"box\": 1, \"pallet\": 4}}\n\n\ndef allowed(plan, overflow):\n    model = mathopt.Model()\n    choose = choice_variables(model, orders)\n    yard = model.add_binary_variable(name=\"overflow\")\n    add_dock_row(model, choose, orders, 10, yard)\n    for (o, opt), var in choose.items():\n        var.lower_bound = var.upper_bound = 1.0 if plan.get(o) == opt else 0.0\n    yard.lower_bound = yard.upper_bound = overflow\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"M at capacity 10:\", dock_m(orders, 10))\nprint(\"M at capacity 20:\", dock_m(orders, 20))\nprint(\"crate, crate, pallet, no yard:\", allowed({\"R1\": \"crate\", \"R2\": \"crate\", \"R3\": \"pallet\"}, 0))\nprint(\"all pallets, no yard:\", allowed({\"R1\": \"pallet\", \"R2\": \"pallet\", \"R3\": \"pallet\"}, 0))\nprint(\"all pallets, yard:\", allowed({\"R1\": \"pallet\", \"R2\": \"pallet\", \"R3\": \"pallet\"}, 1))\n"
         }
       ]
     },
@@ -76,6 +85,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n# orders[order][option] = pallets that option unloads at dock D (0 if it uses another dock)\nOrders = dict[str, dict[str, int]]\n\n\ndef choice_variables(model: mathopt.Model, orders: Orders) -> dict:\n    \"\"\"choose[order, option] = 1: the order ships this week by that option. At most one per order.\"\"\"\n    choose = {(o, opt): model.add_binary_variable(name=f\"choose_{o}_{opt}\") for o, options in orders.items()\n              for opt in options}\n    for o, options in orders.items():\n        model.add_linear_constraint(sum(choose[o, opt] for opt in options) <= 1, name=f\"one_{o}\")\n    return choose\n\n\ndef dock_m(orders: Orders, capacity: int) -> int:\n    \"\"\"The smallest M for dock D's row that the one-option-per-order rows justify.\"\"\"\n    # TODO\n    return 0\n\n\ndef add_dock_row(model: mathopt.Model, choose: dict, orders: Orders, capacity: int,\n                 overflow: mathopt.Variable) -> None:\n    \"\"\"Pallets unloaded at dock D stay within `capacity`, unless the overflow yard is opened.\"\"\"\n    # TODO: your row.\n    return None\n\n\nif __name__ == \"__main__\":\n    orders = {\"O1\": {\"small\": 4, \"big\": 9}, \"O2\": {\"small\": 3, \"big\": 7}}\n    print(\"M =\", dock_m(orders, 10))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom dock import add_dock_row, choice_variables, dock_m\n\n# Pallets per shipping option for three orders; the dock holds 10.\norders = {\"R1\": {\"crate\": 3, \"pallet\": 6}, \"R2\": {\"crate\": 2, \"pallet\": 5}, \"R3\": {\"box\": 1, \"pallet\": 4}}\n\n\ndef allowed(plan, overflow):\n    model = mathopt.Model()\n    choose = choice_variables(model, orders)\n    yard = model.add_binary_variable(name=\"overflow\")\n    add_dock_row(model, choose, orders, 10, yard)\n    for (o, opt), var in choose.items():\n        var.lower_bound = var.upper_bound = 1.0 if plan.get(o) == opt else 0.0\n    yard.lower_bound = yard.upper_bound = overflow\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"M at capacity 10:\", dock_m(orders, 10))\nprint(\"M at capacity 20:\", dock_m(orders, 20))\nprint(\"crate, crate, pallet, no yard:\", allowed({\"R1\": \"crate\", \"R2\": \"crate\", \"R3\": \"pallet\"}, 0))\nprint(\"all pallets, no yard:\", allowed({\"R1\": \"pallet\", \"R2\": \"pallet\", \"R3\": \"pallet\"}, 0))\nprint(\"all pallets, yard:\", allowed({\"R1\": \"pallet\", \"R2\": \"pallet\", \"R3\": \"pallet\"}, 1))\n"
     }
   ],
   "video": null,
@@ -83,8 +101,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -94,14 +112,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "58973cf3fe8a8d0901ebd2adaa0caa2d093baf229221b6619f1fb7251813fd8e",
+  "content_sha256": "8919322d7b7057eb3cf052d8e6e467aaa4e3cd6abe8e0cb2fe7afdaa1cec2c4d",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n# orders[order][option] = pallets that option unloads at dock D (0 if it uses another dock)\nOrders = dict[str, dict[str, int]]\n\n\ndef choice_variables(model: mathopt.Model, orders: Orders) -> dict:\n    \"\"\"choose[order, option] = 1: the order ships this week by that option. At most one per order.\"\"\"\n    choose = {(o, opt): model.add_binary_variable(name=f\"choose_{o}_{opt}\") for o, options in orders.items()\n              for opt in options}\n    for o, options in orders.items():\n        model.add_linear_constraint(sum(choose[o, opt] for opt in options) <= 1, name=f\"one_{o}\")\n    return choose\n\n\ndef dock_m(orders: Orders, capacity: int) -> int:\n    \"\"\"The smallest M for dock D's row that the one-option-per-order rows justify.\"\"\"\n    # TODO\n    return 0\n\n\ndef add_dock_row(model: mathopt.Model, choose: dict, orders: Orders, capacity: int,\n                 overflow: mathopt.Variable) -> None:\n    \"\"\"Pallets unloaded at dock D stay within `capacity`, unless the overflow yard is opened.\"\"\"\n    # TODO: your row.\n    return None\n\n\nif __name__ == \"__main__\":\n    orders = {\"O1\": {\"small\": 4, \"big\": 9}, \"O2\": {\"small\": 3, \"big\": 7}}\n    print(\"M =\", dock_m(orders, 10))\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-2/dock.py",
     "test_path": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-2/test_dock.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-2/dock.py"
+      "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -148,6 +166,10 @@
     "concepts": [
       "when at most one variable of a group can be 1, the group adds only its largest coefficient to M",
       "a row that can never be exceeded needs an M of 0"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-2/try_it.py"
   }
 }

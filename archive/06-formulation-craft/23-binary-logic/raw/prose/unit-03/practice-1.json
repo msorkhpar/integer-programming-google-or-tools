@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A broadband grant's county rules",
   "blocks": [
     {
@@ -65,6 +65,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Tower:\n    tid: str\n    county: str\n\n\ndef add_grant_rules(model: mathopt.Model, x: dict, y: dict, towers: list[Tower], need: dict[str, int],\n                    already: dict[str, int], crew_limit: dict[str, int],\n                    backhaul: dict[str, list[str]]) -> None:\n    \"\"\"Coverage targets counting earlier upgrades, crew limits, and one backhaul per upgraded hub.\"\"\"\n    for county in sorted({t.county for t in towers}):\n        upgraded = sum(x[t.tid] for t in towers if t.county == county)\n        still_needed = need.get(county, 0) - already.get(county, 0)\n        if still_needed > 0:\n            model.add_linear_constraint(upgraded >= still_needed, name=f\"cover_{county}\")\n        if county in crew_limit:\n            model.add_linear_constraint(upgraded <= crew_limit[county], name=f\"crews_{county}\")\n    for hub, options in backhaul.items():\n        model.add_linear_constraint(sum(y[o] for o in options) == x[hub], name=f\"backhaul_{hub}\")\n\n\ndef build(towers: list[Tower], need: dict[str, int], already: dict[str, int], crew_limit: dict[str, int],\n          backhaul: dict[str, list[str]]) -> tuple[mathopt.Model, dict, dict]:\n    model = mathopt.Model(name=\"broadband-grant\")\n    x = {t.tid: model.add_binary_variable(name=f\"x_{t.tid}\") for t in towers}\n    y = {o: model.add_binary_variable(name=f\"y_{o}\") for options in backhaul.values() for o in options}\n    add_grant_rules(model, x, y, towers, need, already, crew_limit, backhaul)\n    model.maximize(sum(x.values()))\n    return model, x, y\n\n\nif __name__ == \"__main__\":\n    towers = [Tower(\"A1\", \"Alder\"), Tower(\"A2\", \"Alder\"), Tower(\"B1\", \"Birch\")]\n    model, x, y = build(towers, {\"Alder\": 1}, {}, {\"Alder\": 2}, {\"A1\": [\"A1-fiber\", \"A1-radio\"]})\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom grant import Tower, build\n\n# Towers in two counties, with hub H1 needing one backhaul link.\ntowers = [Tower(f\"H{k}\", \"Hill\") for k in range(1, 4)] + [Tower(f\"V{k}\", \"Vale\") for k in range(1, 4)]\nneed = {\"Hill\": 2, \"Vale\": 2}\nalready = {\"Vale\": 1}\ncrew_limit = {\"Hill\": 2}\nbackhaul = {\"H1\": [\"H1-fiber\", \"H1-radio\"]}\nplan = {\"H1\", \"H1-radio\", \"H2\", \"V1\"}\n\n\ndef allowed(chosen):\n    model, x, y = build(towers, need, already, crew_limit, backhaul)\n    for key, var in {**x, **y}.items():\n        var.lower_bound = var.upper_bound = 1.0 if key in chosen else 0.0\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"H1 H1-radio H2 V1:\", allowed(plan))\nprint(\"without V1:\", allowed(plan - {\"V1\"}))\nprint(\"plus H3:\", allowed(plan | {\"H3\"}))\nprint(\"without H1-radio:\", allowed(plan - {\"H1-radio\"}))\nprint(\"plus H1-fiber:\", allowed(plan | {\"H1-fiber\"}))\n"
         }
       ]
     },
@@ -77,6 +86,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Tower:\n    tid: str\n    county: str\n\n\ndef add_grant_rules(model: mathopt.Model, x: dict, y: dict, towers: list[Tower], need: dict[str, int],\n                    already: dict[str, int], crew_limit: dict[str, int],\n                    backhaul: dict[str, list[str]]) -> None:\n    \"\"\"Coverage targets counting earlier upgrades, crew limits, and one backhaul per upgraded hub.\"\"\"\n    # TODO: the coverage rows, the crew rows and the backhaul rows.\n    return None\n\n\ndef build(towers: list[Tower], need: dict[str, int], already: dict[str, int], crew_limit: dict[str, int],\n          backhaul: dict[str, list[str]]) -> tuple[mathopt.Model, dict, dict]:\n    model = mathopt.Model(name=\"broadband-grant\")\n    x = {t.tid: model.add_binary_variable(name=f\"x_{t.tid}\") for t in towers}\n    y = {o: model.add_binary_variable(name=f\"y_{o}\") for options in backhaul.values() for o in options}\n    add_grant_rules(model, x, y, towers, need, already, crew_limit, backhaul)\n    model.maximize(sum(x.values()))\n    return model, x, y\n\n\nif __name__ == \"__main__\":\n    towers = [Tower(\"A1\", \"Alder\"), Tower(\"A2\", \"Alder\"), Tower(\"B1\", \"Birch\")]\n    model, x, y = build(towers, {\"Alder\": 1}, {}, {\"Alder\": 2}, {\"A1\": [\"A1-fiber\", \"A1-radio\"]})\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom grant import Tower, build\n\n# Towers in two counties, with hub H1 needing one backhaul link.\ntowers = [Tower(f\"H{k}\", \"Hill\") for k in range(1, 4)] + [Tower(f\"V{k}\", \"Vale\") for k in range(1, 4)]\nneed = {\"Hill\": 2, \"Vale\": 2}\nalready = {\"Vale\": 1}\ncrew_limit = {\"Hill\": 2}\nbackhaul = {\"H1\": [\"H1-fiber\", \"H1-radio\"]}\nplan = {\"H1\", \"H1-radio\", \"H2\", \"V1\"}\n\n\ndef allowed(chosen):\n    model, x, y = build(towers, need, already, crew_limit, backhaul)\n    for key, var in {**x, **y}.items():\n        var.lower_bound = var.upper_bound = 1.0 if key in chosen else 0.0\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"H1 H1-radio H2 V1:\", allowed(plan))\nprint(\"without V1:\", allowed(plan - {\"V1\"}))\nprint(\"plus H3:\", allowed(plan | {\"H3\"}))\nprint(\"without H1-radio:\", allowed(plan - {\"H1-radio\"}))\nprint(\"plus H1-fiber:\", allowed(plan | {\"H1-fiber\"}))\n"
     }
   ],
   "video": null,
@@ -84,8 +102,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -95,14 +113,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "2d7edbf62a89d92b1e271649eb198fd5e4fca72ddaa1636066294dbdb8eb5e7e",
+  "content_sha256": "08a17022625e6651f44bf42c03132259a55dbaff77cc37f001f1377d09ab5657",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Tower:\n    tid: str\n    county: str\n\n\ndef add_grant_rules(model: mathopt.Model, x: dict, y: dict, towers: list[Tower], need: dict[str, int],\n                    already: dict[str, int], crew_limit: dict[str, int],\n                    backhaul: dict[str, list[str]]) -> None:\n    \"\"\"Coverage targets counting earlier upgrades, crew limits, and one backhaul per upgraded hub.\"\"\"\n    # TODO: the coverage rows, the crew rows and the backhaul rows.\n    return None\n\n\ndef build(towers: list[Tower], need: dict[str, int], already: dict[str, int], crew_limit: dict[str, int],\n          backhaul: dict[str, list[str]]) -> tuple[mathopt.Model, dict, dict]:\n    model = mathopt.Model(name=\"broadband-grant\")\n    x = {t.tid: model.add_binary_variable(name=f\"x_{t.tid}\") for t in towers}\n    y = {o: model.add_binary_variable(name=f\"y_{o}\") for options in backhaul.values() for o in options}\n    add_grant_rules(model, x, y, towers, need, already, crew_limit, backhaul)\n    model.maximize(sum(x.values()))\n    return model, x, y\n\n\nif __name__ == \"__main__\":\n    towers = [Tower(\"A1\", \"Alder\"), Tower(\"A2\", \"Alder\"), Tower(\"B1\", \"Birch\")]\n    model, x, y = build(towers, {\"Alder\": 1}, {}, {\"Alder\": 2}, {\"A1\": [\"A1-fiber\", \"A1-radio\"]})\n    print(len(list(model.linear_constraints())), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-1/grant.py",
     "test_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-1/test_grant.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-1/grant.py"
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -159,6 +177,10 @@
     "concepts": [
       "a minimum is checked against the projects a plan can fund, and a maximum against those it must fund",
       "at most, at least and exactly a number of a group are each one row on the group's count"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-1/try_it.py"
   }
 }

@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Rows stored as data",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.linear_solver import pywraplp\n\n\ndef add_rows(solver: pywraplp.Solver, x: dict, rows: list) -> None:\n    \"\"\"Add each (name, lower, coefficients, upper) row; a bound of None means there is none.\"\"\"\n    for name, lower, coefficients, upper in rows:\n        lb = -solver.infinity() if lower is None else lower\n        ub = solver.infinity() if upper is None else upper\n        row = solver.RowConstraint(lb, ub, name)\n        for var_name, a in coefficients.items():\n            row.SetCoefficient(x[var_name], a)\n\n\ndef best(rows: list, objective: dict, names=(\"x0\", \"x1\")) -> float | None:\n    \"\"\"Maximize the objective over integers 0..10 under the rows; None unless optimal.\"\"\"\n    solver = pywraplp.Solver.CreateSolver(\"SCIP\")\n    x = {n: solver.IntVar(0, 10, n) for n in names}\n    add_rows(solver, x, rows)\n    solver.Maximize(sum(c * x[n] for n, c in objective.items()))\n    if solver.Solve() != pywraplp.Solver.OPTIMAL:\n        return None\n    return round(solver.Objective().Value(), 6)\n\n\nif __name__ == \"__main__\":\n    print(best([(\"cap\", None, {\"x0\": 1, \"x1\": 2}, 8)], {\"x0\": 1, \"x1\": 3}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom rows import best\n\n# Rows are (name, lower or None, coefficients, upper or None); x0 and x1 run 0..10.\nprint(\"2 x0 + x1 <= 9, max 2 x0 + 3 x1:\", best([(\"cap\", None, {\"x0\": 2, \"x1\": 1}, 9)], {\"x0\": 2, \"x1\": 3}))\nprint(\"4 <= x0 + x1 <= 6, max x0 - x1:\", best([(\"band\", 4, {\"x0\": 1, \"x1\": 1}, 6)], {\"x0\": 1, \"x1\": -1}))\nprint(\"x0 - x1 >= 5, max -x0:\", best([(\"lead\", 5, {\"x0\": 1, \"x1\": -1}, None)], {\"x0\": -1}))\nprint(\"x0 + x1 <= 3 and x1 >= 5:\", best([(\"cap\", None, {\"x0\": 1, \"x1\": 1}, 3), (\"floor\", 5, {\"x1\": 1}, None)],\n                                         {\"x0\": 1}))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.linear_solver import pywraplp\n\n\ndef add_rows(solver: pywraplp.Solver, x: dict, rows: list) -> None:\n    \"\"\"Add each (name, lower, coefficients, upper) row; a bound of None means there is none.\"\"\"\n    # TODO: one RowConstraint per row, filled with SetCoefficient.\n    return None\n\n\ndef best(rows: list, objective: dict, names=(\"x0\", \"x1\")) -> float | None:\n    \"\"\"Maximize the objective over integers 0..10 under the rows; None unless optimal.\"\"\"\n    solver = pywraplp.Solver.CreateSolver(\"SCIP\")\n    x = {n: solver.IntVar(0, 10, n) for n in names}\n    add_rows(solver, x, rows)\n    solver.Maximize(sum(c * x[n] for n, c in objective.items()))\n    if solver.Solve() != pywraplp.Solver.OPTIMAL:\n        return None\n    return round(solver.Objective().Value(), 6)\n\n\nif __name__ == \"__main__\":\n    print(best([(\"cap\", None, {\"x0\": 1, \"x1\": 2}, 8)], {\"x0\": 1, \"x1\": 3}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom rows import best\n\n# Rows are (name, lower or None, coefficients, upper or None); x0 and x1 run 0..10.\nprint(\"2 x0 + x1 <= 9, max 2 x0 + 3 x1:\", best([(\"cap\", None, {\"x0\": 2, \"x1\": 1}, 9)], {\"x0\": 2, \"x1\": 3}))\nprint(\"4 <= x0 + x1 <= 6, max x0 - x1:\", best([(\"band\", 4, {\"x0\": 1, \"x1\": 1}, 6)], {\"x0\": 1, \"x1\": -1}))\nprint(\"x0 - x1 >= 5, max -x0:\", best([(\"lead\", 5, {\"x0\": 1, \"x1\": -1}, None)], {\"x0\": -1}))\nprint(\"x0 + x1 <= 3 and x1 >= 5:\", best([(\"cap\", None, {\"x0\": 1, \"x1\": 1}, 3), (\"floor\", 5, {\"x1\": 1}, None)],\n                                         {\"x0\": 1}))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "b3c303542072f19b00b4ccc249903d2a6a2ae64b87dbfc6b89118a428882916f",
+  "content_sha256": "90b894336e5614534a7557c611a76488389c5cd0d5b630dc8381940234c683ff",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.linear_solver import pywraplp\n\n\ndef add_rows(solver: pywraplp.Solver, x: dict, rows: list) -> None:\n    \"\"\"Add each (name, lower, coefficients, upper) row; a bound of None means there is none.\"\"\"\n    # TODO: one RowConstraint per row, filled with SetCoefficient.\n    return None\n\n\ndef best(rows: list, objective: dict, names=(\"x0\", \"x1\")) -> float | None:\n    \"\"\"Maximize the objective over integers 0..10 under the rows; None unless optimal.\"\"\"\n    solver = pywraplp.Solver.CreateSolver(\"SCIP\")\n    x = {n: solver.IntVar(0, 10, n) for n in names}\n    add_rows(solver, x, rows)\n    solver.Maximize(sum(c * x[n] for n, c in objective.items()))\n    if solver.Solve() != pywraplp.Solver.OPTIMAL:\n        return None\n    return round(solver.Objective().Value(), 6)\n\n\nif __name__ == \"__main__\":\n    print(best([(\"cap\", None, {\"x0\": 1, \"x1\": 2}, 8)], {\"x0\": 1, \"x1\": 3}))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-01/practice-1/rows.py",
     "test_path": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-01/practice-1/test_rows.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-01/practice-1/rows.py"
+      "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-01/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -135,6 +153,10 @@
     },
     "concepts": [
       "a row built with RowConstraint has a lower and an upper bound, filled by SetCoefficient"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-01/practice-1/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/18-linear-solver-wrapper/prose/unit-01/practice-1/try_it.py"
   }
 }

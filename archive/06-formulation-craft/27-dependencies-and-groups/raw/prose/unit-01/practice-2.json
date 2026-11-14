@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "What a parks department's mandates cost",
   "blocks": [
     {
@@ -59,6 +59,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    mandated: bool = False\n\n\ndef best_value(projects: list[Project], budget: int, enforced: set[str]) -> float:\n    \"\"\"The best total value within the budget, with every project in `enforced` funded.\"\"\"\n    model = mathopt.Model(name=\"parks\")\n    pick = {p.pid: model.add_binary_variable(name=f\"pick_{p.pid}\") for p in projects}\n    model.add_linear_constraint(sum(p.cost * pick[p.pid] for p in projects) <= budget, name=\"budget\")\n    for pid in enforced:\n        pick[pid].lower_bound = 1.0\n    model.maximize(sum(p.value * pick[p.pid] for p in projects))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    return result.objective_value()\n\n\ndef mandate_costs(projects: list[Project], budget: int) -> dict[str, float]:\n    \"\"\"Each mandated project's cost, and the cost of all mandates together under \"all\".\"\"\"\n    mandated = {p.pid for p in projects if p.mandated}\n    with_all = best_value(projects, budget, mandated)\n    costs = {pid: best_value(projects, budget, mandated - {pid}) - with_all for pid in sorted(mandated)}\n    costs[\"all\"] = best_value(projects, budget, set()) - with_all\n    return costs\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"PLAY\", 4, 5, mandated=True), Project(\"POOL\", 6, 9), Project(\"PATH\", 3, 4)]\n    print(mandate_costs(projects, 9))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom parks import Project, best_value, mandate_costs\n\n# Park works: id, cost, value ($k); two are ordered by the safety inspector.\nworks = [\n    Project(\"GATE\", 4, 2, mandated=True),\n    Project(\"RAIL\", 3, 1, mandated=True),\n    Project(\"POND\", 7, 15),\n    Project(\"PATH\", 3, 4),\n    Project(\"SIGN\", 1, 2),\n]\n\nprint(\"best value at budget 10, mandates kept:\", best_value(works, 10, {\"GATE\", \"RAIL\"}))\nprint(\"best value at budget 10, nothing enforced:\", best_value(works, 10, set()))\nprint(\"mandate costs at budget 10:\", mandate_costs(works, 10))\nprint(\"mandate costs at budget 14:\", mandate_costs(works, 14))\n"
         }
       ]
     },
@@ -71,6 +80,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    mandated: bool = False\n\n\ndef best_value(projects: list[Project], budget: int, enforced: set[str]) -> float:\n    \"\"\"The best total value within the budget, with every project in `enforced` funded.\"\"\"\n    # TODO: build the selection model, solve it and return its objective value.\n    return 0.0\n\n\ndef mandate_costs(projects: list[Project], budget: int) -> dict[str, float]:\n    \"\"\"Each mandated project's cost, and the cost of all mandates together under \"all\".\"\"\"\n    # TODO: compare best values with and without each mandate. Every cost below is a placeholder.\n    costs = {p.pid: -1.0 for p in projects if p.mandated}\n    costs[\"all\"] = -1.0\n    return costs\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"PLAY\", 4, 5, mandated=True), Project(\"POOL\", 6, 9), Project(\"PATH\", 3, 4)]\n    print(mandate_costs(projects, 9))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom parks import Project, best_value, mandate_costs\n\n# Park works: id, cost, value ($k); two are ordered by the safety inspector.\nworks = [\n    Project(\"GATE\", 4, 2, mandated=True),\n    Project(\"RAIL\", 3, 1, mandated=True),\n    Project(\"POND\", 7, 15),\n    Project(\"PATH\", 3, 4),\n    Project(\"SIGN\", 1, 2),\n]\n\nprint(\"best value at budget 10, mandates kept:\", best_value(works, 10, {\"GATE\", \"RAIL\"}))\nprint(\"best value at budget 10, nothing enforced:\", best_value(works, 10, set()))\nprint(\"mandate costs at budget 10:\", mandate_costs(works, 10))\nprint(\"mandate costs at budget 14:\", mandate_costs(works, 14))\n"
     }
   ],
   "video": null,
@@ -78,8 +96,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 1,
+    "paras": 6,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -89,14 +107,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "f84f5a69087d6d1fb1ec8b772a91ac042d83c86b60d9a33989fdf4c29199ef64",
+  "content_sha256": "7e6139c110cc023be98207e74b43551d7b071f7a9a46faad11a59daf5bfe0ccf",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    mandated: bool = False\n\n\ndef best_value(projects: list[Project], budget: int, enforced: set[str]) -> float:\n    \"\"\"The best total value within the budget, with every project in `enforced` funded.\"\"\"\n    # TODO: build the selection model, solve it and return its objective value.\n    return 0.0\n\n\ndef mandate_costs(projects: list[Project], budget: int) -> dict[str, float]:\n    \"\"\"Each mandated project's cost, and the cost of all mandates together under \"all\".\"\"\"\n    # TODO: compare best values with and without each mandate. Every cost below is a placeholder.\n    costs = {p.pid: -1.0 for p in projects if p.mandated}\n    costs[\"all\"] = -1.0\n    return costs\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"PLAY\", 4, 5, mandated=True), Project(\"POOL\", 6, 9), Project(\"PATH\", 3, 4)]\n    print(mandate_costs(projects, 9))\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-2/parks.py",
     "test_path": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-2/test_parks.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-2/parks.py"
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -142,6 +160,10 @@
     },
     "concepts": [
       "a mandate's cost is the best value without its row less the best value with it, and costs of several mandates are measured together"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-01/practice-2/try_it.py"
   }
 }

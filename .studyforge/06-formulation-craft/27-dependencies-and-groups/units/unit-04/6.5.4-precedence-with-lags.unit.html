@@ -131,6 +131,44 @@ if __name__ == &quot;__main__&quot;:
     projects = [Project(&quot;MAIN&quot;, (2027, 2028), 2), Project(&quot;PAVE&quot;, (2029, 2030, 2031))]
     model, x = build(projects, {&quot;PAVE&quot;: (&quot;MAIN&quot;, 1)})
     print(model.get_num_linear_constraints(), &quot;rows&quot;)
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from streets import Project, build
+
+# Two mains and three streets above or beside them, 2027 to 2033.
+years = tuple(range(2027, 2034))
+projects = [Project(&quot;MAIN-PINE&quot;, (2027, 2028), 1), Project(&quot;MAIN-BAY&quot;, (2027, 2028, 2029), 2),
+            Project(&quot;PAVE-PINE&quot;, years), Project(&quot;PAVE-BAY&quot;, years), Project(&quot;PAVE-HILL&quot;, years)]
+after = {&quot;PAVE-PINE&quot;: (&quot;MAIN-PINE&quot;, 2), &quot;PAVE-BAY&quot;: (&quot;MAIN-BAY&quot;, 0)}
+
+def accepted(model):
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+def allowed(plan):
+    model, x = build(projects, after)
+    for key, var in x.items():
+        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0
+    return accepted(model)
+
+
+print(&quot;MAIN-PINE 2027, PAVE-PINE 2030:&quot;, allowed({(&quot;MAIN-PINE&quot;, 2027), (&quot;PAVE-PINE&quot;, 2030)}))
+print(&quot;MAIN-PINE 2027, PAVE-PINE 2029:&quot;, allowed({(&quot;MAIN-PINE&quot;, 2027), (&quot;PAVE-PINE&quot;, 2029)}))
+print(&quot;PAVE-PINE 2031 alone:&quot;, allowed({(&quot;PAVE-PINE&quot;, 2031)}))
+print(&quot;MAIN-BAY 2029, PAVE-BAY 2031:&quot;, allowed({(&quot;MAIN-BAY&quot;, 2029), (&quot;PAVE-BAY&quot;, 2031)}))
+print(&quot;MAIN-BAY 2029, PAVE-BAY 2030:&quot;, allowed({(&quot;MAIN-BAY&quot;, 2029), (&quot;PAVE-BAY&quot;, 2030)}))
+print(&quot;PAVE-HILL 2027 alone:&quot;, allowed({(&quot;PAVE-HILL&quot;, 2027)}))
 </code></pre></figure></details>
 <h2 id="practice-prose-b10">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -168,10 +206,49 @@ if __name__ == &quot;__main__&quot;:
     model, x = build(projects, {&quot;PAVE&quot;: (&quot;MAIN&quot;, 1)})
     print(model.get_num_linear_constraints(), &quot;rows&quot;)
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from streets import Project, build
+
+# Two mains and three streets above or beside them, 2027 to 2033.
+years = tuple(range(2027, 2034))
+projects = [Project(&quot;MAIN-PINE&quot;, (2027, 2028), 1), Project(&quot;MAIN-BAY&quot;, (2027, 2028, 2029), 2),
+            Project(&quot;PAVE-PINE&quot;, years), Project(&quot;PAVE-BAY&quot;, years), Project(&quot;PAVE-HILL&quot;, years)]
+after = {&quot;PAVE-PINE&quot;: (&quot;MAIN-PINE&quot;, 2), &quot;PAVE-BAY&quot;: (&quot;MAIN-BAY&quot;, 0)}
+
+def accepted(model):
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+def allowed(plan):
+    model, x = build(projects, after)
+    for key, var in x.items():
+        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0
+    return accepted(model)
+
+
+print(&quot;MAIN-PINE 2027, PAVE-PINE 2030:&quot;, allowed({(&quot;MAIN-PINE&quot;, 2027), (&quot;PAVE-PINE&quot;, 2030)}))
+print(&quot;MAIN-PINE 2027, PAVE-PINE 2029:&quot;, allowed({(&quot;MAIN-PINE&quot;, 2027), (&quot;PAVE-PINE&quot;, 2029)}))
+print(&quot;PAVE-PINE 2031 alone:&quot;, allowed({(&quot;PAVE-PINE&quot;, 2031)}))
+print(&quot;MAIN-BAY 2029, PAVE-BAY 2031:&quot;, allowed({(&quot;MAIN-BAY&quot;, 2029), (&quot;PAVE-BAY&quot;, 2031)}))
+print(&quot;MAIN-BAY 2029, PAVE-BAY 2030:&quot;, allowed({(&quot;MAIN-BAY&quot;, 2029), (&quot;PAVE-BAY&quot;, 2030)}))
+print(&quot;PAVE-HILL 2027 alone:&quot;, allowed({(&quot;PAVE-HILL&quot;, 2027)}))
+</code></pre></figure>
 </section>
 <section data-practice="06-formulation-craft/27-dependencies-and-groups/unit-04/practice-prose" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-1/streets.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-1/streets.py</code> and <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-1/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-1/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>
@@ -289,6 +366,44 @@ if __name__ == &quot;__main__&quot;:
     projects = [Project(&quot;SUB&quot;, years), Project(&quot;TEST&quot;, years)]
     model, x = build(projects, years, {&quot;TEST&quot;: (&quot;SUB&quot;, 1)})
     print(model.get_num_linear_constraints(), &quot;rows&quot;)
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from testing import Project, build
+
+# Two substations and their relay testing, 2027 to 2030.
+years = (2027, 2028, 2029, 2030)
+projects = [Project(&quot;SUB-E&quot;, (2027, 2028, 2029)), Project(&quot;TEST-E&quot;, years),
+            Project(&quot;SUB-W&quot;, (2028, 2029)), Project(&quot;TEST-W&quot;, (2029, 2030))]
+testing = {&quot;TEST-E&quot;: (&quot;SUB-E&quot;, 1), &quot;TEST-W&quot;: (&quot;SUB-W&quot;, 3)}
+
+def accepted(model):
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+def allowed(plan):
+    model, x = build(projects, years, testing)
+    for key, var in x.items():
+        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0
+    return accepted(model)
+
+
+print(&quot;SUB-E 2028, TEST-E 2029:&quot;, allowed({(&quot;SUB-E&quot;, 2028), (&quot;TEST-E&quot;, 2029)}))
+print(&quot;SUB-E 2028, TEST-E 2030:&quot;, allowed({(&quot;SUB-E&quot;, 2028), (&quot;TEST-E&quot;, 2030)}))
+print(&quot;SUB-E 2028 alone:&quot;, allowed({(&quot;SUB-E&quot;, 2028)}))
+print(&quot;SUB-E 2029, TEST-E 2028:&quot;, allowed({(&quot;SUB-E&quot;, 2029), (&quot;TEST-E&quot;, 2028)}))
+print(&quot;SUB-W 2028 alone:&quot;, allowed({(&quot;SUB-W&quot;, 2028)}))
+print(&quot;nothing built:&quot;, allowed(set()))
 </code></pre></figure></details>
 <h2 id="practice-prose-2-b11">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -327,10 +442,49 @@ if __name__ == &quot;__main__&quot;:
     model, x = build(projects, years, {&quot;TEST&quot;: (&quot;SUB&quot;, 1)})
     print(model.get_num_linear_constraints(), &quot;rows&quot;)
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from testing import Project, build
+
+# Two substations and their relay testing, 2027 to 2030.
+years = (2027, 2028, 2029, 2030)
+projects = [Project(&quot;SUB-E&quot;, (2027, 2028, 2029)), Project(&quot;TEST-E&quot;, years),
+            Project(&quot;SUB-W&quot;, (2028, 2029)), Project(&quot;TEST-W&quot;, (2029, 2030))]
+testing = {&quot;TEST-E&quot;: (&quot;SUB-E&quot;, 1), &quot;TEST-W&quot;: (&quot;SUB-W&quot;, 3)}
+
+def accepted(model):
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+def allowed(plan):
+    model, x = build(projects, years, testing)
+    for key, var in x.items():
+        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0
+    return accepted(model)
+
+
+print(&quot;SUB-E 2028, TEST-E 2029:&quot;, allowed({(&quot;SUB-E&quot;, 2028), (&quot;TEST-E&quot;, 2029)}))
+print(&quot;SUB-E 2028, TEST-E 2030:&quot;, allowed({(&quot;SUB-E&quot;, 2028), (&quot;TEST-E&quot;, 2030)}))
+print(&quot;SUB-E 2028 alone:&quot;, allowed({(&quot;SUB-E&quot;, 2028)}))
+print(&quot;SUB-E 2029, TEST-E 2028:&quot;, allowed({(&quot;SUB-E&quot;, 2029), (&quot;TEST-E&quot;, 2028)}))
+print(&quot;SUB-W 2028 alone:&quot;, allowed({(&quot;SUB-W&quot;, 2028)}))
+print(&quot;nothing built:&quot;, allowed(set()))
+</code></pre></figure>
 </section>
 <section data-practice="06-formulation-craft/27-dependencies-and-groups/unit-04/practice-prose-2" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-2/testing.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-2/testing.py</code> and <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-2/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/06-formulation-craft/27-dependencies-and-groups/prose/unit-04/practice-2/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>

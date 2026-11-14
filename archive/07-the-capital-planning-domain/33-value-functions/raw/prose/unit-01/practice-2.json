@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Water main breaks avoided",
   "blocks": [
     {
@@ -47,6 +47,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Main:\n    name: str\n    age: float            # years, at the start of the plan\n    beta: float           # Weibull shape\n    eta: float            # Weibull scale, years\n    households: int       # households cut off by one break\n    hours: float          # hours until their water is back\n\n\ndef breaks(age: float, beta: float, eta: float, years: float) -> float:\n    \"\"\"Expected breaks of a main between ages `age` and `age + years` (repaired, not renewed).\"\"\"\n    return ((age + years) / eta) ** beta - (age / eta) ** beta\n\n\ndef benefit(main: Main, depth: float, start: int, duration: int, first_year: int, window: int) -> dict[str, float]:\n    \"\"\"Breaks and household-hours without water that renewing `main` avoids within the window.\"\"\"\n    in_service = start + duration\n    remaining = first_year + window - in_service\n    if remaining <= 0:\n        return {\"breaks\": 0.0, \"household_hours\": 0.0}\n    old = main.age + (in_service - first_year)\n    young = (1 - depth) * old\n    avoided = breaks(old, main.beta, main.eta, remaining) - breaks(young, main.beta, main.eta, remaining)\n    return {\"breaks\": avoided, \"household_hours\": avoided * main.households * main.hours}\n\n\nif __name__ == \"__main__\":\n    elm = Main(\"Elm St\", 20, 2.0, 10.0, 50, 6.0)\n    print(benefit(elm, 1.0, 2030, 0, 2030, 10))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom mains import Main, benefit\n\n\ndef rounded(result):\n    return {k: round(v, 3) for k, v in result.items()}\n\n\nbirch = Main(\"Birch Rd\", 30, 2.0, 20.0, 80, 4.0)\n\nprint(\"replace, start 2031, done at once:\", rounded(benefit(birch, 1.0, 2031, 0, 2031, 8)))\nprint(\"reline half, start 2031, done at once:\", rounded(benefit(birch, 0.5, 2031, 0, 2031, 8)))\nprint(\"replace, start 2033, two years of work:\", rounded(benefit(birch, 1.0, 2033, 2, 2031, 8)))\nprint(\"replace, start 2037, two years of work:\", rounded(benefit(birch, 1.0, 2037, 2, 2031, 8)))\n"
         }
       ]
     },
@@ -59,6 +68,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Main:\n    name: str\n    age: float            # years, at the start of the plan\n    beta: float           # Weibull shape\n    eta: float            # Weibull scale, years\n    households: int       # households cut off by one break\n    hours: float          # hours until their water is back\n\n\ndef breaks(age: float, beta: float, eta: float, years: float) -> float:\n    \"\"\"Expected breaks of a main between ages `age` and `age + years` (repaired, not renewed).\"\"\"\n    return ((age + years) / eta) ** beta - (age / eta) ** beta\n\n\ndef benefit(main: Main, depth: float, start: int, duration: int, first_year: int, window: int) -> dict[str, float]:\n    \"\"\"Breaks and household-hours without water that renewing `main` avoids within the window.\"\"\"\n    # TODO: the expected breaks avoided, and the household-hours they would have cost.\n    return {\"breaks\": 0.0, \"household_hours\": 0.0}\n\nif __name__ == \"__main__\":\n    elm = Main(\"Elm St\", 20, 2.0, 10.0, 50, 6.0)\n    print(benefit(elm, 1.0, 2030, 0, 2030, 10))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom mains import Main, benefit\n\n\ndef rounded(result):\n    return {k: round(v, 3) for k, v in result.items()}\n\n\nbirch = Main(\"Birch Rd\", 30, 2.0, 20.0, 80, 4.0)\n\nprint(\"replace, start 2031, done at once:\", rounded(benefit(birch, 1.0, 2031, 0, 2031, 8)))\nprint(\"reline half, start 2031, done at once:\", rounded(benefit(birch, 0.5, 2031, 0, 2031, 8)))\nprint(\"replace, start 2033, two years of work:\", rounded(benefit(birch, 1.0, 2033, 2, 2031, 8)))\nprint(\"replace, start 2037, two years of work:\", rounded(benefit(birch, 1.0, 2037, 2, 2031, 8)))\n"
     }
   ],
   "video": null,
@@ -66,8 +84,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -77,14 +95,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "da967286e30bf8a2a3ce7126bdec6ce57a1f94a4a32ca268262c0362a7890042",
+  "content_sha256": "73a3b7dcfa201364531d50d37f39cfa0ff08835b3444da79c177947b946c9c9e",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Main:\n    name: str\n    age: float            # years, at the start of the plan\n    beta: float           # Weibull shape\n    eta: float            # Weibull scale, years\n    households: int       # households cut off by one break\n    hours: float          # hours until their water is back\n\n\ndef breaks(age: float, beta: float, eta: float, years: float) -> float:\n    \"\"\"Expected breaks of a main between ages `age` and `age + years` (repaired, not renewed).\"\"\"\n    return ((age + years) / eta) ** beta - (age / eta) ** beta\n\n\ndef benefit(main: Main, depth: float, start: int, duration: int, first_year: int, window: int) -> dict[str, float]:\n    \"\"\"Breaks and household-hours without water that renewing `main` avoids within the window.\"\"\"\n    # TODO: the expected breaks avoided, and the household-hours they would have cost.\n    return {\"breaks\": 0.0, \"household_hours\": 0.0}\n\nif __name__ == \"__main__\":\n    elm = Main(\"Elm St\", 20, 2.0, 10.0, 50, 6.0)\n    print(benefit(elm, 1.0, 2030, 0, 2030, 10))\n",
   "exercise": {
     "main_path": "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-01/practice-2/mains.py",
     "test_path": "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-01/practice-2/test_mains.py",
     "run_command": [
       "python3",
-      "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-01/practice-2/mains.py"
+      "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -140,6 +158,10 @@
     },
     "concepts": [
       "expected failures avoided from the Weibull curve and the intervention depth, times each consequence"
-    ]
+    ],
+    "files": [
+      "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-01/practice-2/try_it.py"
   }
 }

@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Which formulation is stronger, on the evidence",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom typing import Callable\n\nfrom ortools.math_opt.python import mathopt\n\nTOLERANCE = 1e-6\n\n\ndef lp_value(model: mathopt.Model) -> float:\n    return mathopt.solve(model, mathopt.SolverType.GLOP).objective_value()\n\n\ndef compare(build_a: Callable, build_b: Callable, objectives: list, sense: str = \"max\") -> str:\n    \"\"\"Which formulation's LP bound is tighter on these objectives: \"a\", \"b\", \"same\" or \"neither\".\n\n    `build_a(objective)` and `build_b(objective)` return the LP relaxation of each formulation with\n    that objective set; `sense` is \"max\" or \"min\", the same for both.\n    \"\"\"\n    a_tighter = b_tighter = False\n    for objective in objectives:\n        za, zb = lp_value(build_a(objective)), lp_value(build_b(objective))\n        if sense == \"max\":                       # a ceiling is tighter when it is lower\n            a_better, b_better = za < zb - TOLERANCE, zb < za - TOLERANCE\n        else:                                    # a floor is tighter when it is higher\n            a_better, b_better = za > zb + TOLERANCE, zb > za + TOLERANCE\n        a_tighter |= a_better\n        b_tighter |= b_better\n    if a_tighter and b_tighter:\n        return \"neither\"\n    if a_tighter:\n        return \"a\"\n    if b_tighter:\n        return \"b\"\n    return \"same\"\n\n\nif __name__ == \"__main__\":\n    def one_row(objective):\n        model = mathopt.Model()\n        u, v = model.add_variable(lb=0, ub=1), model.add_variable(lb=0, ub=1)\n        model.add_linear_constraint(u + v <= 1)\n        model.maximize(objective[0] * u + objective[1] * v)\n        return model\n\n    print(compare(one_row, one_row, [(1, 1)]))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom compare import compare\n\n\ndef formulation(rows, sense=\"max\"):\n    def build(objective):\n        model = mathopt.Model()\n        u = model.add_variable(lb=0, ub=1, name=\"u\")\n        v = model.add_variable(lb=0, ub=1, name=\"v\")\n        for row in rows:\n            model.add_linear_constraint(row(u, v))\n        expr = objective[0] * u + objective[1] * v\n        model.maximize(expr) if sense == \"max\" else model.minimize(expr)\n        return model\n    return build\n\n\ntight = formulation([lambda u, v: u + v <= 1])\nloose = formulation([lambda u, v: 3 * u + 3 * v <= 5])\ntilted = formulation([lambda u, v: 3 * u + v <= 3])\nobjs = [(2, 1), (1, 4)]\n\nprint(\"tight vs loose:\", compare(tight, loose, objs))\nprint(\"loose vs tight:\", compare(loose, tight, objs))\nprint(\"tight vs tight:\", compare(tight, tight, objs))\nprint(\"tight vs tilted:\", compare(tight, tilted, objs))\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom typing import Callable\n\nfrom ortools.math_opt.python import mathopt\n\nTOLERANCE = 1e-6\n\n\ndef lp_value(model: mathopt.Model) -> float:\n    return mathopt.solve(model, mathopt.SolverType.GLOP).objective_value()\n\n\ndef compare(build_a: Callable, build_b: Callable, objectives: list, sense: str = \"max\") -> str:\n    \"\"\"Which formulation's LP bound is tighter on these objectives: \"a\", \"b\", \"same\" or \"neither\".\n\n    `build_a(objective)` and `build_b(objective)` return the LP relaxation of each formulation with\n    that objective set; `sense` is \"max\" or \"min\", the same for both.\n    \"\"\"\n    # TODO: solve both relaxations for each objective and decide.\n    return None\n\n\nif __name__ == \"__main__\":\n    def one_row(objective):\n        model = mathopt.Model()\n        u, v = model.add_variable(lb=0, ub=1), model.add_variable(lb=0, ub=1)\n        model.add_linear_constraint(u + v <= 1)\n        model.maximize(objective[0] * u + objective[1] * v)\n        return model\n\n    print(compare(one_row, one_row, [(1, 1)]))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom compare import compare\n\n\ndef formulation(rows, sense=\"max\"):\n    def build(objective):\n        model = mathopt.Model()\n        u = model.add_variable(lb=0, ub=1, name=\"u\")\n        v = model.add_variable(lb=0, ub=1, name=\"v\")\n        for row in rows:\n            model.add_linear_constraint(row(u, v))\n        expr = objective[0] * u + objective[1] * v\n        model.maximize(expr) if sense == \"max\" else model.minimize(expr)\n        return model\n    return build\n\n\ntight = formulation([lambda u, v: u + v <= 1])\nloose = formulation([lambda u, v: 3 * u + 3 * v <= 5])\ntilted = formulation([lambda u, v: 3 * u + v <= 3])\nobjs = [(2, 1), (1, 4)]\n\nprint(\"tight vs loose:\", compare(tight, loose, objs))\nprint(\"loose vs tight:\", compare(loose, tight, objs))\nprint(\"tight vs tight:\", compare(tight, tight, objs))\nprint(\"tight vs tilted:\", compare(tight, tilted, objs))\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "673b54d86e1e34c2c390bbbc1a096220dd6b3b87a7cd1a643a01336180b191ca",
+  "content_sha256": "88d78fa4ed23df468ad56b632015e1c94a21f3a33f35349e2ae2474a84fab5ff",
   "starting_code": "from __future__ import annotations\n\nfrom typing import Callable\n\nfrom ortools.math_opt.python import mathopt\n\nTOLERANCE = 1e-6\n\n\ndef lp_value(model: mathopt.Model) -> float:\n    return mathopt.solve(model, mathopt.SolverType.GLOP).objective_value()\n\n\ndef compare(build_a: Callable, build_b: Callable, objectives: list, sense: str = \"max\") -> str:\n    \"\"\"Which formulation's LP bound is tighter on these objectives: \"a\", \"b\", \"same\" or \"neither\".\n\n    `build_a(objective)` and `build_b(objective)` return the LP relaxation of each formulation with\n    that objective set; `sense` is \"max\" or \"min\", the same for both.\n    \"\"\"\n    # TODO: solve both relaxations for each objective and decide.\n    return None\n\n\nif __name__ == \"__main__\":\n    def one_row(objective):\n        model = mathopt.Model()\n        u, v = model.add_variable(lb=0, ub=1), model.add_variable(lb=0, ub=1)\n        model.add_linear_constraint(u + v <= 1)\n        model.maximize(objective[0] * u + objective[1] * v)\n        return model\n\n    print(compare(one_row, one_row, [(1, 1)]))\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-01/practice-2/compare.py",
     "test_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-01/practice-2/test_compare.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/29-strong-formulations/prose/unit-01/practice-2/compare.py"
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -140,6 +158,10 @@
     "concepts": [
       "a weak row that is a nonnegative sum of strong rows proves containment for every objective",
       "bounds over many objectives are evidence; formulations that each win one objective are not comparable"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/29-strong-formulations/prose/unit-01/practice-2/try_it.py"
   }
 }

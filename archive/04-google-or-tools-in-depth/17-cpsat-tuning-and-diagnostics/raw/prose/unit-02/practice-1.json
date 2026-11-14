@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Does last year's plan still fit?",
   "blocks": [
     {
@@ -60,6 +60,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef build(costs: dict[str, int], values: dict[str, int], must: set[str],\n          budget: int) -> tuple[cp_model.CpModel, dict[str, cp_model.IntVar]]:\n    \"\"\"Given: this year's model. pick[p] = 1 funds project p.\"\"\"\n    model = cp_model.CpModel()\n    pick = {p: model.new_bool_var(f\"pick_{p}\") for p in costs}\n    model.add(sum(costs[p] * pick[p] for p in costs) <= budget)\n    for p in must:\n        model.add(pick[p] == 1)\n    model.maximize(sum(values[p] * pick[p] for p in costs))\n    return model, pick\n\n\ndef add_plan_hint(model: cp_model.CpModel, pick: dict[str, cp_model.IntVar], plan: set[str]) -> None:\n    \"\"\"Hint the plan: 1 for every project it funds, 0 for every other project.\"\"\"\n    for p, var in pick.items():\n        model.add_hint(var, 1 if p in plan else 0)\n\n\ndef fits(costs: dict[str, int], values: dict[str, int], must: set[str], budget: int, plan: set[str]) -> bool:\n    \"\"\"Does last year's plan keep every rule of this year's model?\"\"\"\n    model, pick = build(costs, values, must, budget)\n    add_plan_hint(model, pick, plan)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.parameters.fix_variables_to_their_hinted_value = True\n    status = solver.solve(model)\n    return status in (cp_model.OPTIMAL, cp_model.FEASIBLE)\n\n\nif __name__ == \"__main__\":\n    costs, values = {\"A\": 40, \"B\": 30, \"C\": 50}, {\"A\": 70, \"B\": 60, \"C\": 50}\n    print(fits(costs, values, {\"C\"}, 90, {\"A\", \"C\"}), fits(costs, values, {\"C\"}, 90, {\"A\", \"B\"}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom carryover import fits\n\n# Four batches of meter swaps; batch Q is required; 100 to spend.\ncosts = {\"P\": 35, \"Q\": 45, \"R\": 25, \"S\": 30}\nvalues = {\"P\": 60, \"Q\": 40, \"R\": 50, \"S\": 55}\nfor plan in ({\"Q\", \"R\", \"S\"}, {\"P\", \"Q\", \"R\"}, {\"P\", \"R\", \"S\"}, {\"P\", \"Q\"}):\n    print(f\"plan {sorted(plan)} fits:\", fits(costs, values, {\"Q\"}, 100, plan))\n"
         }
       ]
     },
@@ -72,6 +81,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef build(costs: dict[str, int], values: dict[str, int], must: set[str],\n          budget: int) -> tuple[cp_model.CpModel, dict[str, cp_model.IntVar]]:\n    \"\"\"Given: this year's model. pick[p] = 1 funds project p.\"\"\"\n    model = cp_model.CpModel()\n    pick = {p: model.new_bool_var(f\"pick_{p}\") for p in costs}\n    model.add(sum(costs[p] * pick[p] for p in costs) <= budget)\n    for p in must:\n        model.add(pick[p] == 1)\n    model.maximize(sum(values[p] * pick[p] for p in costs))\n    return model, pick\n\n\ndef add_plan_hint(model: cp_model.CpModel, pick: dict[str, cp_model.IntVar], plan: set[str]) -> None:\n    \"\"\"Hint the plan: 1 for every project it funds, 0 for every other project.\"\"\"\n    # TODO: one hint per project.\n    return None\n\n\ndef fits(costs: dict[str, int], values: dict[str, int], must: set[str], budget: int, plan: set[str]) -> bool:\n    \"\"\"Does last year's plan keep every rule of this year's model?\"\"\"\n    # TODO: hint the plan, fix every variable to its hint, solve with one worker.\n    return False\n\n\nif __name__ == \"__main__\":\n    costs, values = {\"A\": 40, \"B\": 30, \"C\": 50}, {\"A\": 70, \"B\": 60, \"C\": 50}\n    print(fits(costs, values, {\"C\"}, 90, {\"A\", \"C\"}), fits(costs, values, {\"C\"}, 90, {\"A\", \"B\"}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom carryover import fits\n\n# Four batches of meter swaps; batch Q is required; 100 to spend.\ncosts = {\"P\": 35, \"Q\": 45, \"R\": 25, \"S\": 30}\nvalues = {\"P\": 60, \"Q\": 40, \"R\": 50, \"S\": 55}\nfor plan in ({\"Q\", \"R\", \"S\"}, {\"P\", \"Q\", \"R\"}, {\"P\", \"R\", \"S\"}, {\"P\", \"Q\"}):\n    print(f\"plan {sorted(plan)} fits:\", fits(costs, values, {\"Q\"}, 100, plan))\n"
     }
   ],
   "video": null,
@@ -79,8 +97,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -90,14 +108,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "01abeb6b3d578e949c62f57b1944bc21ccf56fd5ef0aa8ea2b0ff8c468efdc93",
+  "content_sha256": "e6971f8b75f21a3b5b9d39dfe9039b3ed24dda49cfe54fd0e144eb373400ae8a",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef build(costs: dict[str, int], values: dict[str, int], must: set[str],\n          budget: int) -> tuple[cp_model.CpModel, dict[str, cp_model.IntVar]]:\n    \"\"\"Given: this year's model. pick[p] = 1 funds project p.\"\"\"\n    model = cp_model.CpModel()\n    pick = {p: model.new_bool_var(f\"pick_{p}\") for p in costs}\n    model.add(sum(costs[p] * pick[p] for p in costs) <= budget)\n    for p in must:\n        model.add(pick[p] == 1)\n    model.maximize(sum(values[p] * pick[p] for p in costs))\n    return model, pick\n\n\ndef add_plan_hint(model: cp_model.CpModel, pick: dict[str, cp_model.IntVar], plan: set[str]) -> None:\n    \"\"\"Hint the plan: 1 for every project it funds, 0 for every other project.\"\"\"\n    # TODO: one hint per project.\n    return None\n\n\ndef fits(costs: dict[str, int], values: dict[str, int], must: set[str], budget: int, plan: set[str]) -> bool:\n    \"\"\"Does last year's plan keep every rule of this year's model?\"\"\"\n    # TODO: hint the plan, fix every variable to its hint, solve with one worker.\n    return False\n\n\nif __name__ == \"__main__\":\n    costs, values = {\"A\": 40, \"B\": 30, \"C\": 50}, {\"A\": 70, \"B\": 60, \"C\": 50}\n    print(fits(costs, values, {\"C\"}, 90, {\"A\", \"C\"}), fits(costs, values, {\"C\"}, 90, {\"A\", \"B\"}))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-1/carryover.py",
     "test_path": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-1/test_carryover.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-1/carryover.py"
+      "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -138,6 +156,10 @@
     },
     "concepts": [
       "hinting every variable and fixing variables to their hints tests one plan's feasibility"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/17-cpsat-tuning-and-diagnostics/prose/unit-02/practice-1/try_it.py"
   }
 }

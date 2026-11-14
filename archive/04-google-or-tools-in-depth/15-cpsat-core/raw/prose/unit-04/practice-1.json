@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "One park plan, two solvers",
   "blocks": [
     {
@@ -60,6 +60,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\nfrom ortools.sat.python import cp_model\n\n\ndef best_with_cpsat(value: dict[str, int], cost: dict[str, int], budget: int,\n                    requires: list[tuple[str, str]], excludes: list[tuple[str, str]]) -> int:\n    \"\"\"The best total value, from CP-SAT with its own logic constraints.\"\"\"\n    model = cp_model.CpModel()\n    x = {i: model.new_bool_var(i) for i in value}\n    model.add(sum(cost[i] * x[i] for i in value) <= budget)\n    for a, b in requires:\n        model.add_implication(x[a], x[b])\n    for a, b in excludes:\n        model.add_bool_or(~x[a], ~x[b])\n    model.maximize(sum(value[i] * x[i] for i in value))\n    solver = cp_model.CpSolver()\n    solver.solve(model)\n    return round(solver.objective_value)\n\n\ndef best_with_highs(value: dict[str, int], cost: dict[str, int], budget: int,\n                    requires: list[tuple[str, str]], excludes: list[tuple[str, str]]) -> int:\n    \"\"\"The best total value, from HiGHS through MathOpt with linear rows.\"\"\"\n    model = mathopt.Model()\n    x = {i: model.add_binary_variable(name=i) for i in value}\n    model.add_linear_constraint(sum(cost[i] * x[i] for i in value) <= budget)\n    for a, b in requires:\n        model.add_linear_constraint(x[a] <= x[b])\n    for a, b in excludes:\n        model.add_linear_constraint(x[a] + x[b] <= 1)\n    model.maximize(sum(value[i] * x[i] for i in value))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    return round(result.objective_value())\n\n\nif __name__ == \"__main__\":\n    value, cost = {\"a\": 5, \"b\": 4, \"c\": 3}, {\"a\": 4, \"b\": 3, \"c\": 2}\n    print(best_with_cpsat(value, cost, 6, [(\"c\", \"b\")], []), best_with_highs(value, cost, 6, [(\"c\", \"b\")], []))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom twins import best_with_cpsat, best_with_highs\n\n# Park improvements: value points and cost in $k.\nvalue = {\"bench\": 3, \"trail\": 8, \"pond\": 6, \"kiosk\": 5, \"swing\": 4}\ncost = {\"bench\": 10, \"trail\": 35, \"pond\": 30, \"kiosk\": 25, \"swing\": 20}\nrequires = [(\"kiosk\", \"trail\")]\nexcludes = [(\"pond\", \"swing\")]\n\nfor budget in (50, 80):\n    print(f\"budget {budget}, rules on, CP-SAT:\", best_with_cpsat(value, cost, budget, requires, excludes))\n    print(f\"budget {budget}, rules on, HiGHS:\", best_with_highs(value, cost, budget, requires, excludes))\nprint(\"budget 80, no rules, CP-SAT:\", best_with_cpsat(value, cost, 80, [], []))\n"
         }
       ]
     },
@@ -72,6 +81,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\nfrom ortools.sat.python import cp_model\n\n\ndef best_with_cpsat(value: dict[str, int], cost: dict[str, int], budget: int,\n                    requires: list[tuple[str, str]], excludes: list[tuple[str, str]]) -> int:\n    \"\"\"The best total value, from CP-SAT with its own logic constraints.\"\"\"\n    # TODO: the model in CP-SAT, solved.\n    return 0\n\ndef best_with_highs(value: dict[str, int], cost: dict[str, int], budget: int,\n                    requires: list[tuple[str, str]], excludes: list[tuple[str, str]]) -> int:\n    \"\"\"The best total value, from HiGHS through MathOpt with linear rows.\"\"\"\n    # TODO: the same model in MathOpt, solved with HiGHS.\n    return 0\n\nif __name__ == \"__main__\":\n    value, cost = {\"a\": 5, \"b\": 4, \"c\": 3}, {\"a\": 4, \"b\": 3, \"c\": 2}\n    print(best_with_cpsat(value, cost, 6, [(\"c\", \"b\")], []), best_with_highs(value, cost, 6, [(\"c\", \"b\")], []))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom twins import best_with_cpsat, best_with_highs\n\n# Park improvements: value points and cost in $k.\nvalue = {\"bench\": 3, \"trail\": 8, \"pond\": 6, \"kiosk\": 5, \"swing\": 4}\ncost = {\"bench\": 10, \"trail\": 35, \"pond\": 30, \"kiosk\": 25, \"swing\": 20}\nrequires = [(\"kiosk\", \"trail\")]\nexcludes = [(\"pond\", \"swing\")]\n\nfor budget in (50, 80):\n    print(f\"budget {budget}, rules on, CP-SAT:\", best_with_cpsat(value, cost, budget, requires, excludes))\n    print(f\"budget {budget}, rules on, HiGHS:\", best_with_highs(value, cost, budget, requires, excludes))\nprint(\"budget 80, no rules, CP-SAT:\", best_with_cpsat(value, cost, 80, [], []))\n"
     }
   ],
   "video": null,
@@ -79,8 +97,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -90,14 +108,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "fc942fd68f0525af58e547b830413b7237a70cb8397a650a9d6de57b72ecce15",
+  "content_sha256": "bb66edb80ef2d5d46805237bbfe98abc12b16bb6021c476ddf9b5f00f5284e12",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\nfrom ortools.sat.python import cp_model\n\n\ndef best_with_cpsat(value: dict[str, int], cost: dict[str, int], budget: int,\n                    requires: list[tuple[str, str]], excludes: list[tuple[str, str]]) -> int:\n    \"\"\"The best total value, from CP-SAT with its own logic constraints.\"\"\"\n    # TODO: the model in CP-SAT, solved.\n    return 0\n\ndef best_with_highs(value: dict[str, int], cost: dict[str, int], budget: int,\n                    requires: list[tuple[str, str]], excludes: list[tuple[str, str]]) -> int:\n    \"\"\"The best total value, from HiGHS through MathOpt with linear rows.\"\"\"\n    # TODO: the same model in MathOpt, solved with HiGHS.\n    return 0\n\nif __name__ == \"__main__\":\n    value, cost = {\"a\": 5, \"b\": 4, \"c\": 3}, {\"a\": 4, \"b\": 3, \"c\": 2}\n    print(best_with_cpsat(value, cost, 6, [(\"c\", \"b\")], []), best_with_highs(value, cost, 6, [(\"c\", \"b\")], []))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-1/twins.py",
     "test_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-1/test_twins.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-1/twins.py"
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -138,6 +156,10 @@
     },
     "concepts": [
       "on a plain selection model both solvers prove the same optimum, so the choice is about modeling style"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-1/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-04/practice-1/try_it.py"
   }
 }

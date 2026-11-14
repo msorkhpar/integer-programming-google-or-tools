@@ -9,7 +9,7 @@
   "unit": 5,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A plan gate with counts and exceptions",
   "blocks": [
     {
@@ -51,6 +51,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom collections import Counter\n\nVERBS = {(\"no-op\",): \"no-op\", (\"create\",): \"create\", (\"read\",): \"read\", (\"update\",): \"update\",\n         (\"delete\",): \"delete\", (\"delete\", \"create\"): \"replace\", (\"create\", \"delete\"): \"replace\"}\n\n\ndef gate(plan: dict, protected: set[str], allowed: set[str] = frozenset()) -> tuple[list[str], dict[str, int]]:\n    \"\"\"(addresses blocked, sorted; count of changes by verb) for a `terraform show -json` plan.\"\"\"\n    blocked, counts = [], Counter()\n    for change in plan.get(\"resource_changes\", []):\n        actions = change[\"change\"][\"actions\"]\n        counts[VERBS[tuple(actions)]] += 1\n        if change[\"type\"] in protected and \"delete\" in actions and change[\"address\"] not in allowed:\n            blocked.append(change[\"address\"])\n    return sorted(blocked), dict(counts)\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom plan_gate import gate\n\n\ndef change(address, kind, *actions):\n    return {\"address\": address, \"mode\": \"managed\", \"type\": kind, \"name\": address.rsplit(\".\", 1)[-1],\n            \"change\": {\"actions\": list(actions)}}\n\n\nprotected = {\"aws_s3_bucket\", \"aws_dynamodb_table\"}\nplan = {\"format_version\": \"1.2\", \"resource_changes\": [\n    change(\"aws_dynamodb_table.locks\", \"aws_dynamodb_table\", \"create\", \"delete\"),\n    change(\"aws_s3_bucket.archive\", \"aws_s3_bucket\", \"delete\"),\n    change(\"aws_s3_bucket.tmp\", \"aws_s3_bucket\", \"delete\"),\n    change(\"aws_lambda_function.solve\", \"aws_lambda_function\", \"update\"),\n    change(\"aws_sqs_queue.jobs\", \"aws_sqs_queue\", \"no-op\"),\n]}\n\nprint(\"plan, nothing allowed:\", gate(plan, protected))\nprint(\"plan, aws_s3_bucket.tmp allowed:\", gate(plan, protected, allowed={\"aws_s3_bucket.tmp\"}))\n"
         }
       ]
     },
@@ -63,6 +72,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom collections import Counter  # noqa: F401\n\nVERBS = {(\"no-op\",): \"no-op\", (\"create\",): \"create\", (\"read\",): \"read\", (\"update\",): \"update\",\n         (\"delete\",): \"delete\", (\"delete\", \"create\"): \"replace\", (\"create\", \"delete\"): \"replace\"}\n\n\ndef gate(plan: dict, protected: set[str], allowed: set[str] = frozenset()) -> tuple[list[str], dict[str, int]]:\n    \"\"\"(addresses blocked, sorted; count of changes by verb) for a `terraform show -json` plan.\"\"\"\n    # TODO: count each change's verb, and block deletes of protected types not in `allowed`.\n    return [], {}\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom plan_gate import gate\n\n\ndef change(address, kind, *actions):\n    return {\"address\": address, \"mode\": \"managed\", \"type\": kind, \"name\": address.rsplit(\".\", 1)[-1],\n            \"change\": {\"actions\": list(actions)}}\n\n\nprotected = {\"aws_s3_bucket\", \"aws_dynamodb_table\"}\nplan = {\"format_version\": \"1.2\", \"resource_changes\": [\n    change(\"aws_dynamodb_table.locks\", \"aws_dynamodb_table\", \"create\", \"delete\"),\n    change(\"aws_s3_bucket.archive\", \"aws_s3_bucket\", \"delete\"),\n    change(\"aws_s3_bucket.tmp\", \"aws_s3_bucket\", \"delete\"),\n    change(\"aws_lambda_function.solve\", \"aws_lambda_function\", \"update\"),\n    change(\"aws_sqs_queue.jobs\", \"aws_sqs_queue\", \"no-op\"),\n]}\n\nprint(\"plan, nothing allowed:\", gate(plan, protected))\nprint(\"plan, aws_s3_bucket.tmp allowed:\", gate(plan, protected, allowed={\"aws_s3_bucket.tmp\"}))\n"
     }
   ],
   "video": null,
@@ -70,8 +88,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -81,14 +99,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "ba70e0f63bd74910da7af96bd4ee46f4638a30afae51cb8d932b9df503bf749b",
+  "content_sha256": "64d62b9da5a90b9f4a86c5709af7672e3bbdce5b1bea983fcf761f6e3716668a",
   "starting_code": "from __future__ import annotations\n\nfrom collections import Counter  # noqa: F401\n\nVERBS = {(\"no-op\",): \"no-op\", (\"create\",): \"create\", (\"read\",): \"read\", (\"update\",): \"update\",\n         (\"delete\",): \"delete\", (\"delete\", \"create\"): \"replace\", (\"create\", \"delete\"): \"replace\"}\n\n\ndef gate(plan: dict, protected: set[str], allowed: set[str] = frozenset()) -> tuple[list[str], dict[str, int]]:\n    \"\"\"(addresses blocked, sorted; count of changes by verb) for a `terraform show -json` plan.\"\"\"\n    # TODO: count each change's verb, and block deletes of protected types not in `allowed`.\n    return [], {}\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-05/practice-2/plan_gate.py",
     "test_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-05/practice-2/test_plan_gate.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-05/practice-2/plan_gate.py"
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-05/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -140,6 +158,10 @@
     "concepts": [
       "plan to a file, read it as JSON, apply that file",
       "blocking plans that delete resources holding history"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-05/practice-2/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-05/practice-2/try_it.py"
   }
 }

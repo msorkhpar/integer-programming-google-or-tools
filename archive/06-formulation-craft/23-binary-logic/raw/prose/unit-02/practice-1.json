@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A water utility's engineering rules",
   "blocks": [
     {
@@ -66,6 +66,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int        # $k\n\n\ndef add_engineering_rules(model: mathopt.Model, x: dict, needs_any: dict[str, list[str]],\n                          all_trigger: list[tuple[list[str], str]], never_with: list[tuple[str, str]],\n                          together: list[tuple[str, str]]) -> None:\n    \"\"\"Supports, group triggers, incompatible pairs and pairs funded together, as linear rows.\"\"\"\n    for project, supports in needs_any.items():\n        model.add_linear_constraint(x[project] <= sum(x[s] for s in supports), name=f\"needs_{project}\")\n    for group, consequence in all_trigger:\n        model.add_linear_constraint(sum(x[g] for g in group) - (len(group) - 1) <= x[consequence],\n                                    name=f\"all_{consequence}\")\n    for a, b in never_with:\n        model.add_linear_constraint(x[a] + x[b] <= 1, name=f\"never_{a}_{b}\")\n    for a, b in together:\n        model.add_linear_constraint(x[a] == x[b], name=f\"together_{a}_{b}\")\n\n\ndef build(projects: list[Project], budget: int, needs_any: dict[str, list[str]],\n          all_trigger: list[tuple[list[str], str]], never_with: list[tuple[str, str]],\n          together: list[tuple[str, str]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"water-capital\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in projects) <= budget, name=\"budget\")\n    add_engineering_rules(model, x, needs_any, all_trigger, never_with, together)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"TX\", 900), Project(\"NM\", 400), Project(\"SM\", 350)]\n    model, x = build(projects, 2_000, {\"TX\": [\"NM\", \"SM\"]}, [], [], [])\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom water_rules import Project, build\n\n# Ten wastewater projects of cost 50 each, with four engineering rules.\nprojects = [Project(pid, 50) for pid in (\"PL\", \"E1\", \"E2\", \"D\", \"V\", \"S\", \"SC\", \"OLD\", \"NEW\", \"LAB\", \"GIS\")]\nneeds_any = {\"PL\": [\"E1\", \"E2\"]}\nall_trigger = [([\"D\", \"V\"], \"SC\")]\nnever_with = [(\"OLD\", \"NEW\")]\ntogether = [(\"LAB\", \"GIS\")]\n\n\ndef solved(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef fix(variables, plan):\n    for key, var in variables.items():\n        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0\n\n\ndef allowed(plan):\n    model, x = build(projects, 5_000, needs_any, all_trigger, never_with, together)\n    fix(x, plan)\n    return solved(model)\n\n\nprint(\"PL + E2:\", allowed({\"PL\", \"E2\"}))\nprint(\"PL alone:\", allowed({\"PL\"}))\nprint(\"D + V:\", allowed({\"D\", \"V\"}))\nprint(\"D + V + SC:\", allowed({\"D\", \"V\", \"SC\"}))\nprint(\"OLD + NEW:\", allowed({\"OLD\", \"NEW\"}))\nprint(\"GIS alone:\", allowed({\"GIS\"}))\n"
         }
       ]
     },
@@ -78,6 +87,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int        # $k\n\n\ndef add_engineering_rules(model: mathopt.Model, x: dict, needs_any: dict[str, list[str]],\n                          all_trigger: list[tuple[list[str], str]], never_with: list[tuple[str, str]],\n                          together: list[tuple[str, str]]) -> None:\n    \"\"\"Supports, group triggers, incompatible pairs and pairs funded together, as linear rows.\"\"\"\n    # TODO: one family of rows for each kind of rule.\n    return None\n\n\ndef build(projects: list[Project], budget: int, needs_any: dict[str, list[str]],\n          all_trigger: list[tuple[list[str], str]], never_with: list[tuple[str, str]],\n          together: list[tuple[str, str]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"water-capital\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in projects) <= budget, name=\"budget\")\n    add_engineering_rules(model, x, needs_any, all_trigger, never_with, together)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"TX\", 900), Project(\"NM\", 400), Project(\"SM\", 350)]\n    model, x = build(projects, 2_000, {\"TX\": [\"NM\", \"SM\"]}, [], [], [])\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom water_rules import Project, build\n\n# Ten wastewater projects of cost 50 each, with four engineering rules.\nprojects = [Project(pid, 50) for pid in (\"PL\", \"E1\", \"E2\", \"D\", \"V\", \"S\", \"SC\", \"OLD\", \"NEW\", \"LAB\", \"GIS\")]\nneeds_any = {\"PL\": [\"E1\", \"E2\"]}\nall_trigger = [([\"D\", \"V\"], \"SC\")]\nnever_with = [(\"OLD\", \"NEW\")]\ntogether = [(\"LAB\", \"GIS\")]\n\n\ndef solved(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef fix(variables, plan):\n    for key, var in variables.items():\n        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0\n\n\ndef allowed(plan):\n    model, x = build(projects, 5_000, needs_any, all_trigger, never_with, together)\n    fix(x, plan)\n    return solved(model)\n\n\nprint(\"PL + E2:\", allowed({\"PL\", \"E2\"}))\nprint(\"PL alone:\", allowed({\"PL\"}))\nprint(\"D + V:\", allowed({\"D\", \"V\"}))\nprint(\"D + V + SC:\", allowed({\"D\", \"V\", \"SC\"}))\nprint(\"OLD + NEW:\", allowed({\"OLD\", \"NEW\"}))\nprint(\"GIS alone:\", allowed({\"GIS\"}))\n"
     }
   ],
   "video": null,
@@ -85,8 +103,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -96,14 +114,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "370fd1579f86f9d1e2afba29604640dfa36e0fd37aaa7377128ce539229574ac",
+  "content_sha256": "6072ee7d8a8c3f5be1486fd09d59255b007442db78fce5126cd5702342bd229a",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int        # $k\n\n\ndef add_engineering_rules(model: mathopt.Model, x: dict, needs_any: dict[str, list[str]],\n                          all_trigger: list[tuple[list[str], str]], never_with: list[tuple[str, str]],\n                          together: list[tuple[str, str]]) -> None:\n    \"\"\"Supports, group triggers, incompatible pairs and pairs funded together, as linear rows.\"\"\"\n    # TODO: one family of rows for each kind of rule.\n    return None\n\n\ndef build(projects: list[Project], budget: int, needs_any: dict[str, list[str]],\n          all_trigger: list[tuple[list[str], str]], never_with: list[tuple[str, str]],\n          together: list[tuple[str, str]]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"water-capital\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in projects) <= budget, name=\"budget\")\n    add_engineering_rules(model, x, needs_any, all_trigger, never_with, together)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"TX\", 900), Project(\"NM\", 400), Project(\"SM\", 350)]\n    model, x = build(projects, 2_000, {\"TX\": [\"NM\", \"SM\"]}, [], [], [])\n    print(len(list(model.linear_constraints())), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-1/water_rules.py",
     "test_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-1/test_water_rules.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-1/water_rules.py"
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -166,6 +184,10 @@
       "rules with a conjunction or disjunction in the premise or the conclusion are still linear rows",
       "an implication between two decisions is a single inequality, checked on every 0/1 combination",
       "the negation of a yes/no decision is one minus its binary"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/23-binary-logic/prose/unit-02/practice-1/try_it.py"
   }
 }

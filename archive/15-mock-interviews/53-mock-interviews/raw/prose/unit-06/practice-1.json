@@ -9,7 +9,7 @@
   "unit": 6,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "An independent plan checker",
   "blocks": [
     {
@@ -50,6 +50,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int            # $k\n    crew: int            # crew-weeks\n    region: str\n    value: int = 0\n\n\n@dataclass(frozen=True)\nclass Limits:\n    budget: int\n    crew: int\n    region_cap: dict[str, int]\n    conflicts: list[tuple[str, str]] = field(default_factory=list)   # not both\n    needs: list[tuple[str, str]] = field(default_factory=list)       # (a, b): a only if b\n\n\ndef broken_rules(plan: set[str], projects: list[Project], limits: Limits) -> list[str]:\n    \"\"\"Every rule the plan breaks, read from the data alone, as sorted labels.\"\"\"\n    chosen = [p for p in projects if p.pid in plan]\n    broken = []\n    if sum(p.cost for p in chosen) > limits.budget:\n        broken.append(\"budget\")\n    if sum(p.crew for p in chosen) > limits.crew:\n        broken.append(\"crews\")\n    for region, cap in limits.region_cap.items():\n        if sum(1 for p in chosen if p.region == region) > cap:\n            broken.append(f\"region_{region}\")\n    for a, b in limits.conflicts:\n        if a in plan and b in plan:\n            broken.append(f\"conflict_{a}_{b}\")\n    for a, b in limits.needs:\n        if a in plan and b not in plan:\n            broken.append(f\"needs_{a}_{b}\")\n    return sorted(broken)\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"A\", 40, 3, \"N\"), Project(\"B\", 30, 2, \"N\")]\n    print(broken_rules({\"A\", \"B\"}, projects, Limits(60, 4, {\"N\": 1})))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom checker import Limits, Project, broken_rules\n\npiers = [\n    Project(\"P1\", 50, 2, \"East\"),\n    Project(\"P2\", 35, 3, \"East\"),\n    Project(\"P3\", 25, 2, \"West\"),\n    Project(\"P4\", 40, 4, \"West\"),\n    Project(\"P5\", 15, 1, \"North\"),\n]\nlimits = Limits(budget=110, crew=8, region_cap={\"East\": 1, \"West\": 2, \"North\": 1},\n                conflicts=[(\"P1\", \"P4\")], needs=[(\"P5\", \"P3\")])\n\nfor plan in ({\"P1\", \"P3\", \"P5\"}, {\"P1\", \"P2\"}, {\"P1\", \"P4\"}, {\"P5\"}, {\"P1\", \"P2\", \"P3\", \"P4\"}):\n    print(f\"plan {sorted(plan)}:\", broken_rules(plan, piers, limits))\n"
         }
       ]
     },
@@ -62,6 +71,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int            # $k\n    crew: int            # crew-weeks\n    region: str\n    value: int = 0\n\n\n@dataclass(frozen=True)\nclass Limits:\n    budget: int\n    crew: int\n    region_cap: dict[str, int]\n    conflicts: list[tuple[str, str]] = field(default_factory=list)   # not both\n    needs: list[tuple[str, str]] = field(default_factory=list)       # (a, b): a only if b\n\n\ndef broken_rules(plan: set[str], projects: list[Project], limits: Limits) -> list[str]:\n    \"\"\"Every rule the plan breaks, read from the data alone, as sorted labels.\"\"\"\n    # TODO: check each rule against the plan, using only the data.\n    return [\"unchecked\"]\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"A\", 40, 3, \"N\"), Project(\"B\", 30, 2, \"N\")]\n    print(broken_rules({\"A\", \"B\"}, projects, Limits(60, 4, {\"N\": 1})))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom checker import Limits, Project, broken_rules\n\npiers = [\n    Project(\"P1\", 50, 2, \"East\"),\n    Project(\"P2\", 35, 3, \"East\"),\n    Project(\"P3\", 25, 2, \"West\"),\n    Project(\"P4\", 40, 4, \"West\"),\n    Project(\"P5\", 15, 1, \"North\"),\n]\nlimits = Limits(budget=110, crew=8, region_cap={\"East\": 1, \"West\": 2, \"North\": 1},\n                conflicts=[(\"P1\", \"P4\")], needs=[(\"P5\", \"P3\")])\n\nfor plan in ({\"P1\", \"P3\", \"P5\"}, {\"P1\", \"P2\"}, {\"P1\", \"P4\"}, {\"P5\"}, {\"P1\", \"P2\", \"P3\", \"P4\"}):\n    print(f\"plan {sorted(plan)}:\", broken_rules(plan, piers, limits))\n"
     }
   ],
   "video": null,
@@ -69,8 +87,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 2,
-    "code": 1,
+    "paras": 3,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -80,14 +98,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "524a295b8ea744960a720e54790f0d585c97ff7e2b14062b700321d3e3fbbf01",
+  "content_sha256": "2b428bd5f69830af7e257052800af8251246fdc61c68d7c22bdb3a5b33fb7180",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass, field\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int            # $k\n    crew: int            # crew-weeks\n    region: str\n    value: int = 0\n\n\n@dataclass(frozen=True)\nclass Limits:\n    budget: int\n    crew: int\n    region_cap: dict[str, int]\n    conflicts: list[tuple[str, str]] = field(default_factory=list)   # not both\n    needs: list[tuple[str, str]] = field(default_factory=list)       # (a, b): a only if b\n\n\ndef broken_rules(plan: set[str], projects: list[Project], limits: Limits) -> list[str]:\n    \"\"\"Every rule the plan breaks, read from the data alone, as sorted labels.\"\"\"\n    # TODO: check each rule against the plan, using only the data.\n    return [\"unchecked\"]\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"A\", 40, 3, \"N\"), Project(\"B\", 30, 2, \"N\")]\n    print(broken_rules({\"A\", \"B\"}, projects, Limits(60, 4, {\"N\": 1})))\n",
   "exercise": {
     "main_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-1/checker.py",
     "test_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-1/test_checker.py",
     "run_command": [
       "python3",
-      "practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-1/checker.py"
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -143,6 +161,10 @@
     },
     "concepts": [
       "check a returned plan against every rule from the data alone, and name each rule it breaks"
-    ]
+    ],
+    "files": [
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-1/try_it.py"
+    ],
+    "try_file": "practice/15-mock-interviews/53-mock-interviews/prose/unit-06/practice-1/try_it.py"
   }
 }

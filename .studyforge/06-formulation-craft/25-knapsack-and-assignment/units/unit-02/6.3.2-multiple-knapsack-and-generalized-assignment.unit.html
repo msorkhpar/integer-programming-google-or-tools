@@ -161,6 +161,37 @@ def build(orders: list[Order], trucks: list[Truck]) -&gt; tuple[mathopt.Model, d
 if __name__ == &quot;__main__&quot;:
     model, x = build([Order(&quot;O1&quot;, 3, 400, 2.0), Order(&quot;O2&quot;, 5, 900, 1.0, &quot;S1&quot;)], [Truck(&quot;T1&quot;, 1000, 3.0)])
     print(len(list(model.linear_constraints())), &quot;rows&quot;)
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from ortools.math_opt.python import mathopt
+
+from loading import Order, Truck, build
+
+orders = [Order(&quot;P1&quot;, 6, 700, 1.5), Order(&quot;P2&quot;, 3, 400, 2.0), Order(&quot;P3&quot;, 5, 650, 1.0, site=&quot;Quay&quot;),
+          Order(&quot;P4&quot;, 2, 300, 0.5, site=&quot;Quay&quot;), Order(&quot;P5&quot;, 4, 500, 2.5)]
+trucks = [Truck(&quot;V1&quot;, 1400, 3.0), Truck(&quot;V2&quot;, 1000, 4.0)]
+
+
+def allowed(loads):
+    model, x = build(orders, trucks)
+    for (oid, tid), var in x.items():
+        var.lower_bound = var.upper_bound = 1.0 if loads.get(oid) == tid else 0.0
+    return mathopt.solve(model, mathopt.SolverType.HIGHS).termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+print(&quot;P1,P2 on V1:&quot;, allowed({&quot;P1&quot;: &quot;V1&quot;, &quot;P2&quot;: &quot;V1&quot;}))
+print(&quot;P1 on V1, P3,P4 on V2:&quot;, allowed({&quot;P1&quot;: &quot;V1&quot;, &quot;P3&quot;: &quot;V2&quot;, &quot;P4&quot;: &quot;V2&quot;}))
+print(&quot;P3 on V1, P4 on V2:&quot;, allowed({&quot;P3&quot;: &quot;V1&quot;, &quot;P4&quot;: &quot;V2&quot;}))
+print(&quot;P3 on V1 alone:&quot;, allowed({&quot;P3&quot;: &quot;V1&quot;}))
+
+model, x = build(orders, trucks)
+result = mathopt.solve(model, mathopt.SolverType.HIGHS)
+print(&quot;best priority shipped:&quot;, round(result.objective_value(), 2))
 </code></pre></figure></details>
 <h2 id="practice-prose-b10">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -203,10 +234,42 @@ if __name__ == &quot;__main__&quot;:
     model, x = build([Order(&quot;O1&quot;, 3, 400, 2.0), Order(&quot;O2&quot;, 5, 900, 1.0, &quot;S1&quot;)], [Truck(&quot;T1&quot;, 1000, 3.0)])
     print(len(list(model.linear_constraints())), &quot;rows&quot;)
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from ortools.math_opt.python import mathopt
+
+from loading import Order, Truck, build
+
+orders = [Order(&quot;P1&quot;, 6, 700, 1.5), Order(&quot;P2&quot;, 3, 400, 2.0), Order(&quot;P3&quot;, 5, 650, 1.0, site=&quot;Quay&quot;),
+          Order(&quot;P4&quot;, 2, 300, 0.5, site=&quot;Quay&quot;), Order(&quot;P5&quot;, 4, 500, 2.5)]
+trucks = [Truck(&quot;V1&quot;, 1400, 3.0), Truck(&quot;V2&quot;, 1000, 4.0)]
+
+
+def allowed(loads):
+    model, x = build(orders, trucks)
+    for (oid, tid), var in x.items():
+        var.lower_bound = var.upper_bound = 1.0 if loads.get(oid) == tid else 0.0
+    return mathopt.solve(model, mathopt.SolverType.HIGHS).termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+print(&quot;P1,P2 on V1:&quot;, allowed({&quot;P1&quot;: &quot;V1&quot;, &quot;P2&quot;: &quot;V1&quot;}))
+print(&quot;P1 on V1, P3,P4 on V2:&quot;, allowed({&quot;P1&quot;: &quot;V1&quot;, &quot;P3&quot;: &quot;V2&quot;, &quot;P4&quot;: &quot;V2&quot;}))
+print(&quot;P3 on V1, P4 on V2:&quot;, allowed({&quot;P3&quot;: &quot;V1&quot;, &quot;P4&quot;: &quot;V2&quot;}))
+print(&quot;P3 on V1 alone:&quot;, allowed({&quot;P3&quot;: &quot;V1&quot;}))
+
+model, x = build(orders, trucks)
+result = mathopt.solve(model, mathopt.SolverType.HIGHS)
+print(&quot;best priority shipped:&quot;, round(result.objective_value(), 2))
+</code></pre></figure>
 </section>
 <section data-practice="06-formulation-craft/25-knapsack-and-assignment/unit-02/practice-prose" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-1/loading.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-1/loading.py</code> and <code>practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-1/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-1/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>
@@ -377,6 +440,30 @@ if __name__ == &quot;__main__&quot;:
     crews = [Crew(&quot;K1&quot;, {2027: 20, 2028: 20}, 9, certified=True)]
     model, x = build([Job(&quot;J1&quot;, 2027, 2028, {&quot;K1&quot;: 8}, large=True)], crews, [2027, 2028])
     print(len(x), &quot;variables&quot;)
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from ortools.math_opt.python import mathopt
+
+from schedule import Crew, Job, build
+
+years = [2030, 2031]
+crews = [Crew(&quot;Ortiz&quot;, {2030: 18, 2031: 12}, 8, certified=True), Crew(&quot;Patel&quot;, {2030: 14, 2031: 14}, 6)]
+jobs = [Job(&quot;W1&quot;, 2030, 2031, {&quot;Ortiz&quot;: 9, &quot;Patel&quot;: 11}),
+        Job(&quot;W2&quot;, 2030, 2030, {&quot;Ortiz&quot;: 7, &quot;Patel&quot;: 7}),
+        Job(&quot;W3&quot;, 2031, 2031, {&quot;Ortiz&quot;: 10, &quot;Patel&quot;: 12}, large=True)]
+
+model, x = build(jobs, crews, years)
+print(&quot;variables:&quot;, sorted(x))
+result = mathopt.solve(model, mathopt.SolverType.HIGHS)
+print(&quot;status:&quot;, result.termination.reason.name)
+print(&quot;cost:&quot;, round(result.objective_value(), 2))
+values = result.variable_values()
+print(&quot;schedule:&quot;, sorted(k for k, v in x.items() if values[v] &gt; 0.5))
 </code></pre></figure></details>
 <h2 id="practice-prose-2-b8">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -415,10 +502,35 @@ if __name__ == &quot;__main__&quot;:
     model, x = build([Job(&quot;J1&quot;, 2027, 2028, {&quot;K1&quot;: 8}, large=True)], crews, [2027, 2028])
     print(len(x), &quot;variables&quot;)
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from ortools.math_opt.python import mathopt
+
+from schedule import Crew, Job, build
+
+years = [2030, 2031]
+crews = [Crew(&quot;Ortiz&quot;, {2030: 18, 2031: 12}, 8, certified=True), Crew(&quot;Patel&quot;, {2030: 14, 2031: 14}, 6)]
+jobs = [Job(&quot;W1&quot;, 2030, 2031, {&quot;Ortiz&quot;: 9, &quot;Patel&quot;: 11}),
+        Job(&quot;W2&quot;, 2030, 2030, {&quot;Ortiz&quot;: 7, &quot;Patel&quot;: 7}),
+        Job(&quot;W3&quot;, 2031, 2031, {&quot;Ortiz&quot;: 10, &quot;Patel&quot;: 12}, large=True)]
+
+model, x = build(jobs, crews, years)
+print(&quot;variables:&quot;, sorted(x))
+result = mathopt.solve(model, mathopt.SolverType.HIGHS)
+print(&quot;status:&quot;, result.termination.reason.name)
+print(&quot;cost:&quot;, round(result.objective_value(), 2))
+values = result.variable_values()
+print(&quot;schedule:&quot;, sorted(k for k, v in x.items() if values[v] &gt; 0.5))
+</code></pre></figure>
 </section>
 <section data-practice="06-formulation-craft/25-knapsack-and-assignment/unit-02/practice-prose-2" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-2/schedule.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-2/schedule.py</code> and <code>practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-2/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-2/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>

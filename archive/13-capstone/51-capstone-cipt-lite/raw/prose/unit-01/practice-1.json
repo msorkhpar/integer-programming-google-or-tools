@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Reject an export with six planted defects",
   "blocks": [
     {
@@ -166,6 +166,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nPROGRAMS = (\"lines\", \"poles\")\nREGIONS = (\"North\", \"South\")\n\nFinding = tuple[str, str, str]                  # (severity, rule, subject)\n\n\ndef whole(text: str) -> int | None:\n    \"\"\"The cell as a whole number, or None if it is not one.\"\"\"\n    try:\n        return int(text)\n    except ValueError:\n        return None\n\n\ndef read_rows(export: dict) -> tuple[dict | None, list[Finding]]:\n    \"\"\"The practice snapshot built from the export's text cells, and every cell problem.\n\n    Returns (None, findings) as soon as there is any problem, but only after reading every row.\n    \"\"\"\n    years = export[\"years\"]\n    found: list[Finding] = []\n    budget = {}\n    for row in export[\"budgets\"]:\n        year, amount = whole(row[\"year\"]), whole(row[\"amount\"])\n        if year is None or amount is None or amount < 0:\n            found.append((\"error\", \"bad-budget\", row[\"year\"]))\n        else:\n            budget[year] = amount\n    for y in years:\n        if y not in budget and (\"error\", \"bad-budget\", str(y)) not in found:\n            found.append((\"error\", \"missing-budget\", str(y)))\n\n    projects, ids = {}, [row[\"id\"] for row in export[\"projects\"]]\n    for row in export[\"projects\"]:\n        pid = row[\"id\"]\n        if ids.count(pid) > 1 and pid in projects:\n            found.append((\"error\", \"duplicate-id\", pid))\n            continue\n        cost = [whole(part) for part in row[\"cost\"].split(\";\")]\n        if any(c is None or c <= 0 for c in cost):\n            found.append((\"error\", \"not-a-number\", f\"{pid}.cost\"))\n        numbers = {}\n        for column in (\"earliest\", \"latest\", \"lag\", \"crews\"):\n            numbers[column] = whole(row[column])\n            if numbers[column] is None:\n                found.append((\"error\", \"not-a-number\", f\"{pid}.{column}\"))\n        if row[\"program\"] not in PROGRAMS:\n            found.append((\"error\", \"unknown-code\", f\"{pid}.program\"))\n        if row[\"region\"] not in REGIONS:\n            found.append((\"error\", \"unknown-code\", f\"{pid}.region\"))\n        if row[\"must\"] not in (\"0\", \"1\"):\n            found.append((\"error\", \"unknown-code\", f\"{pid}.must\"))\n        first, last = numbers[\"earliest\"], numbers[\"latest\"]\n        if first is not None and last is not None and not (\n                years[0] <= first <= last and last + len(cost) - 1 <= years[-1]):\n            found.append((\"error\", \"empty-window\", pid))\n        projects[pid] = {\"program\": row[\"program\"], \"region\": row[\"region\"], \"cost\": cost,\n                         \"earliest\": first, \"latest\": last, \"must\": row[\"must\"] == \"1\",\n                         \"parent\": row[\"parent\"] or None, \"lag\": numbers[\"lag\"],\n                         \"group\": row[\"group\"] or None, \"crews\": numbers[\"crews\"]}\n    for pid, p in projects.items():\n        if p[\"parent\"] is not None and p[\"parent\"] not in projects:\n            found.append((\"error\", \"unknown-parent\", pid))\n    if found:\n        return None, found\n    return {\"years\": list(years), \"rate\": float(export[\"rate\"]), \"budget\": budget, \"projects\": projects}, []\n\n\ndef cross_rules(snap: dict) -> list[Finding]:\n    \"\"\"The rules that look across projects; they assume every cell is clean.\"\"\"\n    projects, found = snap[\"projects\"], []\n    seen_cycles = set()\n    for start in sorted(projects):\n        path, pid = [], start\n        while pid is not None and pid not in path:\n            path.append(pid)\n            pid = projects[pid][\"parent\"]\n        if pid is not None:\n            loop = frozenset(path[path.index(pid):])\n            if loop not in seen_cycles:\n                seen_cycles.add(loop)\n                found.append((\"error\", \"parent-cycle\", \"+\".join(sorted(loop))))\n    for pid, p in sorted(projects.items()):\n        if p[\"parent\"] is None:\n            continue\n        parent = projects[p[\"parent\"]]\n        if parent[\"earliest\"] + p[\"lag\"] > p[\"latest\"]:\n            found.append((\"error\" if p[\"must\"] else \"warning\", \"parent-too-late\", pid))\n    for y in snap[\"years\"]:\n        least = 0\n        for p in projects.values():\n            if p[\"must\"]:\n                least += min(p[\"cost\"][y - t] if 0 <= y - t < len(p[\"cost\"]) else 0\n                             for t in range(p[\"earliest\"], p[\"latest\"] + 1))\n        if least > snap[\"budget\"][y]:\n            found.append((\"error\", \"must-spend-over-budget\", str(y)))\n    return found\n\n\ndef review(export: dict) -> tuple[dict | None, list[Finding]]:\n    \"\"\"Cells first; the cross-project rules only on a snapshot whose cells are all clean.\"\"\"\n    snap, found = read_rows(export)\n    if snap is None:\n        return None, sorted(found)\n    found = cross_rules(snap)\n    return (None if rejected(found) else snap), sorted(found)\n\n\ndef rejected(findings: list[Finding]) -> bool:\n    return any(severity == \"error\" for severity, _, _ in findings)\n\n\nif __name__ == \"__main__\":\n    export = {\"years\": [2027, 2028], \"rate\": \"0.05\", \"budgets\": [{\"year\": \"2027\", \"amount\": \"100\"},\n                                                                 {\"year\": \"2028\", \"amount\": \"1oo\"}],\n              \"projects\": [{\"id\": \"J1\", \"program\": \"lines\", \"region\": \"North\", \"cost\": \"50\", \"earliest\": \"2027\",\n                            \"latest\": \"2028\", \"must\": \"1\", \"parent\": \"\", \"lag\": \"0\", \"group\": \"\", \"crews\": \"1\"}]}\n    print(review(export))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom export import rejected, review\n\nCOLUMNS = (\"id\", \"program\", \"region\", \"cost\", \"earliest\", \"latest\", \"must\", \"parent\", \"lag\", \"group\", \"crews\")\n\n\ndef export(rows, budget=\"300\"):\n    return {\"years\": [2030, 2031], \"rate\": \"0.04\",\n            \"budgets\": [{\"year\": str(y), \"amount\": budget} for y in (2030, 2031)],\n            \"projects\": [dict(zip(COLUMNS, row)) for row in rows]}\n\n\ngood = [(\"K1\", \"lines\", \"South\", \"90;60\", \"2030\", \"2030\", \"1\", \"\", \"0\", \"\", \"1\"),\n        (\"K2\", \"poles\", \"North\", \"70\", \"2030\", \"2031\", \"0\", \"K1\", \"1\", \"\", \"1\")]\nsnap, findings = review(export(good))\nprint(\"two clean rows, budget 300:\", findings, \"accepted:\", snap is not None)\n\nmessy = [(\"K1\", \"wires\", \"South\", \"9O\", \"2030\", \"2030\", \"1\", \"\", \"0\", \"\", \"1\"),\n         (\"K2\", \"poles\", \"East\", \"70\", \"2031\", \"2030\", \"0\", \"K7\", \"1\", \"\", \"1\")]\nsnap, findings = review(export(messy))\nprint(\"messy rows:\", findings)\n\nsnap, findings = review(export(good, budget=\"50\"))\nprint(\"two clean rows, budget 50:\", findings, \"rejected:\", rejected(findings))\n"
         }
       ]
     },
@@ -178,6 +187,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nPROGRAMS = (\"lines\", \"poles\")\nREGIONS = (\"North\", \"South\")\n\nFinding = tuple[str, str, str]                  # (severity, rule, subject)\n\n\ndef whole(text: str) -> int | None:\n    \"\"\"The cell as a whole number, or None if it is not one.\"\"\"\n    try:\n        return int(text)\n    except ValueError:\n        return None\n\n\ndef read_rows(export: dict) -> tuple[dict | None, list[Finding]]:\n    \"\"\"The practice snapshot built from the export's text cells, and every cell problem.\n\n    Returns (None, findings) when there is any problem, but only after reading every row.\n    \"\"\"\n    # TODO: read the budget rows, then every project row; keep every problem as a finding.\n    return None, []\n\n\ndef cross_rules(snap: dict) -> list[Finding]:\n    \"\"\"The rules that look across projects; they assume every cell is clean.\"\"\"\n    # TODO: parent-cycle, parent-too-late, must-spend-over-budget.\n    return []\n\n\ndef review(export: dict) -> tuple[dict | None, list[Finding]]:\n    \"\"\"Cells first; the cross-project rules only on a snapshot whose cells are all clean.\"\"\"\n    snap, found = read_rows(export)\n    if snap is None:\n        return None, sorted(found)\n    found = cross_rules(snap)\n    return (None if rejected(found) else snap), sorted(found)\n\n\ndef rejected(findings: list[Finding]) -> bool:\n    return any(severity == \"error\" for severity, _, _ in findings)\n\n\nif __name__ == \"__main__\":\n    export = {\"years\": [2027, 2028], \"rate\": \"0.05\", \"budgets\": [{\"year\": \"2027\", \"amount\": \"100\"},\n                                                                 {\"year\": \"2028\", \"amount\": \"1oo\"}],\n              \"projects\": [{\"id\": \"J1\", \"program\": \"lines\", \"region\": \"North\", \"cost\": \"50\", \"earliest\": \"2027\",\n                            \"latest\": \"2028\", \"must\": \"1\", \"parent\": \"\", \"lag\": \"0\", \"group\": \"\", \"crews\": \"1\"}]}\n    print(review(export))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom export import rejected, review\n\nCOLUMNS = (\"id\", \"program\", \"region\", \"cost\", \"earliest\", \"latest\", \"must\", \"parent\", \"lag\", \"group\", \"crews\")\n\n\ndef export(rows, budget=\"300\"):\n    return {\"years\": [2030, 2031], \"rate\": \"0.04\",\n            \"budgets\": [{\"year\": str(y), \"amount\": budget} for y in (2030, 2031)],\n            \"projects\": [dict(zip(COLUMNS, row)) for row in rows]}\n\n\ngood = [(\"K1\", \"lines\", \"South\", \"90;60\", \"2030\", \"2030\", \"1\", \"\", \"0\", \"\", \"1\"),\n        (\"K2\", \"poles\", \"North\", \"70\", \"2030\", \"2031\", \"0\", \"K1\", \"1\", \"\", \"1\")]\nsnap, findings = review(export(good))\nprint(\"two clean rows, budget 300:\", findings, \"accepted:\", snap is not None)\n\nmessy = [(\"K1\", \"wires\", \"South\", \"9O\", \"2030\", \"2030\", \"1\", \"\", \"0\", \"\", \"1\"),\n         (\"K2\", \"poles\", \"East\", \"70\", \"2031\", \"2030\", \"0\", \"K7\", \"1\", \"\", \"1\")]\nsnap, findings = review(export(messy))\nprint(\"messy rows:\", findings)\n\nsnap, findings = review(export(good, budget=\"50\"))\nprint(\"two clean rows, budget 50:\", findings, \"rejected:\", rejected(findings))\n"
     }
   ],
   "video": null,
@@ -185,8 +203,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 9,
-    "code": 2,
+    "paras": 10,
+    "code": 3,
     "tables": 3,
     "lists": 0,
     "images": 0,
@@ -196,14 +214,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "10448180f17170b4c87dc23b97bb109324581122019ee1f9a0d6374bdf4bdc10",
+  "content_sha256": "9e15a1f376d003fad158e3db6206645e8d09c84747416036695caac484de1f81",
   "starting_code": "from __future__ import annotations\n\nPROGRAMS = (\"lines\", \"poles\")\nREGIONS = (\"North\", \"South\")\n\nFinding = tuple[str, str, str]                  # (severity, rule, subject)\n\n\ndef whole(text: str) -> int | None:\n    \"\"\"The cell as a whole number, or None if it is not one.\"\"\"\n    try:\n        return int(text)\n    except ValueError:\n        return None\n\n\ndef read_rows(export: dict) -> tuple[dict | None, list[Finding]]:\n    \"\"\"The practice snapshot built from the export's text cells, and every cell problem.\n\n    Returns (None, findings) when there is any problem, but only after reading every row.\n    \"\"\"\n    # TODO: read the budget rows, then every project row; keep every problem as a finding.\n    return None, []\n\n\ndef cross_rules(snap: dict) -> list[Finding]:\n    \"\"\"The rules that look across projects; they assume every cell is clean.\"\"\"\n    # TODO: parent-cycle, parent-too-late, must-spend-over-budget.\n    return []\n\n\ndef review(export: dict) -> tuple[dict | None, list[Finding]]:\n    \"\"\"Cells first; the cross-project rules only on a snapshot whose cells are all clean.\"\"\"\n    snap, found = read_rows(export)\n    if snap is None:\n        return None, sorted(found)\n    found = cross_rules(snap)\n    return (None if rejected(found) else snap), sorted(found)\n\n\ndef rejected(findings: list[Finding]) -> bool:\n    return any(severity == \"error\" for severity, _, _ in findings)\n\n\nif __name__ == \"__main__\":\n    export = {\"years\": [2027, 2028], \"rate\": \"0.05\", \"budgets\": [{\"year\": \"2027\", \"amount\": \"100\"},\n                                                                 {\"year\": \"2028\", \"amount\": \"1oo\"}],\n              \"projects\": [{\"id\": \"J1\", \"program\": \"lines\", \"region\": \"North\", \"cost\": \"50\", \"earliest\": \"2027\",\n                            \"latest\": \"2028\", \"must\": \"1\", \"parent\": \"\", \"lag\": \"0\", \"group\": \"\", \"crews\": \"1\"}]}\n    print(review(export))\n",
   "exercise": {
     "main_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-01/practice-1/export.py",
     "test_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-01/practice-1/test_export.py",
     "run_command": [
       "python3",
-      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-01/practice-1/export.py"
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-01/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -289,6 +307,10 @@
     },
     "concepts": [
       "an export reader that keeps every cell problem, and rules across projects that run only on clean cells, refusing an export with six planted defects"
-    ]
+    ],
+    "files": [
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-01/practice-1/try_it.py"
+    ],
+    "try_file": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-01/practice-1/try_it.py"
   }
 }

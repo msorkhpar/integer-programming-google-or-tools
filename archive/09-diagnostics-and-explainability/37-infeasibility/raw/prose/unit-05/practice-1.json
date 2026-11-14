@@ -9,7 +9,7 @@
   "unit": 5,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Which roster rules clash?",
   "blocks": [
     {
@@ -73,6 +73,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef named_conflict(nurses: list[str], need: dict, max_shifts: dict, days_off: list) -> list[str] | None:\n    \"\"\"The roster rules CP-SAT names as clashing (sorted), or None if a roster exists.\"\"\"\n    model = cp_model.CpModel()\n    days = sorted(need)\n    works = {(n, d): model.new_bool_var(f\"works_{n}_{d}\") for n in nurses for d in days}\n    flags = {}\n\n    def rule(name, constraint):\n        flags[name] = model.new_bool_var(f\"flag_{name}\")\n        constraint.only_enforce_if(flags[name])\n\n    for d in days:\n        rule(f\"cover_{d}\", model.add(sum(works[n, d] for n in nurses) >= need[d]))\n    for n in nurses:\n        rule(f\"max_{n}\", model.add(sum(works[n, d] for d in days) <= max_shifts[n]))\n    for n, d in days_off:\n        if d not in need:\n            continue                                   # not a roster day: nothing to forbid, no rule\n        rule(f\"off_{n}_{d}\", model.add(works[n, d] == 0))\n    model.add_assumptions(list(flags.values()))\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    if solver.solve(model) != cp_model.INFEASIBLE:\n        return None\n    by_index = {flag.index: name for name, flag in flags.items()}\n    return sorted(by_index[i] for i in solver.sufficient_assumptions_for_infeasibility())\n\n\nif __name__ == \"__main__\":\n    print(named_conflict([\"Ana\", \"Ben\"], {1: 3}, {\"Ana\": 5, \"Ben\": 5}, []))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom roster import named_conflict\n\nnurses = [\"Dee\", \"Eli\", \"Fay\", \"Gus\"]\nloose = {\"Dee\": 2, \"Eli\": 2, \"Fay\": 2, \"Gus\": 2}\n\nprint(\"conflict, need 2/2/2:\", named_conflict(nurses, {1: 2, 2: 2, 3: 2}, loose, []))\nprint(\"conflict, need 5 on day 1:\", named_conflict(nurses, {1: 5, 2: 2, 3: 2}, loose, []))\nprint(\"conflict, need 3 on day 2, Dee and Eli off:\",\n      named_conflict(nurses, {1: 2, 2: 3, 3: 2}, loose, [(\"Dee\", 2), (\"Eli\", 2)]))\n"
         }
       ]
     },
@@ -85,6 +94,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef named_conflict(nurses: list[str], need: dict, max_shifts: dict, days_off: list) -> list[str] | None:\n    \"\"\"The roster rules CP-SAT names as clashing (sorted), or None if a roster exists.\"\"\"\n    # TODO: guard each rule with its own flag, assume every flag, solve with one worker,\n    # and turn the indices the solver names back into rule names.\n    return None\n\n\nif __name__ == \"__main__\":\n    print(named_conflict([\"Ana\", \"Ben\"], {1: 3}, {\"Ana\": 5, \"Ben\": 5}, []))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom roster import named_conflict\n\nnurses = [\"Dee\", \"Eli\", \"Fay\", \"Gus\"]\nloose = {\"Dee\": 2, \"Eli\": 2, \"Fay\": 2, \"Gus\": 2}\n\nprint(\"conflict, need 2/2/2:\", named_conflict(nurses, {1: 2, 2: 2, 3: 2}, loose, []))\nprint(\"conflict, need 5 on day 1:\", named_conflict(nurses, {1: 5, 2: 2, 3: 2}, loose, []))\nprint(\"conflict, need 3 on day 2, Dee and Eli off:\",\n      named_conflict(nurses, {1: 2, 2: 3, 3: 2}, loose, [(\"Dee\", 2), (\"Eli\", 2)]))\n"
     }
   ],
   "video": null,
@@ -92,8 +110,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 1,
     "lists": 1,
     "images": 0,
@@ -103,14 +121,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "159232e0cb6886b90ae6a03497ba07a337ae4df90e309659224ee2b4b0d20195",
+  "content_sha256": "8960fcad0ef42736bf7c40428169cccec7637d362991f1f3795d89e341e91d4e",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef named_conflict(nurses: list[str], need: dict, max_shifts: dict, days_off: list) -> list[str] | None:\n    \"\"\"The roster rules CP-SAT names as clashing (sorted), or None if a roster exists.\"\"\"\n    # TODO: guard each rule with its own flag, assume every flag, solve with one worker,\n    # and turn the indices the solver names back into rule names.\n    return None\n\n\nif __name__ == \"__main__\":\n    print(named_conflict([\"Ana\", \"Ben\"], {1: 3}, {\"Ana\": 5, \"Ben\": 5}, []))\n",
   "exercise": {
     "main_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-05/practice-1/roster.py",
     "test_path": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-05/practice-1/test_roster.py",
     "run_command": [
       "python3",
-      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-05/practice-1/roster.py"
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-05/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -156,6 +174,10 @@
     },
     "concepts": [
       "rules guarded by flags, assumed, solved with one worker, read back by index"
-    ]
+    ],
+    "files": [
+      "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-05/practice-1/try_it.py"
+    ],
+    "try_file": "practice/09-diagnostics-and-explainability/37-infeasibility/prose/unit-05/practice-1/try_it.py"
   }
 }

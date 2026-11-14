@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "The cheapest repair",
   "blocks": [
     {
@@ -43,6 +43,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    year: int\n    cost: int            # $k, all spent in its year\n    must_do: bool = False\n\n\ndef select_variables(model: mathopt.Model, projects: list[Project]) -> dict[str, mathopt.Variable]:\n    \"\"\"Given: x[pid] = 1 when the project is funded, and every must-do funded.\"\"\"\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    for p in projects:\n        if p.must_do:\n            model.add_linear_constraint(x[p.pid] == 1, name=f\"must_{p.pid}\")\n    return x\n\n\ndef add_elastic_budgets(model: mathopt.Model, x: dict, projects: list[Project],\n                        budgets: dict[int, int], penalty: dict[int, float]) -> None:\n    \"\"\"Each year's budget may be overspent, at penalty[year] per $k; minimize the total penalty.\"\"\"\n    over = {y: model.add_variable(lb=0, name=f\"over_{y}\") for y in budgets}\n    for y, cap in budgets.items():\n        spend = sum(p.cost * x[p.pid] for p in projects if p.year == y)\n        model.add_linear_constraint(spend - over[y] <= cap, name=f\"budget_{y}\")\n    model.minimize(sum(penalty[y] * over[y] for y in budgets))\n\n\ndef build(projects: list[Project], budgets: dict[int, int], penalty: dict[int, float]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"elastic-budgets\")\n    x = select_variables(model, projects)\n    add_elastic_budgets(model, x, projects, budgets, penalty)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Project(\"M1\", 2027, 80, True)], {2027: 50}, {2027: 1.0})\n    print(mathopt.solve(model, mathopt.SolverType.HIGHS).objective_value())\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom elastic import Project, build\n\nprojects = [\n    Project(\"B1\", 2031, 120, must_do=True),\n    Project(\"B2\", 2031, 50, must_do=True),\n    Project(\"B3\", 2032, 70, must_do=True),\n    Project(\"B4\", 2032, 25),\n]\n\nfor budgets, penalty in (({2031: 200, 2032: 100}, {2031: 1.0, 2032: 1.0}),\n                         ({2031: 150, 2032: 60}, {2031: 1.0, 2032: 1.0}),\n                         ({2031: 150, 2032: 60}, {2031: 1.0, 2032: 3.0})):\n    model, x = build(projects, budgets, penalty)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    funded = sorted(p for p, v in x.items() if result.variable_values(v) > 0.5)\n    print(f\"budgets {budgets}, penalty {penalty}:\", result.termination.reason.name,\n          round(result.objective_value(), 2), funded)\n"
         }
       ]
     },
@@ -55,6 +64,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    year: int\n    cost: int            # $k, all spent in its year\n    must_do: bool = False\n\n\ndef select_variables(model: mathopt.Model, projects: list[Project]) -> dict[str, mathopt.Variable]:\n    \"\"\"Given: x[pid] = 1 when the project is funded, and every must-do funded.\"\"\"\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    for p in projects:\n        if p.must_do:\n            model.add_linear_constraint(x[p.pid] == 1, name=f\"must_{p.pid}\")\n    return x\n\n\ndef add_elastic_budgets(model: mathopt.Model, x: dict, projects: list[Project],\n                        budgets: dict[int, int], penalty: dict[int, float]) -> None:\n    \"\"\"Each year's budget may be overspent, at penalty[year] per $k; minimize the total penalty.\"\"\"\n    # TODO: the overspend variables, the elastic budget rows and the objective.\n    return None\n\n\ndef build(projects: list[Project], budgets: dict[int, int], penalty: dict[int, float]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"elastic-budgets\")\n    x = select_variables(model, projects)\n    add_elastic_budgets(model, x, projects, budgets, penalty)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Project(\"M1\", 2027, 80, True)], {2027: 50}, {2027: 1.0})\n    print(mathopt.solve(model, mathopt.SolverType.HIGHS).objective_value())\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom elastic import Project, build\n\nprojects = [\n    Project(\"B1\", 2031, 120, must_do=True),\n    Project(\"B2\", 2031, 50, must_do=True),\n    Project(\"B3\", 2032, 70, must_do=True),\n    Project(\"B4\", 2032, 25),\n]\n\nfor budgets, penalty in (({2031: 200, 2032: 100}, {2031: 1.0, 2032: 1.0}),\n                         ({2031: 150, 2032: 60}, {2031: 1.0, 2032: 1.0}),\n                         ({2031: 150, 2032: 60}, {2031: 1.0, 2032: 3.0})):\n    model, x = build(projects, budgets, penalty)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    funded = sorted(p for p, v in x.items() if result.variable_values(v) > 0.5)\n    print(f\"budgets {budgets}, penalty {penalty}:\", result.termination.reason.name,\n          round(result.objective_value(), 2), funded)\n"
     }
   ],
   "video": null,
@@ -62,8 +80,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -73,14 +91,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "f79a0c34d4736cb0ebc0bc02a663c35997d0e016b7eb95c3e6fb245bba311822",
+  "content_sha256": "6c6af2fa5e81734b797e90d6b9ae4df137645c77cbd50b8153957f6df3f5a097",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    year: int\n    cost: int            # $k, all spent in its year\n    must_do: bool = False\n\n\ndef select_variables(model: mathopt.Model, projects: list[Project]) -> dict[str, mathopt.Variable]:\n    \"\"\"Given: x[pid] = 1 when the project is funded, and every must-do funded.\"\"\"\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    for p in projects:\n        if p.must_do:\n            model.add_linear_constraint(x[p.pid] == 1, name=f\"must_{p.pid}\")\n    return x\n\n\ndef add_elastic_budgets(model: mathopt.Model, x: dict, projects: list[Project],\n                        budgets: dict[int, int], penalty: dict[int, float]) -> None:\n    \"\"\"Each year's budget may be overspent, at penalty[year] per $k; minimize the total penalty.\"\"\"\n    # TODO: the overspend variables, the elastic budget rows and the objective.\n    return None\n\n\ndef build(projects: list[Project], budgets: dict[int, int], penalty: dict[int, float]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"elastic-budgets\")\n    x = select_variables(model, projects)\n    add_elastic_budgets(model, x, projects, budgets, penalty)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Project(\"M1\", 2027, 80, True)], {2027: 50}, {2027: 1.0})\n    print(mathopt.solve(model, mathopt.SolverType.HIGHS).objective_value())\n",
   "exercise": {
     "main_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-04/practice-2/elastic.py",
     "test_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-04/practice-2/test_elastic.py",
     "run_command": [
       "python3",
-      "practice/15-mock-interviews/53-mock-interviews/prose/unit-04/practice-2/elastic.py"
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-04/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -131,6 +149,10 @@
     },
     "concepts": [
       "make each year's budget elastic, price its overspend, and keep the must-dos hard"
-    ]
+    ],
+    "files": [
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-04/practice-2/try_it.py"
+    ],
+    "try_file": "practice/15-mock-interviews/53-mock-interviews/prose/unit-04/practice-2/try_it.py"
   }
 }

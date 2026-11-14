@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A result schema for the trim service",
   "blocks": [
     {
@@ -53,6 +53,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom typing import Literal\n\nfrom pydantic import BaseModel, Field, model_validator\n\n\nclass MonthHours(BaseModel):\n    month: int = Field(ge=1, le=12)\n    crew_hours: int = Field(ge=0)\n    capacity: int = Field(ge=0)\n\n\nclass TrimResult(BaseModel):\n    \"\"\"What the trim service returns for a finished job.\"\"\"\n\n    status: Literal[\"optimal\", \"time_limit\", \"infeasible\", \"failed\"]\n    message: str = Field(min_length=1)\n    value: float | None          # outage-minutes avoided per year; None when there is no plan\n    bound: float | None          # no plan avoids more; None when unknown\n    gap: float | None = Field(ge=0)\n    circuits: list[str]\n    hours_by_month: list[MonthHours]\n\n    @model_validator(mode=\"after\")\n    def tells_one_story(self) -> \"TrimResult\":\n        if self.status == \"optimal\" and self.value is None:\n            raise ValueError(\"an optimal result carries its value\")\n        if self.status in (\"infeasible\", \"failed\") and (self.value is not None or self.circuits):\n            raise ValueError(\"a result without a plan lists no circuits and no value\")\n        if (self.gap is None) != (self.value is None or self.bound is None):\n            raise ValueError(\"gap is given exactly when value and bound are\")\n        months = [m.month for m in self.hours_by_month]\n        if months != sorted(set(months)):\n            raise ValueError(\"months are listed once each, in order\")\n        if any(m.crew_hours > m.capacity for m in self.hours_by_month):\n            raise ValueError(\"a month's crew hours exceed its capacity\")\n        return self\n\n\nif __name__ == \"__main__\":\n    print(TrimResult(status=\"infeasible\", message=\"No plan.\", value=None, bound=None, gap=None,\n                     circuits=[], hours_by_month=[]).model_dump_json())\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom pydantic import ValidationError\n\nfrom trim_result import TrimResult\n\nplan = {\"status\": \"time_limit\", \"message\": \"Stopped at the 60 s limit.\", \"value\": 150.0, \"bound\": 180.0,\n        \"gap\": 0.2, \"circuits\": [\"L-3\", \"L-5\"],\n        \"hours_by_month\": [{\"month\": 6, \"crew_hours\": 90, \"capacity\": 100},\n                           {\"month\": 9, \"crew_hours\": 40, \"capacity\": 100}]}\n\n\ndef check(**changes):\n    try:\n        TrimResult(**{**plan, **changes})\n        return \"accepted\"\n    except ValidationError as e:\n        return \"refused: \" + e.errors()[0][\"msg\"]\n\n\nprint(\"time_limit plan:\", check())\nprint(\"status infeasible, circuits kept:\", check(status=\"infeasible\"))\nprint(\"bound None, gap 0.2:\", check(bound=None))\nprint(\"June 110 hours of 100:\", check(hours_by_month=[{\"month\": 6, \"crew_hours\": 110, \"capacity\": 100}]))\nprint(\"months 9 then 6:\", check(hours_by_month=plan[\"hours_by_month\"][::-1]))\n"
         }
       ]
     },
@@ -65,6 +74,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom pydantic import BaseModel, Field, model_validator  # noqa: F401\n\n\nclass MonthHours(BaseModel):\n    month: int\n    crew_hours: int\n    capacity: int\n\n\nclass TrimResult(BaseModel):\n    \"\"\"What the trim service returns for a finished job.\"\"\"\n\n    # TODO: give each field its rules, and add one validator that refuses a result whose fields disagree.\n    status: str\n    message: str\n    value: float | None          # outage-minutes avoided per year; None when there is no plan\n    bound: float | None          # no plan avoids more; None when unknown\n    gap: float | None\n    circuits: list[str]\n    hours_by_month: list[MonthHours]\n\n\nif __name__ == \"__main__\":\n    print(TrimResult(status=\"infeasible\", message=\"No plan.\", value=None, bound=None, gap=None,\n                     circuits=[], hours_by_month=[]).model_dump_json())\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom pydantic import ValidationError\n\nfrom trim_result import TrimResult\n\nplan = {\"status\": \"time_limit\", \"message\": \"Stopped at the 60 s limit.\", \"value\": 150.0, \"bound\": 180.0,\n        \"gap\": 0.2, \"circuits\": [\"L-3\", \"L-5\"],\n        \"hours_by_month\": [{\"month\": 6, \"crew_hours\": 90, \"capacity\": 100},\n                           {\"month\": 9, \"crew_hours\": 40, \"capacity\": 100}]}\n\n\ndef check(**changes):\n    try:\n        TrimResult(**{**plan, **changes})\n        return \"accepted\"\n    except ValidationError as e:\n        return \"refused: \" + e.errors()[0][\"msg\"]\n\n\nprint(\"time_limit plan:\", check())\nprint(\"status infeasible, circuits kept:\", check(status=\"infeasible\"))\nprint(\"bound None, gap 0.2:\", check(bound=None))\nprint(\"June 110 hours of 100:\", check(hours_by_month=[{\"month\": 6, \"crew_hours\": 110, \"capacity\": 100}]))\nprint(\"months 9 then 6:\", check(hours_by_month=plan[\"hours_by_month\"][::-1]))\n"
     }
   ],
   "video": null,
@@ -72,8 +90,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -83,14 +101,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "f0fc9c2142014cef88a91191f06f054572ca82c2a8ce0e1ba4fbd4e102eda82e",
+  "content_sha256": "f8ddfc8989a8b691f8d24fdcd70b1697baf628c19b0ff04e49d61d272947487e",
   "starting_code": "from __future__ import annotations\n\nfrom pydantic import BaseModel, Field, model_validator  # noqa: F401\n\n\nclass MonthHours(BaseModel):\n    month: int\n    crew_hours: int\n    capacity: int\n\n\nclass TrimResult(BaseModel):\n    \"\"\"What the trim service returns for a finished job.\"\"\"\n\n    # TODO: give each field its rules, and add one validator that refuses a result whose fields disagree.\n    status: str\n    message: str\n    value: float | None          # outage-minutes avoided per year; None when there is no plan\n    bound: float | None          # no plan avoids more; None when unknown\n    gap: float | None\n    circuits: list[str]\n    hours_by_month: list[MonthHours]\n\n\nif __name__ == \"__main__\":\n    print(TrimResult(status=\"infeasible\", message=\"No plan.\", value=None, bound=None, gap=None,\n                     circuits=[], hours_by_month=[]).model_dump_json())\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-03/practice-1/trim_result.py",
     "test_path": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-03/practice-1/test_trim_result.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-03/practice-1/trim_result.py"
+      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-03/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -166,6 +184,10 @@
     },
     "concepts": [
       "field rules and one model validator keep a result from contradicting itself"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-03/practice-1/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-03/practice-1/try_it.py"
   }
 }

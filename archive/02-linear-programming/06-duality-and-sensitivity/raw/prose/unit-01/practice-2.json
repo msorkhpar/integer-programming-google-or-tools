@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Write and solve the dual",
   "blocks": [
     {
@@ -69,6 +69,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef solve_dual(value: dict[str, float],\n               rows: dict[str, tuple[dict[str, float], str, float]]) -> tuple[float | None, dict[str, float]]:\n    \"\"\"Build and solve the dual of the maximization LP; return its optimal value and the row prices.\"\"\"\n    dual = mathopt.Model(name=\"dual\")\n    price = {}\n    for name, (_, sense, _) in rows.items():\n        if sense == \"<=\":\n            price[name] = dual.add_variable(lb=0, name=f\"y_{name}\")\n        elif sense == \">=\":\n            price[name] = dual.add_variable(lb=-math.inf, ub=0, name=f\"y_{name}\")\n        else:\n            price[name] = dual.add_variable(lb=-math.inf, ub=math.inf, name=f\"y_{name}\")\n    for activity, worth in value.items():\n        column = sum(coeffs.get(activity, 0) * price[name] for name, (coeffs, _, _) in rows.items())\n        dual.add_linear_constraint(column >= worth, name=f\"cover_{activity}\")\n    dual.minimize(sum(rhs * price[name] for name, (_, _, rhs) in rows.items()))\n    result = mathopt.solve(dual, mathopt.SolverType.GLOP)\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None, {}\n    return result.objective_value(), {name: result.variable_values(y) for name, y in price.items()}\n\n\nif __name__ == \"__main__\":\n    value = {\"inspect\": 4, \"repair\": 3}\n    rows = {\"hours\": ({\"inspect\": 1, \"repair\": 1}, \"<=\", 10), \"inspect_cap\": ({\"inspect\": 1}, \"<=\", 6)}\n    print(solve_dual(value, rows))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom dual import solve_dual\n\n# A garage's week: hours of servicing, tyre work and valeting, value per hour.\nvalue = {\"service\": 5, \"tyres\": 3, \"valet\": 1}\nrows = {\n    \"hours\": ({\"service\": 1, \"tyres\": 1, \"valet\": 1}, \"<=\", 12),\n    \"lifts\": ({\"service\": 1}, \"<=\", 4),\n}\nprint(\"dual of hours + lifts:\", solve_dual(value, rows))\nrows[\"min_valet\"] = ({\"valet\": 1}, \">=\", 2)\nprint(\"dual with valet at least 2:\", solve_dual(value, rows))\n"
         }
       ]
     },
@@ -81,6 +90,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef solve_dual(value: dict[str, float],\n               rows: dict[str, tuple[dict[str, float], str, float]]) -> tuple[float | None, dict[str, float]]:\n    \"\"\"Build and solve the dual of the maximization LP; return its optimal value and the row prices.\"\"\"\n    # TODO: write the dual on paper first: one price per row (its sign set by the row's sense),\n    # one cover row per activity, and the objective. Then build it, solve it with GLOP, and read it.\n    return 0.0, {}\n\n\nif __name__ == \"__main__\":\n    value = {\"inspect\": 4, \"repair\": 3}\n    rows = {\"hours\": ({\"inspect\": 1, \"repair\": 1}, \"<=\", 10), \"inspect_cap\": ({\"inspect\": 1}, \"<=\", 6)}\n    print(solve_dual(value, rows))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom dual import solve_dual\n\n# A garage's week: hours of servicing, tyre work and valeting, value per hour.\nvalue = {\"service\": 5, \"tyres\": 3, \"valet\": 1}\nrows = {\n    \"hours\": ({\"service\": 1, \"tyres\": 1, \"valet\": 1}, \"<=\", 12),\n    \"lifts\": ({\"service\": 1}, \"<=\", 4),\n}\nprint(\"dual of hours + lifts:\", solve_dual(value, rows))\nrows[\"min_valet\"] = ({\"valet\": 1}, \">=\", 2)\nprint(\"dual with valet at least 2:\", solve_dual(value, rows))\n"
     }
   ],
   "video": null,
@@ -88,8 +106,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 7,
-    "code": 3,
+    "paras": 8,
+    "code": 4,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -99,14 +117,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "d7ec78e9ea669bd09ff7e78f3f1f1023fc440747a79138ce34e5de1f5b863767",
+  "content_sha256": "ec1b9714883fe4501bdd4d56be0f5a1b6851b724af29e16580acd48decd1177e",
   "starting_code": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef solve_dual(value: dict[str, float],\n               rows: dict[str, tuple[dict[str, float], str, float]]) -> tuple[float | None, dict[str, float]]:\n    \"\"\"Build and solve the dual of the maximization LP; return its optimal value and the row prices.\"\"\"\n    # TODO: write the dual on paper first: one price per row (its sign set by the row's sense),\n    # one cover row per activity, and the objective. Then build it, solve it with GLOP, and read it.\n    return 0.0, {}\n\n\nif __name__ == \"__main__\":\n    value = {\"inspect\": 4, \"repair\": 3}\n    rows = {\"hours\": ({\"inspect\": 1, \"repair\": 1}, \"<=\", 10), \"inspect_cap\": ({\"inspect\": 1}, \"<=\", 6)}\n    print(solve_dual(value, rows))\n",
   "exercise": {
     "main_path": "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-01/practice-2/dual.py",
     "test_path": "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-01/practice-2/test_dual.py",
     "run_command": [
       "python3",
-      "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-01/practice-2/dual.py"
+      "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -158,6 +176,10 @@
     "concepts": [
       "the smallest bound is an LP: rows become prices, variables become cover rows, max becomes min",
       "a <= row's price is nonnegative, a >= row's nonpositive, and an == row's free"
-    ]
+    ],
+    "files": [
+      "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-01/practice-2/try_it.py"
   }
 }

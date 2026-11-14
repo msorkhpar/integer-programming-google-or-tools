@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A write-once S3 store for condition surveys",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport hashlib\nimport json\n\nfrom botocore.exceptions import ClientError\n\n\ndef canonical(survey: dict) -> bytes:\n    \"\"\"One byte string per survey content: readings sorted by asset, keys sorted, no spaces.\"\"\"\n    readings = sorted(survey[\"readings\"], key=lambda r: r[\"asset_id\"])\n    text = json.dumps({**survey, \"readings\": readings}, sort_keys=True, separators=(\",\", \":\"), ensure_ascii=True)\n    return text.encode(\"ascii\")\n\n\ndef survey_key(digest: str) -> str:\n    return f\"surveys/sha256/{digest}.json\"\n\n\ndef put_survey(s3, bucket: str, survey: dict) -> str:\n    \"\"\"Store a survey once under its digest; return the digest. Never replace an existing object.\"\"\"\n    body = canonical(survey)\n    digest = hashlib.sha256(body).hexdigest()\n    try:\n        s3.put_object(Bucket=bucket, Key=survey_key(digest), Body=body, IfNoneMatch=\"*\")\n    except ClientError as error:\n        if error.response[\"Error\"][\"Code\"] != \"PreconditionFailed\":\n            raise\n    return digest\n\n\ndef get_survey(s3, bucket: str, digest: str) -> tuple[dict | None, str]:\n    \"\"\"(survey, \"ok\"), or (None, \"missing\") if no object, or (None, \"corrupted\") if it changed.\"\"\"\n    try:\n        found = s3.get_object(Bucket=bucket, Key=survey_key(digest))\n    except s3.exceptions.NoSuchKey:\n        return None, \"missing\"\n    body = found[\"Body\"].read()\n    if hashlib.sha256(body).hexdigest() != digest:\n        return None, \"corrupted\"\n    return json.loads(body), \"ok\"\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport os\n\nimport boto3\nfrom moto import mock_aws\n\nfor name in (\"AWS_ACCESS_KEY_ID\", \"AWS_SECRET_ACCESS_KEY\", \"AWS_SESSION_TOKEN\"):\n    os.environ[name] = \"testing\"\nos.environ[\"AWS_DEFAULT_REGION\"] = \"us-east-1\"\nfor noisy in (\"botocore\", \"boto3\", \"urllib3\", \"moto\", \"s3transfer\"):\n    logging.getLogger(noisy).setLevel(logging.WARNING)\n\nfrom survey_store import get_survey, put_survey, survey_key\n\nsurvey = {\"survey_id\": \"S-2035-02\", \"region\": \"Valley\",\n          \"readings\": [{\"asset_id\": \"V-9\", \"condition\": 2}, {\"asset_id\": \"A-1\", \"condition\": 4}]}\n\nwith mock_aws():\n    s3 = boto3.client(\"s3\")\n    s3.create_bucket(Bucket=\"surveys-demo\")\n    digest = put_survey(s3, \"surveys-demo\", survey)\n    again = put_survey(s3, \"surveys-demo\", {**survey, \"readings\": survey[\"readings\"][::-1]})\n    print(\"digest:\", digest[:16])\n    print(\"readings reversed, same digest:\", again == digest)\n    print(\"objects stored:\", s3.list_objects_v2(Bucket=\"surveys-demo\").get(\"KeyCount\", 0))\n    print(\"read back:\", get_survey(s3, \"surveys-demo\", digest))\n    print(\"digest 0...0:\", get_survey(s3, \"surveys-demo\", \"0\" * 64))\n    if digest:\n        s3.put_object(Bucket=\"surveys-demo\", Key=survey_key(\"f\" * 64), Body=b\"{}\")\n    print(\"digest f...f holding other bytes:\", get_survey(s3, \"surveys-demo\", \"f\" * 64))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport hashlib  # noqa: F401\nimport json\n\nfrom botocore.exceptions import ClientError  # noqa: F401\n\n\ndef canonical(survey: dict) -> bytes:\n    \"\"\"One byte string per survey content: readings sorted by asset, keys sorted, no spaces.\"\"\"\n    return json.dumps(survey).encode(\"utf-8\")\n\n\ndef survey_key(digest: str) -> str:\n    return f\"surveys/sha256/{digest}.json\"\n\n\ndef put_survey(s3, bucket: str, survey: dict) -> str:\n    \"\"\"Store a survey once under its digest; return the digest. Never replace an existing object.\"\"\"\n    return \"\"\n\n\ndef get_survey(s3, bucket: str, digest: str) -> tuple[dict | None, str]:\n    \"\"\"(survey, \"ok\"), or (None, \"missing\") if no object, or (None, \"corrupted\") if it changed.\"\"\"\n    return None, \"\"\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport os\n\nimport boto3\nfrom moto import mock_aws\n\nfor name in (\"AWS_ACCESS_KEY_ID\", \"AWS_SECRET_ACCESS_KEY\", \"AWS_SESSION_TOKEN\"):\n    os.environ[name] = \"testing\"\nos.environ[\"AWS_DEFAULT_REGION\"] = \"us-east-1\"\nfor noisy in (\"botocore\", \"boto3\", \"urllib3\", \"moto\", \"s3transfer\"):\n    logging.getLogger(noisy).setLevel(logging.WARNING)\n\nfrom survey_store import get_survey, put_survey, survey_key\n\nsurvey = {\"survey_id\": \"S-2035-02\", \"region\": \"Valley\",\n          \"readings\": [{\"asset_id\": \"V-9\", \"condition\": 2}, {\"asset_id\": \"A-1\", \"condition\": 4}]}\n\nwith mock_aws():\n    s3 = boto3.client(\"s3\")\n    s3.create_bucket(Bucket=\"surveys-demo\")\n    digest = put_survey(s3, \"surveys-demo\", survey)\n    again = put_survey(s3, \"surveys-demo\", {**survey, \"readings\": survey[\"readings\"][::-1]})\n    print(\"digest:\", digest[:16])\n    print(\"readings reversed, same digest:\", again == digest)\n    print(\"objects stored:\", s3.list_objects_v2(Bucket=\"surveys-demo\").get(\"KeyCount\", 0))\n    print(\"read back:\", get_survey(s3, \"surveys-demo\", digest))\n    print(\"digest 0...0:\", get_survey(s3, \"surveys-demo\", \"0\" * 64))\n    if digest:\n        s3.put_object(Bucket=\"surveys-demo\", Key=survey_key(\"f\" * 64), Body=b\"{}\")\n    print(\"digest f...f holding other bytes:\", get_survey(s3, \"surveys-demo\", \"f\" * 64))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "727cb8b05ad39d41cce11da5c346cc20694db5a3bf275283a5a5d0d4278af905",
+  "content_sha256": "66044bb0f153e02a475371bb6349e6689a299b9d4d6e8f18b466957369f8b4b8",
   "starting_code": "from __future__ import annotations\n\nimport hashlib  # noqa: F401\nimport json\n\nfrom botocore.exceptions import ClientError  # noqa: F401\n\n\ndef canonical(survey: dict) -> bytes:\n    \"\"\"One byte string per survey content: readings sorted by asset, keys sorted, no spaces.\"\"\"\n    return json.dumps(survey).encode(\"utf-8\")\n\n\ndef survey_key(digest: str) -> str:\n    return f\"surveys/sha256/{digest}.json\"\n\n\ndef put_survey(s3, bucket: str, survey: dict) -> str:\n    \"\"\"Store a survey once under its digest; return the digest. Never replace an existing object.\"\"\"\n    return \"\"\n\n\ndef get_survey(s3, bucket: str, digest: str) -> tuple[dict | None, str]:\n    \"\"\"(survey, \"ok\"), or (None, \"missing\") if no object, or (None, \"corrupted\") if it changed.\"\"\"\n    return None, \"\"\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-03/practice-1/survey_store.py",
     "test_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-03/practice-1/test_survey_store.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-03/practice-1/survey_store.py"
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-03/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -147,6 +165,10 @@
       "S3's If-None-Match write, and when a refusal is fine or an error",
       "a snapshot stored under its digest, and results under the snapshot they solved",
       "re-hashing on read, and versioning to recover what an overwrite replaced"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-03/practice-1/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-03/practice-1/try_it.py"
   }
 }

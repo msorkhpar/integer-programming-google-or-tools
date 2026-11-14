@@ -164,6 +164,40 @@ if __name__ == &quot;__main__&quot;:
     waiver = model.add_binary_variable(name=&quot;waiver&quot;)
     add_floor(model, spend, 100, waiver)
     print(model.get_num_linear_constraints(), &quot;row&quot;)
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from floor import add_floor, spend_variables
+
+# Two spend lines with (lowest, highest) amounts; the district floor is 70.
+orders = {&quot;paving&quot;: (10, 50), &quot;signs&quot;: (5, 40)}
+
+
+def allowed(values, waiver, floor=70):
+    model = mathopt.Model()
+    spend = spend_variables(model, orders)
+    w = model.add_binary_variable(name=&quot;waiver&quot;)
+    add_floor(model, spend, floor, w)
+    for name, var in spend.items():
+        var.lower_bound = var.upper_bound = values[name]
+    w.lower_bound = w.upper_bound = waiver
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+print(&quot;paving 40, signs 35, no waiver:&quot;, allowed({&quot;paving&quot;: 40, &quot;signs&quot;: 35}, 0))
+print(&quot;paving 30, signs 20, no waiver:&quot;, allowed({&quot;paving&quot;: 30, &quot;signs&quot;: 20}, 0))
+print(&quot;paving 10, signs 5, waiver:&quot;, allowed({&quot;paving&quot;: 10, &quot;signs&quot;: 5}, 1))
+print(&quot;paving 10, signs 5, no waiver:&quot;, allowed({&quot;paving&quot;: 10, &quot;signs&quot;: 5}, 0))
 </code></pre></figure></details>
 <h2 id="practice-prose-b9">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -189,10 +223,45 @@ if __name__ == &quot;__main__&quot;:
     add_floor(model, spend, 100, waiver)
     print(model.get_num_linear_constraints(), &quot;row&quot;)
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from floor import add_floor, spend_variables
+
+# Two spend lines with (lowest, highest) amounts; the district floor is 70.
+orders = {&quot;paving&quot;: (10, 50), &quot;signs&quot;: (5, 40)}
+
+
+def allowed(values, waiver, floor=70):
+    model = mathopt.Model()
+    spend = spend_variables(model, orders)
+    w = model.add_binary_variable(name=&quot;waiver&quot;)
+    add_floor(model, spend, floor, w)
+    for name, var in spend.items():
+        var.lower_bound = var.upper_bound = values[name]
+    w.lower_bound = w.upper_bound = waiver
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+print(&quot;paving 40, signs 35, no waiver:&quot;, allowed({&quot;paving&quot;: 40, &quot;signs&quot;: 35}, 0))
+print(&quot;paving 30, signs 20, no waiver:&quot;, allowed({&quot;paving&quot;: 30, &quot;signs&quot;: 20}, 0))
+print(&quot;paving 10, signs 5, waiver:&quot;, allowed({&quot;paving&quot;: 10, &quot;signs&quot;: 5}, 1))
+print(&quot;paving 10, signs 5, no waiver:&quot;, allowed({&quot;paving&quot;: 10, &quot;signs&quot;: 5}, 0))
+</code></pre></figure>
 </section>
 <section data-practice="06-formulation-craft/24-big-m-and-indicators/unit-01/practice-prose" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-1/floor.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-1/floor.py</code> and <code>practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-1/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-1/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>
@@ -294,6 +363,41 @@ def add_dock_row(model: mathopt.Model, choose: dict, orders: Orders, capacity: i
 if __name__ == &quot;__main__&quot;:
     orders = {&quot;O1&quot;: {&quot;small&quot;: 4, &quot;big&quot;: 9}, &quot;O2&quot;: {&quot;small&quot;: 3, &quot;big&quot;: 7}}
     print(&quot;M =&quot;, dock_m(orders, 10))
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from dock import add_dock_row, choice_variables, dock_m
+
+# Pallets per shipping option for three orders; the dock holds 10.
+orders = {&quot;R1&quot;: {&quot;crate&quot;: 3, &quot;pallet&quot;: 6}, &quot;R2&quot;: {&quot;crate&quot;: 2, &quot;pallet&quot;: 5}, &quot;R3&quot;: {&quot;box&quot;: 1, &quot;pallet&quot;: 4}}
+
+
+def allowed(plan, overflow):
+    model = mathopt.Model()
+    choose = choice_variables(model, orders)
+    yard = model.add_binary_variable(name=&quot;overflow&quot;)
+    add_dock_row(model, choose, orders, 10, yard)
+    for (o, opt), var in choose.items():
+        var.lower_bound = var.upper_bound = 1.0 if plan.get(o) == opt else 0.0
+    yard.lower_bound = yard.upper_bound = overflow
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+print(&quot;M at capacity 10:&quot;, dock_m(orders, 10))
+print(&quot;M at capacity 20:&quot;, dock_m(orders, 20))
+print(&quot;crate, crate, pallet, no yard:&quot;, allowed({&quot;R1&quot;: &quot;crate&quot;, &quot;R2&quot;: &quot;crate&quot;, &quot;R3&quot;: &quot;pallet&quot;}, 0))
+print(&quot;all pallets, no yard:&quot;, allowed({&quot;R1&quot;: &quot;pallet&quot;, &quot;R2&quot;: &quot;pallet&quot;, &quot;R3&quot;: &quot;pallet&quot;}, 0))
+print(&quot;all pallets, yard:&quot;, allowed({&quot;R1&quot;: &quot;pallet&quot;, &quot;R2&quot;: &quot;pallet&quot;, &quot;R3&quot;: &quot;pallet&quot;}, 1))
 </code></pre></figure></details>
 <h2 id="practice-prose-2-b10">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -330,10 +434,46 @@ if __name__ == &quot;__main__&quot;:
     orders = {&quot;O1&quot;: {&quot;small&quot;: 4, &quot;big&quot;: 9}, &quot;O2&quot;: {&quot;small&quot;: 3, &quot;big&quot;: 7}}
     print(&quot;M =&quot;, dock_m(orders, 10))
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from dock import add_dock_row, choice_variables, dock_m
+
+# Pallets per shipping option for three orders; the dock holds 10.
+orders = {&quot;R1&quot;: {&quot;crate&quot;: 3, &quot;pallet&quot;: 6}, &quot;R2&quot;: {&quot;crate&quot;: 2, &quot;pallet&quot;: 5}, &quot;R3&quot;: {&quot;box&quot;: 1, &quot;pallet&quot;: 4}}
+
+
+def allowed(plan, overflow):
+    model = mathopt.Model()
+    choose = choice_variables(model, orders)
+    yard = model.add_binary_variable(name=&quot;overflow&quot;)
+    add_dock_row(model, choose, orders, 10, yard)
+    for (o, opt), var in choose.items():
+        var.lower_bound = var.upper_bound = 1.0 if plan.get(o) == opt else 0.0
+    yard.lower_bound = yard.upper_bound = overflow
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+print(&quot;M at capacity 10:&quot;, dock_m(orders, 10))
+print(&quot;M at capacity 20:&quot;, dock_m(orders, 20))
+print(&quot;crate, crate, pallet, no yard:&quot;, allowed({&quot;R1&quot;: &quot;crate&quot;, &quot;R2&quot;: &quot;crate&quot;, &quot;R3&quot;: &quot;pallet&quot;}, 0))
+print(&quot;all pallets, no yard:&quot;, allowed({&quot;R1&quot;: &quot;pallet&quot;, &quot;R2&quot;: &quot;pallet&quot;, &quot;R3&quot;: &quot;pallet&quot;}, 0))
+print(&quot;all pallets, yard:&quot;, allowed({&quot;R1&quot;: &quot;pallet&quot;, &quot;R2&quot;: &quot;pallet&quot;, &quot;R3&quot;: &quot;pallet&quot;}, 1))
+</code></pre></figure>
 </section>
 <section data-practice="06-formulation-craft/24-big-m-and-indicators/unit-01/practice-prose-2" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-2/dock.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-2/dock.py</code> and <code>practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-2/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/06-formulation-craft/24-big-m-and-indicators/prose/unit-01/practice-2/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>

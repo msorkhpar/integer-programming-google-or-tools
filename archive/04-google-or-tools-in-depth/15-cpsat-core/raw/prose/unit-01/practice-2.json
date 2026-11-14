@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Say what the solver found before reading a plan",
   "blocks": [
     {
@@ -72,6 +72,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef report(model: cp_model.CpModel, x: dict, solver: cp_model.CpSolver | None = None) -> dict:\n    \"\"\"Solve and say what came back: status, plan, objective, whether it is proven best, and why not valid.\"\"\"\n    solver = solver or cp_model.CpSolver()\n    status = solver.solve(model)\n    answer = {\"status\": solver.status_name(status), \"plan\": None, \"objective\": None, \"proven\": False, \"reason\": \"\"}\n    if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):\n        answer[\"plan\"] = sorted(name for name, var in x.items() if solver.boolean_value(var))\n        if model.has_objective():\n            answer[\"objective\"] = round(solver.objective_value)\n        answer[\"proven\"] = status == cp_model.OPTIMAL\n    elif status == cp_model.MODEL_INVALID:\n        answer[\"reason\"] = model.validate()\n    return answer\n\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = {name: model.new_bool_var(name) for name in (\"a\", \"b\", \"c\")}\n    model.add(2 * x[\"a\"] + 3 * x[\"b\"] + 4 * x[\"c\"] <= 5)\n    model.maximize(3 * x[\"a\"] + 4 * x[\"b\"] + 5 * x[\"c\"])\n    print(report(model, x))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.sat.python import cp_model\n\nfrom report import report\n\n\ndef boxes(capacity):\n    model = cp_model.CpModel()\n    x = {name: model.new_bool_var(name) for name in (\"ice\", \"fish\", \"bread\", \"fruit\")}\n    model.add(3 * x[\"ice\"] + 5 * x[\"fish\"] + 2 * x[\"bread\"] + 4 * x[\"fruit\"] <= capacity)\n    model.maximize(4 * x[\"ice\"] + 7 * x[\"fish\"] + 2 * x[\"bread\"] + 5 * x[\"fruit\"])\n    return model, x\n\n\nsolver = cp_model.CpSolver()\nsolver.parameters.max_time_in_seconds = 10\nprint(\"capacity 9:\", report(*boxes(9), solver))\n\nmodel, x = boxes(9)\nmodel.add(x[\"ice\"] + x[\"fish\"] >= 3)\nprint(\"capacity 9, three of two:\", report(model, x))\n\nmodel, x = boxes(9)\nmodel.add(x[\"ice\"] + x[\"fish\"] <= 1).only_enforce_if(model.new_int_var(0, 3, \"count\"))\nprint(\"enforced by an integer:\", report(model, x))\n"
         }
       ]
     },
@@ -84,6 +93,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef report(model: cp_model.CpModel, x: dict, solver: cp_model.CpSolver | None = None) -> dict:\n    \"\"\"Solve and say what came back: status, plan, objective, whether it is proven best, and why not valid.\"\"\"\n    # TODO: solve, then fill in what the status allows you to read.\n    return {\"status\": \"\", \"plan\": None, \"objective\": None, \"proven\": False, \"reason\": \"\"}\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = {name: model.new_bool_var(name) for name in (\"a\", \"b\", \"c\")}\n    model.add(2 * x[\"a\"] + 3 * x[\"b\"] + 4 * x[\"c\"] <= 5)\n    model.maximize(3 * x[\"a\"] + 4 * x[\"b\"] + 5 * x[\"c\"])\n    print(report(model, x))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.sat.python import cp_model\n\nfrom report import report\n\n\ndef boxes(capacity):\n    model = cp_model.CpModel()\n    x = {name: model.new_bool_var(name) for name in (\"ice\", \"fish\", \"bread\", \"fruit\")}\n    model.add(3 * x[\"ice\"] + 5 * x[\"fish\"] + 2 * x[\"bread\"] + 4 * x[\"fruit\"] <= capacity)\n    model.maximize(4 * x[\"ice\"] + 7 * x[\"fish\"] + 2 * x[\"bread\"] + 5 * x[\"fruit\"])\n    return model, x\n\n\nsolver = cp_model.CpSolver()\nsolver.parameters.max_time_in_seconds = 10\nprint(\"capacity 9:\", report(*boxes(9), solver))\n\nmodel, x = boxes(9)\nmodel.add(x[\"ice\"] + x[\"fish\"] >= 3)\nprint(\"capacity 9, three of two:\", report(model, x))\n\nmodel, x = boxes(9)\nmodel.add(x[\"ice\"] + x[\"fish\"] <= 1).only_enforce_if(model.new_int_var(0, 3, \"count\"))\nprint(\"enforced by an integer:\", report(model, x))\n"
     }
   ],
   "video": null,
@@ -91,8 +109,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 1,
     "lists": 0,
     "images": 0,
@@ -102,14 +120,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "ff84a5da0cd4a16305c0919620e7828c3041646643b0a7a4c37e6836509d6e4c",
+  "content_sha256": "eeb15b4261df3ee4b4f71c7e4b9fcc313698c9874aa305aea285c90bd748e5a9",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef report(model: cp_model.CpModel, x: dict, solver: cp_model.CpSolver | None = None) -> dict:\n    \"\"\"Solve and say what came back: status, plan, objective, whether it is proven best, and why not valid.\"\"\"\n    # TODO: solve, then fill in what the status allows you to read.\n    return {\"status\": \"\", \"plan\": None, \"objective\": None, \"proven\": False, \"reason\": \"\"}\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = {name: model.new_bool_var(name) for name in (\"a\", \"b\", \"c\")}\n    model.add(2 * x[\"a\"] + 3 * x[\"b\"] + 4 * x[\"c\"] <= 5)\n    model.maximize(3 * x[\"a\"] + 4 * x[\"b\"] + 5 * x[\"c\"])\n    print(report(model, x))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-2/report.py",
     "test_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-2/test_report.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-2/report.py"
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -161,6 +179,10 @@
     "concepts": [
       "a CP-SAT program builds a CpModel, solves it with a CpSolver and checks the status before reading values",
       "only OPTIMAL and FEASIBLE carry a solution, and only OPTIMAL proves it best"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-2/try_it.py"
   }
 }

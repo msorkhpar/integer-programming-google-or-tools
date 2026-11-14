@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Which license a container job will use, decided before Gurobi starts",
   "blocks": [
     {
@@ -50,6 +50,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom typing import Callable\n\nWLS = (\"WLSACCESSID\", \"WLSSECRET\", \"LICENSEID\")\n\n\ndef license_plan(environ: dict[str, str], exists: Callable[[str], bool]) -> tuple[str, object]:\n    \"\"\"('wls', params), ('file', path) or ('error', message), by the rules of the statement.\"\"\"\n    present = [name for name in WLS if environ.get(name)]\n    if len(present) == len(WLS):\n        return (\"wls\", {\"WLSACCESSID\": environ[\"WLSACCESSID\"], \"WLSSECRET\": environ[\"WLSSECRET\"],\n                        \"LICENSEID\": int(environ[\"LICENSEID\"])})\n    if present:\n        missing = \", \".join(name for name in WLS if name not in present)\n        return (\"error\", f\"incomplete WLS key: {missing} not set\")\n    if environ.get(\"GRB_LICENSE_FILE\"):\n        path = environ[\"GRB_LICENSE_FILE\"]\n        return (\"file\", path) if exists(path) else (\"error\", f\"license file not found: {path}\")\n    places = [\"/opt/gurobi/gurobi.lic\"]\n    if environ.get(\"HOME\"):\n        places.append(environ[\"HOME\"].rstrip(\"/\") + \"/gurobi.lic\")\n    for path in places:\n        if exists(path):\n            return (\"file\", path)\n    return (\"error\", \"no license\")\n\n\nif __name__ == \"__main__\":\n    print(license_plan({\"GRB_LICENSE_FILE\": \"/licenses/gurobi.lic\"}, lambda path: True))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom license_plan import license_plan\n\n# Made-up environments and a made-up file system; nothing here reads the real ones.\nfiles = {\"/opt/gurobi/gurobi.lic\", \"/srv/learner/gurobi.lic\", \"/mnt/keys/site.lic\"}\n\n\ndef exists(path):\n    return path in files\n\n\nkey = {\"WLSACCESSID\": \"0000-demo\", \"WLSSECRET\": \"1111-demo\", \"LICENSEID\": \"1234\"}\nprint(\"full WLS key:\", license_plan(key, exists))\nprint(\"WLS key without secret:\", license_plan({\"WLSACCESSID\": \"0000-demo\", \"LICENSEID\": \"1234\"}, exists))\nprint(\"GRB_LICENSE_FILE /mnt/keys/site.lic:\", license_plan({\"GRB_LICENSE_FILE\": \"/mnt/keys/site.lic\"}, exists))\nprint(\"GRB_LICENSE_FILE /mnt/keys/gone.lic:\", license_plan({\"GRB_LICENSE_FILE\": \"/mnt/keys/gone.lic\"}, exists))\nprint(\"HOME /srv/learner:\", license_plan({\"HOME\": \"/srv/learner\"}, exists))\nprint(\"HOME /srv/learner, no /opt file:\", license_plan({\"HOME\": \"/srv/learner\"}, lambda p: p == \"/srv/learner/gurobi.lic\"))\n"
         }
       ]
     },
@@ -62,6 +71,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom typing import Callable\n\nWLS = (\"WLSACCESSID\", \"WLSSECRET\", \"LICENSEID\")\n\n\ndef license_plan(environ: dict[str, str], exists: Callable[[str], bool]) -> tuple[str, object]:\n    \"\"\"('wls', params), ('file', path) or ('error', message), by the rules of the statement.\"\"\"\n    # TODO: the WLS key first (whole or partial), then GRB_LICENSE_FILE, then the default places.\n    return (\"error\", \"no license\")\n\n\nif __name__ == \"__main__\":\n    print(license_plan({\"GRB_LICENSE_FILE\": \"/licenses/gurobi.lic\"}, lambda path: True))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom license_plan import license_plan\n\n# Made-up environments and a made-up file system; nothing here reads the real ones.\nfiles = {\"/opt/gurobi/gurobi.lic\", \"/srv/learner/gurobi.lic\", \"/mnt/keys/site.lic\"}\n\n\ndef exists(path):\n    return path in files\n\n\nkey = {\"WLSACCESSID\": \"0000-demo\", \"WLSSECRET\": \"1111-demo\", \"LICENSEID\": \"1234\"}\nprint(\"full WLS key:\", license_plan(key, exists))\nprint(\"WLS key without secret:\", license_plan({\"WLSACCESSID\": \"0000-demo\", \"LICENSEID\": \"1234\"}, exists))\nprint(\"GRB_LICENSE_FILE /mnt/keys/site.lic:\", license_plan({\"GRB_LICENSE_FILE\": \"/mnt/keys/site.lic\"}, exists))\nprint(\"GRB_LICENSE_FILE /mnt/keys/gone.lic:\", license_plan({\"GRB_LICENSE_FILE\": \"/mnt/keys/gone.lic\"}, exists))\nprint(\"HOME /srv/learner:\", license_plan({\"HOME\": \"/srv/learner\"}, exists))\nprint(\"HOME /srv/learner, no /opt file:\", license_plan({\"HOME\": \"/srv/learner\"}, lambda p: p == \"/srv/learner/gurobi.lic\"))\n"
     }
   ],
   "video": null,
@@ -69,8 +87,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 2,
-    "code": 1,
+    "paras": 3,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -80,14 +98,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "acfde224de0fad459c76936bee1835dcc039493f3e73cf991f177891da24169a",
+  "content_sha256": "142f23c63244dc97d9797d309a10b0112fc0635bac8e5961f6c994cb0579329a",
   "starting_code": "from __future__ import annotations\n\nfrom typing import Callable\n\nWLS = (\"WLSACCESSID\", \"WLSSECRET\", \"LICENSEID\")\n\n\ndef license_plan(environ: dict[str, str], exists: Callable[[str], bool]) -> tuple[str, object]:\n    \"\"\"('wls', params), ('file', path) or ('error', message), by the rules of the statement.\"\"\"\n    # TODO: the WLS key first (whole or partial), then GRB_LICENSE_FILE, then the default places.\n    return (\"error\", \"no license\")\n\n\nif __name__ == \"__main__\":\n    print(license_plan({\"GRB_LICENSE_FILE\": \"/licenses/gurobi.lic\"}, lambda path: True))\n",
   "exercise": {
     "main_path": "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-04/practice-1/license_plan.py",
     "test_path": "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-04/practice-1/test_license_plan.py",
     "run_command": [
       "python3",
-      "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-04/practice-1/license_plan.py"
+      "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-04/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -138,6 +156,10 @@
     },
     "concepts": [
       "the license a job will use, from its environment variables and the default places"
-    ]
+    ],
+    "files": [
+      "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-04/practice-1/try_it.py"
+    ],
+    "try_file": "practice/05-other-modeling-frameworks-and-solvers/21-gurobipy/prose/unit-04/practice-1/try_it.py"
   }
 }

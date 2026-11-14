@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Validate an asset register, row by row",
   "blocks": [
     {
@@ -92,6 +92,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom typing import Literal\n\nfrom pydantic import BaseModel, ConfigDict, Field, ValidationError\n\n\nclass AssetRow(BaseModel):\n    model_config = ConfigDict(frozen=True)\n\n    asset_id: str\n    kind: str\n    region: Literal[\"North\", \"South\", \"East\", \"West\"]\n    age: int = Field(ge=0)\n    weibull_beta: float = Field(gt=0)\n    weibull_eta: float = Field(gt=0)\n    rul: int = Field(ge=0)\n    cof: int = Field(ge=0)\n\n\ndef parse_assets(rows: list[dict[str, str]]) -> tuple[list[AssetRow], list[tuple[int, str]]]:\n    \"\"\"The valid rows as AssetRow objects, and (row index, field) for each row that is not valid.\"\"\"\n    assets, rejected = [], []\n    for index, row in enumerate(rows):\n        try:\n            assets.append(AssetRow.model_validate(row))\n        except ValidationError as error:\n            rejected.append((index, str(error.errors()[0][\"loc\"][0])))\n    return assets, rejected\n\n\nif __name__ == \"__main__\":\n    row = {\"asset_id\": \"X1\", \"kind\": \"pole\", \"region\": \"North\", \"age\": \"30\", \"weibull_beta\": \"2.5\",\n           \"weibull_eta\": \"45\", \"rul\": \"12\", \"cof\": \"300\"}\n    print(parse_assets([row, {**row, \"age\": \"-1\"}]))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom assets import parse_assets\n\nrows = [\n    {\"asset_id\": \"T-07\", \"kind\": \"transformer\", \"region\": \"North\", \"age\": \"22\", \"weibull_beta\": \"2.8\",\n     \"weibull_eta\": \"48\", \"rul\": \"15\", \"cof\": \"2400\"},\n    {\"asset_id\": \"T-08\", \"kind\": \"transformer\", \"region\": \"Central\", \"age\": \"5\", \"weibull_beta\": \"2.8\",\n     \"weibull_eta\": \"48\", \"rul\": \"30\", \"cof\": \"2400\"},\n    {\"asset_id\": \"S-31\", \"kind\": \"switch\", \"region\": \"South\", \"age\": \"17\", \"weibull_beta\": \"1.9\",\n     \"weibull_eta\": \"\", \"rul\": \"8\", \"cof\": \"150\"},\n]\nassets, rejected = parse_assets(rows)\nfor a in assets:\n    print(\"valid row:\", a.asset_id, \"age\", a.age, \"eta\", a.weibull_eta)\nprint(\"rejected (row, field):\", rejected)\n"
         }
       ]
     },
@@ -104,6 +113,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom typing import Literal\n\nfrom pydantic import BaseModel, ConfigDict, Field, ValidationError\n\n\nclass AssetRow(BaseModel):\n    model_config = ConfigDict(frozen=True)\n\n    # TODO: give each field its real type and bounds (see the statement's table).\n    asset_id: str\n    kind: str\n    region: str\n    age: str\n    weibull_beta: str\n    weibull_eta: str\n    rul: str\n    cof: str\n\n\ndef parse_assets(rows: list[dict[str, str]]) -> tuple[list[AssetRow], list[tuple[int, str]]]:\n    \"\"\"The valid rows as AssetRow objects, and (row index, field) for each row that is not valid.\"\"\"\n    # TODO: validate each row; a row that fails goes to the rejected list with its first bad field.\n    return [], [(-1, \"not checked yet\")]\n\n\nif __name__ == \"__main__\":\n    row = {\"asset_id\": \"X1\", \"kind\": \"pole\", \"region\": \"North\", \"age\": \"30\", \"weibull_beta\": \"2.5\",\n           \"weibull_eta\": \"45\", \"rul\": \"12\", \"cof\": \"300\"}\n    print(parse_assets([row, {**row, \"age\": \"-1\"}]))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom assets import parse_assets\n\nrows = [\n    {\"asset_id\": \"T-07\", \"kind\": \"transformer\", \"region\": \"North\", \"age\": \"22\", \"weibull_beta\": \"2.8\",\n     \"weibull_eta\": \"48\", \"rul\": \"15\", \"cof\": \"2400\"},\n    {\"asset_id\": \"T-08\", \"kind\": \"transformer\", \"region\": \"Central\", \"age\": \"5\", \"weibull_beta\": \"2.8\",\n     \"weibull_eta\": \"48\", \"rul\": \"30\", \"cof\": \"2400\"},\n    {\"asset_id\": \"S-31\", \"kind\": \"switch\", \"region\": \"South\", \"age\": \"17\", \"weibull_beta\": \"1.9\",\n     \"weibull_eta\": \"\", \"rul\": \"8\", \"cof\": \"150\"},\n]\nassets, rejected = parse_assets(rows)\nfor a in assets:\n    print(\"valid row:\", a.asset_id, \"age\", a.age, \"eta\", a.weibull_eta)\nprint(\"rejected (row, field):\", rejected)\n"
     }
   ],
   "video": null,
@@ -111,8 +129,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 1,
     "lists": 0,
     "images": 0,
@@ -122,14 +140,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "df5c86d6df8dfbd05091ddcd54f4f9a8ba4866beabf4a4435be78465760ce08f",
+  "content_sha256": "97ab3befd7077250acd4f8ff43b12eec952d51fbb7b229411609ab0bf79a86c5",
   "starting_code": "from __future__ import annotations\n\nfrom typing import Literal\n\nfrom pydantic import BaseModel, ConfigDict, Field, ValidationError\n\n\nclass AssetRow(BaseModel):\n    model_config = ConfigDict(frozen=True)\n\n    # TODO: give each field its real type and bounds (see the statement's table).\n    asset_id: str\n    kind: str\n    region: str\n    age: str\n    weibull_beta: str\n    weibull_eta: str\n    rul: str\n    cof: str\n\n\ndef parse_assets(rows: list[dict[str, str]]) -> tuple[list[AssetRow], list[tuple[int, str]]]:\n    \"\"\"The valid rows as AssetRow objects, and (row index, field) for each row that is not valid.\"\"\"\n    # TODO: validate each row; a row that fails goes to the rejected list with its first bad field.\n    return [], [(-1, \"not checked yet\")]\n\n\nif __name__ == \"__main__\":\n    row = {\"asset_id\": \"X1\", \"kind\": \"pole\", \"region\": \"North\", \"age\": \"30\", \"weibull_beta\": \"2.5\",\n           \"weibull_eta\": \"45\", \"rul\": \"12\", \"cof\": \"300\"}\n    print(parse_assets([row, {**row, \"age\": \"-1\"}]))\n",
   "exercise": {
     "main_path": "practice/01-foundations/03-python-for-optimization/prose/unit-02/practice-1/assets.py",
     "test_path": "practice/01-foundations/03-python-for-optimization/prose/unit-02/practice-1/test_assets.py",
     "run_command": [
       "python3",
-      "practice/01-foundations/03-python-for-optimization/prose/unit-02/practice-1/assets.py"
+      "practice/01-foundations/03-python-for-optimization/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -195,6 +213,10 @@
     },
     "concepts": [
       "each field's type and bounds are declared on a pydantic model, and a row that cannot be converted without a guess is rejected with the field it failed on"
-    ]
+    ],
+    "files": [
+      "practice/01-foundations/03-python-for-optimization/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/01-foundations/03-python-for-optimization/prose/unit-02/practice-1/try_it.py"
   }
 }

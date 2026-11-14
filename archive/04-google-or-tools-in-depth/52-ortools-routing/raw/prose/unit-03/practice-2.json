@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Overtime as a cost, not a rule",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef add_overtime_cost(routing, time_dim, finish_by: list[int], cost_per_minute: int) -> None:\n    \"\"\"Each crew v should be back by finish_by[v]; every minute later costs cost_per_minute.\"\"\"\n    for vehicle, bound in enumerate(finish_by):\n        time_dim.SetCumulVarSoftUpperBound(routing.End(vehicle), bound, cost_per_minute)\n\n\ndef build(travel: list[list[int]], service: list[int], finish_by: list[int], cost_per_minute: int):\n    \"\"\"Given: one route per crew from the depot (node 0), priced in travel minutes, with a Time\n    dimension that starts every crew at 0 and adds the work at each stop to the travel.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(travel), len(finish_by), 0)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def drive(from_index, to_index):\n        return travel[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    def busy(from_index, to_index):\n        here = manager.IndexToNode(from_index)\n        return service[here] + travel[here][manager.IndexToNode(to_index)]\n\n    routing.SetArcCostEvaluatorOfAllVehicles(routing.RegisterTransitCallback(drive))\n    routing.AddDimension(routing.RegisterTransitCallback(busy), 0, 24 * 60, True, \"Time\")\n    add_overtime_cost(routing, routing.GetDimensionOrDie(\"Time\"), finish_by, cost_per_minute)\n    return manager, routing\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 5, 9], [5, 0, 6], [9, 6, 0]], [0, 20, 20], [40, 40], 3)\n    plan = routing.ReadAssignmentFromRoutes([[1, 2], []], True)\n    print(plan.ObjectiveValue() if plan else None)\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom overtime import build\n\n# Two gardening crews and four parks, in minutes.\ntravel = [\n    [0, 12, 18, 9, 20],\n    [12, 0, 10, 15, 22],\n    [18, 10, 0, 14, 8],\n    [9, 15, 14, 0, 11],\n    [20, 22, 8, 11, 0],\n]\nservice = [0, 45, 30, 40, 25]\n\n\ndef cost(routes, finish_by, cost_per_minute):\n    manager, routing = build(travel, service, finish_by, cost_per_minute)\n    plan = routing.ReadAssignmentFromRoutes(routes, True)\n    return None if plan is None else plan.ObjectiveValue()\n\n\nroutes = [[1, 2], [3, 4]]\nprint(\"routes [1, 2] [3, 4], back by 150 and 150, 4 per minute:\", cost(routes, [150, 150], 4))\nprint(\"routes [1, 2] [3, 4], back by 100 and 150, 4 per minute:\", cost(routes, [100, 150], 4))\nprint(\"routes [1, 2] [3, 4], back by 100 and 90, 4 per minute:\", cost(routes, [100, 90], 4))\nprint(\"routes [1, 2] [3, 4], back by 100 and 90, 10 per minute:\", cost(routes, [100, 90], 10))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef add_overtime_cost(routing, time_dim, finish_by: list[int], cost_per_minute: int) -> None:\n    \"\"\"Each crew v should be back by finish_by[v]; every minute later costs cost_per_minute.\"\"\"\n    # TODO: a soft upper bound on each crew's return.\n    return None\n\n\ndef build(travel: list[list[int]], service: list[int], finish_by: list[int], cost_per_minute: int):\n    \"\"\"Given: one route per crew from the depot (node 0), priced in travel minutes, with a Time\n    dimension that starts every crew at 0 and adds the work at each stop to the travel.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(travel), len(finish_by), 0)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def drive(from_index, to_index):\n        return travel[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    def busy(from_index, to_index):\n        here = manager.IndexToNode(from_index)\n        return service[here] + travel[here][manager.IndexToNode(to_index)]\n\n    routing.SetArcCostEvaluatorOfAllVehicles(routing.RegisterTransitCallback(drive))\n    routing.AddDimension(routing.RegisterTransitCallback(busy), 0, 24 * 60, True, \"Time\")\n    add_overtime_cost(routing, routing.GetDimensionOrDie(\"Time\"), finish_by, cost_per_minute)\n    return manager, routing\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 5, 9], [5, 0, 6], [9, 6, 0]], [0, 20, 20], [40, 40], 3)\n    plan = routing.ReadAssignmentFromRoutes([[1, 2], []], True)\n    print(plan.ObjectiveValue() if plan else None)\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom overtime import build\n\n# Two gardening crews and four parks, in minutes.\ntravel = [\n    [0, 12, 18, 9, 20],\n    [12, 0, 10, 15, 22],\n    [18, 10, 0, 14, 8],\n    [9, 15, 14, 0, 11],\n    [20, 22, 8, 11, 0],\n]\nservice = [0, 45, 30, 40, 25]\n\n\ndef cost(routes, finish_by, cost_per_minute):\n    manager, routing = build(travel, service, finish_by, cost_per_minute)\n    plan = routing.ReadAssignmentFromRoutes(routes, True)\n    return None if plan is None else plan.ObjectiveValue()\n\n\nroutes = [[1, 2], [3, 4]]\nprint(\"routes [1, 2] [3, 4], back by 150 and 150, 4 per minute:\", cost(routes, [150, 150], 4))\nprint(\"routes [1, 2] [3, 4], back by 100 and 150, 4 per minute:\", cost(routes, [100, 150], 4))\nprint(\"routes [1, 2] [3, 4], back by 100 and 90, 4 per minute:\", cost(routes, [100, 90], 4))\nprint(\"routes [1, 2] [3, 4], back by 100 and 90, 10 per minute:\", cost(routes, [100, 90], 10))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "4bd414456e2ff27e552830ab4eca5f32001657ccec7859606a955cee36b6ff76",
+  "content_sha256": "4a0f5e6c47022f4ea9a5b0bf0cf76a3e9a3efdd641a245c3267f01b23cb08716",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef add_overtime_cost(routing, time_dim, finish_by: list[int], cost_per_minute: int) -> None:\n    \"\"\"Each crew v should be back by finish_by[v]; every minute later costs cost_per_minute.\"\"\"\n    # TODO: a soft upper bound on each crew's return.\n    return None\n\n\ndef build(travel: list[list[int]], service: list[int], finish_by: list[int], cost_per_minute: int):\n    \"\"\"Given: one route per crew from the depot (node 0), priced in travel minutes, with a Time\n    dimension that starts every crew at 0 and adds the work at each stop to the travel.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(travel), len(finish_by), 0)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def drive(from_index, to_index):\n        return travel[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    def busy(from_index, to_index):\n        here = manager.IndexToNode(from_index)\n        return service[here] + travel[here][manager.IndexToNode(to_index)]\n\n    routing.SetArcCostEvaluatorOfAllVehicles(routing.RegisterTransitCallback(drive))\n    routing.AddDimension(routing.RegisterTransitCallback(busy), 0, 24 * 60, True, \"Time\")\n    add_overtime_cost(routing, routing.GetDimensionOrDie(\"Time\"), finish_by, cost_per_minute)\n    return manager, routing\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 5, 9], [5, 0, 6], [9, 6, 0]], [0, 20, 20], [40, 40], 3)\n    plan = routing.ReadAssignmentFromRoutes([[1, 2], []], True)\n    print(plan.ObjectiveValue() if plan else None)\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-03/practice-2/overtime.py",
     "test_path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-03/practice-2/test_overtime.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-03/practice-2/overtime.py"
+      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-03/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -130,6 +148,10 @@
     },
     "concepts": [
       "a soft upper bound on a cumul adds a cost per unit above the bound instead of forbidding it"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-03/practice-2/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-03/practice-2/try_it.py"
   }
 }

@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A canonical digest for a pipe-inspection survey",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport hashlib\nimport json\nimport math\n\n#: Lists whose order means nothing, with the field that sorts their records (None: sort the values).\nUNORDERED = {\"segments\": \"id\", \"tags\": None}\nPLACES = 3\n\n\ndef fixed(value: float) -> float:\n    if not math.isfinite(value):\n        raise ValueError(f\"{value} has no canonical form\")\n    return float(f\"{value:.{PLACES}f}\") + 0.0\n\n\ndef normalize(value, key: str | None = None):\n    if isinstance(value, float):\n        return fixed(value)\n    if isinstance(value, dict):\n        return {k: normalize(v, k) for k, v in value.items()}\n    if isinstance(value, list):\n        items = [normalize(v) for v in value]\n        if key in UNORDERED:\n            field = UNORDERED[key]\n            items.sort(key=(lambda r: r[field]) if field else None)\n        return items\n    return value\n\n\ndef digest(doc: dict) -> str:\n    \"\"\"sha256 of the survey's canonical bytes.\"\"\"\n    text = json.dumps(normalize(doc), sort_keys=True, separators=(\",\", \":\"), ensure_ascii=True, allow_nan=False)\n    return hashlib.sha256(text.encode(\"ascii\")).hexdigest()\n\n\nif __name__ == \"__main__\":\n    print(digest({\"version\": 1, \"tags\": [\"b\", \"a\"], \"rate\": 0.05}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom survey import digest\n\nsurvey = {\n    \"version\": 2, \"survey\": \"Hillcrest\", \"rate\": 0.25, \"tags\": [\"steel\", \"urgent\"],\n    \"segments\": [{\"id\": \"H2\", \"length_m\": 64.0, \"readings\": [4.2, 4.1]},\n                 {\"id\": \"H1\", \"length_m\": 30.5, \"readings\": [5.0, 4.95, 4.9]}],\n}\nshuffled = {**survey, \"tags\": [\"urgent\", \"steel\"], \"segments\": survey[\"segments\"][::-1]}\nrounded = {**survey, \"rate\": 0.2500001}\nreading = {**survey, \"segments\": [{**survey[\"segments\"][0], \"readings\": [4.1, 4.2]}, survey[\"segments\"][1]]}\n\nprint(\"Hillcrest:            \", digest(survey)[:16])\nprint(\"tags and segments swapped:\", digest(shuffled)[:16])\nprint(\"rate 0.2500001:       \", digest(rounded)[:16])\nprint(\"H2 readings reversed: \", digest(reading)[:16])\ntry:\n    digest({**survey, \"rate\": float(\"nan\")})\nexcept ValueError as e:\n    print(\"rate nan raised:\", e)\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport hashlib\nimport json\nimport math\n\n#: Lists whose order means nothing, with the field that sorts their records (None: sort the values).\nUNORDERED = {\"segments\": \"id\", \"tags\": None}\nPLACES = 3\n\n\ndef digest(doc: dict) -> str:\n    \"\"\"sha256 of the survey's canonical bytes.\"\"\"\n    # TODO: build the canonical form the statement describes, then hash it.\n    return hashlib.sha256(json.dumps(doc).encode(\"utf-8\")).hexdigest()\n\n\nif __name__ == \"__main__\":\n    print(digest({\"version\": 1, \"tags\": [\"b\", \"a\"], \"rate\": 0.05}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom survey import digest\n\nsurvey = {\n    \"version\": 2, \"survey\": \"Hillcrest\", \"rate\": 0.25, \"tags\": [\"steel\", \"urgent\"],\n    \"segments\": [{\"id\": \"H2\", \"length_m\": 64.0, \"readings\": [4.2, 4.1]},\n                 {\"id\": \"H1\", \"length_m\": 30.5, \"readings\": [5.0, 4.95, 4.9]}],\n}\nshuffled = {**survey, \"tags\": [\"urgent\", \"steel\"], \"segments\": survey[\"segments\"][::-1]}\nrounded = {**survey, \"rate\": 0.2500001}\nreading = {**survey, \"segments\": [{**survey[\"segments\"][0], \"readings\": [4.1, 4.2]}, survey[\"segments\"][1]]}\n\nprint(\"Hillcrest:            \", digest(survey)[:16])\nprint(\"tags and segments swapped:\", digest(shuffled)[:16])\nprint(\"rate 0.2500001:       \", digest(rounded)[:16])\nprint(\"H2 readings reversed: \", digest(reading)[:16])\ntry:\n    digest({**survey, \"rate\": float(\"nan\")})\nexcept ValueError as e:\n    print(\"rate nan raised:\", e)\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "eb511f81933449afd2877f73aa0b81603ba6699806db09aa0cd4918eb0f61f46",
+  "content_sha256": "fd4cfc98b10ce881ac7e044817b31b7318961063db87b3a859c93115b7c176d7",
   "starting_code": "from __future__ import annotations\n\nimport hashlib\nimport json\nimport math\n\n#: Lists whose order means nothing, with the field that sorts their records (None: sort the values).\nUNORDERED = {\"segments\": \"id\", \"tags\": None}\nPLACES = 3\n\n\ndef digest(doc: dict) -> str:\n    \"\"\"sha256 of the survey's canonical bytes.\"\"\"\n    # TODO: build the canonical form the statement describes, then hash it.\n    return hashlib.sha256(json.dumps(doc).encode(\"utf-8\")).hexdigest()\n\n\nif __name__ == \"__main__\":\n    print(digest({\"version\": 1, \"tags\": [\"b\", \"a\"], \"rate\": 0.05}))\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-03/practice-1/survey.py",
     "test_path": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-03/practice-1/test_survey.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-03/practice-1/survey.py"
+      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-03/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -155,6 +173,10 @@
     },
     "concepts": [
       "a digest of content in canonical form: sorted keys, only the order-free lists sorted, floats at a fixed precision, NaN refused, one documented byte form"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-03/practice-1/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/46-input-data-quality/prose/unit-03/practice-1/try_it.py"
   }
 }

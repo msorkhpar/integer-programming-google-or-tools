@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "List every result of a survey",
   "blocks": [
     {
@@ -53,6 +53,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\n\ndef runs_of(s3, bucket: str, survey_id: str) -> list[str]:\n    \"\"\"The run ids with a result under trim-results/<survey_id>/, sorted as text.\"\"\"\n    prefix = f\"trim-results/{survey_id}/\"\n    runs = []\n    for page in s3.get_paginator(\"list_objects_v2\").paginate(Bucket=bucket, Prefix=prefix):\n        for obj in page.get(\"Contents\", []):\n            name = obj[\"Key\"][len(prefix):]\n            if name.endswith(\".json\") and \"/\" not in name:\n                runs.append(name.removesuffix(\".json\"))\n    return sorted(runs)\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport os\n\nimport boto3\nfrom moto import mock_aws\n\nfor name in (\"AWS_ACCESS_KEY_ID\", \"AWS_SECRET_ACCESS_KEY\", \"AWS_SESSION_TOKEN\"):\n    os.environ[name] = \"testing\"\nos.environ[\"AWS_DEFAULT_REGION\"] = \"us-east-1\"\nfor noisy in (\"botocore\", \"boto3\", \"urllib3\", \"moto\", \"s3transfer\"):\n    logging.getLogger(noisy).setLevel(logging.WARNING)\n\nfrom run_listing import runs_of\n\nwith mock_aws():\n    s3 = boto3.client(\"s3\")\n    s3.create_bucket(Bucket=\"runs-demo\")\n    keys = [\"trim-results/V-4/r-b.json\", \"trim-results/V-4/r-a.json\", \"trim-results/V-4/logs/r-a.json\",\n            \"trim-results/V-4/r-a.log\", \"trim-results/V-40/r-z.json\"]\n    keys += [f\"trim-results/V-6/r-{i:04d}.json\" for i in range(1004)]\n    for key in keys:\n        s3.put_object(Bucket=\"runs-demo\", Key=key, Body=b\"{}\")\n    print(\"runs of V-4:\", runs_of(s3, \"runs-demo\", \"V-4\"))\n    print(\"runs of V-5:\", runs_of(s3, \"runs-demo\", \"V-5\"))\n    print(\"how many runs of V-6:\", len(runs_of(s3, \"runs-demo\", \"V-6\")))\n"
         }
       ]
     },
@@ -65,6 +74,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\n\ndef runs_of(s3, bucket: str, survey_id: str) -> list[str]:\n    \"\"\"The run ids with a result under trim-results/<survey_id>/, sorted as text.\"\"\"\n    # TODO: list every key under the survey's prefix, on every page, and keep the run ids.\n    return []\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport os\n\nimport boto3\nfrom moto import mock_aws\n\nfor name in (\"AWS_ACCESS_KEY_ID\", \"AWS_SECRET_ACCESS_KEY\", \"AWS_SESSION_TOKEN\"):\n    os.environ[name] = \"testing\"\nos.environ[\"AWS_DEFAULT_REGION\"] = \"us-east-1\"\nfor noisy in (\"botocore\", \"boto3\", \"urllib3\", \"moto\", \"s3transfer\"):\n    logging.getLogger(noisy).setLevel(logging.WARNING)\n\nfrom run_listing import runs_of\n\nwith mock_aws():\n    s3 = boto3.client(\"s3\")\n    s3.create_bucket(Bucket=\"runs-demo\")\n    keys = [\"trim-results/V-4/r-b.json\", \"trim-results/V-4/r-a.json\", \"trim-results/V-4/logs/r-a.json\",\n            \"trim-results/V-4/r-a.log\", \"trim-results/V-40/r-z.json\"]\n    keys += [f\"trim-results/V-6/r-{i:04d}.json\" for i in range(1004)]\n    for key in keys:\n        s3.put_object(Bucket=\"runs-demo\", Key=key, Body=b\"{}\")\n    print(\"runs of V-4:\", runs_of(s3, \"runs-demo\", \"V-4\"))\n    print(\"runs of V-5:\", runs_of(s3, \"runs-demo\", \"V-5\"))\n    print(\"how many runs of V-6:\", len(runs_of(s3, \"runs-demo\", \"V-6\")))\n"
     }
   ],
   "video": null,
@@ -72,8 +90,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -83,14 +101,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "20ecea07774824750413201258b8092c1d8ee8c8ac819ce5332c7fc41546712c",
+  "content_sha256": "7bd93abb1836bbad4b16f7b12a36dd4d14c0808cddb9effded430073e59218cf",
   "starting_code": "from __future__ import annotations\n\n\ndef runs_of(s3, bucket: str, survey_id: str) -> list[str]:\n    \"\"\"The run ids with a result under trim-results/<survey_id>/, sorted as text.\"\"\"\n    # TODO: list every key under the survey's prefix, on every page, and keep the run ids.\n    return []\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-1/run_listing.py",
     "test_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-1/test_run_listing.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-1/run_listing.py"
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -141,6 +159,10 @@
     },
     "concepts": [
       "paging past 1,000 keys and telling a missing key from a missing bucket"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-1/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-04/practice-1/try_it.py"
   }
 }

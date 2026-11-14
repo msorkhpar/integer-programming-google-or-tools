@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Fix an inherited PuLP valve replacement model",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom pulp import PULP_CBC_CMD, LpMaximize, LpProblem, LpStatusOptimal, LpVariable, lpSum, value\n\n\n@dataclass(frozen=True)\nclass Valve:\n    vid: str\n    district: str\n    risk_cut: float       # expected leak cost avoided a year, $k\n    cost: float           # replacement cost, $k\n    crew_weeks: int\n\n\ndef plan(valves, budget, crew_weeks, harbor_band, last_year):\n    \"\"\"The best replacement plan as (risk cut, sorted valve ids), or None when no plan exists.\"\"\"\n    z = LpVariable.dicts(\"z\", [v.vid for v in valves], cat=\"Binary\")\n    prob = LpProblem(\"valves\", LpMaximize)\n    prob += lpSum(v.risk_cut * z[v.vid] for v in valves), \"risk_cut\"\n\n    prob += lpSum(v.cost * z[v.vid] for v in valves) <= budget, \"budget\"\n    prob += lpSum(v.crew_weeks * z[v.vid] for v in valves) <= crew_weeks, \"crew\"\n\n    lo, hi = harbor_band\n    harbor = lpSum(v.cost * z[v.vid] for v in valves if v.district == \"harbor\")\n    prob += harbor >= lo, \"harbor_min\"\n    prob += harbor <= hi, \"harbor_max\"\n\n    for vid, was_funded in last_year.items():\n        if was_funded == 1:\n            prob += z[vid] == 1, \"lock_\" + vid\n\n    status = prob.solve(PULP_CBC_CMD(msg=0, gapRel=0))\n    if status != LpStatusOptimal:\n        return None\n    return value(prob.objective), sorted(vid for vid in z if value(z[vid]) > 0.5)\n\n\nif __name__ == \"__main__\":\n    demo = [Valve(\"H1\", \"harbor\", 30, 40, 3), Valve(\"U1\", \"uptown\", 25, 20, 4)]\n    print(plan(demo, budget=60, crew_weeks=7, harbor_band=(0, 100), last_year={}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport warnings\n\nfrom valves import Valve, plan\n\nwarnings.simplefilter(\"ignore\")      # PuLP's deprecation and objective warnings\n\n# Valve(id, district, risk cut $k, cost $k, crew-weeks)\nmains = [\n    Valve(\"H7\", \"harbor\", 26, 35, 2),\n    Valve(\"H8\", \"harbor\", 15, 20, 3),\n    Valve(\"U5\", \"uptown\", 30, 30, 4),\n    Valve(\"U6\", \"uptown\", 12, 10, 1),\n]\nprint(\"budget 60, 6 weeks:\", plan(mains, budget=60, crew_weeks=6, harbor_band=(0, 100), last_year={}))\nprint(\"budget 60, 6 weeks, harbor at least 50:\", plan(mains, budget=60, crew_weeks=6, harbor_band=(50, 100), last_year={}))\nprint(\"budget 60, 6 weeks, H8 kept from last year:\",\n      plan(mains, budget=60, crew_weeks=6, harbor_band=(0, 100), last_year={\"H8\": 1.0, \"U5\": 0.0}))\nprint(\"budget 60, 6 weeks, H8 and U5 kept:\",\n      plan(mains, budget=60, crew_weeks=6, harbor_band=(0, 100), last_year={\"H8\": 1.0, \"U5\": 1.0}))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom pulp import PULP_CBC_CMD, LpMaximize, LpProblem, LpVariable, lpSum, value\n\n\n@dataclass(frozen=True)\nclass Valve:\n    vid: str\n    district: str\n    risk_cut: float       # expected leak cost avoided a year, $k\n    cost: float           # replacement cost, $k\n    crew_weeks: int\n\n\ndef plan(valves, budget, crew_weeks, harbor_band, last_year):\n    \"\"\"The best replacement plan as (risk cut, sorted valve ids), or None when no plan exists.\"\"\"\n    z = LpVariable.dicts(\"z\", [v.vid for v in valves], cat=\"Binary\")\n    prob = LpProblem(\"valves\", LpMaximize)\n    prob += lpSum(v.risk_cut * z[v.vid] for v in valves), \"risk_cut\"\n\n    prob += lpSum(v.cost * z[v.vid] for v in valves) <= budget, \"budget\"\n    prob += lpSum(v.crew_weeks * z[v.vid] for v in valves), \"crew\"\n\n    lo, hi = harbor_band\n    prob += lo <= lpSum(v.cost * z[v.vid] for v in valves if v.district == \"harbor\") <= hi, \"harbor_band\"\n\n    for vid, was_funded in last_year.items():\n        if was_funded == 1:\n            prob += last_year[vid] == 1, \"lock_\" + vid\n\n    if prob.solve(PULP_CBC_CMD(msg=0, gapRel=0)):\n        return value(prob.objective), sorted(vid for vid in z if value(z[vid]) > 0.5)\n    return None\n\n\nif __name__ == \"__main__\":\n    demo = [Valve(\"H1\", \"harbor\", 30, 40, 3), Valve(\"U1\", \"uptown\", 25, 20, 4)]\n    print(plan(demo, budget=60, crew_weeks=7, harbor_band=(0, 100), last_year={}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport warnings\n\nfrom valves import Valve, plan\n\nwarnings.simplefilter(\"ignore\")      # PuLP's deprecation and objective warnings\n\n# Valve(id, district, risk cut $k, cost $k, crew-weeks)\nmains = [\n    Valve(\"H7\", \"harbor\", 26, 35, 2),\n    Valve(\"H8\", \"harbor\", 15, 20, 3),\n    Valve(\"U5\", \"uptown\", 30, 30, 4),\n    Valve(\"U6\", \"uptown\", 12, 10, 1),\n]\nprint(\"budget 60, 6 weeks:\", plan(mains, budget=60, crew_weeks=6, harbor_band=(0, 100), last_year={}))\nprint(\"budget 60, 6 weeks, harbor at least 50:\", plan(mains, budget=60, crew_weeks=6, harbor_band=(50, 100), last_year={}))\nprint(\"budget 60, 6 weeks, H8 kept from last year:\",\n      plan(mains, budget=60, crew_weeks=6, harbor_band=(0, 100), last_year={\"H8\": 1.0, \"U5\": 0.0}))\nprint(\"budget 60, 6 weeks, H8 and U5 kept:\",\n      plan(mains, budget=60, crew_weeks=6, harbor_band=(0, 100), last_year={\"H8\": 1.0, \"U5\": 1.0}))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "f1f6e0ea1b0dfdc766dac95281dbf23ee0fb91bb5ccc341ccc25baf0ed1fa868",
+  "content_sha256": "78fe54fdbc15d2be2e593bbe0adbecd5d0938a7c2dd98b15afcd0fce5289b502",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom pulp import PULP_CBC_CMD, LpMaximize, LpProblem, LpVariable, lpSum, value\n\n\n@dataclass(frozen=True)\nclass Valve:\n    vid: str\n    district: str\n    risk_cut: float       # expected leak cost avoided a year, $k\n    cost: float           # replacement cost, $k\n    crew_weeks: int\n\n\ndef plan(valves, budget, crew_weeks, harbor_band, last_year):\n    \"\"\"The best replacement plan as (risk cut, sorted valve ids), or None when no plan exists.\"\"\"\n    z = LpVariable.dicts(\"z\", [v.vid for v in valves], cat=\"Binary\")\n    prob = LpProblem(\"valves\", LpMaximize)\n    prob += lpSum(v.risk_cut * z[v.vid] for v in valves), \"risk_cut\"\n\n    prob += lpSum(v.cost * z[v.vid] for v in valves) <= budget, \"budget\"\n    prob += lpSum(v.crew_weeks * z[v.vid] for v in valves), \"crew\"\n\n    lo, hi = harbor_band\n    prob += lo <= lpSum(v.cost * z[v.vid] for v in valves if v.district == \"harbor\") <= hi, \"harbor_band\"\n\n    for vid, was_funded in last_year.items():\n        if was_funded == 1:\n            prob += last_year[vid] == 1, \"lock_\" + vid\n\n    if prob.solve(PULP_CBC_CMD(msg=0, gapRel=0)):\n        return value(prob.objective), sorted(vid for vid in z if value(z[vid]) > 0.5)\n    return None\n\n\nif __name__ == \"__main__\":\n    demo = [Valve(\"H1\", \"harbor\", 30, 40, 3), Valve(\"U1\", \"uptown\", 25, 20, 4)]\n    print(plan(demo, budget=60, crew_weeks=7, harbor_band=(0, 100), last_year={}))\n",
   "exercise": {
     "main_path": "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-02/practice-1/valves.py",
     "test_path": "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-02/practice-1/test_valves.py",
     "run_command": [
       "python3",
-      "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-02/practice-1/valves.py"
+      "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -142,6 +160,10 @@
       "older PuLP code makes variables with LpVariable.dicts, sets the objective with an unnamed +=, and reads answers through LpStatus, varValue and value",
       "a result is read only after both status codes say there is a plan, and a variable outside the problem has no value",
       "a bool handed to += is dropped or refused, a chained band keeps its right half, and an expression replaces the objective"
-    ]
+    ],
+    "files": [
+      "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-02/practice-1/try_it.py"
   }
 }

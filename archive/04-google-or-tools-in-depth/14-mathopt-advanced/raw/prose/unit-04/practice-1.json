@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A new limit for an indicator constraint",
   "blocks": [
     {
@@ -43,6 +43,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef replace_upper(model: mathopt.Model, ic, new_upper: float):\n    \"\"\"Delete `ic` and add the same indicator constraint with upper bound `new_upper`; return the new one.\"\"\"\n    indicator, on_zero, name = ic.indicator_variable, ic.activate_on_zero, ic.name\n    lower = ic.lower_bound\n    expr = mathopt.fast_sum(term.coefficient * term.variable for term in ic.terms())\n    model.delete_indicator_constraint(ic)\n    return model.add_indicator_constraint(indicator=indicator, activate_on_zero=on_zero, implied_expr=expr,\n                                          implied_lb=lower, implied_ub=new_upper, name=name)\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    z, heat = model.add_binary_variable(name=\"z\"), model.add_variable(lb=0, ub=200, name=\"heat\")\n    ic = model.add_indicator_constraint(indicator=z, implied_constraint=(40 <= heat) <= 120, name=\"boiler\")\n    print(replace_upper(model, ic, 100).upper_bound)\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom relimit import replace_upper\n\n# A boiler rule: if run_b2 = 1, then 30 <= heat + 0.25 gas <= 150.\nmodel = mathopt.Model(name=\"heating\")\nrun = model.add_binary_variable(name=\"run_b2\")\nheat = model.add_variable(lb=0, ub=300, name=\"heat_b2\")\ngas = model.add_variable(lb=0, ub=400, name=\"gas_b2\")\nic = model.add_indicator_constraint(indicator=run, implied_expr=heat + 0.25 * gas, implied_lb=30,\n                                    implied_ub=150, name=\"boiler_b2\")\n\nnew = replace_upper(model, ic, 110)\nprint(\"new upper limit:\", new.upper_bound)\nprint(\"new lower limit:\", new.lower_bound)\nprint(\"new name and indicator:\", new.name, new.indicator_variable.name, \"on zero\", new.activate_on_zero)\nprint(\"new terms:\", {t.variable.name: t.coefficient for t in new.terms()})\nprint(\"indicator constraints in the model:\", model.get_num_indicator_constraints())\n"
         }
       ]
     },
@@ -55,6 +64,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef replace_upper(model: mathopt.Model, ic, new_upper: float):\n    \"\"\"Delete `ic` and add the same indicator constraint with upper bound `new_upper`; return the new one.\"\"\"\n    # TODO: read the parts, delete, add again.\n    return ic\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    z, heat = model.add_binary_variable(name=\"z\"), model.add_variable(lb=0, ub=200, name=\"heat\")\n    ic = model.add_indicator_constraint(indicator=z, implied_constraint=(40 <= heat) <= 120, name=\"boiler\")\n    print(replace_upper(model, ic, 100).upper_bound)\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom relimit import replace_upper\n\n# A boiler rule: if run_b2 = 1, then 30 <= heat + 0.25 gas <= 150.\nmodel = mathopt.Model(name=\"heating\")\nrun = model.add_binary_variable(name=\"run_b2\")\nheat = model.add_variable(lb=0, ub=300, name=\"heat_b2\")\ngas = model.add_variable(lb=0, ub=400, name=\"gas_b2\")\nic = model.add_indicator_constraint(indicator=run, implied_expr=heat + 0.25 * gas, implied_lb=30,\n                                    implied_ub=150, name=\"boiler_b2\")\n\nnew = replace_upper(model, ic, 110)\nprint(\"new upper limit:\", new.upper_bound)\nprint(\"new lower limit:\", new.lower_bound)\nprint(\"new name and indicator:\", new.name, new.indicator_variable.name, \"on zero\", new.activate_on_zero)\nprint(\"new terms:\", {t.variable.name: t.coefficient for t in new.terms()})\nprint(\"indicator constraints in the model:\", model.get_num_indicator_constraints())\n"
     }
   ],
   "video": null,
@@ -62,8 +80,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -73,14 +91,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "b2ca80418f359657be90c1237c7e8bdb2dfa907dcf9610c56c298695d128ddb1",
+  "content_sha256": "f8358b571d281069f04710bd450cb0e87f173ef88847008eb4ca3a38c384417a",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef replace_upper(model: mathopt.Model, ic, new_upper: float):\n    \"\"\"Delete `ic` and add the same indicator constraint with upper bound `new_upper`; return the new one.\"\"\"\n    # TODO: read the parts, delete, add again.\n    return ic\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    z, heat = model.add_binary_variable(name=\"z\"), model.add_variable(lb=0, ub=200, name=\"heat\")\n    ic = model.add_indicator_constraint(indicator=z, implied_constraint=(40 <= heat) <= 120, name=\"boiler\")\n    print(replace_upper(model, ic, 100).upper_bound)\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-1/relimit.py",
     "test_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-1/test_relimit.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-1/relimit.py"
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -126,6 +144,10 @@
     },
     "concepts": [
       "changing one bound of an indicator constraint by deleting it and adding it back whole"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-1/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-1/try_it.py"
   }
 }

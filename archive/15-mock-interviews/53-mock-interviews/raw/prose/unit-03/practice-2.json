@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Leak repairs, NPV against safety",
   "blocks": [
     {
@@ -43,6 +43,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Repair:\n    rid: str\n    cost: int            # $k\n    npv: int             # $k\n    risk: int            # safety risk removed, $k a year\n    main: str | None = None   # repairs on the same main are alternatives\n\n\ndef select_variables(model: mathopt.Model, repairs: list[Repair]) -> dict[str, mathopt.Variable]:\n    \"\"\"Given: x[rid] = 1 when the repair is funded.\"\"\"\n    return {r.rid: model.add_binary_variable(name=f\"x_{r.rid}\") for r in repairs}\n\n\ndef add_epsilon_model(model: mathopt.Model, x: dict, repairs: list[Repair], budget: int, risk_floor: int) -> None:\n    \"\"\"The most NPV within the budget, among plans removing at least risk_floor, one repair per main.\"\"\"\n    model.add_linear_constraint(sum(r.cost * x[r.rid] for r in repairs) <= budget, name=\"budget\")\n    model.add_linear_constraint(sum(r.risk * x[r.rid] for r in repairs) >= risk_floor, name=\"risk_floor\")\n    mains: dict[str, list[Repair]] = {}\n    for r in repairs:\n        if r.main is not None:\n            mains.setdefault(r.main, []).append(r)\n    for m, group in mains.items():\n        model.add_linear_constraint(sum(x[r.rid] for r in group) <= 1, name=f\"alt_{m}\")\n    model.maximize(sum(r.npv * x[r.rid] for r in repairs))\n\n\ndef build(repairs: list[Repair], budget: int, risk_floor: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"leak-repairs\")\n    x = select_variables(model, repairs)\n    add_epsilon_model(model, x, repairs, budget, risk_floor)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Repair(\"L1\", 40, 30, 10), Repair(\"L2\", 30, 25, 12)], 60, 10)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    print(result.termination.reason.name, {k: round(result.variable_values(v)) for k, v in x.items()})\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom repairs import Repair, build\n\nrepairs = [\n    Repair(\"G1\", 35, 28, 8),\n    Repair(\"G2\", 25, 15, 14, main=\"Elm St\"),\n    Repair(\"G3\", 45, 22, 25, main=\"Elm St\"),\n    Repair(\"G4\", 30, 18, 6),\n]\n\nfor budget, floor in ((90, 0), (90, 30), (110, 35), (60, 40)):\n    model, x = build(repairs, budget, floor)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    if result.termination.reason == mathopt.TerminationReason.OPTIMAL:\n        funded = sorted(r for r, v in x.items() if result.variable_values(v) > 0.5)\n        print(f\"budget {budget}, risk floor {floor}: NPV {round(result.objective_value())}, funded {funded}\")\n    else:\n        print(f\"budget {budget}, risk floor {floor}:\", result.termination.reason.name)\n"
         }
       ]
     },
@@ -55,6 +64,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Repair:\n    rid: str\n    cost: int            # $k\n    npv: int             # $k\n    risk: int            # safety risk removed, $k a year\n    main: str | None = None   # repairs on the same main are alternatives\n\n\ndef select_variables(model: mathopt.Model, repairs: list[Repair]) -> dict[str, mathopt.Variable]:\n    \"\"\"Given: x[rid] = 1 when the repair is funded.\"\"\"\n    return {r.rid: model.add_binary_variable(name=f\"x_{r.rid}\") for r in repairs}\n\n\ndef add_epsilon_model(model: mathopt.Model, x: dict, repairs: list[Repair], budget: int, risk_floor: int) -> None:\n    \"\"\"The most NPV within the budget, among plans removing at least risk_floor, one repair per main.\"\"\"\n    # TODO: the objective and the rows of your formulation.\n    return None\n\n\ndef build(repairs: list[Repair], budget: int, risk_floor: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"leak-repairs\")\n    x = select_variables(model, repairs)\n    add_epsilon_model(model, x, repairs, budget, risk_floor)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Repair(\"L1\", 40, 30, 10), Repair(\"L2\", 30, 25, 12)], 60, 10)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    print(result.termination.reason.name, {k: round(result.variable_values(v)) for k, v in x.items()})\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom repairs import Repair, build\n\nrepairs = [\n    Repair(\"G1\", 35, 28, 8),\n    Repair(\"G2\", 25, 15, 14, main=\"Elm St\"),\n    Repair(\"G3\", 45, 22, 25, main=\"Elm St\"),\n    Repair(\"G4\", 30, 18, 6),\n]\n\nfor budget, floor in ((90, 0), (90, 30), (110, 35), (60, 40)):\n    model, x = build(repairs, budget, floor)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    if result.termination.reason == mathopt.TerminationReason.OPTIMAL:\n        funded = sorted(r for r, v in x.items() if result.variable_values(v) > 0.5)\n        print(f\"budget {budget}, risk floor {floor}: NPV {round(result.objective_value())}, funded {funded}\")\n    else:\n        print(f\"budget {budget}, risk floor {floor}:\", result.termination.reason.name)\n"
     }
   ],
   "video": null,
@@ -62,8 +80,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -73,14 +91,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "e69f419f44f348942101ca750f08d87494453b05869df4daa1eebe199de4f964",
+  "content_sha256": "f165ab89a1032707818d106424eba31eadd51d30a16758bace294c6c947db492",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Repair:\n    rid: str\n    cost: int            # $k\n    npv: int             # $k\n    risk: int            # safety risk removed, $k a year\n    main: str | None = None   # repairs on the same main are alternatives\n\n\ndef select_variables(model: mathopt.Model, repairs: list[Repair]) -> dict[str, mathopt.Variable]:\n    \"\"\"Given: x[rid] = 1 when the repair is funded.\"\"\"\n    return {r.rid: model.add_binary_variable(name=f\"x_{r.rid}\") for r in repairs}\n\n\ndef add_epsilon_model(model: mathopt.Model, x: dict, repairs: list[Repair], budget: int, risk_floor: int) -> None:\n    \"\"\"The most NPV within the budget, among plans removing at least risk_floor, one repair per main.\"\"\"\n    # TODO: the objective and the rows of your formulation.\n    return None\n\n\ndef build(repairs: list[Repair], budget: int, risk_floor: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"leak-repairs\")\n    x = select_variables(model, repairs)\n    add_epsilon_model(model, x, repairs, budget, risk_floor)\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Repair(\"L1\", 40, 30, 10), Repair(\"L2\", 30, 25, 12)], 60, 10)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    print(result.termination.reason.name, {k: round(result.variable_values(v)) for k, v in x.items()})\n",
   "exercise": {
     "main_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-03/practice-2/repairs.py",
     "test_path": "practice/15-mock-interviews/53-mock-interviews/prose/unit-03/practice-2/test_repairs.py",
     "run_command": [
       "python3",
-      "practice/15-mock-interviews/53-mock-interviews/prose/unit-03/practice-2/repairs.py"
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-03/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -132,6 +150,10 @@
     "concepts": [
       "maximize NPV within a budget while removing at least a floor of risk",
       "write the objective and every row, at most one repair per main, formulation first"
-    ]
+    ],
+    "files": [
+      "practice/15-mock-interviews/53-mock-interviews/prose/unit-03/practice-2/try_it.py"
+    ],
+    "try_file": "practice/15-mock-interviews/53-mock-interviews/prose/unit-03/practice-2/try_it.py"
   }
 }

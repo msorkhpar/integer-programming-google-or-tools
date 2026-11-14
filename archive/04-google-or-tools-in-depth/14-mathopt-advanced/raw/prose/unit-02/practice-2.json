@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "The row that keeps an earlier objective within its tolerance",
   "blocks": [
     {
@@ -48,6 +48,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef keep_within(model: mathopt.Model, expr, best: float, is_maximize: bool,\n                params: mathopt.ObjectiveParameters | None):\n    \"\"\"Add and return the row keeping `expr` within its allowed loss of `best`.\"\"\"\n    loss = 0.0\n    if params is not None:\n        absolute = params.objective_degradation_absolute_tolerance or 0.0\n        relative = (params.objective_degradation_relative_tolerance or 0.0) * abs(best)\n        loss = max(absolute, relative)\n    if is_maximize:\n        return model.add_linear_constraint(expr >= best - loss, name=\"keep\")\n    return model.add_linear_constraint(expr <= best + loss, name=\"keep\")\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    cost = model.add_variable(lb=-1e6, ub=1e6, name=\"cost\")\n    print(keep_within(model, cost, 1000, False, mathopt.ObjectiveParameters(objective_degradation_absolute_tolerance=5)))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom keep import keep_within\n\n\ndef accepts(value, best, is_maximize, params):\n    model = mathopt.Model()\n    margin = model.add_variable(lb=-1e6, ub=1e6, name=\"margin\")\n    keep_within(model, 3 * margin, best, is_maximize, params)\n    margin.lower_bound = margin.upper_bound = value / 3\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nREL2 = mathopt.ObjectiveParameters(objective_degradation_relative_tolerance=0.02)\nABS9 = mathopt.ObjectiveParameters(objective_degradation_absolute_tolerance=9)\nprint(\"max, best 600, 2 percent, value 588:\", accepts(588, 600, True, REL2))\nprint(\"max, best 600, 2 percent, value 585:\", accepts(585, 600, True, REL2))\nprint(\"min, best 300, absolute 9, value 309:\", accepts(309, 300, False, ABS9))\nprint(\"min, best 300, no tolerance, value 301:\", accepts(301, 300, False, None))\n"
         }
       ]
     },
@@ -60,6 +69,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef keep_within(model: mathopt.Model, expr, best: float, is_maximize: bool,\n                params: mathopt.ObjectiveParameters | None):\n    \"\"\"Add and return the row keeping `expr` within its allowed loss of `best`.\"\"\"\n    # TODO: the allowed loss, then a row whose direction follows the objective's sense.\n    return None\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    cost = model.add_variable(lb=-1e6, ub=1e6, name=\"cost\")\n    print(keep_within(model, cost, 1000, False, mathopt.ObjectiveParameters(objective_degradation_absolute_tolerance=5)))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom keep import keep_within\n\n\ndef accepts(value, best, is_maximize, params):\n    model = mathopt.Model()\n    margin = model.add_variable(lb=-1e6, ub=1e6, name=\"margin\")\n    keep_within(model, 3 * margin, best, is_maximize, params)\n    margin.lower_bound = margin.upper_bound = value / 3\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nREL2 = mathopt.ObjectiveParameters(objective_degradation_relative_tolerance=0.02)\nABS9 = mathopt.ObjectiveParameters(objective_degradation_absolute_tolerance=9)\nprint(\"max, best 600, 2 percent, value 588:\", accepts(588, 600, True, REL2))\nprint(\"max, best 600, 2 percent, value 585:\", accepts(585, 600, True, REL2))\nprint(\"min, best 300, absolute 9, value 309:\", accepts(309, 300, False, ABS9))\nprint(\"min, best 300, no tolerance, value 301:\", accepts(301, 300, False, None))\n"
     }
   ],
   "video": null,
@@ -67,8 +85,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 2,
+    "paras": 4,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -78,14 +96,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "1dc016f8a69d09c4edaa979960eaeb3eda29b0b9cd93165c7a3ed1e85ebe8e18",
+  "content_sha256": "1ce4493135d2b665baf7615df7abbe7e5f3b6844c2293d4dbd43a07c578b1b2b",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef keep_within(model: mathopt.Model, expr, best: float, is_maximize: bool,\n                params: mathopt.ObjectiveParameters | None):\n    \"\"\"Add and return the row keeping `expr` within its allowed loss of `best`.\"\"\"\n    # TODO: the allowed loss, then a row whose direction follows the objective's sense.\n    return None\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    cost = model.add_variable(lb=-1e6, ub=1e6, name=\"cost\")\n    print(keep_within(model, cost, 1000, False, mathopt.ObjectiveParameters(objective_degradation_absolute_tolerance=5)))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-2/keep.py",
     "test_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-2/test_keep.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-2/keep.py"
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -136,6 +154,10 @@
     },
     "concepts": [
       "the row that keeps an optimized objective within its tolerance for later solves"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-2/try_it.py"
   }
 }

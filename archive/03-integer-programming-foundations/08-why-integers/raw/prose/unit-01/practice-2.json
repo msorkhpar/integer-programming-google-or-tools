@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Round down, then fill the budget",
   "blocks": [
     {
@@ -55,6 +55,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    must_do: bool = False\n    parent: str | None = None\n    group: str | None = None\n\n\ndef round_down_and_fill(shares: dict[str, float], projects: list[Project], budget: int) -> set[str]:\n    \"\"\"Keep the projects the LP funded whole, then add the rest best value per dollar while they fit the rules.\"\"\"\n    plan = {pid for pid, share in shares.items() if share > 1 - 1e-6}\n    spent = sum(p.cost for p in projects if p.pid in plan)\n    for p in sorted(projects, key=lambda p: p.value / p.cost, reverse=True):\n        if p.pid in plan or spent + p.cost > budget:\n            continue\n        if p.parent and p.parent not in plan:\n            continue\n        if p.group and any(q.group == p.group and q.pid in plan for q in projects):\n            continue\n        plan.add(p.pid)\n        spent += p.cost\n    return plan\n\n\nif __name__ == \"__main__\":\n    pipes = [Project(\"A\", 50, 60, must_do=True), Project(\"B\", 40, 52), Project(\"H\", 30, 24), Project(\"F\", 10, 9)]\n    print(round_down_and_fill({\"A\": 1.0, \"B\": 0.25, \"H\": 0.0, \"F\": 0.0}, pipes, 100))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom fill import Project, round_down_and_fill\n\n# Five sewer works; S1 is ordered by the regulator, S5 needs S4, S2 and S3 are alternatives.\nsewers = [\n    Project(\"S1\", 40, 48, must_do=True),\n    Project(\"S2\", 30, 45, group=\"outfall\"),\n    Project(\"S3\", 25, 35, group=\"outfall\"),\n    Project(\"S4\", 20, 18),\n    Project(\"S5\", 10, 16, parent=\"S4\"),\n]\nshares = {\"S1\": 1.0, \"S2\": 1.0, \"S3\": 0.0, \"S4\": 0.5, \"S5\": 0.5}\nprint(\"LP shares at budget 90:\", shares)\nprint(\"plan at budget 90:\", sorted(round_down_and_fill(shares, sewers, 90)))\nprint(\"plan at budget 120:\", sorted(round_down_and_fill(shares, sewers, 120)))\n"
         }
       ]
     },
@@ -67,6 +76,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    must_do: bool = False\n    parent: str | None = None\n    group: str | None = None\n\n\ndef round_down_and_fill(shares: dict[str, float], projects: list[Project], budget: int) -> set[str]:\n    \"\"\"Keep the projects the LP funded whole, then add the rest best value per dollar while they fit the rules.\"\"\"\n    # TODO: round down (a share within 1e-6 of 1 counts as whole), then walk the other projects\n    # best value per dollar first, adding each one that fits the budget and keeps every rule.\n    return set()\n\n\nif __name__ == \"__main__\":\n    pipes = [Project(\"A\", 50, 60, must_do=True), Project(\"B\", 40, 52), Project(\"H\", 30, 24), Project(\"F\", 10, 9)]\n    print(round_down_and_fill({\"A\": 1.0, \"B\": 0.25, \"H\": 0.0, \"F\": 0.0}, pipes, 100))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom fill import Project, round_down_and_fill\n\n# Five sewer works; S1 is ordered by the regulator, S5 needs S4, S2 and S3 are alternatives.\nsewers = [\n    Project(\"S1\", 40, 48, must_do=True),\n    Project(\"S2\", 30, 45, group=\"outfall\"),\n    Project(\"S3\", 25, 35, group=\"outfall\"),\n    Project(\"S4\", 20, 18),\n    Project(\"S5\", 10, 16, parent=\"S4\"),\n]\nshares = {\"S1\": 1.0, \"S2\": 1.0, \"S3\": 0.0, \"S4\": 0.5, \"S5\": 0.5}\nprint(\"LP shares at budget 90:\", shares)\nprint(\"plan at budget 90:\", sorted(round_down_and_fill(shares, sewers, 90)))\nprint(\"plan at budget 120:\", sorted(round_down_and_fill(shares, sewers, 120)))\n"
     }
   ],
   "video": null,
@@ -74,8 +92,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -85,14 +103,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "36b46d718d5512ede32557839a1159ec6b324edb04e6a5da10183ff60d154ebc",
+  "content_sha256": "26d09c8674456f37847608f0de75459ccb326a141f4a0284899b0cda12207f62",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    must_do: bool = False\n    parent: str | None = None\n    group: str | None = None\n\n\ndef round_down_and_fill(shares: dict[str, float], projects: list[Project], budget: int) -> set[str]:\n    \"\"\"Keep the projects the LP funded whole, then add the rest best value per dollar while they fit the rules.\"\"\"\n    # TODO: round down (a share within 1e-6 of 1 counts as whole), then walk the other projects\n    # best value per dollar first, adding each one that fits the budget and keeps every rule.\n    return set()\n\n\nif __name__ == \"__main__\":\n    pipes = [Project(\"A\", 50, 60, must_do=True), Project(\"B\", 40, 52), Project(\"H\", 30, 24), Project(\"F\", 10, 9)]\n    print(round_down_and_fill({\"A\": 1.0, \"B\": 0.25, \"H\": 0.0, \"F\": 0.0}, pipes, 100))\n",
   "exercise": {
     "main_path": "practice/03-integer-programming-foundations/08-why-integers/prose/unit-01/practice-2/fill.py",
     "test_path": "practice/03-integer-programming-foundations/08-why-integers/prose/unit-01/practice-2/test_fill.py",
     "run_command": [
       "python3",
-      "practice/03-integer-programming-foundations/08-why-integers/prose/unit-01/practice-2/fill.py"
+      "practice/03-integer-programming-foundations/08-why-integers/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -143,6 +161,10 @@
     },
     "concepts": [
       "rounding down keeps the LP's whole projects, and a fill spends the rest while keeping every rule"
-    ]
+    ],
+    "files": [
+      "practice/03-integer-programming-foundations/08-why-integers/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/03-integer-programming-foundations/08-why-integers/prose/unit-01/practice-2/try_it.py"
   }
 }

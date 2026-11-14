@@ -9,7 +9,7 @@
   "unit": 6,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Which jobs run when one fails",
   "blocks": [
     {
@@ -53,6 +53,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport re\n\nEVENT = re.compile(r\"github\\.event_name == '(\\w+)'\")\n\n\ndef needs_of(job: dict) -> list[str]:\n    needs = job.get(\"needs\", [])\n    return [needs] if isinstance(needs, str) else list(needs)\n\n\ndef outcomes(jobs: dict[str, dict], event: str, failing: set[str] = frozenset()) -> dict[str, str]:\n    \"\"\"Each job's outcome for one event: \"success\", \"failure\" or \"skipped\". Jobs in `failing` fail if they run.\"\"\"\n    result: dict[str, str] = {}\n\n    def decide(name: str) -> str:\n        if name not in result:\n            job = jobs[name]\n            before = [decide(n) for n in needs_of(job)]\n            condition = job.get(\"if\", \"\")\n            wanted = EVENT.search(condition)\n            if wanted and wanted.group(1) != event:\n                result[name] = \"skipped\"\n            elif \"always()\" not in condition and any(o != \"success\" for o in before):\n                result[name] = \"skipped\"\n            else:\n                result[name] = \"failure\" if name in failing else \"success\"\n        return result[name]\n\n    for name in jobs:\n        decide(name)\n    return result\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom job_outcomes import outcomes\n\njobs = {\n    \"lint\": {},\n    \"unit\": {},\n    \"build\": {\"needs\": [\"lint\", \"unit\"]},\n    \"release\": {\"needs\": \"build\", \"if\": \"github.event_name == 'push'\"},\n    \"report\": {\"needs\": \"release\", \"if\": \"always()\"},\n}\n\nprint(\"push, nothing failing:\", outcomes(jobs, \"push\"))\nprint(\"pull_request:\", outcomes(jobs, \"pull_request\"))\nprint(\"push, unit failing:\", outcomes(jobs, \"push\", failing={\"unit\"}))\n"
         }
       ]
     },
@@ -65,6 +74,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport re\n\nEVENT = re.compile(r\"github\\.event_name == '(\\w+)'\")\n\n\ndef needs_of(job: dict) -> list[str]:\n    needs = job.get(\"needs\", [])\n    return [needs] if isinstance(needs, str) else list(needs)\n\n\ndef outcomes(jobs: dict[str, dict], event: str, failing: set[str] = frozenset()) -> dict[str, str]:\n    \"\"\"Each job's outcome for one event: \"success\", \"failure\" or \"skipped\". Jobs in `failing` fail if they run.\"\"\"\n    # TODO: decide each job after the jobs it needs, whatever order the dict lists them in.\n    return {name: \"success\" for name in jobs}\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom job_outcomes import outcomes\n\njobs = {\n    \"lint\": {},\n    \"unit\": {},\n    \"build\": {\"needs\": [\"lint\", \"unit\"]},\n    \"release\": {\"needs\": \"build\", \"if\": \"github.event_name == 'push'\"},\n    \"report\": {\"needs\": \"release\", \"if\": \"always()\"},\n}\n\nprint(\"push, nothing failing:\", outcomes(jobs, \"push\"))\nprint(\"pull_request:\", outcomes(jobs, \"pull_request\"))\nprint(\"push, unit failing:\", outcomes(jobs, \"push\", failing={\"unit\"}))\n"
     }
   ],
   "video": null,
@@ -72,8 +90,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -83,14 +101,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "de7d05cb223444893e3d15805d4fb7af504c27499b2fbcebf28fe96f8c8f89b1",
+  "content_sha256": "873a8808b536c73335e326ca35c1f93b33890bad16bce0722ba92af0bd9a048b",
   "starting_code": "from __future__ import annotations\n\nimport re\n\nEVENT = re.compile(r\"github\\.event_name == '(\\w+)'\")\n\n\ndef needs_of(job: dict) -> list[str]:\n    needs = job.get(\"needs\", [])\n    return [needs] if isinstance(needs, str) else list(needs)\n\n\ndef outcomes(jobs: dict[str, dict], event: str, failing: set[str] = frozenset()) -> dict[str, str]:\n    \"\"\"Each job's outcome for one event: \"success\", \"failure\" or \"skipped\". Jobs in `failing` fail if they run.\"\"\"\n    # TODO: decide each job after the jobs it needs, whatever order the dict lists them in.\n    return {name: \"success\" for name in jobs}\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-06/practice-2/job_outcomes.py",
     "test_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-06/practice-2/test_job_outcomes.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-06/practice-2/job_outcomes.py"
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-06/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -152,6 +170,10 @@
     "concepts": [
       "an image per commit, a plan checked before apply, and an environment with reviewers",
       "jobs, steps, needs and if, and when a job is skipped"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-06/practice-2/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-06/practice-2/try_it.py"
   }
 }

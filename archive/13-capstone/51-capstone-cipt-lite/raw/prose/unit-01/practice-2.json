@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Name the practice snapshot by its content",
   "blocks": [
     {
@@ -87,6 +87,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport hashlib\nimport json\nimport math\nfrom pathlib import Path\n\nPLACES = 6          # decimals kept from every float: rates closer than a millionth are one rate\n\n\ndef fixed(value: float) -> float:\n    \"\"\"A float cut to PLACES decimals; NaN and infinity have no canonical form.\"\"\"\n    if not math.isfinite(value):\n        raise ValueError(f\"{value!r} has no canonical form\")\n    return float(f\"{value:.{PLACES}f}\") + 0.0\n\n\ndef plain(value):\n    \"\"\"The snapshot as JSON-ready data with every float fixed; lists keep their order.\"\"\"\n    if isinstance(value, bool) or value is None or isinstance(value, (int, str)):\n        return value\n    if isinstance(value, float):\n        return fixed(value)\n    if isinstance(value, dict):\n        return {k: plain(v) for k, v in value.items()}\n    return [plain(v) for v in value]\n\n\ndef canonical(snap: dict) -> bytes:\n    \"\"\"One byte string per content: keys sorted at every level, no spaces, ASCII, no NaN.\"\"\"\n    return json.dumps(plain(snap), sort_keys=True, separators=(\",\", \":\"), ensure_ascii=True,\n                      allow_nan=False).encode(\"ascii\")\n\n\ndef name(data: bytes) -> str:\n    \"\"\"The SHA-256 of some bytes, as 64 hex digits: the same bytes give the same name everywhere.\"\"\"\n    return hashlib.sha256(data).hexdigest()\n\n\ndef digest(snap: dict) -> str:\n    return name(canonical(snap))\n\n\nclass Edited(Exception):\n    \"\"\"A stored file whose bytes no longer hash to its name.\"\"\"\n\n\nclass Store:\n    \"\"\"Snapshots on disk, each written once as <digest>.json and re-hashed on every read.\"\"\"\n\n    def __init__(self, root: str | Path):\n        self.root = Path(root)\n        self.root.mkdir(parents=True, exist_ok=True)\n\n    def put(self, snap: dict) -> str:\n        data = canonical(snap)\n        key = name(data)\n        path = self.root / f\"{key}.json\"\n        if not path.exists():\n            path.write_bytes(data)\n        return key\n\n    def get(self, key: str) -> dict:\n        data = (self.root / f\"{key}.json\").read_bytes()\n        if name(data) != key:\n            raise Edited(f\"{key[:12]}.json was edited\")\n        return json.loads(data)\n\n\nif __name__ == \"__main__\":\n    print(canonical({\"rate\": 0.0500000001, \"years\": [2027, 2028]}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nimport tempfile\n\nfrom snapshot import Edited, Store, canonical, digest\n\nsnap = {\"years\": [2031, 2032], \"rate\": 0.0375, \"budget\": {2031: 500, 2032: 450},\n        \"projects\": {\"P7\": {\"cost\": [80], \"must\": False}}}\nsame = {\"projects\": {\"P7\": {\"must\": False, \"cost\": [80]}}, \"budget\": {2032: 450, 2031: 500},\n        \"rate\": 0.03750000004, \"years\": [2031, 2032]}\n\nprint(\"canonical bytes:\", canonical(snap))\nprint(\"digest:\", digest(snap))\nprint(\"digest of reordered copy:\", digest(same))\n\nwith tempfile.TemporaryDirectory() as root:\n    store = Store(root)\n    key = store.put(snap)\n    print(\"read back:\", store.get(key))\n    (store.root / f\"{key}.json\").write_bytes(canonical({**snap, \"rate\": 0.04}))\n    try:\n        store.get(key)\n        print(\"edited file read: no error\")\n    except Edited as error:\n        print(\"edited file read:\", error)\n"
         }
       ]
     },
@@ -99,6 +108,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport hashlib\nimport json\nimport math\nfrom pathlib import Path\n\nPLACES = 6          # decimals kept from every float: rates closer than a millionth are one rate\n\n\ndef fixed(value: float) -> float:\n    \"\"\"A float cut to PLACES decimals; NaN and infinity have no canonical form.\"\"\"\n    # TODO\n    return value\n\n\ndef canonical(snap: dict) -> bytes:\n    \"\"\"One byte string per content: keys sorted at every level, no spaces, ASCII, no NaN.\"\"\"\n    # TODO\n    return b\"\"\n\n\ndef name(data: bytes) -> str:\n    \"\"\"The SHA-256 of some bytes, as 64 hex digits: the same bytes give the same name everywhere.\"\"\"\n    # TODO\n    return \"\"\n\n\ndef digest(snap: dict) -> str:\n    # TODO: the name of the canonical bytes.\n    return \"\"\n\n\nclass Edited(Exception):\n    \"\"\"A stored file whose bytes no longer hash to its name.\"\"\"\n\n\nclass Store:\n    \"\"\"Snapshots on disk, each written once as <digest>.json and re-hashed on every read.\"\"\"\n\n    def __init__(self, root: str | Path):\n        self.root = Path(root)\n        self.root.mkdir(parents=True, exist_ok=True)\n\n    def put(self, snap: dict) -> str:\n        \"\"\"Write the canonical bytes once under their digest; return the digest.\"\"\"\n        # TODO\n        return \"\"\n\n    def get(self, key: str) -> dict:\n        \"\"\"Read a snapshot back; raise Edited if its bytes no longer hash to `key`.\"\"\"\n        # TODO\n        return {}\n\n\nif __name__ == \"__main__\":\n    print(canonical({\"rate\": 0.0500000001, \"years\": [2027, 2028]}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nimport tempfile\n\nfrom snapshot import Edited, Store, canonical, digest\n\nsnap = {\"years\": [2031, 2032], \"rate\": 0.0375, \"budget\": {2031: 500, 2032: 450},\n        \"projects\": {\"P7\": {\"cost\": [80], \"must\": False}}}\nsame = {\"projects\": {\"P7\": {\"must\": False, \"cost\": [80]}}, \"budget\": {2032: 450, 2031: 500},\n        \"rate\": 0.03750000004, \"years\": [2031, 2032]}\n\nprint(\"canonical bytes:\", canonical(snap))\nprint(\"digest:\", digest(snap))\nprint(\"digest of reordered copy:\", digest(same))\n\nwith tempfile.TemporaryDirectory() as root:\n    store = Store(root)\n    key = store.put(snap)\n    print(\"read back:\", store.get(key))\n    (store.root / f\"{key}.json\").write_bytes(canonical({**snap, \"rate\": 0.04}))\n    try:\n        store.get(key)\n        print(\"edited file read: no error\")\n    except Edited as error:\n        print(\"edited file read:\", error)\n"
     }
   ],
   "video": null,
@@ -106,8 +124,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 1,
     "lists": 0,
     "images": 0,
@@ -117,14 +135,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "1fd838202bc1153d9a8ac8690a4ddf6e8ce5535ddc00e634d53835401e7d0990",
+  "content_sha256": "6f6ebc9e275dca51592b1d0dca1e931043f786c3207c28c9df5b1a9dbae90a6e",
   "starting_code": "from __future__ import annotations\n\nimport hashlib\nimport json\nimport math\nfrom pathlib import Path\n\nPLACES = 6          # decimals kept from every float: rates closer than a millionth are one rate\n\n\ndef fixed(value: float) -> float:\n    \"\"\"A float cut to PLACES decimals; NaN and infinity have no canonical form.\"\"\"\n    # TODO\n    return value\n\n\ndef canonical(snap: dict) -> bytes:\n    \"\"\"One byte string per content: keys sorted at every level, no spaces, ASCII, no NaN.\"\"\"\n    # TODO\n    return b\"\"\n\n\ndef name(data: bytes) -> str:\n    \"\"\"The SHA-256 of some bytes, as 64 hex digits: the same bytes give the same name everywhere.\"\"\"\n    # TODO\n    return \"\"\n\n\ndef digest(snap: dict) -> str:\n    # TODO: the name of the canonical bytes.\n    return \"\"\n\n\nclass Edited(Exception):\n    \"\"\"A stored file whose bytes no longer hash to its name.\"\"\"\n\n\nclass Store:\n    \"\"\"Snapshots on disk, each written once as <digest>.json and re-hashed on every read.\"\"\"\n\n    def __init__(self, root: str | Path):\n        self.root = Path(root)\n        self.root.mkdir(parents=True, exist_ok=True)\n\n    def put(self, snap: dict) -> str:\n        \"\"\"Write the canonical bytes once under their digest; return the digest.\"\"\"\n        # TODO\n        return \"\"\n\n    def get(self, key: str) -> dict:\n        \"\"\"Read a snapshot back; raise Edited if its bytes no longer hash to `key`.\"\"\"\n        # TODO\n        return {}\n\n\nif __name__ == \"__main__\":\n    print(canonical({\"rate\": 0.0500000001, \"years\": [2027, 2028]}))\n",
   "exercise": {
     "main_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-01/practice-2/snapshot.py",
     "test_path": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-01/practice-2/test_snapshot.py",
     "run_command": [
       "python3",
-      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-01/practice-2/snapshot.py"
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -195,6 +213,10 @@
     },
     "concepts": [
       "a digest of the snapshot's canonical bytes that is stable under reordering, float noise and fresh processes, and a store that refuses an edited file"
-    ]
+    ],
+    "files": [
+      "practice/13-capstone/51-capstone-cipt-lite/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/13-capstone/51-capstone-cipt-lite/prose/unit-01/practice-2/try_it.py"
   }
 }

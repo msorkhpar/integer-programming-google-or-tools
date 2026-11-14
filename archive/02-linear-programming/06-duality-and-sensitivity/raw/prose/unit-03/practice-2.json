@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Find how far a shadow price holds",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom typing import Callable\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef price_range(build: Callable[[float], tuple[mathopt.Model, mathopt.LinearConstraint]], rhs: float,\n                low: float, high: float, tol: float = 1e-3) -> tuple[float, float]:\n    \"\"\"The interval of right-hand sides around `rhs`, inside [low, high], where the row keeps its price.\"\"\"\n    def price(r: float) -> float | None:\n        model, row = build(r)\n        result = mathopt.solve(model, mathopt.SolverType.GLOP)\n        if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n            return None\n        return result.dual_values(row)\n\n    start = price(rhs)\n\n    def same(r: float) -> bool:\n        p = price(r)\n        return p is not None and abs(p - start) <= 1e-9\n\n    def end(inside: float, outside: float) -> float:\n        if same(outside):\n            return outside\n        while abs(outside - inside) > tol:\n            middle = (inside + outside) / 2\n            if same(middle):\n                inside = middle\n            else:\n                outside = middle\n        return inside\n\n    return end(rhs, low), end(rhs, high)\n\n\nif __name__ == \"__main__\":\n    def build(r: float):\n        model = mathopt.Model()\n        x = model.add_variable(lb=0, ub=40, name=\"x\")\n        y = model.add_variable(lb=0, ub=30, name=\"y\")\n        row = model.add_linear_constraint(x + y <= r, name=\"budget\")\n        model.maximize(3 * x + 2 * y)\n        return model, row\n\n    print(price_range(build, 50, 0, 100))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom ranging import price_range\n\n\ndef kitchen(hours):\n    \"\"\"Prep hours: soups earn 4 per hour (at most 25), salads 1 per hour (at most 35).\"\"\"\n    model = mathopt.Model(name=\"kitchen\")\n    soups = model.add_variable(lb=0, ub=25, name=\"soups\")\n    salads = model.add_variable(lb=0, ub=35, name=\"salads\")\n    row = model.add_linear_constraint(soups + salads <= hours, name=\"prep\")\n    model.maximize(4 * soups + salads)\n    return model, row\n\n\nfor hours in (10, 40, 70):\n    low, high = price_range(kitchen, hours, 0, 80)\n    print(f\"range around {hours} prep hours:\", round(low, 2), round(high, 2))\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom typing import Callable\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef price_range(build: Callable[[float], tuple[mathopt.Model, mathopt.LinearConstraint]], rhs: float,\n                low: float, high: float, tol: float = 1e-3) -> tuple[float, float]:\n    \"\"\"The interval of right-hand sides around `rhs`, inside [low, high], where the row keeps its price.\"\"\"\n    # TODO: the row's price at rhs; then, on each side, the farthest point that still has it.\n    return rhs, rhs\n\n\nif __name__ == \"__main__\":\n    def build(r: float):\n        model = mathopt.Model()\n        x = model.add_variable(lb=0, ub=40, name=\"x\")\n        y = model.add_variable(lb=0, ub=30, name=\"y\")\n        row = model.add_linear_constraint(x + y <= r, name=\"budget\")\n        model.maximize(3 * x + 2 * y)\n        return model, row\n\n    print(price_range(build, 50, 0, 100))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom ranging import price_range\n\n\ndef kitchen(hours):\n    \"\"\"Prep hours: soups earn 4 per hour (at most 25), salads 1 per hour (at most 35).\"\"\"\n    model = mathopt.Model(name=\"kitchen\")\n    soups = model.add_variable(lb=0, ub=25, name=\"soups\")\n    salads = model.add_variable(lb=0, ub=35, name=\"salads\")\n    row = model.add_linear_constraint(soups + salads <= hours, name=\"prep\")\n    model.maximize(4 * soups + salads)\n    return model, row\n\n\nfor hours in (10, 40, 70):\n    low, high = price_range(kitchen, hours, 0, 80)\n    print(f\"range around {hours} prep hours:\", round(low, 2), round(high, 2))\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "52e43fc4973f067acad6055ab7a17f4ea3b6e86f77bf786cf04292c4c43c8617",
+  "content_sha256": "34d384624388f4894e0f81788d141b88feec4c9deda5fd3f4cb18f3e75515a81",
   "starting_code": "from __future__ import annotations\n\nfrom typing import Callable\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef price_range(build: Callable[[float], tuple[mathopt.Model, mathopt.LinearConstraint]], rhs: float,\n                low: float, high: float, tol: float = 1e-3) -> tuple[float, float]:\n    \"\"\"The interval of right-hand sides around `rhs`, inside [low, high], where the row keeps its price.\"\"\"\n    # TODO: the row's price at rhs; then, on each side, the farthest point that still has it.\n    return rhs, rhs\n\n\nif __name__ == \"__main__\":\n    def build(r: float):\n        model = mathopt.Model()\n        x = model.add_variable(lb=0, ub=40, name=\"x\")\n        y = model.add_variable(lb=0, ub=30, name=\"y\")\n        row = model.add_linear_constraint(x + y <= r, name=\"budget\")\n        model.maximize(3 * x + 2 * y)\n        return model, row\n\n    print(price_range(build, 50, 0, 100))\n",
   "exercise": {
     "main_path": "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-03/practice-2/ranging.py",
     "test_path": "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-03/practice-2/test_ranging.py",
     "run_command": [
       "python3",
-      "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-03/practice-2/ranging.py"
+      "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-03/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -139,6 +157,10 @@
     },
     "concepts": [
       "a shadow price is a slope that holds between two breakpoints of the right-hand side"
-    ]
+    ],
+    "files": [
+      "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-03/practice-2/try_it.py"
+    ],
+    "try_file": "practice/02-linear-programming/06-duality-and-sensitivity/prose/unit-03/practice-2/try_it.py"
   }
 }

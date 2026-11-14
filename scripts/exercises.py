@@ -5,6 +5,7 @@
     python3 scripts/exercises.py readings 01-optimization-mindset          # what the quiz readers must answer
     python3 scripts/exercises.py record Q2.json,... Q13.json,... '<page-free reader>' '<page reader>'
     python3 scripts/exercises.py ship 01-optimization-mindset 26-multi-period-timing
+    python3 scripts/exercises.py regate 01-optimization-mindset            # re-gate shipped practices in place
 
 Each practice is written once, as files, under `exercise-src/<module>/<lesson>/`:
 
@@ -15,10 +16,12 @@ Each practice is written once, as files, under `exercise-src/<module>/<lesson>/`
     <name>/reference.py       the worked solution
     <name>/tests.py           the tests (copied to the workspace as `test_file`)
     <name>/plants.json        {case id: [[old, new], ...]}: each edge's wrong solution, as edits of the reference
+    <name>/try_it.py          what Run executes beside the reader's file: a call on a fresh example and its prints
     quiz/quiz.json            {"title", "questions": [{id, stem, heading, options: [{id, text, correct, says}]}]}
     quiz/readings.json        the independent readers' answers (Q1 key picked, Q2 page-free pick, Q3 refutations)
 
-A project practice (section 14) is instead a folder with two files, and the snapshots it names:
+A project practice (section 14) is instead a folder with two files, and the snapshots it names
+(its Run is the step's own entry point, so that file is its try-it file):
 
     <name>/project.json       StudyForge's project manifest: the before/after snapshots (steps/NN-1, steps/NN),
                               the entry point and expected report, the blueprint, the step's cases and plants
@@ -38,6 +41,7 @@ import shutil
 import subprocess
 import sys
 import uuid
+from dataclasses import replace
 from pathlib import Path
 
 from studyforge.address import Address
@@ -45,8 +49,10 @@ from studyforge.exercise import EDGE, MAIN, Case, Origin
 from studyforge.exercise.gates.quiz import Q1, Q3, WHOLE_QUESTION, Judgement, page_free, question_digest
 from studyforge.exercise.quiz import Option, Question
 from studyforge.skills.exercises import (
-    Aspect, Brief, CodeDraft, Page, PlantSpec, QuizDraft, Ran, Replacement, author_corpus, author_page, take,
+    Aspect, Brief, CodeDraft, EditedFile, Page, PlantSpec, QuizDraft, Ran, Replacement, author_corpus, author_page,
+    take,
 )
+from studyforge.skills.exercises import tryit
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "exercise-src"
@@ -124,9 +130,12 @@ def code_draft(brief: Brief) -> CodeDraft:
     plants = {}
     for cid, edits in json.loads(text(folder / "plants.json")).items():
         plants[cid] = PlantSpec(tuple(Replacement(main, old, new) for old, new in edits))
+    try_name = tryit.TRYIT_FILE["python"]
+    tried = text(folder / try_name)
     return CodeDraft(
         title=meta["title"], lang="python", main_file=main, test_file=test_file,
-        run_command=("python3", f"{ws}/{main}"),
+        run_command=tryit.run_command("python", ws),
+        files={try_name: EditedFile(tried, tried)}, try_file=try_name,
         test_command=("python3", "-m", "pytest", "-q", "-p", "no:cacheprovider",
                       f"--junitxml={ws}/target/report.xml", f"{ws}/{test_file}"),
         cases=cases, report="target/report.xml",
@@ -141,7 +150,13 @@ def project_practice(manifest: Path, brief: Brief) -> CodeDraft:
     """A project practice: StudyForge builds the draft from the manifest and its two snapshots."""
     # Imported here so a StudyForge without project practices still drives every other practice.
     from studyforge.skills.exercises.project import project_draft
-    return project_draft(manifest, brief.places.workspace, origin=Origin(brief.page.path, None))
+    draft = project_draft(manifest, brief.places.workspace, origin=Origin(brief.page.path, None))
+    # Run executes the step's entry point, a reader-edited file that prints the planner's report
+    # with no tests: that file is the step's try-it file.
+    entry = draft.run_command[-1].removeprefix(f"{brief.places.workspace}/")
+    if entry not in draft.files:
+        raise SystemExit(f"{manifest}: the entry point {entry!r} is not one of the step's files")
+    return replace(draft, try_file=entry)
 
 
 def questions_of(page: Page, name: str) -> tuple[Question, ...]:
@@ -214,6 +229,8 @@ def readings_brief(slug: str) -> dict:
 
 
 def runner_image() -> str:
+    if os.environ.get("RUNNER_IMAGE"):
+        return os.environ["RUNNER_IMAGE"]
     toolchain = Path(os.environ.get("TOOLCHAIN", ROOT.parent / "code-server-toolchain"))
     return subprocess.run(
         [sys.executable, str(toolchain / "docker/profile_packages/package_build.py"), "--root", str(toolchain),
@@ -288,6 +305,41 @@ def ship(slugs: list[str]) -> int:
     return 1 if authored.shortfalls else 0
 
 
+def regate(slugs: list[str]) -> int:
+    """Gate every shipped page again and write its code practices' bundles back in place.
+
+    `ship` is additive: a page it already shipped is reused, never re-gated. After a change to the
+    practices' sources (a try-it file added to each), this gates each page once more and writes
+    the files of each code practice that clears over the bundle it replaces. A page whose gated
+    practices are not exactly the bundles it shipped is refused and nothing of it is written.
+    """
+    from studyforge.skills.exercises.corpus import carried_practices
+    material, graders = material_and_graders(slugs)
+    ledger = take(ROOT, material, graders, "the course ledger")
+    run = InRunner()
+    failed = 0
+    for page in (p for s in slugs for p in pages_of(s)):
+        where = f"the page '{page.path}'"
+        outcome = author_page(page, ledger, Author(), judge, run, source=SOURCE, where=where,
+                              carried=carried_practices(ROOT, page, where))
+        code = [g for g in outcome.shipped if (ROOT / g.places.bundle / "bundle.json").exists()
+                and json.loads(text(ROOT / g.places.bundle / "bundle.json")).get("main_file")]
+        on_disk = sorted(str(b.parent.relative_to(ROOT)) for b in ROOT.glob(f"exercises/**/{page.path.split('/')[0]}/"
+                         f"{page.variant}/unit-{page.unit:02d}/practice-*/bundle.json")
+                         if json.loads(text(b)).get("main_file"))
+        if outcome.shortfalls or sorted(str(g.places.bundle) for g in code) != on_disk:
+            failed += 1
+            print(page.path, "NOT WRITTEN", outcome_summary(outcome), "on disk:", on_disk, flush=True)
+            continue
+        for gated in code:
+            for path, data in gated.files:
+                target = ROOT / path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(data)
+        print(page.path, f"rewrote {len(code)}", flush=True)
+    return 1 if failed else 0
+
+
 Q1_PROMPT = ("Read the whole lesson page, then this question. Using only what the page states, which option "
              "does the page decide is correct? Quote or cite the deciding passage.")
 Q3_PROMPT = ("Using only what the lesson page states, does a passage of the page rule this option out? "
@@ -346,6 +398,8 @@ def main(argv: list[str]) -> int:
         return 0
     if verb == "ship":
         return ship(args)
+    if verb == "regate":
+        return regate(args)
     if verb == "record":
         # record <q2 files,comma> <q13 files,comma> <q2 reader label> <page reader label>
         return record_readings(args[0].split(","), args[1].split(","), args[2], args[3])

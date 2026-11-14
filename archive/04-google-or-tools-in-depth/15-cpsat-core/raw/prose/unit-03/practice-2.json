@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Stop loading the truck once the target is reached",
   "blocks": [
     {
@@ -48,6 +48,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\nclass TargetStopper(cp_model.CpSolverSolutionCallback):\n    \"\"\"Record each solution's objective, and stop the search at the first one that reaches the target.\"\"\"\n\n    def __init__(self, target: float):\n        cp_model.CpSolverSolutionCallback.__init__(self)\n        self.target = target\n        self.objectives: list[float] = []\n\n    def on_solution_callback(self) -> None:\n        self.objectives.append(self.objective_value)\n        if self.objective_value >= self.target:\n            self.stop_search()\n\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = [model.new_bool_var(f\"x{i}\") for i in range(4)]\n    model.add(3 * x[0] + 4 * x[1] + 5 * x[2] + 6 * x[3] <= 10)\n    model.maximize(4 * x[0] + 5 * x[1] + 6 * x[2] + 8 * x[3])\n    stopper = TargetStopper(10)\n    solver = cp_model.CpSolver()\n    print(solver.status_name(solver.solve(model, stopper)), stopper.objectives)\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport random\n\nfrom ortools.sat.python import cp_model\n\nfrom stopper import TargetStopper\n\n# Twenty crates for a van with 80 units of room.\nrng = random.Random(11)\nvalues = [rng.randint(4, 30) for _ in range(20)]\nweights = [rng.randint(2, 15) for _ in range(20)]\nmodel = cp_model.CpModel()\nx = [model.new_bool_var(f\"crate{i}\") for i in range(20)]\nmodel.add(sum(w * v for w, v in zip(weights, x)) <= 80)\nmodel.maximize(sum(c * v for c, v in zip(values, x)))\n\nfor target in (150, 10_000):\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.parameters.max_time_in_seconds = 10\n    solver.parameters.cp_model_presolve = False\n    solver.parameters.linearization_level = 0\n    stopper = TargetStopper(target)\n    status = solver.solve(model, stopper)\n    print(f\"target {target}:\", solver.status_name(status), \"values seen\", stopper.objectives)\n"
         }
       ]
     },
@@ -60,6 +69,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\nclass TargetStopper(cp_model.CpSolverSolutionCallback):\n    \"\"\"Record each solution's objective, and stop the search at the first one that reaches the target.\"\"\"\n\n    def __init__(self, target: float):\n        cp_model.CpSolverSolutionCallback.__init__(self)\n        self.target = target\n        self.objectives: list[float] = []\n\n    def on_solution_callback(self) -> None:\n        # TODO: record the objective, and stop once the target is reached.\n        return None\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = [model.new_bool_var(f\"x{i}\") for i in range(4)]\n    model.add(3 * x[0] + 4 * x[1] + 5 * x[2] + 6 * x[3] <= 10)\n    model.maximize(4 * x[0] + 5 * x[1] + 6 * x[2] + 8 * x[3])\n    stopper = TargetStopper(10)\n    solver = cp_model.CpSolver()\n    print(solver.status_name(solver.solve(model, stopper)), stopper.objectives)\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport random\n\nfrom ortools.sat.python import cp_model\n\nfrom stopper import TargetStopper\n\n# Twenty crates for a van with 80 units of room.\nrng = random.Random(11)\nvalues = [rng.randint(4, 30) for _ in range(20)]\nweights = [rng.randint(2, 15) for _ in range(20)]\nmodel = cp_model.CpModel()\nx = [model.new_bool_var(f\"crate{i}\") for i in range(20)]\nmodel.add(sum(w * v for w, v in zip(weights, x)) <= 80)\nmodel.maximize(sum(c * v for c, v in zip(values, x)))\n\nfor target in (150, 10_000):\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.parameters.max_time_in_seconds = 10\n    solver.parameters.cp_model_presolve = False\n    solver.parameters.linearization_level = 0\n    stopper = TargetStopper(target)\n    status = solver.solve(model, stopper)\n    print(f\"target {target}:\", solver.status_name(status), \"values seen\", stopper.objectives)\n"
     }
   ],
   "video": null,
@@ -67,8 +85,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 2,
+    "paras": 4,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -78,14 +96,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "fcae6e0967a86d911954389d8b098a8631e03e5ab2fd7f4e7fb9fdcf50e41940",
+  "content_sha256": "7903619a674d69440f166e3c3f1c58d3dba988550a71afd9521b0dda76c091c0",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\nclass TargetStopper(cp_model.CpSolverSolutionCallback):\n    \"\"\"Record each solution's objective, and stop the search at the first one that reaches the target.\"\"\"\n\n    def __init__(self, target: float):\n        cp_model.CpSolverSolutionCallback.__init__(self)\n        self.target = target\n        self.objectives: list[float] = []\n\n    def on_solution_callback(self) -> None:\n        # TODO: record the objective, and stop once the target is reached.\n        return None\n\nif __name__ == \"__main__\":\n    model = cp_model.CpModel()\n    x = [model.new_bool_var(f\"x{i}\") for i in range(4)]\n    model.add(3 * x[0] + 4 * x[1] + 5 * x[2] + 6 * x[3] <= 10)\n    model.maximize(4 * x[0] + 5 * x[1] + 6 * x[2] + 8 * x[3])\n    stopper = TargetStopper(10)\n    solver = cp_model.CpSolver()\n    print(solver.status_name(solver.solve(model, stopper)), stopper.objectives)\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-2/stopper.py",
     "test_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-2/test_stopper.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-2/stopper.py"
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -126,6 +144,10 @@
     },
     "concepts": [
       "a solution callback reads each solution as it is found and can stop the search"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-2/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-03/practice-2/try_it.py"
   }
 }

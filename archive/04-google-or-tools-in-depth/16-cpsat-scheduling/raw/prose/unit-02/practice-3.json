@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 3,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Track work inside possessions",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef possession_plan(jobs: dict[str, tuple[str, int]], possessions: dict[str, list[tuple[int, int]]]) -> dict[str, int]:\n    \"\"\"Start day of each job, inside one possession of its line, so the last ends as early as possible.\"\"\"\n    horizon = max(last + 1 for spans in possessions.values() for _, last in spans)\n    model = cp_model.CpModel()\n    start, on_line = {}, {}\n    for name, (line, days) in jobs.items():\n        ranges = [[first, last - days + 1] for first, last in possessions[line] if last - days + 1 >= first]\n        start[name] = model.new_int_var_from_domain(cp_model.Domain.from_intervals(ranges), f\"start_{name}\")\n        on_line.setdefault(line, []).append(model.new_fixed_size_interval_var(start[name], days, f\"work_{name}\"))\n    for intervals in on_line.values():\n        model.add_no_overlap(intervals)\n\n    makespan = model.new_int_var(0, horizon, \"makespan\")\n    model.add_max_equality(makespan, [start[name] + days for name, (_, days) in jobs.items()])\n    model.minimize(makespan)\n    solver = cp_model.CpSolver()\n    solver.parameters.num_workers = 1\n    solver.solve(model)\n    return {name: solver.value(start[name]) for name in jobs}\n\n\nif __name__ == \"__main__\":\n    print(possession_plan({\"rails\": (\"north\", 3), \"points\": (\"north\", 2), \"drain\": (\"south\", 4)},\n                          {\"north\": [(0, 3), (8, 12)], \"south\": [(2, 9)]}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom possessions import possession_plan\n\n# Each job is (line, days); each line has its closures as (first_day, last_day).\njobs = {\"ballast\": (\"up\", 2), \"signals\": (\"up\", 4), \"culvert\": (\"down\", 3)}\npossessions = {\"up\": [(0, 2), (6, 11)], \"down\": [(4, 8)]}\nstart = possession_plan(jobs, possessions)\nfor name in sorted(start):\n    print(f\"{name} {jobs[name]} starts on day:\", start[name])\nprint(\"last job ends on day:\", max(start[n] + d for n, (_, d) in jobs.items()))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef possession_plan(jobs: dict[str, tuple[str, int]], possessions: dict[str, list[tuple[int, int]]]) -> dict[str, int]:\n    \"\"\"Start day of each job, inside one possession of its line, so the last ends as early as possible.\"\"\"\n    # TODO: a start per job whose domain keeps the job inside a possession, an interval per job,\n    # a NoOverlap per line, and minimize the latest end. Every start below is a placeholder.\n    return {name: -1 for name in jobs}\n\n\nif __name__ == \"__main__\":\n    print(possession_plan({\"rails\": (\"north\", 3), \"points\": (\"north\", 2), \"drain\": (\"south\", 4)},\n                          {\"north\": [(0, 3), (8, 12)], \"south\": [(2, 9)]}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom possessions import possession_plan\n\n# Each job is (line, days); each line has its closures as (first_day, last_day).\njobs = {\"ballast\": (\"up\", 2), \"signals\": (\"up\", 4), \"culvert\": (\"down\", 3)}\npossessions = {\"up\": [(0, 2), (6, 11)], \"down\": [(4, 8)]}\nstart = possession_plan(jobs, possessions)\nfor name in sorted(start):\n    print(f\"{name} {jobs[name]} starts on day:\", start[name])\nprint(\"last job ends on day:\", max(start[n] + d for n, (_, d) in jobs.items()))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "2a3b23e8ddb2cd81d027a168b1ca7e619310c5e12c0f36fadf6448f3bf088ce9",
+  "content_sha256": "da50c6c58a485defcedf3f474c52c6dd247bc8c4c64cfc80ee9db7edc4e8bca8",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.sat.python import cp_model\n\n\ndef possession_plan(jobs: dict[str, tuple[str, int]], possessions: dict[str, list[tuple[int, int]]]) -> dict[str, int]:\n    \"\"\"Start day of each job, inside one possession of its line, so the last ends as early as possible.\"\"\"\n    # TODO: a start per job whose domain keeps the job inside a possession, an interval per job,\n    # a NoOverlap per line, and minimize the latest end. Every start below is a placeholder.\n    return {name: -1 for name in jobs}\n\n\nif __name__ == \"__main__\":\n    print(possession_plan({\"rails\": (\"north\", 3), \"points\": (\"north\", 2), \"drain\": (\"south\", 4)},\n                          {\"north\": [(0, 3), (8, 12)], \"south\": [(2, 9)]}))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-02/practice-3/possessions.py",
     "test_path": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-02/practice-3/test_possessions.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-02/practice-3/possessions.py"
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-02/practice-3/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -136,6 +154,10 @@
     "concepts": [
       "time windows can be a domain with holes on the start variable",
       "one interval can sit in several resource constraints, such as a NoOverlap per region"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-02/practice-3/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/16-cpsat-scheduling/prose/unit-02/practice-3/try_it.py"
   }
 }

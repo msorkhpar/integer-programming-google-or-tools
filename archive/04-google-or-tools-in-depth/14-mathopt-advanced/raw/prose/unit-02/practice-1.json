@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A nurse rota's three objectives in priority order",
   "blocks": [
     {
@@ -57,6 +57,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef set_objectives(model: mathopt.Model, uncovered, overtime, preferences) -> None:\n    \"\"\"Uncovered shifts first, then overtime, then preferences, as prioritized objectives.\"\"\"\n    model.minimize(uncovered)\n    for expr, priority, is_maximize, name in ((overtime, 1, False, \"overtime\"),\n                                              (preferences, 2, True, \"preferences\")):\n        obj = model.add_auxiliary_objective(priority=priority, is_maximize=is_maximize, name=name)\n        flat = mathopt.LinearExpression(expr)\n        obj.offset = flat.offset\n        for var, coefficient in flat.terms.items():\n            obj.set_linear_coefficient(var, coefficient)\n\n\ndef build() -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"rota\")\n    gap = model.add_variable(lb=0, ub=10, name=\"gap_night\")\n    extra = model.add_variable(lb=0, ub=40, name=\"extra_hours\")\n    likes = [model.add_binary_variable(name=f\"likes_{n}\") for n in (\"ana\", \"ben\", \"cy\")]\n    exprs = {\"uncovered\": gap, \"overtime\": 1.5 * extra, \"preferences\": sum(likes)}\n    set_objectives(model, exprs[\"uncovered\"], exprs[\"overtime\"], exprs[\"preferences\"])\n    return model, {\"gap\": gap, \"extra\": extra, \"likes\": likes}\n\n\nif __name__ == \"__main__\":\n    model, _ = build()\n    print(model.objective.is_maximize, model.num_auxiliary_objectives())\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom rota import set_objectives\n\n# A small ward: open early shifts, extra hours, and two liked shifts.\nmodel = mathopt.Model(name=\"ward\")\nopen_early = model.add_variable(lb=0, ub=6, name=\"open_early\")\nextra = model.add_variable(lb=0, ub=24, name=\"extra\")\nliked = [model.add_binary_variable(name=f\"liked_{n}\") for n in (\"dee\", \"eli\")]\nset_objectives(model, 2 * open_early, 0.5 * extra + 1, liked[0] + 3 * liked[1])\n\n\ndef show(obj):\n    terms = {t.variable.name: t.coefficient for t in obj.linear_terms()}\n    return f\"priority {obj.priority}, maximize {obj.is_maximize}, offset {obj.offset}, terms {terms}\"\n\n\nprint(\"primary:\", show(model.objective))\nfor obj in model.auxiliary_objectives():\n    print(f\"auxiliary {obj.name!r}:\", show(obj))\n"
         }
       ]
     },
@@ -69,6 +78,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef set_objectives(model: mathopt.Model, uncovered, overtime, preferences) -> None:\n    \"\"\"Uncovered shifts first, then overtime, then preferences, as prioritized objectives.\"\"\"\n    # TODO: the primary objective and two auxiliary ones.\n    return None\n\n\ndef build() -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"rota\")\n    gap = model.add_variable(lb=0, ub=10, name=\"gap_night\")\n    extra = model.add_variable(lb=0, ub=40, name=\"extra_hours\")\n    likes = [model.add_binary_variable(name=f\"likes_{n}\") for n in (\"ana\", \"ben\", \"cy\")]\n    exprs = {\"uncovered\": gap, \"overtime\": 1.5 * extra, \"preferences\": sum(likes)}\n    set_objectives(model, exprs[\"uncovered\"], exprs[\"overtime\"], exprs[\"preferences\"])\n    return model, {\"gap\": gap, \"extra\": extra, \"likes\": likes}\n\n\nif __name__ == \"__main__\":\n    model, _ = build()\n    print(model.objective.is_maximize, model.num_auxiliary_objectives())\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom rota import set_objectives\n\n# A small ward: open early shifts, extra hours, and two liked shifts.\nmodel = mathopt.Model(name=\"ward\")\nopen_early = model.add_variable(lb=0, ub=6, name=\"open_early\")\nextra = model.add_variable(lb=0, ub=24, name=\"extra\")\nliked = [model.add_binary_variable(name=f\"liked_{n}\") for n in (\"dee\", \"eli\")]\nset_objectives(model, 2 * open_early, 0.5 * extra + 1, liked[0] + 3 * liked[1])\n\n\ndef show(obj):\n    terms = {t.variable.name: t.coefficient for t in obj.linear_terms()}\n    return f\"priority {obj.priority}, maximize {obj.is_maximize}, offset {obj.offset}, terms {terms}\"\n\n\nprint(\"primary:\", show(model.objective))\nfor obj in model.auxiliary_objectives():\n    print(f\"auxiliary {obj.name!r}:\", show(obj))\n"
     }
   ],
   "video": null,
@@ -76,8 +94,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 2,
+    "paras": 4,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -87,14 +105,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "6c7f511cbe36789dc9647abec6e637fd794bd4f10ec09b74d1f4b1a4a66f6dd0",
+  "content_sha256": "8763e97904e4700bccf7529f521daf7dc26533faf2003dc359925616d049f11e",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef set_objectives(model: mathopt.Model, uncovered, overtime, preferences) -> None:\n    \"\"\"Uncovered shifts first, then overtime, then preferences, as prioritized objectives.\"\"\"\n    # TODO: the primary objective and two auxiliary ones.\n    return None\n\n\ndef build() -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"rota\")\n    gap = model.add_variable(lb=0, ub=10, name=\"gap_night\")\n    extra = model.add_variable(lb=0, ub=40, name=\"extra_hours\")\n    likes = [model.add_binary_variable(name=f\"likes_{n}\") for n in (\"ana\", \"ben\", \"cy\")]\n    exprs = {\"uncovered\": gap, \"overtime\": 1.5 * extra, \"preferences\": sum(likes)}\n    set_objectives(model, exprs[\"uncovered\"], exprs[\"overtime\"], exprs[\"preferences\"])\n    return model, {\"gap\": gap, \"extra\": extra, \"likes\": likes}\n\n\nif __name__ == \"__main__\":\n    model, _ = build()\n    print(model.objective.is_maximize, model.num_auxiliary_objectives())\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-1/rota.py",
     "test_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-1/test_rota.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-1/rota.py"
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -140,6 +158,10 @@
     },
     "concepts": [
       "a ranked list of goals written as a primary objective and auxiliary objectives with priorities and senses"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-02/practice-1/try_it.py"
   }
 }

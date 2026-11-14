@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A manifest entry that states its own promise",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nKEPT = (\"status\", \"objective\", \"x_digest\", \"iterations\")\n\n\ndef entry(settings: dict, result: dict, device: dict) -> dict | None:\n    \"\"\"The manifest's solver and result blocks for one run, or None when a concurrent run lacks its winner.\n\n    settings: {\"solver\", \"method\", \"tolerance\", \"threads\"}; result: what the solver returned; device: where\n    the solve ran, {\"device\": \"cpu\"} or a GPU report with \"name\", \"driver_cuda\", \"cuda_runtime\" and more.\n    \"\"\"\n    method = settings[\"method\"]\n    if method == \"concurrent\":\n        method = result.get(\"solved_by\")\n        if method is None:\n            return None\n    solver = {\"name\": settings[\"solver\"], \"method\": method, \"tolerance\": settings[\"tolerance\"],\n              \"threads\": settings[\"threads\"], \"device\": device[\"device\"]}\n    if settings[\"method\"] == \"concurrent\":\n        solver[\"requested\"] = \"concurrent\"\n    if device[\"device\"] == \"gpu\":\n        solver.update(device_name=device[\"name\"], driver_cuda=device[\"driver_cuda\"],\n                      cuda_runtime=device[\"cuda_runtime\"])\n    return {\"solver\": solver, \"result\": {k: result[k] for k in KEPT if k in result}}\n\n\nif __name__ == \"__main__\":\n    print(entry({\"solver\": \"highs\", \"method\": \"simplex\", \"tolerance\": 1e-7, \"threads\": 1},\n                {\"status\": \"Optimal\", \"objective\": 12.0, \"x_digest\": \"ab\", \"iterations\": 4}, {\"device\": \"cpu\"}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom manifest import entry\n\ncpu = {\"device\": \"cpu\"}\ngpu = {\"device\": \"gpu\", \"name\": \"Demo Card 42\", \"compute_capability\": \"8.6\", \"driver_cuda\": \"12.8\",\n       \"cuda_runtime\": \"12.8.1\", \"uuid\": \"GPU-11111111-2222-3333-4444-555555555555\"}\nresult = {\"status\": \"Optimal\", \"objective\": 1_930.5, \"x_digest\": \"7be0\", \"iterations\": 311, \"wall_seconds\": 0.42}\n\nprint(\"highs simplex on cpu:\", entry({\"solver\": \"highs\", \"method\": \"simplex\", \"tolerance\": 1e-7, \"threads\": 1}, result, cpu))\nprint(\"highs pdlp on gpu:\", entry({\"solver\": \"highs\", \"method\": \"pdlp\", \"tolerance\": 1e-6, \"threads\": 1}, result, gpu))\nconcurrent = {\"solver\": \"cuopt\", \"method\": \"concurrent\", \"tolerance\": 1e-4, \"threads\": 0}\nprint(\"cuopt concurrent, barrier won:\", entry(concurrent, {**result, \"solved_by\": \"barrier\"}, gpu))\nprint(\"cuopt concurrent, no winner reported:\", entry(concurrent, result, gpu))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nKEPT = (\"status\", \"objective\", \"x_digest\", \"iterations\")\n\n\ndef entry(settings: dict, result: dict, device: dict) -> dict | None:\n    \"\"\"The manifest's solver and result blocks for one run, or None when a concurrent run lacks its winner.\n\n    settings: {\"solver\", \"method\", \"tolerance\", \"threads\"}; result: what the solver returned; device: where\n    the solve ran, {\"device\": \"cpu\"} or a GPU report with \"name\", \"driver_cuda\", \"cuda_runtime\" and more.\n    \"\"\"\n    # TODO: the solver block (with the winner of a race, and a GPU's model and CUDA versions), then the\n    # result block with only the kept fields.\n    return {}\n\n\nif __name__ == \"__main__\":\n    print(entry({\"solver\": \"highs\", \"method\": \"simplex\", \"tolerance\": 1e-7, \"threads\": 1},\n                {\"status\": \"Optimal\", \"objective\": 12.0, \"x_digest\": \"ab\", \"iterations\": 4}, {\"device\": \"cpu\"}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom manifest import entry\n\ncpu = {\"device\": \"cpu\"}\ngpu = {\"device\": \"gpu\", \"name\": \"Demo Card 42\", \"compute_capability\": \"8.6\", \"driver_cuda\": \"12.8\",\n       \"cuda_runtime\": \"12.8.1\", \"uuid\": \"GPU-11111111-2222-3333-4444-555555555555\"}\nresult = {\"status\": \"Optimal\", \"objective\": 1_930.5, \"x_digest\": \"7be0\", \"iterations\": 311, \"wall_seconds\": 0.42}\n\nprint(\"highs simplex on cpu:\", entry({\"solver\": \"highs\", \"method\": \"simplex\", \"tolerance\": 1e-7, \"threads\": 1}, result, cpu))\nprint(\"highs pdlp on gpu:\", entry({\"solver\": \"highs\", \"method\": \"pdlp\", \"tolerance\": 1e-6, \"threads\": 1}, result, gpu))\nconcurrent = {\"solver\": \"cuopt\", \"method\": \"concurrent\", \"tolerance\": 1e-4, \"threads\": 0}\nprint(\"cuopt concurrent, barrier won:\", entry(concurrent, {**result, \"solved_by\": \"barrier\"}, gpu))\nprint(\"cuopt concurrent, no winner reported:\", entry(concurrent, result, gpu))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "f0b1923f7d56649a68941b1233c5cfb1a74fab741299069aea772aead52b994f",
+  "content_sha256": "f0333547b3a6ac9cc70ff9c45ff056ef73a3cf56f6667a4bd489a2ae2d1a297a",
   "starting_code": "from __future__ import annotations\n\nKEPT = (\"status\", \"objective\", \"x_digest\", \"iterations\")\n\n\ndef entry(settings: dict, result: dict, device: dict) -> dict | None:\n    \"\"\"The manifest's solver and result blocks for one run, or None when a concurrent run lacks its winner.\n\n    settings: {\"solver\", \"method\", \"tolerance\", \"threads\"}; result: what the solver returned; device: where\n    the solve ran, {\"device\": \"cpu\"} or a GPU report with \"name\", \"driver_cuda\", \"cuda_runtime\" and more.\n    \"\"\"\n    # TODO: the solver block (with the winner of a race, and a GPU's model and CUDA versions), then the\n    # result block with only the kept fields.\n    return {}\n\n\nif __name__ == \"__main__\":\n    print(entry({\"solver\": \"highs\", \"method\": \"simplex\", \"tolerance\": 1e-7, \"threads\": 1},\n                {\"status\": \"Optimal\", \"objective\": 12.0, \"x_digest\": \"ab\", \"iterations\": 4}, {\"device\": \"cpu\"}))\n",
   "exercise": {
     "main_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-2/manifest.py",
     "test_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-2/test_manifest.py",
     "run_command": [
       "python3",
-      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-2/manifest.py"
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -140,6 +158,10 @@
     },
     "concepts": [
       "the manifest records the device, the winning method and the tolerance, and nothing that names a machine"
-    ]
+    ],
+    "files": [
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-2/try_it.py"
+    ],
+    "try_file": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-04/practice-2/try_it.py"
   }
 }

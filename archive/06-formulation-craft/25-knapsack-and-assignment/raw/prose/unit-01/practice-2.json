@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Analyzers for a hospital laboratory",
   "blocks": [
     {
@@ -65,6 +65,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Analyzer:\n    aid: str\n    value: int        # tests per day it adds\n    price: int        # $k\n    area: float       # floor space, m^2\n    load: float       # electrical load, kW\n\n\ndef add_lab_rules(model: mathopt.Model, x: dict, analyzers: list[Analyzer], budget: int, floor: float,\n                  power: float, lease_rate: float, max_lease: float) -> None:\n    \"\"\"Price and lease within the budget, area within owned plus leased floor, load within the supply.\"\"\"\n    lease = model.add_variable(lb=0, ub=max_lease, name=\"lease\")\n    model.add_linear_constraint(sum(a.price * x[a.aid] for a in analyzers) + lease_rate * lease <= budget,\n                                name=\"budget\")\n    model.add_linear_constraint(sum(a.area * x[a.aid] for a in analyzers) <= floor + lease, name=\"floor\")\n    model.add_linear_constraint(sum(a.load * x[a.aid] for a in analyzers) <= power, name=\"power\")\n\n\ndef build(analyzers: list[Analyzer], budget: int, floor: float, power: float, lease_rate: float,\n          max_lease: float) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"lab-equipment\")\n    x = {a.aid: model.add_binary_variable(name=f\"x_{a.aid}\") for a in analyzers}\n    add_lab_rules(model, x, analyzers, budget, floor, power, lease_rate, max_lease)\n    model.maximize(sum(a.value * x[a.aid] for a in analyzers))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    pair = [Analyzer(\"H1\", 400, 120, 6.0, 3.0), Analyzer(\"C1\", 900, 300, 9.0, 7.5)]\n    model, x = build(pair, 500, 12.0, 10.0, 4.0, 5.0)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom lab import Analyzer, build\n\n# id, tests per day, price ($k), floor (m^2), load (kW)\nunits = [Analyzer(\"Hema\", 400, 180, 9.0, 5.0), Analyzer(\"Chem\", 600, 240, 11.0, 4.0),\n         Analyzer(\"Urin\", 250, 100, 5.0, 3.0), Analyzer(\"Coag\", 300, 130, 7.0, 8.0)]\n\n\ndef allowed(plan, budget):\n    model, x = build(units, budget, 22.0, 16.0, 12.0, 5.0)\n    for aid, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if aid in plan else 0.0\n    return mathopt.solve(model, mathopt.SolverType.HIGHS).termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"Hema+Chem at budget 420:\", allowed({\"Hema\", \"Chem\"}, 420))\nprint(\"Hema+Chem+Urin at budget 520:\", allowed({\"Hema\", \"Chem\", \"Urin\"}, 520))\nprint(\"Hema+Chem+Urin at budget 510:\", allowed({\"Hema\", \"Chem\", \"Urin\"}, 510))\nprint(\"Hema+Chem+Coag at budget 9000:\", allowed({\"Hema\", \"Chem\", \"Coag\"}, 9000))\nprint(\"Hema+Coag+Urin at budget 9000:\", allowed({\"Hema\", \"Coag\", \"Urin\"}, 9000))\n"
         }
       ]
     },
@@ -77,6 +86,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Analyzer:\n    aid: str\n    value: int        # tests per day it adds\n    price: int        # $k\n    area: float       # floor space, m^2\n    load: float       # electrical load, kW\n\n\ndef add_lab_rules(model: mathopt.Model, x: dict, analyzers: list[Analyzer], budget: int, floor: float,\n                  power: float, lease_rate: float, max_lease: float) -> None:\n    \"\"\"Price and lease within the budget, area within owned plus leased floor, load within the supply.\"\"\"\n    # TODO: the leased space, and one row per resource.\n    return None\n\ndef build(analyzers: list[Analyzer], budget: int, floor: float, power: float, lease_rate: float,\n          max_lease: float) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"lab-equipment\")\n    x = {a.aid: model.add_binary_variable(name=f\"x_{a.aid}\") for a in analyzers}\n    add_lab_rules(model, x, analyzers, budget, floor, power, lease_rate, max_lease)\n    model.maximize(sum(a.value * x[a.aid] for a in analyzers))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    pair = [Analyzer(\"H1\", 400, 120, 6.0, 3.0), Analyzer(\"C1\", 900, 300, 9.0, 7.5)]\n    model, x = build(pair, 500, 12.0, 10.0, 4.0, 5.0)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom lab import Analyzer, build\n\n# id, tests per day, price ($k), floor (m^2), load (kW)\nunits = [Analyzer(\"Hema\", 400, 180, 9.0, 5.0), Analyzer(\"Chem\", 600, 240, 11.0, 4.0),\n         Analyzer(\"Urin\", 250, 100, 5.0, 3.0), Analyzer(\"Coag\", 300, 130, 7.0, 8.0)]\n\n\ndef allowed(plan, budget):\n    model, x = build(units, budget, 22.0, 16.0, 12.0, 5.0)\n    for aid, var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if aid in plan else 0.0\n    return mathopt.solve(model, mathopt.SolverType.HIGHS).termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"Hema+Chem at budget 420:\", allowed({\"Hema\", \"Chem\"}, 420))\nprint(\"Hema+Chem+Urin at budget 520:\", allowed({\"Hema\", \"Chem\", \"Urin\"}, 520))\nprint(\"Hema+Chem+Urin at budget 510:\", allowed({\"Hema\", \"Chem\", \"Urin\"}, 510))\nprint(\"Hema+Chem+Coag at budget 9000:\", allowed({\"Hema\", \"Chem\", \"Coag\"}, 9000))\nprint(\"Hema+Coag+Urin at budget 9000:\", allowed({\"Hema\", \"Coag\", \"Urin\"}, 9000))\n"
     }
   ],
   "video": null,
@@ -84,8 +102,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -95,14 +113,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "f6f0043a5a9a0e06de0966a105894710611fe7c6b86e949f3ae0aeec58253e74",
+  "content_sha256": "f074a97075c57baf829f871e7790bcb89cb5b1dd8408f3cfa2851f14aab5c16d",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Analyzer:\n    aid: str\n    value: int        # tests per day it adds\n    price: int        # $k\n    area: float       # floor space, m^2\n    load: float       # electrical load, kW\n\n\ndef add_lab_rules(model: mathopt.Model, x: dict, analyzers: list[Analyzer], budget: int, floor: float,\n                  power: float, lease_rate: float, max_lease: float) -> None:\n    \"\"\"Price and lease within the budget, area within owned plus leased floor, load within the supply.\"\"\"\n    # TODO: the leased space, and one row per resource.\n    return None\n\ndef build(analyzers: list[Analyzer], budget: int, floor: float, power: float, lease_rate: float,\n          max_lease: float) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"lab-equipment\")\n    x = {a.aid: model.add_binary_variable(name=f\"x_{a.aid}\") for a in analyzers}\n    add_lab_rules(model, x, analyzers, budget, floor, power, lease_rate, max_lease)\n    model.maximize(sum(a.value * x[a.aid] for a in analyzers))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    pair = [Analyzer(\"H1\", 400, 120, 6.0, 3.0), Analyzer(\"C1\", 900, 300, 9.0, 7.5)]\n    model, x = build(pair, 500, 12.0, 10.0, 4.0, 5.0)\n    print(len(list(model.linear_constraints())), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-01/practice-2/lab.py",
     "test_path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-01/practice-2/test_lab.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-01/practice-2/lab.py"
+      "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -149,6 +167,10 @@
     "concepts": [
       "every further limited resource is one more capacity row over the same binaries",
       "a 0-1 knapsack is one capacity row over binary items, maximizing total value"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-01/practice-2/try_it.py"
   }
 }

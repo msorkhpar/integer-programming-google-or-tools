@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A test that a value function ignores units",
   "blocks": [
     {
@@ -51,6 +51,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom typing import Callable\n\nTIED = 1e-9   # values closer than this are a tie, listed by name\n\n\ndef ranking(values: dict[str, float]) -> list[str]:\n    \"\"\"Names from the highest value to the lowest; near-equal values count as tied, in name order.\"\"\"\n    order = sorted(values, key=lambda name: (-values[name], name))\n    tied_groups, group = [], [order[0]] if order else []\n    for name in order[1:]:\n        if values[group[-1]] - values[name] <= TIED:\n            group.append(name)\n        else:\n            tied_groups.append(sorted(group))\n            group = [name]\n    if group:\n        tied_groups.append(sorted(group))\n    return [name for g in tied_groups for name in g]\n\n\ndef survives_rescaling(value: Callable[[dict, dict], float], benefits: dict[str, dict[str, float]],\n                       reference: dict[str, float], factors: dict[str, float]) -> bool:\n    \"\"\"Whether `value` ranks the projects the same after every measure and its reference are restated.\"\"\"\n    before = ranking({p: value(b, reference) for p, b in benefits.items()})\n    restated_reference = {m: r * factors[m] for m, r in reference.items()}\n    after = ranking({p: value({m: a * factors[m] for m, a in b.items()}, restated_reference)\n                     for p, b in benefits.items()})\n    return before == after\n\n\nif __name__ == \"__main__\":\n    def raw_sum(benefit, reference):\n        return sum(benefit.values())\n\n    projects = {\"A\": {\"time\": 10.0, \"cost\": 1.0}, \"B\": {\"time\": 1.0, \"cost\": 5.0}}\n    print(survives_rescaling(raw_sum, projects, {\"time\": 10.0, \"cost\": 5.0}, {\"time\": 0.1, \"cost\": 1.0}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom rescaling import ranking, survives_rescaling\n\nreference = {\"time\": 5.0, \"cost\": 4.0}\nprojects = {\"Quay\": {\"time\": 4.0, \"cost\": 0.2}, \"Mill\": {\"time\": 0.3, \"cost\": 3.95},\n            \"Dock\": {\"time\": 2.0, \"cost\": 2.0}}\nto_minutes_and_k = {\"time\": 60.0, \"cost\": 0.001}\n\n\ndef weighted(benefit, ref):\n    return 0.5 * benefit[\"time\"] / ref[\"time\"] + 0.5 * benefit[\"cost\"] / ref[\"cost\"]\n\n\ndef plain_sum(benefit, ref):\n    return benefit[\"time\"] + benefit[\"cost\"]\n\n\nprint(\"ranking of 0.3, 0.9, 0.3:\", ranking({\"p\": 0.3, \"q\": 0.9, \"r\": 0.3}))\nprint(\"weighted, minutes and $k:\", survives_rescaling(weighted, projects, reference, to_minutes_and_k))\nprint(\"plain sum, minutes and $k:\", survives_rescaling(plain_sum, projects, reference, to_minutes_and_k))\n"
         }
       ]
     },
@@ -63,6 +72,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom typing import Callable\n\nTIED = 1e-9   # values closer than this are a tie, listed by name\n\n\ndef ranking(values: dict[str, float]) -> list[str]:\n    \"\"\"Names from the highest value to the lowest; near-equal values count as tied, in name order.\"\"\"\n    # TODO\n    return list(values)\n\ndef survives_rescaling(value: Callable[[dict, dict], float], benefits: dict[str, dict[str, float]],\n                       reference: dict[str, float], factors: dict[str, float]) -> bool:\n    \"\"\"Whether `value` ranks the projects the same after every measure and its reference are restated.\"\"\"\n    # TODO: rank, restate every measure and its reference, rank again.\n    return True\n\n\nif __name__ == \"__main__\":\n    def raw_sum(benefit, reference):\n        return sum(benefit.values())\n\n    projects = {\"A\": {\"time\": 10.0, \"cost\": 1.0}, \"B\": {\"time\": 1.0, \"cost\": 5.0}}\n    print(survives_rescaling(raw_sum, projects, {\"time\": 10.0, \"cost\": 5.0}, {\"time\": 0.1, \"cost\": 1.0}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom rescaling import ranking, survives_rescaling\n\nreference = {\"time\": 5.0, \"cost\": 4.0}\nprojects = {\"Quay\": {\"time\": 4.0, \"cost\": 0.2}, \"Mill\": {\"time\": 0.3, \"cost\": 3.95},\n            \"Dock\": {\"time\": 2.0, \"cost\": 2.0}}\nto_minutes_and_k = {\"time\": 60.0, \"cost\": 0.001}\n\n\ndef weighted(benefit, ref):\n    return 0.5 * benefit[\"time\"] / ref[\"time\"] + 0.5 * benefit[\"cost\"] / ref[\"cost\"]\n\n\ndef plain_sum(benefit, ref):\n    return benefit[\"time\"] + benefit[\"cost\"]\n\n\nprint(\"ranking of 0.3, 0.9, 0.3:\", ranking({\"p\": 0.3, \"q\": 0.9, \"r\": 0.3}))\nprint(\"weighted, minutes and $k:\", survives_rescaling(weighted, projects, reference, to_minutes_and_k))\nprint(\"plain sum, minutes and $k:\", survives_rescaling(plain_sum, projects, reference, to_minutes_and_k))\n"
     }
   ],
   "video": null,
@@ -70,8 +88,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -81,14 +99,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "4eee0b89821fe9f2d176d8142940b54051a2dace92ffbf9691535a74cf5d0fba",
+  "content_sha256": "b61691564ddf0845d286755ccfde73631437683345c4b10f42400fda33987848",
   "starting_code": "from __future__ import annotations\n\nfrom typing import Callable\n\nTIED = 1e-9   # values closer than this are a tie, listed by name\n\n\ndef ranking(values: dict[str, float]) -> list[str]:\n    \"\"\"Names from the highest value to the lowest; near-equal values count as tied, in name order.\"\"\"\n    # TODO\n    return list(values)\n\ndef survives_rescaling(value: Callable[[dict, dict], float], benefits: dict[str, dict[str, float]],\n                       reference: dict[str, float], factors: dict[str, float]) -> bool:\n    \"\"\"Whether `value` ranks the projects the same after every measure and its reference are restated.\"\"\"\n    # TODO: rank, restate every measure and its reference, rank again.\n    return True\n\n\nif __name__ == \"__main__\":\n    def raw_sum(benefit, reference):\n        return sum(benefit.values())\n\n    projects = {\"A\": {\"time\": 10.0, \"cost\": 1.0}, \"B\": {\"time\": 1.0, \"cost\": 5.0}}\n    print(survives_rescaling(raw_sum, projects, {\"time\": 10.0, \"cost\": 5.0}, {\"time\": 0.1, \"cost\": 1.0}))\n",
   "exercise": {
     "main_path": "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-04/practice-2/rescaling.py",
     "test_path": "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-04/practice-2/test_rescaling.py",
     "run_command": [
       "python3",
-      "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-04/practice-2/rescaling.py"
+      "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-04/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -139,6 +157,10 @@
     },
     "concepts": [
       "a test that restates every unit and compares rankings"
-    ]
+    ],
+    "files": [
+      "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-04/practice-2/try_it.py"
+    ],
+    "try_file": "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-04/practice-2/try_it.py"
   }
 }

@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Route a food bank's deliveries",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nArc = tuple[str, str]\n\n\ndef ship(supply: dict[str, float], demand: dict[str, float], arcs: dict[Arc, tuple[float, float]]):\n    \"\"\"Cheapest flow meeting every demand. Returns (status, cost, flow by arc).\"\"\"\n    model = mathopt.Model(name=\"food bank\")\n    f = {(i, j): model.add_variable(lb=0, ub=cap, name=f\"f_{i}_{j}\") for (i, j), (_, cap) in arcs.items()}\n    nodes = {n for arc in arcs for n in arc} | set(supply) | set(demand)\n    for n in sorted(nodes):\n        net_in = sum(f[i, j] for (i, j) in arcs if j == n) - sum(f[i, j] for (i, j) in arcs if i == n)\n        if n in supply:\n            model.add_linear_constraint(-net_in <= supply[n], name=f\"supply_{n}\")\n        elif n in demand:\n            model.add_linear_constraint(net_in == demand[n], name=f\"demand_{n}\")\n        else:\n            model.add_linear_constraint(net_in == 0, name=f\"balance_{n}\")\n    model.minimize(sum(cost * f[a] for a, (cost, _) in arcs.items()))\n    result = mathopt.solve(model, mathopt.SolverType.GLOP)\n    status = result.termination.reason.name\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return status, None, None\n    return status, result.objective_value(), {a: result.variable_values(v) for a, v in f.items()}\n\n\nif __name__ == \"__main__\":\n    print(ship({\"W1\": 10}, {\"P1\": 10}, {(\"W1\", \"P1\"): (3, 20)}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom flow import ship\n\ndef r(v):\n    return v if v is None else round(v, 2)\n\n\n# Two depots, one hub and two shelters; each arc is (cost per crate, capacity).\narcs = {(\"D1\", \"S1\"): (4, 30), (\"D1\", \"Hub\"): (1, 40), (\"D2\", \"Hub\"): (2, 40),\n        (\"Hub\", \"S1\"): (1, 25), (\"Hub\", \"S2\"): (2, 60)}\n\nstatus, cost, flows = ship({\"D1\": 50, \"D2\": 30}, {\"S1\": 35, \"S2\": 30}, arcs)\nprint(\"supply 50/30, demand 35/30:\", status, r(cost))\nfor arc, amount in (flows or {}).items():\n    print(f\"  flow on {arc[0]}->{arc[1]}:\", r(amount))\nprint(\"supply 50/30, demand 50/40:\", ship({\"D1\": 50, \"D2\": 30}, {\"S1\": 50, \"S2\": 40}, arcs))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nArc = tuple[str, str]\n\n\ndef ship(supply: dict[str, float], demand: dict[str, float], arcs: dict[Arc, tuple[float, float]]):\n    \"\"\"Cheapest flow meeting every demand. Returns (status, cost, flow by arc).\"\"\"\n    # TODO: one flow variable per arc, one row per node, the cost, a GLOP solve, the status first.\n    return \"NOT_SOLVED\", None, None\n\nif __name__ == \"__main__\":\n    print(ship({\"W1\": 10}, {\"P1\": 10}, {(\"W1\", \"P1\"): (3, 20)}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom flow import ship\n\ndef r(v):\n    return v if v is None else round(v, 2)\n\n\n# Two depots, one hub and two shelters; each arc is (cost per crate, capacity).\narcs = {(\"D1\", \"S1\"): (4, 30), (\"D1\", \"Hub\"): (1, 40), (\"D2\", \"Hub\"): (2, 40),\n        (\"Hub\", \"S1\"): (1, 25), (\"Hub\", \"S2\"): (2, 60)}\n\nstatus, cost, flows = ship({\"D1\": 50, \"D2\": 30}, {\"S1\": 35, \"S2\": 30}, arcs)\nprint(\"supply 50/30, demand 35/30:\", status, r(cost))\nfor arc, amount in (flows or {}).items():\n    print(f\"  flow on {arc[0]}->{arc[1]}:\", r(amount))\nprint(\"supply 50/30, demand 50/40:\", ship({\"D1\": 50, \"D2\": 30}, {\"S1\": 50, \"S2\": 40}, arcs))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "4cd919e3a1c548817b4ceef70d84208838d11664cbece455578684c08f29f5cd",
+  "content_sha256": "4e2da18661bd443ceec70e71321cc756c17c8964ec3db4d653c40ac033e0f68c",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\nArc = tuple[str, str]\n\n\ndef ship(supply: dict[str, float], demand: dict[str, float], arcs: dict[Arc, tuple[float, float]]):\n    \"\"\"Cheapest flow meeting every demand. Returns (status, cost, flow by arc).\"\"\"\n    # TODO: one flow variable per arc, one row per node, the cost, a GLOP solve, the status first.\n    return \"NOT_SOLVED\", None, None\n\nif __name__ == \"__main__\":\n    print(ship({\"W1\": 10}, {\"P1\": 10}, {(\"W1\", \"P1\"): (3, 20)}))\n",
   "exercise": {
     "main_path": "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-2/flow.py",
     "test_path": "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-2/test_flow.py",
     "run_command": [
       "python3",
-      "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-2/flow.py"
+      "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -140,6 +158,10 @@
     },
     "concepts": [
       "every node of a network gets one row on inflow minus outflow, set by its role"
-    ]
+    ],
+    "files": [
+      "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-2/try_it.py"
+    ],
+    "try_file": "practice/02-linear-programming/04-lp-modeling/prose/unit-03/practice-2/try_it.py"
   }
 }

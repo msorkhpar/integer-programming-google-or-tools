@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A trim request the API can trust",
   "blocks": [
     {
@@ -62,6 +62,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom fastapi import FastAPI\nfrom pydantic import BaseModel, ConfigDict, Field, model_validator\n\n\nclass Circuit(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\")\n\n    circuit_id: str = Field(min_length=1)\n    miles: float = Field(gt=0)\n    cost: int = Field(ge=0)\n\n\nclass TrimRequest(BaseModel):\n    model_config = ConfigDict(extra=\"forbid\")\n\n    budget: int = Field(ge=0)\n    circuits: list[Circuit] = Field(min_length=1)\n\n    @model_validator(mode=\"after\")\n    def ids_are_unique(self) -> \"TrimRequest\":\n        ids = [c.circuit_id for c in self.circuits]\n        if len(ids) != len(set(ids)):\n            raise ValueError(\"circuit ids must be unique\")\n        return self\n\n\napp = FastAPI(title=\"Trim planning API\")\n\n\n@app.post(\"/trims\")\ndef accept(request: TrimRequest) -> dict:\n    return {\"circuits\": len(request.circuits), \"budget\": request.budget}\n\n\nif __name__ == \"__main__\":\n    print(TrimRequest.model_json_schema()[\"required\"])\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport warnings\n\nwith warnings.catch_warnings():\n    warnings.simplefilter(\"ignore\")\n    from fastapi.testclient import TestClient\n\nfrom trim_api import app\n\nclient = TestClient(app)\nfor noisy in (\"httpx\", \"asyncio\"):\n    logging.getLogger(noisy).setLevel(logging.WARNING)\n\n\ndef post(budget, circuits):\n    r = client.post(\"/trims\", json={\"budget\": budget, \"circuits\": circuits})\n    return r.status_code, r.json() if r.status_code == 200 else \"\"\n\n\nline = {\"circuit_id\": \"F-41\", \"miles\": 6.5, \"cost\": 210}\nprint(\"budget 500, one circuit:\", post(500, [line]))\nprint(\"budget 0, two circuits:\", post(0, [line, {**line, \"circuit_id\": \"F-42\"}]))\nprint(\"budget -10:\", post(-10, [line]))\nprint(\"miles 0:\", post(500, [{**line, \"miles\": 0}]))\nprint(\"F-41 twice:\", post(500, [line, line]))\nprint(\"no circuits:\", post(500, []))\n"
         }
       ]
     },
@@ -74,6 +83,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom fastapi import FastAPI\nfrom pydantic import BaseModel\n\n\nclass Circuit(BaseModel):\n    # TODO: refuse an empty id, miles that are not positive, a negative cost, and unknown fields.\n    circuit_id: str\n    miles: float\n    cost: int\n\n\nclass TrimRequest(BaseModel):\n    # TODO: refuse a negative budget, an empty circuit list, repeated circuit ids, and unknown fields.\n    budget: int\n    circuits: list[Circuit]\n\n\napp = FastAPI(title=\"Trim planning API\")\n\n\n@app.post(\"/trims\")\ndef accept(request: TrimRequest) -> dict:\n    return {\"circuits\": len(request.circuits), \"budget\": request.budget}\n\n\nif __name__ == \"__main__\":\n    print(TrimRequest.model_json_schema()[\"required\"])\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport warnings\n\nwith warnings.catch_warnings():\n    warnings.simplefilter(\"ignore\")\n    from fastapi.testclient import TestClient\n\nfrom trim_api import app\n\nclient = TestClient(app)\nfor noisy in (\"httpx\", \"asyncio\"):\n    logging.getLogger(noisy).setLevel(logging.WARNING)\n\n\ndef post(budget, circuits):\n    r = client.post(\"/trims\", json={\"budget\": budget, \"circuits\": circuits})\n    return r.status_code, r.json() if r.status_code == 200 else \"\"\n\n\nline = {\"circuit_id\": \"F-41\", \"miles\": 6.5, \"cost\": 210}\nprint(\"budget 500, one circuit:\", post(500, [line]))\nprint(\"budget 0, two circuits:\", post(0, [line, {**line, \"circuit_id\": \"F-42\"}]))\nprint(\"budget -10:\", post(-10, [line]))\nprint(\"miles 0:\", post(500, [{**line, \"miles\": 0}]))\nprint(\"F-41 twice:\", post(500, [line, line]))\nprint(\"no circuits:\", post(500, []))\n"
     }
   ],
   "video": null,
@@ -81,8 +99,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -92,14 +110,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "c634b829dd98184dfcab01519fc5a694b45299c67e8ea10901913a5c5a6561bd",
+  "content_sha256": "5ebc0ef49656560fe3f9b2fd65210a5636282f2e69cb992ae354708770716422",
   "starting_code": "from __future__ import annotations\n\nfrom fastapi import FastAPI\nfrom pydantic import BaseModel\n\n\nclass Circuit(BaseModel):\n    # TODO: refuse an empty id, miles that are not positive, a negative cost, and unknown fields.\n    circuit_id: str\n    miles: float\n    cost: int\n\n\nclass TrimRequest(BaseModel):\n    # TODO: refuse a negative budget, an empty circuit list, repeated circuit ids, and unknown fields.\n    budget: int\n    circuits: list[Circuit]\n\n\napp = FastAPI(title=\"Trim planning API\")\n\n\n@app.post(\"/trims\")\ndef accept(request: TrimRequest) -> dict:\n    return {\"circuits\": len(request.circuits), \"budget\": request.budget}\n\n\nif __name__ == \"__main__\":\n    print(TrimRequest.model_json_schema()[\"required\"])\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-01/practice-1/trim_api.py",
     "test_path": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-01/practice-1/test_trim_api.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-01/practice-1/trim_api.py"
+      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-01/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -166,6 +184,10 @@
     "concepts": [
       "an endpoint is a method, a path and a Python function, and a TestClient calls it without a server",
       "request rules live in the pydantic model, and FastAPI answers 422 to a body that breaks them"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-01/practice-1/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-01/practice-1/try_it.py"
   }
 }

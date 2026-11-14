@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Where a failed Task state goes next",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\n\ndef matches(names: list[str], error: str) -> bool:\n    \"\"\"Whether an ErrorEquals list names `error`, with the two wildcards.\"\"\"\n    return any(name == error or name == \"States.ALL\"\n               or (name == \"States.TaskFailed\" and error != \"States.Timeout\") for name in names)\n\n\ndef route(state: dict, errors: list[str]) -> list[str]:\n    \"\"\"What the Task state does when its attempts fail with `errors`, in order, and the next one succeeds.\"\"\"\n    used = [0] * len(state.get(\"Retry\", []))\n    actions = []\n    for error in errors:\n        retriers = [i for i, r in enumerate(state.get(\"Retry\", [])) if matches(r[\"ErrorEquals\"], error)]\n        if retriers:\n            i = retriers[0]\n            if used[i] < state[\"Retry\"][i].get(\"MaxAttempts\", 3):\n                used[i] += 1\n                actions.append(\"retry\")\n                continue\n        catcher = next((c for c in state.get(\"Catch\", []) if matches(c[\"ErrorEquals\"], error)), None)\n        actions.append(f\"catch:{catcher['Next']}\" if catcher else \"fail\")\n        return actions\n    return actions + [\"succeeded\"]\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom error_routing import route\n\nload = {\n    \"Type\": \"Task\",\n    \"Retry\": [{\"ErrorEquals\": [\"Feed.Slow\"], \"MaxAttempts\": 1},\n              {\"ErrorEquals\": [\"States.TaskFailed\"], \"MaxAttempts\": 2}],\n    \"Catch\": [{\"ErrorEquals\": [\"Feed.Corrupt\"], \"Next\": \"Quarantine\"},\n              {\"ErrorEquals\": [\"States.ALL\"], \"Next\": \"PageOnCall\"}],\n}\n\nprint(\"Feed.Slow:\", route(load, [\"Feed.Slow\"]))\nprint(\"Feed.Slow twice:\", route(load, [\"Feed.Slow\", \"Feed.Slow\"]))\nprint(\"Feed.Corrupt three times:\", route(load, [\"Feed.Corrupt\"] * 3))\nprint(\"States.Timeout:\", route(load, [\"States.Timeout\"]))\nprint(\"no errors:\", route(load, []))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\n\ndef matches(names: list[str], error: str) -> bool:\n    \"\"\"Whether an ErrorEquals list names `error`, with the two wildcards.\"\"\"\n    return False\n\n\ndef route(state: dict, errors: list[str]) -> list[str]:\n    \"\"\"What the Task state does when its attempts fail with `errors`, in order, and the next one succeeds.\"\"\"\n    actions: list[str] = []\n    # TODO: retriers first (the first matching one, within its MaxAttempts), then catchers, else fail.\n    return actions\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom error_routing import route\n\nload = {\n    \"Type\": \"Task\",\n    \"Retry\": [{\"ErrorEquals\": [\"Feed.Slow\"], \"MaxAttempts\": 1},\n              {\"ErrorEquals\": [\"States.TaskFailed\"], \"MaxAttempts\": 2}],\n    \"Catch\": [{\"ErrorEquals\": [\"Feed.Corrupt\"], \"Next\": \"Quarantine\"},\n              {\"ErrorEquals\": [\"States.ALL\"], \"Next\": \"PageOnCall\"}],\n}\n\nprint(\"Feed.Slow:\", route(load, [\"Feed.Slow\"]))\nprint(\"Feed.Slow twice:\", route(load, [\"Feed.Slow\", \"Feed.Slow\"]))\nprint(\"Feed.Corrupt three times:\", route(load, [\"Feed.Corrupt\"] * 3))\nprint(\"States.Timeout:\", route(load, [\"States.Timeout\"]))\nprint(\"no errors:\", route(load, []))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "8c66c5ac3bcc82f16c9bb8b863d143fb94ae25e509d6629623dfac4da72e27b3",
+  "content_sha256": "b683f0ca352f1f2db003635b1335d0bed94b2377f8ab6401017f891e4497bac0",
   "starting_code": "from __future__ import annotations\n\n\ndef matches(names: list[str], error: str) -> bool:\n    \"\"\"Whether an ErrorEquals list names `error`, with the two wildcards.\"\"\"\n    return False\n\n\ndef route(state: dict, errors: list[str]) -> list[str]:\n    \"\"\"What the Task state does when its attempts fail with `errors`, in order, and the next one succeeds.\"\"\"\n    actions: list[str] = []\n    # TODO: retriers first (the first matching one, within its MaxAttempts), then catchers, else fail.\n    return actions\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-02/practice-2/error_routing.py",
     "test_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-02/practice-2/test_error_routing.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-02/practice-2/error_routing.py"
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -150,6 +168,10 @@
     },
     "concepts": [
       "how a state's retriers and catchers decide where an error goes"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-02/practice-2/try_it.py"
   }
 }

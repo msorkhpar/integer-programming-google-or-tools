@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 3,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Same model, up to rounding",
   "blocks": [
     {
@@ -53,6 +53,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef close(x: float, y: float, rel_tol: float) -> bool:\n    return math.isclose(x, y, rel_tol=rel_tol, abs_tol=0.0)\n\n\ndef coefficients_match(left: dict, right: dict, rel_tol: float) -> bool:\n    if left.keys() != right.keys():\n        return False\n    return all(close(left[name], right[name], rel_tol) for name in left)\n\n\ndef by_name(model: mathopt.Model) -> tuple[dict, dict, dict]:\n    variables, rows, objective = {}, {}, {}\n    for v in model.variables():\n        variables[v.name] = (v.lower_bound, v.upper_bound, v.integer)\n    for row in model.linear_constraints():\n        terms = {}\n        for term in row.terms():\n            terms[term.variable.name] = term.coefficient\n        rows[row.name] = (row.lower_bound, row.upper_bound, terms)\n    for term in model.objective.linear_terms():\n        objective[term.variable.name] = term.coefficient\n    return variables, rows, objective\n\n\ndef same_model(a: mathopt.Model, b: mathopt.Model, rel_tol: float = 1e-9) -> bool:\n    \"\"\"True when a and b state the same model, whatever order they were built in.\n\n    Names, bounds, integrality and the objective's sense must match exactly; coefficients and the\n    objective's offset may differ by a relative `rel_tol`.\n    \"\"\"\n    va, ra, oa = by_name(a)\n    vb, rb, ob = by_name(b)\n    if va != vb or ra.keys() != rb.keys():\n        return False\n    for name, (lb, ub, terms) in ra.items():\n        other_lb, other_ub, other_terms = rb[name]\n        if (lb, ub) != (other_lb, other_ub):\n            return False\n        if not coefficients_match(terms, other_terms, rel_tol):\n            return False\n    if a.objective.is_maximize != b.objective.is_maximize:\n        return False\n    return close(a.objective.offset, b.objective.offset, rel_tol) and coefficients_match(oa, ob, rel_tol)\n\n\nif __name__ == \"__main__\":\n    first = mathopt.Model(name=\"first\")\n    x, y = first.add_binary_variable(name=\"x\"), first.add_binary_variable(name=\"y\")\n    first.add_linear_constraint(3 * x + 0.1 * 3 * y <= 4, name=\"cap\")\n    second = mathopt.Model(name=\"second\")\n    y2, x2 = second.add_binary_variable(name=\"y\"), second.add_binary_variable(name=\"x\")\n    second.add_linear_constraint(0.3 * y2 + 3 * x2 <= 4, name=\"cap\")\n    print(\"0.1 * 3 == 0.3:\", 0.1 * 3 == 0.3, \"| same model:\", same_model(first, second))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom compare_models import same_model\n\n\ndef make(order=(\"a\", \"b\"), coef=0.7, integer=True, maximize=True):\n    model = mathopt.Model(name=\"lots\")\n    v = {name: model.add_variable(lb=0, ub=1, is_integer=integer, name=name) for name in order}\n    model.add_linear_constraint(3.0 * v[\"a\"] + coef * v[\"b\"] <= 4.0, name=\"space\")\n    goal = 2.0 * v[\"a\"] + 5.0 * v[\"b\"]\n    model.maximize(goal) if maximize else model.minimize(goal)\n    return model\n\n\nprint(\"built b before a:\", same_model(make(), make(order=(\"b\", \"a\"))))\nprint(\"coef 0.1 * 7 instead of 0.7:\", same_model(make(), make(coef=0.1 * 7)))\nprint(\"coef 0.71:\", same_model(make(), make(coef=0.71)))\nprint(\"continuous variables:\", same_model(make(), make(integer=False)))\nprint(\"minimize instead:\", same_model(make(), make(maximize=False)))\n"
         }
       ]
     },
@@ -65,6 +74,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef close(x: float, y: float, rel_tol: float) -> bool:\n    return math.isclose(x, y, rel_tol=rel_tol, abs_tol=0.0)\n\n\ndef coefficients_match(left: dict, right: dict, rel_tol: float) -> bool:\n    if left.keys() != right.keys():\n        return False\n    return all(close(left[name], right[name], rel_tol) for name in left)\n\n\ndef by_name(model: mathopt.Model) -> tuple[dict, dict, dict]:\n    variables, rows, objective = {}, {}, {}\n    for v in model.variables():\n        variables[v.name] = (v.lower_bound, v.upper_bound, v.integer)\n    for row in model.linear_constraints():\n        terms = {}\n        for term in row.terms():\n            terms[term.variable.name] = term.coefficient\n        rows[row.name] = (row.lower_bound, row.upper_bound, terms)\n    for term in model.objective.linear_terms():\n        objective[term.variable.name] = term.coefficient\n    return variables, rows, objective\n\n\ndef same_model(a: mathopt.Model, b: mathopt.Model, rel_tol: float = 1e-9) -> bool:\n    \"\"\"True when a and b state the same model, whatever order they were built in.\n\n    Names, bounds, integrality and the objective's sense must match exactly; coefficients and the\n    objective's offset may differ by a relative `rel_tol`.\n    \"\"\"\n    # TODO: compare by name; exact for names, bounds, integrality and sense; within rel_tol for numbers.\n    return False\n\nif __name__ == \"__main__\":\n    first = mathopt.Model(name=\"first\")\n    x, y = first.add_binary_variable(name=\"x\"), first.add_binary_variable(name=\"y\")\n    first.add_linear_constraint(3 * x + 0.1 * 3 * y <= 4, name=\"cap\")\n    second = mathopt.Model(name=\"second\")\n    y2, x2 = second.add_binary_variable(name=\"y\"), second.add_binary_variable(name=\"x\")\n    second.add_linear_constraint(0.3 * y2 + 3 * x2 <= 4, name=\"cap\")\n    print(\"0.1 * 3 == 0.3:\", 0.1 * 3 == 0.3, \"| same model:\", same_model(first, second))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom compare_models import same_model\n\n\ndef make(order=(\"a\", \"b\"), coef=0.7, integer=True, maximize=True):\n    model = mathopt.Model(name=\"lots\")\n    v = {name: model.add_variable(lb=0, ub=1, is_integer=integer, name=name) for name in order}\n    model.add_linear_constraint(3.0 * v[\"a\"] + coef * v[\"b\"] <= 4.0, name=\"space\")\n    goal = 2.0 * v[\"a\"] + 5.0 * v[\"b\"]\n    model.maximize(goal) if maximize else model.minimize(goal)\n    return model\n\n\nprint(\"built b before a:\", same_model(make(), make(order=(\"b\", \"a\"))))\nprint(\"coef 0.1 * 7 instead of 0.7:\", same_model(make(), make(coef=0.1 * 7)))\nprint(\"coef 0.71:\", same_model(make(), make(coef=0.71)))\nprint(\"continuous variables:\", same_model(make(), make(integer=False)))\nprint(\"minimize instead:\", same_model(make(), make(maximize=False)))\n"
     }
   ],
   "video": null,
@@ -72,8 +90,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -83,14 +101,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "91849e1c83076f0bbf3bb9730cf7c65899011933690b2813af9a7a244a48dfbf",
+  "content_sha256": "f5f1cd6cb6749807e8dc0bde2becaecd516c0be3bfe8cf81cf42a0cbf0bc3d6a",
   "starting_code": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef close(x: float, y: float, rel_tol: float) -> bool:\n    return math.isclose(x, y, rel_tol=rel_tol, abs_tol=0.0)\n\n\ndef coefficients_match(left: dict, right: dict, rel_tol: float) -> bool:\n    if left.keys() != right.keys():\n        return False\n    return all(close(left[name], right[name], rel_tol) for name in left)\n\n\ndef by_name(model: mathopt.Model) -> tuple[dict, dict, dict]:\n    variables, rows, objective = {}, {}, {}\n    for v in model.variables():\n        variables[v.name] = (v.lower_bound, v.upper_bound, v.integer)\n    for row in model.linear_constraints():\n        terms = {}\n        for term in row.terms():\n            terms[term.variable.name] = term.coefficient\n        rows[row.name] = (row.lower_bound, row.upper_bound, terms)\n    for term in model.objective.linear_terms():\n        objective[term.variable.name] = term.coefficient\n    return variables, rows, objective\n\n\ndef same_model(a: mathopt.Model, b: mathopt.Model, rel_tol: float = 1e-9) -> bool:\n    \"\"\"True when a and b state the same model, whatever order they were built in.\n\n    Names, bounds, integrality and the objective's sense must match exactly; coefficients and the\n    objective's offset may differ by a relative `rel_tol`.\n    \"\"\"\n    # TODO: compare by name; exact for names, bounds, integrality and sense; within rel_tol for numbers.\n    return False\n\nif __name__ == \"__main__\":\n    first = mathopt.Model(name=\"first\")\n    x, y = first.add_binary_variable(name=\"x\"), first.add_binary_variable(name=\"y\")\n    first.add_linear_constraint(3 * x + 0.1 * 3 * y <= 4, name=\"cap\")\n    second = mathopt.Model(name=\"second\")\n    y2, x2 = second.add_binary_variable(name=\"y\"), second.add_binary_variable(name=\"x\")\n    second.add_linear_constraint(0.3 * y2 + 3 * x2 <= 4, name=\"cap\")\n    print(\"0.1 * 3 == 0.3:\", 0.1 * 3 == 0.3, \"| same model:\", same_model(first, second))\n",
   "exercise": {
     "main_path": "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-3/compare_models.py",
     "test_path": "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-3/test_compare_models.py",
     "run_command": [
       "python3",
-      "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-3/compare_models.py"
+      "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-3/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -146,6 +164,10 @@
     },
     "concepts": [
       "comparing by name ignores build order, and coefficients from different arithmetic need a tolerance"
-    ]
+    ],
+    "files": [
+      "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-3/try_it.py"
+    ],
+    "try_file": "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-3/try_it.py"
   }
 }

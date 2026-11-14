@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 3,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "The best plan without some options, with the model left as it was",
   "blocks": [
     {
@@ -48,6 +48,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef objective_without(model: mathopt.Model, variables: list[mathopt.Variable], solver: mathopt.SolverType) -> float:\n    \"\"\"The optimum with every variable in `variables` held at 0; the model is left exactly as it was.\"\"\"\n    old = {v: v.upper_bound for v in variables}\n    try:\n        for v in variables:\n            v.upper_bound = 0.0\n        return mathopt.solve(model, solver).objective_value()\n    finally:\n        for v, bound in old.items():\n            v.upper_bound = bound\n\n\ndef build(towers: dict[str, tuple[float, float, int]], budget: float):\n    \"\"\"towers: name -> (value per radio, cost per radio, most radios).\"\"\"\n    model = mathopt.Model(name=\"towers\")\n    u = {k: model.add_integer_variable(lb=0, ub=towers[k][2], name=f\"u_{k}\") for k in towers}\n    model.add_linear_constraint(sum(towers[k][1] * u[k] for k in towers) <= budget, name=\"budget\")\n    model.maximize(sum(towers[k][0] * u[k] for k in towers))\n    return model, u\n\n\nif __name__ == \"__main__\":\n    model, u = build({\"hill\": (5, 2, 3), \"mall\": (4, 1, 2)}, 6)\n    print(objective_without(model, [u[\"hill\"]], mathopt.SolverType.HIGHS))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom without import build, objective_without\n\nHIGHS = mathopt.SolverType.HIGHS\n# name -> (value per radio, cost per radio, most radios)\ntowers = {\"quarry\": (8, 3, 2), \"pier\": (6, 2, 2), \"chapel\": (4, 2, 1), \"depot\": (5, 4, 1)}\nmodel, u = build(towers, 10)\n\nprint(\"best with every tower:\", mathopt.solve(model, HIGHS).objective_value())\nprint(\"best without quarry:\", objective_without(model, [u[\"quarry\"]], HIGHS))\nprint(\"best without pier and chapel:\", objective_without(model, [u[\"pier\"], u[\"chapel\"]], HIGHS))\nprint(\"upper bounds afterwards:\", {k: v.upper_bound for k, v in u.items()})\n"
         }
       ]
     },
@@ -60,6 +69,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef objective_without(model: mathopt.Model, variables: list[mathopt.Variable], solver: mathopt.SolverType) -> float:\n    \"\"\"The optimum with every variable in `variables` held at 0; the model is left exactly as it was.\"\"\"\n    # TODO: remember each upper bound, set it to 0, solve, and put every bound back, whatever happens.\n    return 0.0\n\n\ndef build(towers: dict[str, tuple[float, float, int]], budget: float):\n    \"\"\"towers: name -> (value per radio, cost per radio, most radios).\"\"\"\n    model = mathopt.Model(name=\"towers\")\n    u = {k: model.add_integer_variable(lb=0, ub=towers[k][2], name=f\"u_{k}\") for k in towers}\n    model.add_linear_constraint(sum(towers[k][1] * u[k] for k in towers) <= budget, name=\"budget\")\n    model.maximize(sum(towers[k][0] * u[k] for k in towers))\n    return model, u\n\n\nif __name__ == \"__main__\":\n    model, u = build({\"hill\": (5, 2, 3), \"mall\": (4, 1, 2)}, 6)\n    print(objective_without(model, [u[\"hill\"]], mathopt.SolverType.HIGHS))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom without import build, objective_without\n\nHIGHS = mathopt.SolverType.HIGHS\n# name -> (value per radio, cost per radio, most radios)\ntowers = {\"quarry\": (8, 3, 2), \"pier\": (6, 2, 2), \"chapel\": (4, 2, 1), \"depot\": (5, 4, 1)}\nmodel, u = build(towers, 10)\n\nprint(\"best with every tower:\", mathopt.solve(model, HIGHS).objective_value())\nprint(\"best without quarry:\", objective_without(model, [u[\"quarry\"]], HIGHS))\nprint(\"best without pier and chapel:\", objective_without(model, [u[\"pier\"], u[\"chapel\"]], HIGHS))\nprint(\"upper bounds afterwards:\", {k: v.upper_bound for k, v in u.items()})\n"
     }
   ],
   "video": null,
@@ -67,8 +85,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 2,
+    "paras": 4,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -78,14 +96,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "95b7c9255d63d862ca4d2c7caae4b6a57c02e5a303e1d208cb4ac531eea80e6f",
+  "content_sha256": "61aac73da2f43b3562e09365e4f23ec5c08d9e959a4dcf7daa18855a7bef38f3",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef objective_without(model: mathopt.Model, variables: list[mathopt.Variable], solver: mathopt.SolverType) -> float:\n    \"\"\"The optimum with every variable in `variables` held at 0; the model is left exactly as it was.\"\"\"\n    # TODO: remember each upper bound, set it to 0, solve, and put every bound back, whatever happens.\n    return 0.0\n\n\ndef build(towers: dict[str, tuple[float, float, int]], budget: float):\n    \"\"\"towers: name -> (value per radio, cost per radio, most radios).\"\"\"\n    model = mathopt.Model(name=\"towers\")\n    u = {k: model.add_integer_variable(lb=0, ub=towers[k][2], name=f\"u_{k}\") for k in towers}\n    model.add_linear_constraint(sum(towers[k][1] * u[k] for k in towers) <= budget, name=\"budget\")\n    model.maximize(sum(towers[k][0] * u[k] for k in towers))\n    return model, u\n\n\nif __name__ == \"__main__\":\n    model, u = build({\"hill\": (5, 2, 3), \"mall\": (4, 1, 2)}, 6)\n    print(objective_without(model, [u[\"hill\"]], mathopt.SolverType.HIGHS))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-3/without.py",
     "test_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-3/test_without.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-3/without.py"
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-3/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -131,6 +149,10 @@
     },
     "concepts": [
       "options switched off for one question by their bounds, and every bound restored"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-3/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-04/practice-3/try_it.py"
   }
 }

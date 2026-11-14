@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Measure the integrality gap",
   "blocks": [
     {
@@ -60,6 +60,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    parent: str | None = None\n\n\ndef solve(projects: list[Project], budget: int, integer: bool) -> float:\n    \"\"\"The selection model's optimal value: the MILP with HiGHS, or its LP relaxation with GLOP.\"\"\"\n    model = mathopt.Model(name=\"selection\")\n    x = {p.pid: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{p.pid}\") for p in projects}\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in projects) <= budget, name=\"budget\")\n    for p in projects:\n        if p.parent:\n            model.add_linear_constraint(x[p.pid] <= x[p.parent], name=f\"parent_{p.pid}\")\n    model.maximize(sum(p.value * x[p.pid] for p in projects))\n    solver = mathopt.SolverType.HIGHS if integer else mathopt.SolverType.GLOP\n    return mathopt.solve(model, solver).objective_value()\n\n\ndef integrality_gap(projects: list[Project], budget: int) -> tuple[float, float, float]:\n    \"\"\"(LP bound, best plan's value, integrality gap as a share of the best plan's value).\"\"\"\n    lp_bound = solve(projects, budget, integer=False)\n    optimum = solve(projects, budget, integer=True)\n    return lp_bound, optimum, (lp_bound - optimum) / abs(optimum)\n\n\nif __name__ == \"__main__\":\n    yards = [Project(\"A\", 60, 66), Project(\"B\", 50, 60), Project(\"C\", 40, 36)]\n    print(integrality_gap(yards, 100))\n    linked = [Project(\"P\", 50, 40), Project(\"Q\", 40, 64, parent=\"P\"), Project(\"R\", 30, 30)]\n    print(integrality_gap(linked, 100))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom gap import Project, integrality_gap\n\n# Three depot refits, then a pair where R2 needs R1.\ndepots = [Project(\"D1\", 70, 84), Project(\"D2\", 45, 50), Project(\"D3\", 35, 35)]\nlinked = [Project(\"R1\", 40, 30), Project(\"R2\", 30, 54, parent=\"R1\"), Project(\"R3\", 50, 45)]\n\nfor name, projects in ((\"depots\", depots), (\"linked\", linked)):\n    bound, best, gap = integrality_gap(projects, 100)\n    print(f\"{name} at budget 100: LP bound\", round(bound, 3), \"best plan\", round(best, 3), \"gap\", round(gap, 4))\n"
         }
       ]
     },
@@ -72,6 +81,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    parent: str | None = None\n\n\ndef solve(projects: list[Project], budget: int, integer: bool) -> float:\n    \"\"\"The selection model's optimal value: the MILP with HiGHS, or its LP relaxation with GLOP.\"\"\"\n    # TODO: one variable per project with the domain `integer` asks for, the budget and parent\n    # rows, the objective, then solve with HiGHS (integer) or GLOP (relaxation).\n    return 0.0\n\n\ndef integrality_gap(projects: list[Project], budget: int) -> tuple[float, float, float]:\n    \"\"\"(LP bound, best plan's value, integrality gap as a share of the best plan's value).\"\"\"\n    # TODO: solve the relaxation and the MILP, then compute the gap.\n    return 0.0, 0.0, 0.0\n\n\nif __name__ == \"__main__\":\n    yards = [Project(\"A\", 60, 66), Project(\"B\", 50, 60), Project(\"C\", 40, 36)]\n    print(integrality_gap(yards, 100))\n    linked = [Project(\"P\", 50, 40), Project(\"Q\", 40, 64, parent=\"P\"), Project(\"R\", 30, 30)]\n    print(integrality_gap(linked, 100))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom gap import Project, integrality_gap\n\n# Three depot refits, then a pair where R2 needs R1.\ndepots = [Project(\"D1\", 70, 84), Project(\"D2\", 45, 50), Project(\"D3\", 35, 35)]\nlinked = [Project(\"R1\", 40, 30), Project(\"R2\", 30, 54, parent=\"R1\"), Project(\"R3\", 50, 45)]\n\nfor name, projects in ((\"depots\", depots), (\"linked\", linked)):\n    bound, best, gap = integrality_gap(projects, 100)\n    print(f\"{name} at budget 100: LP bound\", round(bound, 3), \"best plan\", round(best, 3), \"gap\", round(gap, 4))\n"
     }
   ],
   "video": null,
@@ -79,8 +97,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -90,14 +108,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "0d93804c13c86a6d08f54f9a28fadf01e5a2e8dd174f7de5dde60bdf877dfbe3",
+  "content_sha256": "19ca8571cdb620eb24141cbc043870a642e194d89cb2f454147004edda91e60c",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    parent: str | None = None\n\n\ndef solve(projects: list[Project], budget: int, integer: bool) -> float:\n    \"\"\"The selection model's optimal value: the MILP with HiGHS, or its LP relaxation with GLOP.\"\"\"\n    # TODO: one variable per project with the domain `integer` asks for, the budget and parent\n    # rows, the objective, then solve with HiGHS (integer) or GLOP (relaxation).\n    return 0.0\n\n\ndef integrality_gap(projects: list[Project], budget: int) -> tuple[float, float, float]:\n    \"\"\"(LP bound, best plan's value, integrality gap as a share of the best plan's value).\"\"\"\n    # TODO: solve the relaxation and the MILP, then compute the gap.\n    return 0.0, 0.0, 0.0\n\n\nif __name__ == \"__main__\":\n    yards = [Project(\"A\", 60, 66), Project(\"B\", 50, 60), Project(\"C\", 40, 36)]\n    print(integrality_gap(yards, 100))\n    linked = [Project(\"P\", 50, 40), Project(\"Q\", 40, 64, parent=\"P\"), Project(\"R\", 30, 30)]\n    print(integrality_gap(linked, 100))\n",
   "exercise": {
     "main_path": "practice/03-integer-programming-foundations/08-why-integers/prose/unit-02/practice-2/gap.py",
     "test_path": "practice/03-integer-programming-foundations/08-why-integers/prose/unit-02/practice-2/test_gap.py",
     "run_command": [
       "python3",
-      "practice/03-integer-programming-foundations/08-why-integers/prose/unit-02/practice-2/gap.py"
+      "practice/03-integer-programming-foundations/08-why-integers/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -138,6 +156,10 @@
     },
     "concepts": [
       "the integrality gap compares the relaxation's value with the MILP's, as a share of the MILP's"
-    ]
+    ],
+    "files": [
+      "practice/03-integer-programming-foundations/08-why-integers/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/03-integer-programming-foundations/08-why-integers/prose/unit-02/practice-2/try_it.py"
   }
 }

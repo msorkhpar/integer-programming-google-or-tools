@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A book of scenarios that keeps the planning cycle's rules",
   "blocks": [
     {
@@ -59,6 +59,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom copy import deepcopy\n\n# A book maps each scenario name to {\"stage\", \"inputs\", \"plan\", \"parent\"}.\n\n\ndef create(book: dict, name: str, inputs: dict) -> bool:\n    if name in book:\n        return False\n    book[name] = {\"stage\": \"Initial\", \"inputs\": deepcopy(inputs), \"plan\": None, \"parent\": None}\n    return True\n\n\ndef checked(book: dict, name: str) -> bool:\n    \"\"\"The data checks passed: Initial moves to Pre-Opt.\"\"\"\n    if book[name][\"stage\"] != \"Initial\":\n        return False\n    book[name][\"stage\"] = \"Pre-Opt\"\n    return True\n\n\ndef edit(book: dict, name: str, changes: dict) -> bool:\n    s = book[name]\n    if s[\"stage\"] == \"Budget Lock\":\n        return False\n    s[\"inputs\"].update(deepcopy(changes))\n    if s[\"stage\"] == \"Post-Opt\":\n        s[\"stage\"], s[\"plan\"] = \"Pre-Opt\", None\n    return True\n\n\ndef optimized(book: dict, name: str, plan: dict) -> bool:\n    s = book[name]\n    if s[\"stage\"] != \"Pre-Opt\":\n        return False\n    s[\"stage\"], s[\"plan\"] = \"Post-Opt\", dict(plan)\n    return True\n\n\ndef lock(book: dict, name: str) -> bool:\n    if book[name][\"stage\"] != \"Post-Opt\" or any(s[\"stage\"] == \"Budget Lock\" for s in book.values()):\n        return False\n    book[name][\"stage\"] = \"Budget Lock\"\n    return True\n\n\ndef copy(book: dict, source: str, name: str) -> bool:\n    if name in book:\n        return False\n    book[name] = {\"stage\": \"Initial\", \"inputs\": deepcopy(book[source][\"inputs\"]), \"plan\": None, \"parent\": source}\n    return True\n\n\nif __name__ == \"__main__\":\n    book = {}\n    print(create(book, \"base\", {\"budget\": 900}), checked(book, \"base\"), optimized(book, \"base\", {\"W1\": 2027}))\n    print(lock(book, \"base\"), edit(book, \"base\", {\"budget\": 800}), book[\"base\"][\"stage\"])\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom book import checked, copy, create, edit, lock, optimized\n\nbook = {}\nprint(\"create 'lean':\", create(book, \"lean\", {\"budget\": 750}))\nprint(\"optimize before checks:\", optimized(book, \"lean\", {\"P4\": 2030}))\nprint(\"checked, optimized:\", checked(book, \"lean\"), optimized(book, \"lean\", {\"P4\": 2030}))\nprint(\"edit after optimizing:\", edit(book, \"lean\", {\"budget\": 700}), book[\"lean\"][\"stage\"], book[\"lean\"][\"plan\"])\nchecked(book, \"lean\")\noptimized(book, \"lean\", {\"P4\": 2031})\nprint(\"lock 'lean':\", lock(book, \"lean\"), book[\"lean\"][\"stage\"])\nprint(\"copy to 'lean-b':\", copy(book, \"lean\", \"lean-b\"), book[\"lean-b\"])\nprint(\"edit locked 'lean':\", edit(book, \"lean\", {\"budget\": 650}))\n"
         }
       ]
     },
@@ -71,6 +80,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom copy import deepcopy\n\n# A book maps each scenario name to {\"stage\", \"inputs\", \"plan\", \"parent\"}.\n# TODO: every function below refuses everything and changes nothing; make each one keep the rules.\n\n\ndef create(book: dict, name: str, inputs: dict) -> bool:\n    return False\n\n\ndef checked(book: dict, name: str) -> bool:\n    \"\"\"The data checks passed: Initial moves to Pre-Opt.\"\"\"\n    return False\n\n\ndef edit(book: dict, name: str, changes: dict) -> bool:\n    return False\n\n\ndef optimized(book: dict, name: str, plan: dict) -> bool:\n    return False\n\n\ndef lock(book: dict, name: str) -> bool:\n    return False\n\n\ndef copy(book: dict, source: str, name: str) -> bool:\n    return False\n\n\nif __name__ == \"__main__\":\n    book = {}\n    print(create(book, \"base\", {\"budget\": 900}), checked(book, \"base\"), optimized(book, \"base\", {\"W1\": 2027}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom book import checked, copy, create, edit, lock, optimized\n\nbook = {}\nprint(\"create 'lean':\", create(book, \"lean\", {\"budget\": 750}))\nprint(\"optimize before checks:\", optimized(book, \"lean\", {\"P4\": 2030}))\nprint(\"checked, optimized:\", checked(book, \"lean\"), optimized(book, \"lean\", {\"P4\": 2030}))\nprint(\"edit after optimizing:\", edit(book, \"lean\", {\"budget\": 700}), book[\"lean\"][\"stage\"], book[\"lean\"][\"plan\"])\nchecked(book, \"lean\")\noptimized(book, \"lean\", {\"P4\": 2031})\nprint(\"lock 'lean':\", lock(book, \"lean\"), book[\"lean\"][\"stage\"])\nprint(\"copy to 'lean-b':\", copy(book, \"lean\", \"lean-b\"), book[\"lean-b\"])\nprint(\"edit locked 'lean':\", edit(book, \"lean\", {\"budget\": 650}))\n"
     }
   ],
   "video": null,
@@ -78,8 +96,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -89,14 +107,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "2c09a91f4d94884da645454bdab89f39524b7f37097c9ce18376a381da555963",
+  "content_sha256": "eed9f1bb9b365fbf9437629fc5daace6c9bb5945164e327bf621e4918e4fe1cb",
   "starting_code": "from __future__ import annotations\n\nfrom copy import deepcopy\n\n# A book maps each scenario name to {\"stage\", \"inputs\", \"plan\", \"parent\"}.\n# TODO: every function below refuses everything and changes nothing; make each one keep the rules.\n\n\ndef create(book: dict, name: str, inputs: dict) -> bool:\n    return False\n\n\ndef checked(book: dict, name: str) -> bool:\n    \"\"\"The data checks passed: Initial moves to Pre-Opt.\"\"\"\n    return False\n\n\ndef edit(book: dict, name: str, changes: dict) -> bool:\n    return False\n\n\ndef optimized(book: dict, name: str, plan: dict) -> bool:\n    return False\n\n\ndef lock(book: dict, name: str) -> bool:\n    return False\n\n\ndef copy(book: dict, source: str, name: str) -> bool:\n    return False\n\n\nif __name__ == \"__main__\":\n    book = {}\n    print(create(book, \"base\", {\"budget\": 900}), checked(book, \"base\"), optimized(book, \"base\", {\"W1\": 2027}))\n",
   "exercise": {
     "main_path": "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-03/practice-2/book.py",
     "test_path": "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-03/practice-2/test_book.py",
     "run_command": [
       "python3",
-      "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-03/practice-2/book.py"
+      "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-03/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -154,6 +172,10 @@
       "Initial, Pre-Opt, Post-Opt and Budget Lock each allow different changes, and steps happen in order",
       "a locked plan of record refuses edits, and a change goes to a copy with its own inputs",
       "an edit after a run sends the scenario back to Pre-Opt and invalidates its plan"
-    ]
+    ],
+    "files": [
+      "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-03/practice-2/try_it.py"
+    ],
+    "try_file": "practice/07-the-capital-planning-domain/30-utility-capital-planning/prose/unit-03/practice-2/try_it.py"
   }
 }

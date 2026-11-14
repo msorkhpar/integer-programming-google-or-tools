@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Index trim-plan runs whose results live in S3",
   "blocks": [
     {
@@ -51,6 +51,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport json\nimport sqlite3\n\nfrom botocore.exceptions import ClientError\n\nSCHEMA = \"\"\"\nCREATE TABLE run (\n    run_id     TEXT PRIMARY KEY,\n    digest     TEXT NOT NULL,\n    status     TEXT NOT NULL CHECK (status IN ('submitted', 'optimal', 'time_limit', 'infeasible', 'failed')),\n    result_key TEXT,\n    cost       INTEGER,\n    CHECK ((status = 'submitted') = (result_key IS NULL))\n) STRICT;\n\"\"\"\n\n\ndef connect(path: str) -> sqlite3.Connection:\n    conn = sqlite3.connect(path, autocommit=False)\n    conn.row_factory = sqlite3.Row\n    with conn:\n        conn.executescript(SCHEMA)\n    return conn\n\n\ndef record(conn: sqlite3.Connection, run_id: str, digest: str) -> None:\n    with conn:\n        conn.execute(\"INSERT INTO run (run_id, digest, status) VALUES (?, ?, 'submitted')\", (run_id, digest))\n\n\ndef result_key(digest: str, run_id: str) -> str:\n    return f\"trim-results/{digest}/{run_id}.json\"\n\n\ndef poll(conn: sqlite3.Connection, s3, bucket: str, run_id: str) -> str:\n    \"\"\"The run's status; a waiting run is finished in the index when its result object exists.\"\"\"\n    row = conn.execute(\"SELECT digest, status FROM run WHERE run_id = ?\", (run_id,)).fetchone()\n    if row is None:\n        return \"unknown\"\n    if row[\"status\"] != \"submitted\":\n        return row[\"status\"]\n    key = result_key(row[\"digest\"], run_id)\n    try:\n        result = json.loads(s3.get_object(Bucket=bucket, Key=key)[\"Body\"].read())\n    except ClientError as error:\n        if error.response[\"Error\"][\"Code\"] == \"NoSuchKey\":\n            return \"submitted\"\n        raise\n    with conn:\n        conn.execute(\"UPDATE run SET status = ?, result_key = ?, cost = ? WHERE run_id = ? AND status = 'submitted'\",\n                     (result[\"status\"], key, result.get(\"cost\"), run_id))\n    return result[\"status\"]\n\n\ndef best_runs(conn: sqlite3.Connection) -> dict[str, str]:\n    \"\"\"For each survey digest, the finished run with a plan and the lowest cost (ties: lowest run id).\"\"\"\n    rows = conn.execute(\"SELECT digest, run_id FROM run WHERE status IN ('optimal', 'time_limit') \"\n                        \"ORDER BY digest, cost, run_id\").fetchall()\n    best: dict[str, str] = {}\n    for row in rows:\n        best.setdefault(row[\"digest\"], row[\"run_id\"])\n    return best\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport os\n\nimport boto3\nfrom moto import mock_aws\n\nfor name in (\"AWS_ACCESS_KEY_ID\", \"AWS_SECRET_ACCESS_KEY\", \"AWS_SESSION_TOKEN\"):\n    os.environ[name] = \"testing\"\nos.environ[\"AWS_DEFAULT_REGION\"] = \"us-east-1\"\nfor noisy in (\"botocore\", \"boto3\", \"urllib3\", \"moto\", \"s3transfer\"):\n    logging.getLogger(noisy).setLevel(logging.WARNING)\n\nimport json\nimport tempfile\n\nfrom trim_index import best_runs, connect, poll, record, result_key\n\nsurvey_a, survey_b = \"c\" * 64, \"d\" * 64\n\nwith mock_aws(), tempfile.TemporaryDirectory() as folder:\n    s3 = boto3.client(\"s3\")\n    s3.create_bucket(Bucket=\"runs-demo\")\n    conn = connect(os.path.join(folder, \"runs.db\"))\n    for run_id, digest in ((\"r-10\", survey_a), (\"r-11\", survey_a), (\"r-12\", survey_b)):\n        record(conn, run_id, digest)\n    for run_id, digest, body in ((\"r-10\", survey_a, {\"status\": \"time_limit\", \"cost\": 520}),\n                                 (\"r-11\", survey_a, {\"status\": \"optimal\", \"cost\": 480}),\n                                 (\"r-12\", survey_b, {\"status\": \"infeasible\"})):\n        s3.put_object(Bucket=\"runs-demo\", Key=result_key(digest, run_id), Body=json.dumps(body).encode())\n    record(conn, \"r-13\", survey_b)\n    for run_id in (\"r-10\", \"r-11\", \"r-12\", \"r-13\", \"r-99\"):\n        print(f\"poll {run_id}:\", poll(conn, s3, \"runs-demo\", run_id))\n    print(\"best runs:\", {d[:4]: r for d, r in best_runs(conn).items()})\n    conn.close()\n"
         }
       ]
     },
@@ -63,6 +72,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport json  # noqa: F401\nimport sqlite3\n\nfrom botocore.exceptions import ClientError  # noqa: F401\n\nSCHEMA = \"\"\"\nCREATE TABLE run (\n    run_id     TEXT PRIMARY KEY,\n    digest     TEXT NOT NULL,\n    status     TEXT NOT NULL CHECK (status IN ('submitted', 'optimal', 'time_limit', 'infeasible', 'failed')),\n    result_key TEXT,\n    cost       INTEGER,\n    CHECK ((status = 'submitted') = (result_key IS NULL))\n) STRICT;\n\"\"\"\n\n\ndef connect(path: str) -> sqlite3.Connection:\n    conn = sqlite3.connect(path, autocommit=False)\n    conn.row_factory = sqlite3.Row\n    with conn:\n        conn.executescript(SCHEMA)\n    return conn\n\n\ndef record(conn: sqlite3.Connection, run_id: str, digest: str) -> None:\n    with conn:\n        conn.execute(\"INSERT INTO run (run_id, digest, status) VALUES (?, ?, 'submitted')\", (run_id, digest))\n\n\ndef result_key(digest: str, run_id: str) -> str:\n    return f\"trim-results/{digest}/{run_id}.json\"\n\n\ndef poll(conn: sqlite3.Connection, s3, bucket: str, run_id: str) -> str:\n    \"\"\"The run's status; a waiting run is finished in the index when its result object exists.\"\"\"\n    # TODO: read the row; if it waits, look for its result object and record it when it is there.\n    return \"submitted\"\n\n\ndef best_runs(conn: sqlite3.Connection) -> dict[str, str]:\n    \"\"\"For each survey digest, the finished run with a plan and the lowest cost (ties: lowest run id).\"\"\"\n    return {}\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport os\n\nimport boto3\nfrom moto import mock_aws\n\nfor name in (\"AWS_ACCESS_KEY_ID\", \"AWS_SECRET_ACCESS_KEY\", \"AWS_SESSION_TOKEN\"):\n    os.environ[name] = \"testing\"\nos.environ[\"AWS_DEFAULT_REGION\"] = \"us-east-1\"\nfor noisy in (\"botocore\", \"boto3\", \"urllib3\", \"moto\", \"s3transfer\"):\n    logging.getLogger(noisy).setLevel(logging.WARNING)\n\nimport json\nimport tempfile\n\nfrom trim_index import best_runs, connect, poll, record, result_key\n\nsurvey_a, survey_b = \"c\" * 64, \"d\" * 64\n\nwith mock_aws(), tempfile.TemporaryDirectory() as folder:\n    s3 = boto3.client(\"s3\")\n    s3.create_bucket(Bucket=\"runs-demo\")\n    conn = connect(os.path.join(folder, \"runs.db\"))\n    for run_id, digest in ((\"r-10\", survey_a), (\"r-11\", survey_a), (\"r-12\", survey_b)):\n        record(conn, run_id, digest)\n    for run_id, digest, body in ((\"r-10\", survey_a, {\"status\": \"time_limit\", \"cost\": 520}),\n                                 (\"r-11\", survey_a, {\"status\": \"optimal\", \"cost\": 480}),\n                                 (\"r-12\", survey_b, {\"status\": \"infeasible\"})):\n        s3.put_object(Bucket=\"runs-demo\", Key=result_key(digest, run_id), Body=json.dumps(body).encode())\n    record(conn, \"r-13\", survey_b)\n    for run_id in (\"r-10\", \"r-11\", \"r-12\", \"r-13\", \"r-99\"):\n        print(f\"poll {run_id}:\", poll(conn, s3, \"runs-demo\", run_id))\n    print(\"best runs:\", {d[:4]: r for d, r in best_runs(conn).items()})\n    conn.close()\n"
     }
   ],
   "video": null,
@@ -70,8 +88,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -81,14 +99,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "69adad00fb1796c9ca49ca85de5a7501df5cc3c8364d7e1684013830ac074b8e",
+  "content_sha256": "6a6695c6f113e2521a0818f4a980c845e40d2bf82c54793cd67be29c710efd67",
   "starting_code": "from __future__ import annotations\n\nimport json  # noqa: F401\nimport sqlite3\n\nfrom botocore.exceptions import ClientError  # noqa: F401\n\nSCHEMA = \"\"\"\nCREATE TABLE run (\n    run_id     TEXT PRIMARY KEY,\n    digest     TEXT NOT NULL,\n    status     TEXT NOT NULL CHECK (status IN ('submitted', 'optimal', 'time_limit', 'infeasible', 'failed')),\n    result_key TEXT,\n    cost       INTEGER,\n    CHECK ((status = 'submitted') = (result_key IS NULL))\n) STRICT;\n\"\"\"\n\n\ndef connect(path: str) -> sqlite3.Connection:\n    conn = sqlite3.connect(path, autocommit=False)\n    conn.row_factory = sqlite3.Row\n    with conn:\n        conn.executescript(SCHEMA)\n    return conn\n\n\ndef record(conn: sqlite3.Connection, run_id: str, digest: str) -> None:\n    with conn:\n        conn.execute(\"INSERT INTO run (run_id, digest, status) VALUES (?, ?, 'submitted')\", (run_id, digest))\n\n\ndef result_key(digest: str, run_id: str) -> str:\n    return f\"trim-results/{digest}/{run_id}.json\"\n\n\ndef poll(conn: sqlite3.Connection, s3, bucket: str, run_id: str) -> str:\n    \"\"\"The run's status; a waiting run is finished in the index when its result object exists.\"\"\"\n    # TODO: read the row; if it waits, look for its result object and record it when it is there.\n    return \"submitted\"\n\n\ndef best_runs(conn: sqlite3.Connection) -> dict[str, str]:\n    \"\"\"For each survey digest, the finished run with a plan and the lowest cost (ties: lowest run id).\"\"\"\n    return {}\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-03/practice-2/trim_index.py",
     "test_path": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-03/practice-2/test_trim_index.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-03/practice-2/trim_index.py"
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-03/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -149,6 +167,10 @@
     },
     "concepts": [
       "a local SQLite row per run that points at its S3 objects, updated by a poll"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-03/practice-2/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/49-cloud-deployment/prose/unit-03/practice-2/try_it.py"
   }
 }

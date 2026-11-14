@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "One transformer order, or none",
   "blocks": [
     {
@@ -64,6 +64,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    units: int       # transformers the project needs\n    cost: int        # $k, without the transformers' delivery\n\n\ndef add_order_rules(model: mathopt.Model, x: dict, projects: list[Project], min_order: int,\n                    max_order: int, delivery_fee: int, budget: int) -> None:\n    \"\"\"No order, or one between min_order and max_order units with a delivery fee; all within budget.\"\"\"\n    order = model.add_binary_variable(name=\"order\")\n    units = sum(p.units * x[p.pid] for p in projects)\n    model.add_linear_constraint(units >= min_order * order, name=\"order_min\")\n    model.add_linear_constraint(units <= max_order * order, name=\"order_max\")\n    model.add_linear_constraint(sum(p.cost * x[p.pid] for p in projects) + delivery_fee * order <= budget,\n                                name=\"budget\")\n\n\ndef build(projects: list[Project], min_order: int, max_order: int, delivery_fee: int,\n          budget: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"transformer-order\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    add_order_rules(model, x, projects, min_order, max_order, delivery_fee, budget)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"F1\", 6, 50), Project(\"F2\", 5, 40), Project(\"F3\", 0, 25)]\n    model, x = build(projects, 10, 30, 20, 200)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom order import Project, build\n\n# Substation projects: id, transformers needed, cost ($k). Order 8 to 20 units, fee 15.\nprojects = [Project(\"K1\", 5, 40), Project(\"K2\", 4, 35), Project(\"K3\", 3, 20),\n            Project(\"K4\", 9, 70), Project(\"K5\", 0, 10)]\n\n\ndef solved(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef fix(variables, plan):\n    for key, var in variables.items():\n        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0\n\n\ndef allowed(plan, budget=5_000):\n    model, x = build(projects, 8, 20, 15, budget)\n    fix(x, plan)\n    return solved(model)\n\n\nprint(\"K1+K2:\", allowed({\"K1\", \"K2\"}))\nprint(\"K1 alone:\", allowed({\"K1\"}))\nprint(\"K1+K2+K3+K4:\", allowed({\"K1\", \"K2\", \"K3\", \"K4\"}))\nprint(\"K1+K3 at budget 70:\", allowed({\"K1\", \"K3\"}, 70))\nprint(\"K1+K3 at budget 80:\", allowed({\"K1\", \"K3\"}, 80))\nprint(\"K5 at budget 10:\", allowed({\"K5\"}, 10))\n"
         }
       ]
     },
@@ -76,6 +85,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    units: int       # transformers the project needs\n    cost: int        # $k, without the transformers' delivery\n\n\ndef add_order_rules(model: mathopt.Model, x: dict, projects: list[Project], min_order: int,\n                    max_order: int, delivery_fee: int, budget: int) -> None:\n    \"\"\"No order, or one between min_order and max_order units with a delivery fee; all within budget.\"\"\"\n    # TODO: the order switch, its two rows, and the budget row.\n    return None\n\n\ndef build(projects: list[Project], min_order: int, max_order: int, delivery_fee: int,\n          budget: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"transformer-order\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    add_order_rules(model, x, projects, min_order, max_order, delivery_fee, budget)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"F1\", 6, 50), Project(\"F2\", 5, 40), Project(\"F3\", 0, 25)]\n    model, x = build(projects, 10, 30, 20, 200)\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom order import Project, build\n\n# Substation projects: id, transformers needed, cost ($k). Order 8 to 20 units, fee 15.\nprojects = [Project(\"K1\", 5, 40), Project(\"K2\", 4, 35), Project(\"K3\", 3, 20),\n            Project(\"K4\", 9, 70), Project(\"K5\", 0, 10)]\n\n\ndef solved(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef fix(variables, plan):\n    for key, var in variables.items():\n        var.lower_bound = var.upper_bound = 1.0 if key in plan else 0.0\n\n\ndef allowed(plan, budget=5_000):\n    model, x = build(projects, 8, 20, 15, budget)\n    fix(x, plan)\n    return solved(model)\n\n\nprint(\"K1+K2:\", allowed({\"K1\", \"K2\"}))\nprint(\"K1 alone:\", allowed({\"K1\"}))\nprint(\"K1+K2+K3+K4:\", allowed({\"K1\", \"K2\", \"K3\", \"K4\"}))\nprint(\"K1+K3 at budget 70:\", allowed({\"K1\", \"K3\"}, 70))\nprint(\"K1+K3 at budget 80:\", allowed({\"K1\", \"K3\"}, 80))\nprint(\"K5 at budget 10:\", allowed({\"K5\"}, 10))\n"
     }
   ],
   "video": null,
@@ -83,8 +101,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -94,14 +112,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "e5198778ec6967db86e376058325f62ef3e963485ca59f910ce6eff5deb27c2e",
+  "content_sha256": "0a5262de82736c5630895c60bbf8a6b4d0a3fa920ffa1322ec83fb4a1f8126f0",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    units: int       # transformers the project needs\n    cost: int        # $k, without the transformers' delivery\n\n\ndef add_order_rules(model: mathopt.Model, x: dict, projects: list[Project], min_order: int,\n                    max_order: int, delivery_fee: int, budget: int) -> None:\n    \"\"\"No order, or one between min_order and max_order units with a delivery fee; all within budget.\"\"\"\n    # TODO: the order switch, its two rows, and the budget row.\n    return None\n\n\ndef build(projects: list[Project], min_order: int, max_order: int, delivery_fee: int,\n          budget: int) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"transformer-order\")\n    x = {p.pid: model.add_binary_variable(name=f\"x_{p.pid}\") for p in projects}\n    add_order_rules(model, x, projects, min_order, max_order, delivery_fee, budget)\n    model.maximize(sum(x.values()))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    projects = [Project(\"F1\", 6, 50), Project(\"F2\", 5, 40), Project(\"F3\", 0, 25)]\n    model, x = build(projects, 10, 30, 20, 200)\n    print(len(list(model.linear_constraints())), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-2/order.py",
     "test_path": "practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-2/test_order.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-2/order.py"
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -152,6 +170,10 @@
     },
     "concepts": [
       "a count that is zero or at least a minimum is bounded by a binary switch from both sides"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-2/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/23-binary-logic/prose/unit-03/practice-2/try_it.py"
   }
 }

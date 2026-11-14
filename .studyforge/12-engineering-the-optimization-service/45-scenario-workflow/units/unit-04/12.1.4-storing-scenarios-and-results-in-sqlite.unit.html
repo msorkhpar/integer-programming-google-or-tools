@@ -196,6 +196,39 @@ if __name__ == &quot;__main__&quot;:
     conn = connect(&quot;:memory:&quot;)
     conn.executescript(SCHEMA)
     print(save_estimate(conn, &quot;Elm Street main&quot;, [(&quot;pipe&quot;, 120), (&quot;paving&quot;, 40)]))
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+import os
+import sqlite3
+import tempfile
+
+from estimate import SCHEMA, connect, save_estimate
+
+with tempfile.TemporaryDirectory() as folder:
+    conn = connect(os.path.join(folder, &quot;estimates.db&quot;))
+    conn.executescript(SCHEMA)
+    conn.commit()
+
+    def lines(project):
+        return conn.execute(&quot;SELECT l.item, l.amount FROM estimate_line AS l JOIN estimate AS e &quot;
+                            &quot;USING (estimate_id) WHERE e.project = ?&quot;, (project,)).fetchall()
+
+    print(&quot;save Oak Lane culvert:&quot;, save_estimate(conn, &quot;Oak Lane culvert&quot;, [(&quot;culvert&quot;, 75), (&quot;grading&quot;, 20)]))
+    print(&quot;lines:&quot;, lines(&quot;Oak Lane culvert&quot;))
+    try:
+        save_estimate(conn, &quot;Oak Lane culvert&quot;, [(&quot;culvert&quot;, 60), (&quot;refund&quot;, -5)])
+    except sqlite3.IntegrityError as e:
+        print(&quot;revision with -5 raised:&quot;, e)
+    print(&quot;lines after it:&quot;, lines(&quot;Oak Lane culvert&quot;))
+    save_estimate(conn, &quot;Oak Lane culvert&quot;, [(&quot;culvert&quot;, 80)])
+    print(&quot;lines after a revision to 80:&quot;, lines(&quot;Oak Lane culvert&quot;))
+    conn.close()
 </code></pre></figure></details>
 <h2 id="practice-prose-b5">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -230,10 +263,44 @@ if __name__ == &quot;__main__&quot;:
     conn.executescript(SCHEMA)
     print(save_estimate(conn, &quot;Elm Street main&quot;, [(&quot;pipe&quot;, 120), (&quot;paving&quot;, 40)]))
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+import os
+import sqlite3
+import tempfile
+
+from estimate import SCHEMA, connect, save_estimate
+
+with tempfile.TemporaryDirectory() as folder:
+    conn = connect(os.path.join(folder, &quot;estimates.db&quot;))
+    conn.executescript(SCHEMA)
+    conn.commit()
+
+    def lines(project):
+        return conn.execute(&quot;SELECT l.item, l.amount FROM estimate_line AS l JOIN estimate AS e &quot;
+                            &quot;USING (estimate_id) WHERE e.project = ?&quot;, (project,)).fetchall()
+
+    print(&quot;save Oak Lane culvert:&quot;, save_estimate(conn, &quot;Oak Lane culvert&quot;, [(&quot;culvert&quot;, 75), (&quot;grading&quot;, 20)]))
+    print(&quot;lines:&quot;, lines(&quot;Oak Lane culvert&quot;))
+    try:
+        save_estimate(conn, &quot;Oak Lane culvert&quot;, [(&quot;culvert&quot;, 60), (&quot;refund&quot;, -5)])
+    except sqlite3.IntegrityError as e:
+        print(&quot;revision with -5 raised:&quot;, e)
+    print(&quot;lines after it:&quot;, lines(&quot;Oak Lane culvert&quot;))
+    save_estimate(conn, &quot;Oak Lane culvert&quot;, [(&quot;culvert&quot;, 80)])
+    print(&quot;lines after a revision to 80:&quot;, lines(&quot;Oak Lane culvert&quot;))
+    conn.close()
+</code></pre></figure>
 </section>
 <section data-practice="12-engineering-the-optimization-service/45-scenario-workflow/unit-04/practice-prose" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-1/estimate.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-1/estimate.py</code> and <code>practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-1/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-1/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>
@@ -341,6 +408,36 @@ if __name__ == &quot;__main__&quot;:
     conn = open_db()
     conn.execute(&quot;INSERT INTO budget_plan VALUES ('B-1', 2028, 'approved', 4200)&quot;)
     print(conn.execute(&quot;SELECT * FROM budget_plan&quot;).fetchall())
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+import sqlite3
+
+from guards import open_db
+
+conn = open_db()
+
+
+def attempt(sql):
+    try:
+        conn.execute(sql)
+        return &quot;accepted&quot;
+    except sqlite3.IntegrityError as e:
+        return f&quot;refused ({e})&quot;
+
+
+print(&quot;insert P-1 2031 approved:&quot;, attempt(&quot;INSERT INTO budget_plan VALUES ('P-1', 2031, 'approved', 5100)&quot;))
+print(&quot;insert P-2 2031 draft:&quot;, attempt(&quot;INSERT INTO budget_plan VALUES ('P-2', 2031, 'draft', 5000)&quot;))
+print(&quot;insert P-3 2031 approved:&quot;, attempt(&quot;INSERT INTO budget_plan VALUES ('P-3', 2031, 'approved', 4800)&quot;))
+print(&quot;edit P-2 amount:&quot;, attempt(&quot;UPDATE budget_plan SET amount = 4950 WHERE plan_id = 'P-2'&quot;))
+print(&quot;edit P-1 amount:&quot;, attempt(&quot;UPDATE budget_plan SET amount = 5200 WHERE plan_id = 'P-1'&quot;))
+print(&quot;delete P-1:&quot;, attempt(&quot;DELETE FROM budget_plan WHERE plan_id = 'P-1'&quot;))
+print(&quot;rows:&quot;, conn.execute(&quot;SELECT * FROM budget_plan ORDER BY plan_id&quot;).fetchall())
 </code></pre></figure></details>
 <h2 id="practice-prose-2-b6">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -372,10 +469,41 @@ if __name__ == &quot;__main__&quot;:
     conn.execute(&quot;INSERT INTO budget_plan VALUES ('B-1', 2028, 'approved', 4200)&quot;)
     print(conn.execute(&quot;SELECT * FROM budget_plan&quot;).fetchall())
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+import sqlite3
+
+from guards import open_db
+
+conn = open_db()
+
+
+def attempt(sql):
+    try:
+        conn.execute(sql)
+        return &quot;accepted&quot;
+    except sqlite3.IntegrityError as e:
+        return f&quot;refused ({e})&quot;
+
+
+print(&quot;insert P-1 2031 approved:&quot;, attempt(&quot;INSERT INTO budget_plan VALUES ('P-1', 2031, 'approved', 5100)&quot;))
+print(&quot;insert P-2 2031 draft:&quot;, attempt(&quot;INSERT INTO budget_plan VALUES ('P-2', 2031, 'draft', 5000)&quot;))
+print(&quot;insert P-3 2031 approved:&quot;, attempt(&quot;INSERT INTO budget_plan VALUES ('P-3', 2031, 'approved', 4800)&quot;))
+print(&quot;edit P-2 amount:&quot;, attempt(&quot;UPDATE budget_plan SET amount = 4950 WHERE plan_id = 'P-2'&quot;))
+print(&quot;edit P-1 amount:&quot;, attempt(&quot;UPDATE budget_plan SET amount = 5200 WHERE plan_id = 'P-1'&quot;))
+print(&quot;delete P-1:&quot;, attempt(&quot;DELETE FROM budget_plan WHERE plan_id = 'P-1'&quot;))
+print(&quot;rows:&quot;, conn.execute(&quot;SELECT * FROM budget_plan ORDER BY plan_id&quot;).fetchall())
+</code></pre></figure>
 </section>
 <section data-practice="12-engineering-the-optimization-service/45-scenario-workflow/unit-04/practice-prose-2" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-2/guards.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-2/guards.py</code> and <code>practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-2/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-2/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>
@@ -483,6 +611,29 @@ if __name__ == &quot;__main__&quot;:
     conn.executemany(&quot;INSERT INTO cost VALUES (?, ?, ?)&quot;, [(&quot;M-1&quot;, 0, 300), (&quot;M-1&quot;, 1, 200)])
     conn.executemany(&quot;INSERT INTO run_start VALUES (?, ?, ?)&quot;, [(1, &quot;M-1&quot;, 2027), (2, &quot;M-1&quot;, 2028)])
     print(spend_diff(conn, 1, 2))
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+import sqlite3
+
+from spend import SCHEMA, spend_diff
+
+conn = sqlite3.connect(&quot;:memory:&quot;)
+conn.executescript(SCHEMA)
+conn.executemany(&quot;INSERT INTO cost VALUES (?, ?, ?)&quot;,
+                 [(&quot;R-1&quot;, 0, 100), (&quot;R-1&quot;, 1, 60), (&quot;R-2&quot;, 0, 80), (&quot;R-3&quot;, 0, 120)])
+conn.executemany(&quot;INSERT INTO run_start VALUES (?, ?, ?)&quot;, [
+    (7, &quot;R-1&quot;, 2031), (7, &quot;R-2&quot;, 2032),
+    (8, &quot;R-1&quot;, 2032), (8, &quot;R-2&quot;, 2032), (8, &quot;R-3&quot;, 2034),
+])
+print(&quot;run 7 vs run 8:&quot;, spend_diff(conn, 7, 8))
+print(&quot;run 8 vs run 7:&quot;, spend_diff(conn, 8, 7))
+print(&quot;run 7 vs itself:&quot;, spend_diff(conn, 7, 7))
 </code></pre></figure></details>
 <h2 id="practice-prose-3-b6">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -513,10 +664,34 @@ if __name__ == &quot;__main__&quot;:
     conn.executemany(&quot;INSERT INTO run_start VALUES (?, ?, ?)&quot;, [(1, &quot;M-1&quot;, 2027), (2, &quot;M-1&quot;, 2028)])
     print(spend_diff(conn, 1, 2))
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+
+import sqlite3
+
+from spend import SCHEMA, spend_diff
+
+conn = sqlite3.connect(&quot;:memory:&quot;)
+conn.executescript(SCHEMA)
+conn.executemany(&quot;INSERT INTO cost VALUES (?, ?, ?)&quot;,
+                 [(&quot;R-1&quot;, 0, 100), (&quot;R-1&quot;, 1, 60), (&quot;R-2&quot;, 0, 80), (&quot;R-3&quot;, 0, 120)])
+conn.executemany(&quot;INSERT INTO run_start VALUES (?, ?, ?)&quot;, [
+    (7, &quot;R-1&quot;, 2031), (7, &quot;R-2&quot;, 2032),
+    (8, &quot;R-1&quot;, 2032), (8, &quot;R-2&quot;, 2032), (8, &quot;R-3&quot;, 2034),
+])
+print(&quot;run 7 vs run 8:&quot;, spend_diff(conn, 7, 8))
+print(&quot;run 8 vs run 7:&quot;, spend_diff(conn, 8, 7))
+print(&quot;run 7 vs itself:&quot;, spend_diff(conn, 7, 7))
+</code></pre></figure>
 </section>
 <section data-practice="12-engineering-the-optimization-service/45-scenario-workflow/unit-04/practice-prose-3" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-3/spend.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-3/spend.py</code> and <code>practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-3/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/12-engineering-the-optimization-service/45-scenario-workflow/prose/unit-04/practice-3/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>

@@ -9,7 +9,7 @@
   "unit": 5,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Check a GPU solver's selection before using it",
   "blocks": [
     {
@@ -54,6 +54,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\n\ndef accept(x: list[float], reported: float, bounds: list[float], values: list[float], hours: list[list[float]],\n           capacity: list[float], requires: list[tuple[int, int]], gap: float) -> tuple[bool, str]:\n    \"\"\"Check a selection from an untrusted MILP solver (maximise value); return (accepted, reason).\"\"\"\n    if any(abs(v - round(v)) > 1e-5 for v in x):\n        return False, \"not integral\"\n    plan = [round(v) for v in x]\n    for q, limit in enumerate(capacity):\n        if sum(hours[j][q] * plan[j] for j in range(len(plan))) > limit + 1e-6:\n            return False, f\"over capacity in quarter {q + 1}\"\n    for a, b in requires:\n        if plan[b] > plan[a]:\n            return False, f\"job {b} without job {a}\"\n    worth = sum(v * p for v, p in zip(values, plan))          # recomputed: the report is not evidence\n    best = min(bounds)                                        # the tightest bound any solver proved\n    if (best - worth) / abs(best) > gap:\n        return False, \"outside the gap\"\n    return True, \"accepted\"\n\n\nif __name__ == \"__main__\":\n    print(accept([1, 0], 5.0, [5.0], [5.0, 4.0], [[2, 0], [1, 1]], [2.0, 1.0], [(0, 1)], 1e-3))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom check import accept\n\nvalues = [6.0, 10.0, 7.0, 4.0, 9.0]\nhours = [[3, 0], [2, 4], [0, 3], [1, 1], [4, 2]]\ncapacity = [6.0, 6.0]\nrequires = [(0, 3)]\n\n\ndef check(x, reported, bounds, gap=1e-3):\n    return accept(x, reported, bounds, values, hours, capacity, requires, gap)\n\n\nprint(\"x 1,1,0,1,0 reported 20, bound 20:\", check([1, 1, 0, 1, 0], 20.0, [20.0]))\nprint(\"x 1,1,0,1,0 reported 25, bounds 20 and 22:\", check([1, 1, 0, 1, 0], 25.0, [22.0, 20.0]))\nprint(\"x 0,1,0,1,0 reported 14, bound 20:\", check([0, 1, 0, 1, 0], 14.0, [20.0]))\nprint(\"x 0,1,1,0,1 reported 26, bound 26:\", check([0, 1, 1, 0, 1], 26.0, [26.0]))\nprint(\"x 1,0.5,0,0,0 reported 11, bound 20:\", check([1, 0.5, 0, 0, 0], 11.0, [20.0]))\nprint(\"x 0,1,0,0,0 reported 10, bound 20, gap 0.6:\", check([0, 1, 0, 0, 0], 10.0, [20.0], gap=0.6))\n"
         }
       ]
     },
@@ -66,6 +75,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\n\ndef accept(x: list[float], reported: float, bounds: list[float], values: list[float], hours: list[list[float]],\n           capacity: list[float], requires: list[tuple[int, int]], gap: float) -> tuple[bool, str]:\n    \"\"\"Check a selection from an untrusted MILP solver (maximise value); return (accepted, reason).\"\"\"\n    # TODO: integral, within each quarter's crew-weeks, dependencies kept, and its own worth within the gap.\n    return True, \"accepted\"\n\n\nif __name__ == \"__main__\":\n    print(accept([1, 0], 5.0, [5.0], [5.0, 4.0], [[2, 0], [1, 1]], [2.0, 1.0], [(0, 1)], 1e-3))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom check import accept\n\nvalues = [6.0, 10.0, 7.0, 4.0, 9.0]\nhours = [[3, 0], [2, 4], [0, 3], [1, 1], [4, 2]]\ncapacity = [6.0, 6.0]\nrequires = [(0, 3)]\n\n\ndef check(x, reported, bounds, gap=1e-3):\n    return accept(x, reported, bounds, values, hours, capacity, requires, gap)\n\n\nprint(\"x 1,1,0,1,0 reported 20, bound 20:\", check([1, 1, 0, 1, 0], 20.0, [20.0]))\nprint(\"x 1,1,0,1,0 reported 25, bounds 20 and 22:\", check([1, 1, 0, 1, 0], 25.0, [22.0, 20.0]))\nprint(\"x 0,1,0,1,0 reported 14, bound 20:\", check([0, 1, 0, 1, 0], 14.0, [20.0]))\nprint(\"x 0,1,1,0,1 reported 26, bound 26:\", check([0, 1, 1, 0, 1], 26.0, [26.0]))\nprint(\"x 1,0.5,0,0,0 reported 11, bound 20:\", check([1, 0.5, 0, 0, 0], 11.0, [20.0]))\nprint(\"x 0,1,0,0,0 reported 10, bound 20, gap 0.6:\", check([0, 1, 0, 0, 0], 10.0, [20.0], gap=0.6))\n"
     }
   ],
   "video": null,
@@ -73,8 +91,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -84,14 +102,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "b11b254ca3eee7b4adcdc78947d12b727d264e8c9c2dd99d83486f59aeaf53b0",
+  "content_sha256": "02cccfe97e5c5d1ac9f3aa44f263efc82fed99a5dc04b862e441f230b36b2d48",
   "starting_code": "from __future__ import annotations\n\n\ndef accept(x: list[float], reported: float, bounds: list[float], values: list[float], hours: list[list[float]],\n           capacity: list[float], requires: list[tuple[int, int]], gap: float) -> tuple[bool, str]:\n    \"\"\"Check a selection from an untrusted MILP solver (maximise value); return (accepted, reason).\"\"\"\n    # TODO: integral, within each quarter's crew-weeks, dependencies kept, and its own worth within the gap.\n    return True, \"accepted\"\n\n\nif __name__ == \"__main__\":\n    print(accept([1, 0], 5.0, [5.0], [5.0, 4.0], [[2, 0], [1, 1]], [2.0, 1.0], [(0, 1)], 1e-3))\n",
   "exercise": {
     "main_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-05/practice-2/check.py",
     "test_path": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-05/practice-2/test_check.py",
     "run_command": [
       "python3",
-      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-05/practice-2/check.py"
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-05/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -147,6 +165,10 @@
     },
     "concepts": [
       "a plan from a solver that does not repeat is checked for rows, integrality and its own worth against the tightest bound"
-    ]
+    ],
+    "files": [
+      "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-05/practice-2/try_it.py"
+    ],
+    "try_file": "practice/11-performance-at-scale/57-gpu-acceleration/prose/unit-05/practice-2/try_it.py"
   }
 }

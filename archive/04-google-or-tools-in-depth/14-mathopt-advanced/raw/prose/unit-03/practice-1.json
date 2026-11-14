@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Last week's route plan as a complete or a partial hint",
   "blocks": [
     {
@@ -51,6 +51,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef hint_params(y: dict[str, mathopt.Variable], chosen: set[str], complete: bool) -> mathopt.ModelSolveParameters:\n    \"\"\"Model parameters holding one hint: last week's plan, complete or only its chosen routes.\"\"\"\n    if complete:\n        values = {v: 1.0 if r in chosen else 0.0 for r, v in y.items()}\n    else:\n        values = {y[r]: 1.0 for r in chosen}\n    return mathopt.ModelSolveParameters(solution_hints=[mathopt.SolutionHint(variable_values=values)])\n\n\ndef build(routes: dict[str, tuple[float, float]], vans: int) -> tuple[mathopt.Model, dict]:\n    \"\"\"routes: name -> (profit, vans needed).\"\"\"\n    model = mathopt.Model(name=\"routes\")\n    y = {r: model.add_binary_variable(name=f\"y_{r}\") for r in routes}\n    model.add_linear_constraint(sum(routes[r][1] * y[r] for r in routes) <= vans, name=\"vans\")\n    model.maximize(sum(routes[r][0] * y[r] for r in routes))\n    return model, y\n\n\nif __name__ == \"__main__\":\n    model, y = build({\"north\": (40, 2), \"south\": (30, 1), \"east\": (25, 2)}, 3)\n    print(hint_params(y, {\"north\", \"south\"}, complete=True).solution_hints)\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom hinting import build, hint_params\n\n# name -> (profit, vans needed)\nroutes = {\"quay\": (35, 2), \"spire\": (24, 1), \"canal\": (19, 2), \"abbey\": (14, 1), \"fort\": (29, 3)}\nmodel, y = build(routes, 5)\nlast_week = {\"quay\", \"abbey\"}\n\nfor complete in (True, False):\n    params = hint_params(y, last_week, complete)\n    for hint in params.solution_hints:\n        print(f\"hint, complete={complete}:\", {v.name: val for v, val in sorted(hint.variable_values.items(), key=lambda kv: kv[0].name)})\n\nlog: list[str] = []\nresult = mathopt.solve(model, mathopt.SolverType.HIGHS, model_params=hint_params(y, last_week, True),\n                       msg_cb=mathopt.list_message_callback(log))\nprint(\"HiGHS lines about the start:\", [line for line in log if \"MIP start\" in line or \"user-supplied\" in line])\nprint(\"profit with the hint:\", result.objective_value())\n"
         }
       ]
     },
@@ -63,6 +72,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef hint_params(y: dict[str, mathopt.Variable], chosen: set[str], complete: bool) -> mathopt.ModelSolveParameters:\n    \"\"\"Model parameters holding one hint: last week's plan, complete or only its chosen routes.\"\"\"\n    # TODO: one SolutionHint in solution_hints.\n    return mathopt.ModelSolveParameters()\n\n\ndef build(routes: dict[str, tuple[float, float]], vans: int) -> tuple[mathopt.Model, dict]:\n    \"\"\"routes: name -> (profit, vans needed).\"\"\"\n    model = mathopt.Model(name=\"routes\")\n    y = {r: model.add_binary_variable(name=f\"y_{r}\") for r in routes}\n    model.add_linear_constraint(sum(routes[r][1] * y[r] for r in routes) <= vans, name=\"vans\")\n    model.maximize(sum(routes[r][0] * y[r] for r in routes))\n    return model, y\n\n\nif __name__ == \"__main__\":\n    model, y = build({\"north\": (40, 2), \"south\": (30, 1), \"east\": (25, 2)}, 3)\n    print(hint_params(y, {\"north\", \"south\"}, complete=True).solution_hints)\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom hinting import build, hint_params\n\n# name -> (profit, vans needed)\nroutes = {\"quay\": (35, 2), \"spire\": (24, 1), \"canal\": (19, 2), \"abbey\": (14, 1), \"fort\": (29, 3)}\nmodel, y = build(routes, 5)\nlast_week = {\"quay\", \"abbey\"}\n\nfor complete in (True, False):\n    params = hint_params(y, last_week, complete)\n    for hint in params.solution_hints:\n        print(f\"hint, complete={complete}:\", {v.name: val for v, val in sorted(hint.variable_values.items(), key=lambda kv: kv[0].name)})\n\nlog: list[str] = []\nresult = mathopt.solve(model, mathopt.SolverType.HIGHS, model_params=hint_params(y, last_week, True),\n                       msg_cb=mathopt.list_message_callback(log))\nprint(\"HiGHS lines about the start:\", [line for line in log if \"MIP start\" in line or \"user-supplied\" in line])\nprint(\"profit with the hint:\", result.objective_value())\n"
     }
   ],
   "video": null,
@@ -70,8 +88,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -81,14 +99,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "dd99c0d7722ede6f083578d4460901b3b3909823c4546c7ae529240022a94722",
+  "content_sha256": "f7666f94d8a0304d6afa3d9c9c0823b5f9d4c3bc6fc2a9b006dd3ffbd1f1e6f2",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef hint_params(y: dict[str, mathopt.Variable], chosen: set[str], complete: bool) -> mathopt.ModelSolveParameters:\n    \"\"\"Model parameters holding one hint: last week's plan, complete or only its chosen routes.\"\"\"\n    # TODO: one SolutionHint in solution_hints.\n    return mathopt.ModelSolveParameters()\n\n\ndef build(routes: dict[str, tuple[float, float]], vans: int) -> tuple[mathopt.Model, dict]:\n    \"\"\"routes: name -> (profit, vans needed).\"\"\"\n    model = mathopt.Model(name=\"routes\")\n    y = {r: model.add_binary_variable(name=f\"y_{r}\") for r in routes}\n    model.add_linear_constraint(sum(routes[r][1] * y[r] for r in routes) <= vans, name=\"vans\")\n    model.maximize(sum(routes[r][0] * y[r] for r in routes))\n    return model, y\n\n\nif __name__ == \"__main__\":\n    model, y = build({\"north\": (40, 2), \"south\": (30, 1), \"east\": (25, 2)}, 3)\n    print(hint_params(y, {\"north\", \"south\"}, complete=True).solution_hints)\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-03/practice-1/hinting.py",
     "test_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-03/practice-1/test_hinting.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-03/practice-1/hinting.py"
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-03/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -134,6 +152,10 @@
     },
     "concepts": [
       "a previous plan turned into a complete or a partial solution hint inside model parameters"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-03/practice-1/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-03/practice-1/try_it.py"
   }
 }

@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Vans for a food bank's weekend drive",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass VanType:\n    name: str\n    capacity: int     # pallets per van\n    cost: int         # dollars for the weekend\n    available: int    # vans of this type the dealer has\n    pack: int         # vans of this type are leased in packs of this many\n\n\ndef build(types: list[VanType], demand: int, budget: int, drivers: int) -> tuple[cp_model.CpModel, dict]:\n    \"\"\"The cheapest fleet that carries the demand, within the budget and the drivers.\"\"\"\n    model = cp_model.CpModel()\n    n = {}\n    for t in types:\n        packs = cp_model.Domain.from_values(range(0, t.available + 1, t.pack))\n        n[t.name] = model.new_int_var_from_domain(packs, f\"n_{t.name}\")\n    model.add(sum(t.capacity * n[t.name] for t in types) >= demand)\n    model.add(sum(t.cost * n[t.name] for t in types) <= budget)\n    model.add(sum(n.values()) <= drivers)\n    model.minimize(sum(t.cost * n[t.name] for t in types))\n    return model, n\n\n\nif __name__ == \"__main__\":\n    fleet = [VanType(\"small\", 4, 300, 6, 2), VanType(\"box\", 10, 650, 3, 1)]\n    model, n = build(fleet, 30, 3_000, 5)\n    solver = cp_model.CpSolver()\n    status = solver.solve(model)\n    print(solver.status_name(status), {name: solver.value(v) for name, v in n.items()})\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.sat.python import cp_model\n\nfrom vans import VanType, build\n\nfleet = [VanType(\"cargo\", 6, 400, 4, 2), VanType(\"truck\", 15, 900, 2, 1), VanType(\"mini\", 3, 150, 6, 3)]\n\nfor demand, budget, drivers in ((30, 3_000, 5), (45, 2_500, 4)):\n    model, n = build(fleet, demand, budget, drivers)\n    solver = cp_model.CpSolver()\n    solver.parameters.max_time_in_seconds = 10\n    status = solver.solve(model)\n    label = f\"demand {demand}, budget {budget}, drivers {drivers}:\"\n    if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):\n        print(label, solver.status_name(status), {name: solver.value(v) for name, v in n.items()},\n              \"cost\", round(solver.objective_value))\n    else:\n        print(label, solver.status_name(status))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass VanType:\n    name: str\n    capacity: int     # pallets per van\n    cost: int         # dollars for the weekend\n    available: int    # vans of this type the dealer has\n    pack: int         # vans of this type are leased in packs of this many\n\n\ndef build(types: list[VanType], demand: int, budget: int, drivers: int) -> tuple[cp_model.CpModel, dict]:\n    \"\"\"The cheapest fleet that carries the demand, within the budget and the drivers.\"\"\"\n    model = cp_model.CpModel()\n    n = {t.name: model.new_int_var(0, 1_000, f\"n_{t.name}\") for t in types}   # TODO: each type's own domain\n    # TODO: the cover, budget and drivers rows, and the objective.\n    return model, n\n\n\nif __name__ == \"__main__\":\n    fleet = [VanType(\"small\", 4, 300, 6, 2), VanType(\"box\", 10, 650, 3, 1)]\n    model, n = build(fleet, 30, 3_000, 5)\n    solver = cp_model.CpSolver()\n    status = solver.solve(model)\n    print(solver.status_name(status), {name: solver.value(v) for name, v in n.items()})\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.sat.python import cp_model\n\nfrom vans import VanType, build\n\nfleet = [VanType(\"cargo\", 6, 400, 4, 2), VanType(\"truck\", 15, 900, 2, 1), VanType(\"mini\", 3, 150, 6, 3)]\n\nfor demand, budget, drivers in ((30, 3_000, 5), (45, 2_500, 4)):\n    model, n = build(fleet, demand, budget, drivers)\n    solver = cp_model.CpSolver()\n    solver.parameters.max_time_in_seconds = 10\n    status = solver.solve(model)\n    label = f\"demand {demand}, budget {budget}, drivers {drivers}:\"\n    if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):\n        print(label, solver.status_name(status), {name: solver.value(v) for name, v in n.items()},\n              \"cost\", round(solver.objective_value))\n    else:\n        print(label, solver.status_name(status))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "3d7463c0908a0f1faeaa67a7b105e989b8ea14a733195e12dec2d34ed17d7a48",
+  "content_sha256": "b0025047ab09f485af09e3161d29b0b2a6bfb2f77f2db77a4aa6f250ddeaa0b9",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.sat.python import cp_model\n\n\n@dataclass(frozen=True)\nclass VanType:\n    name: str\n    capacity: int     # pallets per van\n    cost: int         # dollars for the weekend\n    available: int    # vans of this type the dealer has\n    pack: int         # vans of this type are leased in packs of this many\n\n\ndef build(types: list[VanType], demand: int, budget: int, drivers: int) -> tuple[cp_model.CpModel, dict]:\n    \"\"\"The cheapest fleet that carries the demand, within the budget and the drivers.\"\"\"\n    model = cp_model.CpModel()\n    n = {t.name: model.new_int_var(0, 1_000, f\"n_{t.name}\") for t in types}   # TODO: each type's own domain\n    # TODO: the cover, budget and drivers rows, and the objective.\n    return model, n\n\n\nif __name__ == \"__main__\":\n    fleet = [VanType(\"small\", 4, 300, 6, 2), VanType(\"box\", 10, 650, 3, 1)]\n    model, n = build(fleet, 30, 3_000, 5)\n    solver = cp_model.CpSolver()\n    status = solver.solve(model)\n    print(solver.status_name(status), {name: solver.value(v) for name, v in n.items()})\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-1/vans.py",
     "test_path": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-1/test_vans.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-1/vans.py"
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -141,6 +159,10 @@
     "concepts": [
       "every CP-SAT variable is an integer with a finite domain, given as bounds or as a listed set of values",
       "linear constraints take whole-number coefficients and bounds, and ranges and not-equal are allowed"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-1/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/15-cpsat-core/prose/unit-01/practice-1/try_it.py"
   }
 }

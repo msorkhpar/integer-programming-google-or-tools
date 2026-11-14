@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Build the trim result from a finished job",
   "blocks": [
     {
@@ -53,6 +53,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport math\nfrom typing import Literal\n\nfrom pydantic import BaseModel, Field\n\n\nclass MonthHours(BaseModel):\n    month: int = Field(ge=1, le=12)\n    crew_hours: int = Field(ge=0)\n    capacity: int = Field(ge=0)\n\n\nclass TrimResult(BaseModel):\n    status: Literal[\"optimal\", \"time_limit\", \"infeasible\", \"failed\"]\n    message: str\n    value: float | None\n    bound: float | None\n    gap: float | None = Field(ge=0)\n    circuits: list[str]\n    hours_by_month: list[MonthHours]\n\n\ndef build_result(status: str, message: str, value: float | None, bound: float, chosen: list[str],\n                 work: dict[str, tuple[int, int]], capacity: dict[int, int]) -> TrimResult:\n    \"\"\"The result of a finished trim job.\n\n    `value` is the plan's value, or None when the job has no plan; `bound` is the solver's best bound,\n    which may be infinite; `chosen` the circuits trimmed; `work[circuit] = (month, crew_hours)`;\n    `capacity[month]` the crew hours available that month.\n    \"\"\"\n    finite = bound if bound is not None and math.isfinite(bound) else None\n    gap = None\n    if value is not None and finite is not None:\n        gap = max(0.0, finite - value) / max(abs(value), 1.0)\n    hours = {m: 0 for m in capacity}\n    for circuit in chosen:\n        month, crew_hours = work[circuit]\n        hours[month] += crew_hours\n    rows = [MonthHours(month=m, crew_hours=hours[m], capacity=capacity[m]) for m in sorted(capacity)]\n    return TrimResult(status=status, message=message, value=value, bound=finite, gap=gap,\n                      circuits=sorted(chosen), hours_by_month=rows if value is not None else [])\n\n\nif __name__ == \"__main__\":\n    print(build_result(\"time_limit\", \"No plan found within the 30 s limit.\", None, math.inf, [], {}, {3: 160})\n          .model_dump_json())\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport math\n\nfrom trim_builder import build_result\n\nwork = {\"L-1\": (6, 70), \"L-4\": (7, 50), \"L-6\": (6, 30), \"L-8\": (8, 45)}\ncapacity = {8: 120, 6: 140, 7: 100}\n\ndone = build_result(\"optimal\", \"Best plan found and proven.\", 180.0, 180.0, [\"L-6\", \"L-1\", \"L-4\"], work, capacity)\nprint(\"optimal, L-6 L-1 L-4:\", done.circuits, \"gap\", done.gap)\nprint(\"hours by month:\", [(m.month, m.crew_hours, m.capacity) for m in done.hours_by_month])\nstopped = build_result(\"time_limit\", \"Stopped at the limit.\", 120.0, 150.0, [\"L-8\"], work, capacity)\nprint(\"time_limit, value 120, bound 150: gap\", stopped.gap)\nempty = build_result(\"time_limit\", \"No plan found within the limit.\", None, math.inf, [], work, capacity)\nprint(\"no plan, infinite bound:\", empty.model_dump_json())\n"
         }
       ]
     },
@@ -65,6 +74,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport math  # noqa: F401\nfrom typing import Literal\n\nfrom pydantic import BaseModel, Field\n\n\nclass MonthHours(BaseModel):\n    month: int = Field(ge=1, le=12)\n    crew_hours: int = Field(ge=0)\n    capacity: int = Field(ge=0)\n\n\nclass TrimResult(BaseModel):\n    status: Literal[\"optimal\", \"time_limit\", \"infeasible\", \"failed\"]\n    message: str\n    value: float | None\n    bound: float | None\n    gap: float | None = Field(ge=0)\n    circuits: list[str]\n    hours_by_month: list[MonthHours]\n\n\ndef build_result(status: str, message: str, value: float | None, bound: float, chosen: list[str],\n                 work: dict[str, tuple[int, int]], capacity: dict[int, int]) -> TrimResult:\n    \"\"\"The result of a finished trim job.\n\n    `value` is the plan's value, or None when the job has no plan; `bound` is the solver's best bound,\n    which may be infinite; `chosen` the circuits trimmed; `work[circuit] = (month, crew_hours)`;\n    `capacity[month]` the crew hours available that month.\n    \"\"\"\n    # TODO: the gap, a JSON-safe bound, one row per month of capacity, and the sorted circuits.\n    return TrimResult(status=status, message=message, value=value, bound=None, gap=None,\n                      circuits=[], hours_by_month=[])\n\nif __name__ == \"__main__\":\n    print(build_result(\"time_limit\", \"No plan found within the 30 s limit.\", None, math.inf, [], {}, {3: 160})\n          .model_dump_json())\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport math\n\nfrom trim_builder import build_result\n\nwork = {\"L-1\": (6, 70), \"L-4\": (7, 50), \"L-6\": (6, 30), \"L-8\": (8, 45)}\ncapacity = {8: 120, 6: 140, 7: 100}\n\ndone = build_result(\"optimal\", \"Best plan found and proven.\", 180.0, 180.0, [\"L-6\", \"L-1\", \"L-4\"], work, capacity)\nprint(\"optimal, L-6 L-1 L-4:\", done.circuits, \"gap\", done.gap)\nprint(\"hours by month:\", [(m.month, m.crew_hours, m.capacity) for m in done.hours_by_month])\nstopped = build_result(\"time_limit\", \"Stopped at the limit.\", 120.0, 150.0, [\"L-8\"], work, capacity)\nprint(\"time_limit, value 120, bound 150: gap\", stopped.gap)\nempty = build_result(\"time_limit\", \"No plan found within the limit.\", None, math.inf, [], work, capacity)\nprint(\"no plan, infinite bound:\", empty.model_dump_json())\n"
     }
   ],
   "video": null,
@@ -72,8 +90,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -83,14 +101,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "0ed2967950beef7bc28ed4aa5e48f0846e17f38caa6c94dd59b61f196d8c630c",
+  "content_sha256": "a56ca535d314ef74453e8ef256c76860431a466ffe8185b07c091b885ce3637b",
   "starting_code": "from __future__ import annotations\n\nimport math  # noqa: F401\nfrom typing import Literal\n\nfrom pydantic import BaseModel, Field\n\n\nclass MonthHours(BaseModel):\n    month: int = Field(ge=1, le=12)\n    crew_hours: int = Field(ge=0)\n    capacity: int = Field(ge=0)\n\n\nclass TrimResult(BaseModel):\n    status: Literal[\"optimal\", \"time_limit\", \"infeasible\", \"failed\"]\n    message: str\n    value: float | None\n    bound: float | None\n    gap: float | None = Field(ge=0)\n    circuits: list[str]\n    hours_by_month: list[MonthHours]\n\n\ndef build_result(status: str, message: str, value: float | None, bound: float, chosen: list[str],\n                 work: dict[str, tuple[int, int]], capacity: dict[int, int]) -> TrimResult:\n    \"\"\"The result of a finished trim job.\n\n    `value` is the plan's value, or None when the job has no plan; `bound` is the solver's best bound,\n    which may be infinite; `chosen` the circuits trimmed; `work[circuit] = (month, crew_hours)`;\n    `capacity[month]` the crew hours available that month.\n    \"\"\"\n    # TODO: the gap, a JSON-safe bound, one row per month of capacity, and the sorted circuits.\n    return TrimResult(status=status, message=message, value=value, bound=None, gap=None,\n                      circuits=[], hours_by_month=[])\n\nif __name__ == \"__main__\":\n    print(build_result(\"time_limit\", \"No plan found within the 30 s limit.\", None, math.inf, [], {}, {3: 160})\n          .model_dump_json())\n",
   "exercise": {
     "main_path": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-03/practice-2/trim_builder.py",
     "test_path": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-03/practice-2/test_trim_builder.py",
     "run_command": [
       "python3",
-      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-03/practice-2/trim_builder.py"
+      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-03/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -152,6 +170,10 @@
     "concepts": [
       "a missing number is sent as null, because JSON has no infinity",
       "a result carries plan, money by year, value, gap, status and message as data"
-    ]
+    ],
+    "files": [
+      "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-03/practice-2/try_it.py"
+    ],
+    "try_file": "practice/12-engineering-the-optimization-service/48-optimization-api/prose/unit-03/practice-2/try_it.py"
   }
 }

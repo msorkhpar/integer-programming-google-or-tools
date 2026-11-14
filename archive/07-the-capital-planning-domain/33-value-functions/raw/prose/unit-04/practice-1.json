@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A renewal plan's value in NPV-equivalent dollars",
   "blocks": [
     {
@@ -47,6 +47,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef coefficients(benefits: dict[tuple[str, int], dict[str, float]], reference: dict[str, float],\n                 weights: dict[str, float]) -> dict[tuple[str, int], float]:\n    \"\"\"{(main, start year): value in $k of NPV-equivalent} for every row of `benefits`.\"\"\"\n    dollars_per_point = reference[\"npv\"] / weights[\"npv\"]\n    out = {}\n    for key, benefit in benefits.items():\n        points = sum(weights[m] * benefit[m] / reference[m] for m in weights)\n        out[key] = points * dollars_per_point\n    return out\n\n\ndef objective(x: dict[tuple[str, int], mathopt.Variable], coefficient: dict) -> mathopt.LinearExpression:\n    \"\"\"The plan's value: each start variable times its coefficient.\"\"\"\n    return mathopt.fast_sum(coefficient[key] * var for key, var in x.items())\n\n\nif __name__ == \"__main__\":\n    reference = {\"breaks\": 4.0, \"leakage\": 200.0, \"npv\": 1_000.0}\n    weights = {\"breaks\": 0.4, \"leakage\": 0.2, \"npv\": 0.4}\n    print(coefficients({(\"Elm\", 2028): {\"breaks\": 2.0, \"leakage\": 50.0, \"npv\": 300.0}}, reference, weights))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom renewals import coefficients, objective\n\nreference = {\"breaks\": 5.0, \"leakage\": 100.0, \"npv\": 800.0}\nweights = {\"breaks\": 0.5, \"leakage\": 0.1, \"npv\": 0.4}\nbenefits = {(\"Pine\", 2031): {\"breaks\": 5.0, \"leakage\": 20.0, \"npv\": 200.0},\n            (\"Birch\", 2032): {\"breaks\": 1.0, \"leakage\": 100.0, \"npv\": 400.0}}\n\nc = coefficients(benefits, reference, weights)\nprint(\"coefficients:\", {k: round(v, 2) for k, v in c.items()})\nmodel = mathopt.Model()\nx = {key: model.add_binary_variable(name=f\"x_{key[0]}_{key[1]}\") for key in c}\nfor plan in ({(\"Pine\", 2031)}, set(c)):\n    values = {var: 1.0 if key in plan else 0.0 for key, var in x.items()}\n    print(f\"plan {sorted(plan)}:\", round(mathopt.evaluate_expression(objective(x, c), values), 2))\n"
         }
       ]
     },
@@ -59,6 +68,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef coefficients(benefits: dict[tuple[str, int], dict[str, float]], reference: dict[str, float],\n                 weights: dict[str, float]) -> dict[tuple[str, int], float]:\n    \"\"\"{(main, start year): value in $k of NPV-equivalent} for every row of `benefits`.\"\"\"\n    # TODO: one value per row, in $k of NPV-equivalent.\n    out = {key: 0.0 for key in benefits}\n    return out\n\n\ndef objective(x: dict[tuple[str, int], mathopt.Variable], coefficient: dict) -> mathopt.LinearExpression:\n    \"\"\"The plan's value: each start variable times its coefficient.\"\"\"\n    # TODO\n    return mathopt.LinearExpression()\n\n\nif __name__ == \"__main__\":\n    reference = {\"breaks\": 4.0, \"leakage\": 200.0, \"npv\": 1_000.0}\n    weights = {\"breaks\": 0.4, \"leakage\": 0.2, \"npv\": 0.4}\n    print(coefficients({(\"Elm\", 2028): {\"breaks\": 2.0, \"leakage\": 50.0, \"npv\": 300.0}}, reference, weights))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom renewals import coefficients, objective\n\nreference = {\"breaks\": 5.0, \"leakage\": 100.0, \"npv\": 800.0}\nweights = {\"breaks\": 0.5, \"leakage\": 0.1, \"npv\": 0.4}\nbenefits = {(\"Pine\", 2031): {\"breaks\": 5.0, \"leakage\": 20.0, \"npv\": 200.0},\n            (\"Birch\", 2032): {\"breaks\": 1.0, \"leakage\": 100.0, \"npv\": 400.0}}\n\nc = coefficients(benefits, reference, weights)\nprint(\"coefficients:\", {k: round(v, 2) for k, v in c.items()})\nmodel = mathopt.Model()\nx = {key: model.add_binary_variable(name=f\"x_{key[0]}_{key[1]}\") for key in c}\nfor plan in ({(\"Pine\", 2031)}, set(c)):\n    values = {var: 1.0 if key in plan else 0.0 for key, var in x.items()}\n    print(f\"plan {sorted(plan)}:\", round(mathopt.evaluate_expression(objective(x, c), values), 2))\n"
     }
   ],
   "video": null,
@@ -66,8 +84,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 1,
+    "paras": 5,
+    "code": 2,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -77,14 +95,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "6a0141427a773c6f239d5d60dde48efb84c45242ba3fc818be8aac7e5b8c0357",
+  "content_sha256": "7496a214965661a368a0fc896d840b78c8150abbc494726e8dd7bd2cd2ca0f1c",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef coefficients(benefits: dict[tuple[str, int], dict[str, float]], reference: dict[str, float],\n                 weights: dict[str, float]) -> dict[tuple[str, int], float]:\n    \"\"\"{(main, start year): value in $k of NPV-equivalent} for every row of `benefits`.\"\"\"\n    # TODO: one value per row, in $k of NPV-equivalent.\n    out = {key: 0.0 for key in benefits}\n    return out\n\n\ndef objective(x: dict[tuple[str, int], mathopt.Variable], coefficient: dict) -> mathopt.LinearExpression:\n    \"\"\"The plan's value: each start variable times its coefficient.\"\"\"\n    # TODO\n    return mathopt.LinearExpression()\n\n\nif __name__ == \"__main__\":\n    reference = {\"breaks\": 4.0, \"leakage\": 200.0, \"npv\": 1_000.0}\n    weights = {\"breaks\": 0.4, \"leakage\": 0.2, \"npv\": 0.4}\n    print(coefficients({(\"Elm\", 2028): {\"breaks\": 2.0, \"leakage\": 50.0, \"npv\": 300.0}}, reference, weights))\n",
   "exercise": {
     "main_path": "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-04/practice-1/renewals.py",
     "test_path": "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-04/practice-1/test_renewals.py",
     "run_command": [
       "python3",
-      "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-04/practice-1/renewals.py"
+      "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-04/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -133,6 +151,10 @@
       "how a later start moves each measure",
       "the plan's value as one MathOpt linear expression, read on a fixed plan",
       "value points restated in dollars of NPV through the financial weight and reference"
-    ]
+    ],
+    "files": [
+      "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-04/practice-1/try_it.py"
+    ],
+    "try_file": "practice/07-the-capital-planning-domain/33-value-functions/prose/unit-04/practice-1/try_it.py"
   }
 }

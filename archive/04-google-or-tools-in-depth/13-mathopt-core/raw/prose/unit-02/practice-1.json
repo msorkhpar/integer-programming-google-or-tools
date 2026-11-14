@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Tell the caller what a solve means",
   "blocks": [
     {
@@ -93,6 +93,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nR = mathopt.TerminationReason\n\n\n@dataclass(frozen=True)\nclass Verdict:\n    action: str                 # use, use-with-gap, retry, conflict, model-error, solver-error\n    value: float | None         # the plan's objective value, when the plan may be used\n    gap: float | None           # |dual bound - primal bound| when a plan may be used\n    limit: str | None           # the limit's name, when a limit stopped the solve\n\n\ndef verdict(result: mathopt.SolveResult) -> Verdict:\n    \"\"\"What the caller should do with this result.\"\"\"\n    reason = result.termination.reason\n    limit = result.termination.limit.name if result.termination.limit is not None else None\n    if reason == R.OPTIMAL:\n        return Verdict(\"use\", result.objective_value(), 0.0, None)\n    if reason == R.FEASIBLE:\n        gap = abs(result.dual_bound() - result.primal_bound())\n        return Verdict(\"use-with-gap\", result.objective_value(), gap, limit)\n    if reason == R.NO_SOLUTION_FOUND:\n        return Verdict(\"retry\", None, None, limit)\n    if reason == R.INFEASIBLE:\n        return Verdict(\"conflict\", None, None, None)\n    if reason in (R.UNBOUNDED, R.INFEASIBLE_OR_UNBOUNDED):\n        return Verdict(\"model-error\", None, None, None)\n    return Verdict(\"solver-error\", None, None, None)\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_binary_variable(name=\"x\")\n    model.maximize(x)\n    print(verdict(mathopt.solve(model, mathopt.SolverType.HIGHS)))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport datetime\n\nfrom ortools.math_opt.python import mathopt\n\nfrom verdict import verdict\n\nS = mathopt.SolverType\nparams = mathopt.SolveParameters(time_limit=datetime.timedelta(seconds=10))\n\n# Three night shifts under a 20-hour cap.\nmodel = mathopt.Model(name=\"nights\")\nx = [model.add_binary_variable(name=f\"n{i}\") for i in range(3)]\nmodel.add_linear_constraint(8 * x[0] + 9 * x[1] + 7 * x[2] <= 20, name=\"hours\")\nmodel.maximize(10 * x[0] + 12 * x[1] + 7 * x[2])\nprint(\"nights, cap 20:\", verdict(mathopt.solve(model, S.HIGHS, params=params)))\n\nmodel.add_linear_constraint(mathopt.fast_sum(x) >= 3, name=\"cover\")\nprint(\"nights, cap 20, all three:\", verdict(mathopt.solve(model, S.HIGHS, params=params)))\n\nstopped = mathopt.SolveResult(termination=mathopt.Termination(\n    reason=mathopt.TerminationReason.NO_SOLUTION_FOUND, limit=mathopt.Limit.TIME,\n    objective_bounds=mathopt.ObjectiveBounds(primal_bound=float(\"-inf\"), dual_bound=30.0)))\nprint(\"stopped by TIME with no plan:\", verdict(stopped))\n"
         }
       ]
     },
@@ -105,6 +114,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nR = mathopt.TerminationReason\n\n\n@dataclass(frozen=True)\nclass Verdict:\n    action: str                 # use, use-with-gap, retry, conflict, model-error, solver-error\n    value: float | None         # the plan's objective value, when the plan may be used\n    gap: float | None           # |dual bound - primal bound| when a plan may be used\n    limit: str | None           # the limit's name, when a limit stopped the solve\n\n\ndef verdict(result: mathopt.SolveResult) -> Verdict:\n    \"\"\"What the caller should do with this result.\"\"\"\n    # TODO: one branch per row of the table in the statement.\n    return Verdict(\"unknown\", None, None, None)\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_binary_variable(name=\"x\")\n    model.maximize(x)\n    print(verdict(mathopt.solve(model, mathopt.SolverType.HIGHS)))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport datetime\n\nfrom ortools.math_opt.python import mathopt\n\nfrom verdict import verdict\n\nS = mathopt.SolverType\nparams = mathopt.SolveParameters(time_limit=datetime.timedelta(seconds=10))\n\n# Three night shifts under a 20-hour cap.\nmodel = mathopt.Model(name=\"nights\")\nx = [model.add_binary_variable(name=f\"n{i}\") for i in range(3)]\nmodel.add_linear_constraint(8 * x[0] + 9 * x[1] + 7 * x[2] <= 20, name=\"hours\")\nmodel.maximize(10 * x[0] + 12 * x[1] + 7 * x[2])\nprint(\"nights, cap 20:\", verdict(mathopt.solve(model, S.HIGHS, params=params)))\n\nmodel.add_linear_constraint(mathopt.fast_sum(x) >= 3, name=\"cover\")\nprint(\"nights, cap 20, all three:\", verdict(mathopt.solve(model, S.HIGHS, params=params)))\n\nstopped = mathopt.SolveResult(termination=mathopt.Termination(\n    reason=mathopt.TerminationReason.NO_SOLUTION_FOUND, limit=mathopt.Limit.TIME,\n    objective_bounds=mathopt.ObjectiveBounds(primal_bound=float(\"-inf\"), dual_bound=30.0)))\nprint(\"stopped by TIME with no plan:\", verdict(stopped))\n"
     }
   ],
   "video": null,
@@ -112,8 +130,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 2,
-    "code": 1,
+    "paras": 3,
+    "code": 2,
     "tables": 1,
     "lists": 0,
     "images": 0,
@@ -123,14 +141,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "be53b4297e379e57eb043549c5a4d3f9b2b007f67fa7c99d5b1c199eae67fb44",
+  "content_sha256": "32159438420259d8bad3977624fade69068aeb488b8173aeea19612920090c14",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\nR = mathopt.TerminationReason\n\n\n@dataclass(frozen=True)\nclass Verdict:\n    action: str                 # use, use-with-gap, retry, conflict, model-error, solver-error\n    value: float | None         # the plan's objective value, when the plan may be used\n    gap: float | None           # |dual bound - primal bound| when a plan may be used\n    limit: str | None           # the limit's name, when a limit stopped the solve\n\n\ndef verdict(result: mathopt.SolveResult) -> Verdict:\n    \"\"\"What the caller should do with this result.\"\"\"\n    # TODO: one branch per row of the table in the statement.\n    return Verdict(\"unknown\", None, None, None)\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    x = model.add_binary_variable(name=\"x\")\n    model.maximize(x)\n    print(verdict(mathopt.solve(model, mathopt.SolverType.HIGHS)))\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-1/verdict.py",
     "test_path": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-1/test_verdict.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-1/verdict.py"
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -193,6 +211,10 @@
       "each termination reason maps to one action for the caller, with no catch-all branch",
       "objective_value and variable_values read the first solution and raise when there is none, while primal_bound and dual_bound never raise",
       "termination holds the reason, the limit, the solver's detail, the problem status and the objective bounds"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/13-mathopt-core/prose/unit-02/practice-1/try_it.py"
   }
 }

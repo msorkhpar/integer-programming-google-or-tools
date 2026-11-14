@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A plan no weighting can reach, with its proof",
   "blocks": [
     {
@@ -60,6 +60,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\nfrom itertools import combinations\n\n\n@dataclass(frozen=True)\nclass Project:\n    name: str\n    cost: int          # $k\n    shade: int         # square metres of tree canopy\n    visits: int        # extra visits a week\n\n\ndef plans(projects: list[Project], budget: int) -> dict[frozenset[str], tuple[int, int]]:\n    \"\"\"Every set of projects the budget allows, with its (shade, visits).\"\"\"\n    out = {}\n    for size in range(len(projects) + 1):\n        for chosen in combinations(projects, size):\n            if sum(p.cost for p in chosen) <= budget:\n                out[frozenset(p.name for p in chosen)] = (sum(p.shade for p in chosen),\n                                                          sum(p.visits for p in chosen))\n    return out\n\n\ndef unreachable(projects: list[Project], budget: int):\n    \"\"\"An unbeaten plan no weighting of shade and visits picks, with two plans that prove it.\n\n    Returns (plan, a, b), three sets of project names: `plan` is dominated by no plan, and `a` and\n    `b` are plans with less and more shade whose straight line passes strictly above `plan`. Returns\n    None when every unbeaten plan is picked by some weighting.\n    \"\"\"\n    scored = plans(projects, budget)\n    by_point = {}\n    for plan, point in sorted(scored.items(), key=lambda item: sorted(item[0])):\n        by_point.setdefault(point, plan)\n    front = sorted(p for p in by_point\n                   if not any(o[0] >= p[0] and o[1] >= p[1] and o != p for o in by_point))\n    hull = []\n    for p in front:\n        while len(hull) >= 2 and ((hull[-1][0] - hull[-2][0]) * (p[1] - hull[-2][1])\n                                  - (hull[-1][1] - hull[-2][1]) * (p[0] - hull[-2][0])) > 0:\n            hull.pop()\n        hull.append(p)\n    for q in front:\n        if q in hull:\n            continue\n        a = max(h for h in hull if h[0] < q[0])\n        b = min(h for h in hull if h[0] > q[0])\n        return by_point[q], by_point[a], by_point[b]\n    return None\n\n\nif __name__ == \"__main__\":\n    park = [Project(\"trees\", 7, 1, 10), Project(\"pond\", 7, 4, 7), Project(\"courts\", 8, 8, 6)]\n    print(unreachable(park, 10))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom parks import Project, plans, unreachable\n\ngarden = [Project(\"hedges\", 4, 1, 7), Project(\"fountain\", 4, 5, 5), Project(\"arbor\", 5, 7, 1),\n          Project(\"benches\", 3, 2, 2)]\n\nprint(\"plans within 9:\", {\"+\".join(sorted(p)) or \"none\": v for p, v in plans(garden, 9).items()})\nprint(\"unreachable within 9:\", unreachable(garden, 9))\nprint(\"unreachable within 5:\", unreachable(garden, 5))\n"
         }
       ]
     },
@@ -72,6 +81,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\nfrom itertools import combinations\n\n\n@dataclass(frozen=True)\nclass Project:\n    name: str\n    cost: int          # $k\n    shade: int         # square metres of tree canopy\n    visits: int        # extra visits a week\n\n\ndef plans(projects: list[Project], budget: int) -> dict[frozenset[str], tuple[int, int]]:\n    \"\"\"Every set of projects the budget allows, with its (shade, visits).\"\"\"\n    out = {}\n    for size in range(len(projects) + 1):\n        for chosen in combinations(projects, size):\n            if sum(p.cost for p in chosen) <= budget:\n                out[frozenset(p.name for p in chosen)] = (sum(p.shade for p in chosen),\n                                                          sum(p.visits for p in chosen))\n    return out\n\n\ndef unreachable(projects: list[Project], budget: int):\n    \"\"\"An unbeaten plan no weighting of shade and visits picks, with two plans that prove it.\n\n    Returns (plan, a, b), three sets of project names: `plan` is dominated by no plan, and `a` and\n    `b` are plans with less and more shade whose straight line passes strictly above `plan`. Returns\n    None when every unbeaten plan is picked by some weighting.\n    \"\"\"\n    # TODO: find the unbeaten plans, then one that no weighting picks, and its proof.\n    return frozenset(), frozenset(), frozenset()\n\n\nif __name__ == \"__main__\":\n    park = [Project(\"trees\", 7, 1, 10), Project(\"pond\", 7, 4, 7), Project(\"courts\", 8, 8, 6)]\n    print(unreachable(park, 10))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom parks import Project, plans, unreachable\n\ngarden = [Project(\"hedges\", 4, 1, 7), Project(\"fountain\", 4, 5, 5), Project(\"arbor\", 5, 7, 1),\n          Project(\"benches\", 3, 2, 2)]\n\nprint(\"plans within 9:\", {\"+\".join(sorted(p)) or \"none\": v for p, v in plans(garden, 9).items()})\nprint(\"unreachable within 9:\", unreachable(garden, 9))\nprint(\"unreachable within 5:\", unreachable(garden, 5))\n"
     }
   ],
   "video": null,
@@ -79,8 +97,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 1,
+    "paras": 6,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -90,14 +108,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "1c8cf4d84857fa6c7e2d86a3f962f1b64ee37ad25998d0abfe25cd79adc296d4",
+  "content_sha256": "a26e4a76b3aaaf6cf622a37bd1b514b34462b99b6933ffbf4e75811b29d12943",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\nfrom itertools import combinations\n\n\n@dataclass(frozen=True)\nclass Project:\n    name: str\n    cost: int          # $k\n    shade: int         # square metres of tree canopy\n    visits: int        # extra visits a week\n\n\ndef plans(projects: list[Project], budget: int) -> dict[frozenset[str], tuple[int, int]]:\n    \"\"\"Every set of projects the budget allows, with its (shade, visits).\"\"\"\n    out = {}\n    for size in range(len(projects) + 1):\n        for chosen in combinations(projects, size):\n            if sum(p.cost for p in chosen) <= budget:\n                out[frozenset(p.name for p in chosen)] = (sum(p.shade for p in chosen),\n                                                          sum(p.visits for p in chosen))\n    return out\n\n\ndef unreachable(projects: list[Project], budget: int):\n    \"\"\"An unbeaten plan no weighting of shade and visits picks, with two plans that prove it.\n\n    Returns (plan, a, b), three sets of project names: `plan` is dominated by no plan, and `a` and\n    `b` are plans with less and more shade whose straight line passes strictly above `plan`. Returns\n    None when every unbeaten plan is picked by some weighting.\n    \"\"\"\n    # TODO: find the unbeaten plans, then one that no weighting picks, and its proof.\n    return frozenset(), frozenset(), frozenset()\n\n\nif __name__ == \"__main__\":\n    park = [Project(\"trees\", 7, 1, 10), Project(\"pond\", 7, 4, 7), Project(\"courts\", 8, 8, 6)]\n    print(unreachable(park, 10))\n",
   "exercise": {
     "main_path": "practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-02/practice-2/parks.py",
     "test_path": "practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-02/practice-2/test_parks.py",
     "run_command": [
       "python3",
-      "practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-02/practice-2/parks.py"
+      "practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -149,6 +167,10 @@
     "concepts": [
       "a point below the segment between two feasible plans loses to one of them at every share",
       "a supported point is returned by some weighted sum, an unsupported one by none"
-    ]
+    ],
+    "files": [
+      "practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/08-multi-objective-optimization/34-weighted-sum/prose/unit-02/practice-2/try_it.py"
   }
 }

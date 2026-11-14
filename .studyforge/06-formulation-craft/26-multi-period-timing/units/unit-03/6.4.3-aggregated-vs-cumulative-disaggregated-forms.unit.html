@@ -146,6 +146,42 @@ if __name__ == &quot;__main__&quot;:
     x = start_variables(model, [bypass, replacement])
     add_deadline_rows(model, x, bypass, replacement, 1)
     print(len(list(model.linear_constraints())), &quot;rows&quot;)
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from deadline import Project, add_deadline_rows, start_variables
+
+def solve_ok(model):
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+def allowed(schedule, within):
+    first, second = Project(&quot;BY&quot;, (2031, 2032)), Project(&quot;RP&quot;, (2031, 2032, 2033, 2034))
+    model = mathopt.Model()
+    x = start_variables(model, [first, second])
+    for p in (first, second):
+        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) &lt;= 1)
+    add_deadline_rows(model, x, first, second, within)
+    for (pid, t), var in x.items():
+        var.lower_bound = var.upper_bound = 1.0 if schedule.get(pid) == t else 0.0
+    return solve_ok(model)
+
+
+print(&quot;BY 2031, RP 2033, within 2:&quot;, allowed({&quot;BY&quot;: 2031, &quot;RP&quot;: 2033}, 2))
+print(&quot;BY 2031, RP 2034, within 2:&quot;, allowed({&quot;BY&quot;: 2031, &quot;RP&quot;: 2034}, 2))
+print(&quot;BY 2032, RP 2031, within 3:&quot;, allowed({&quot;BY&quot;: 2032, &quot;RP&quot;: 2031}, 3))
+print(&quot;RP 2032 alone, within 3:&quot;, allowed({&quot;RP&quot;: 2032}, 3))
+print(&quot;nothing, within 1:&quot;, allowed({}, 1))
 </code></pre></figure></details>
 <h2 id="practice-prose-b10">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -190,10 +226,47 @@ if __name__ == &quot;__main__&quot;:
     add_deadline_rows(model, x, bypass, replacement, 1)
     print(len(list(model.linear_constraints())), &quot;rows&quot;)
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from deadline import Project, add_deadline_rows, start_variables
+
+def solve_ok(model):
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+def allowed(schedule, within):
+    first, second = Project(&quot;BY&quot;, (2031, 2032)), Project(&quot;RP&quot;, (2031, 2032, 2033, 2034))
+    model = mathopt.Model()
+    x = start_variables(model, [first, second])
+    for p in (first, second):
+        model.add_linear_constraint(sum(x[p.pid, t] for t in p.starts) &lt;= 1)
+    add_deadline_rows(model, x, first, second, within)
+    for (pid, t), var in x.items():
+        var.lower_bound = var.upper_bound = 1.0 if schedule.get(pid) == t else 0.0
+    return solve_ok(model)
+
+
+print(&quot;BY 2031, RP 2033, within 2:&quot;, allowed({&quot;BY&quot;: 2031, &quot;RP&quot;: 2033}, 2))
+print(&quot;BY 2031, RP 2034, within 2:&quot;, allowed({&quot;BY&quot;: 2031, &quot;RP&quot;: 2034}, 2))
+print(&quot;BY 2032, RP 2031, within 3:&quot;, allowed({&quot;BY&quot;: 2032, &quot;RP&quot;: 2031}, 3))
+print(&quot;RP 2032 alone, within 3:&quot;, allowed({&quot;RP&quot;: 2032}, 3))
+print(&quot;nothing, within 1:&quot;, allowed({}, 1))
+</code></pre></figure>
 </section>
 <section data-practice="06-formulation-craft/26-multi-period-timing/unit-03/practice-prose" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/06-formulation-craft/26-multi-period-timing/prose/unit-03/practice-1/deadline.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/06-formulation-craft/26-multi-period-timing/prose/unit-03/practice-1/deadline.py</code> and <code>practice/06-formulation-craft/26-multi-period-timing/prose/unit-03/practice-1/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/06-formulation-craft/26-multi-period-timing/prose/unit-03/practice-1/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>
@@ -289,6 +362,38 @@ if __name__ == &quot;__main__&quot;:
     x = selection_variables(model, projects)
     add_parent_rows(model, x, &quot;SUB&quot;, [&quot;F1&quot;, &quot;F2&quot;])
     print(model.get_num_linear_constraints(), &quot;rows&quot;)
+</code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from feeders import Project, add_parent_rows, selection_variables
+
+def solve_ok(model):
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+def allowed(plan):
+    model = mathopt.Model()
+    x = selection_variables(model, [Project(pid, 5, 1) for pid in [&quot;HUB&quot;, &quot;L1&quot;, &quot;L2&quot;, &quot;L3&quot;]])
+    add_parent_rows(model, x, &quot;HUB&quot;, [&quot;L1&quot;, &quot;L2&quot;, &quot;L3&quot;])
+    for pid, var in x.items():
+        var.lower_bound = var.upper_bound = 1.0 if pid in plan else 0.0
+    return solve_ok(model)
+
+
+print(&quot;plan HUB:&quot;, allowed({&quot;HUB&quot;}))
+print(&quot;plan HUB L1 L3:&quot;, allowed({&quot;HUB&quot;, &quot;L1&quot;, &quot;L3&quot;}))
+print(&quot;plan L2:&quot;, allowed({&quot;L2&quot;}))
+print(&quot;plan L1 L2:&quot;, allowed({&quot;L1&quot;, &quot;L2&quot;}))
 </code></pre></figure></details>
 <h2 id="practice-prose-2-b10">Starting code</h2>
 <figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">from __future__ import annotations
@@ -327,10 +432,43 @@ if __name__ == &quot;__main__&quot;:
     add_parent_rows(model, x, &quot;SUB&quot;, [&quot;F1&quot;, &quot;F2&quot;])
     print(model.get_num_linear_constraints(), &quot;rows&quot;)
 </code></pre></figure>
+<p>File: try_it.py</p>
+<figure class="code"><figcaption><span class="what">python</span></figcaption><pre><code class="language-python">&quot;&quot;&quot;Run executes this file. Change the calls and see what prints. Submit grades.&quot;&quot;&quot;
+import logging
+
+# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.
+logging.basicConfig(level=logging.DEBUG, format=&quot;%(levelname)s %(message)s&quot;)
+from datetime import timedelta
+
+from ortools.math_opt.python import mathopt
+
+from feeders import Project, add_parent_rows, selection_variables
+
+def solve_ok(model):
+    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))
+    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)
+    return result.termination.reason == mathopt.TerminationReason.OPTIMAL
+
+
+def allowed(plan):
+    model = mathopt.Model()
+    x = selection_variables(model, [Project(pid, 5, 1) for pid in [&quot;HUB&quot;, &quot;L1&quot;, &quot;L2&quot;, &quot;L3&quot;]])
+    add_parent_rows(model, x, &quot;HUB&quot;, [&quot;L1&quot;, &quot;L2&quot;, &quot;L3&quot;])
+    for pid, var in x.items():
+        var.lower_bound = var.upper_bound = 1.0 if pid in plan else 0.0
+    return solve_ok(model)
+
+
+print(&quot;plan HUB:&quot;, allowed({&quot;HUB&quot;}))
+print(&quot;plan HUB L1 L3:&quot;, allowed({&quot;HUB&quot;, &quot;L1&quot;, &quot;L3&quot;}))
+print(&quot;plan L2:&quot;, allowed({&quot;L2&quot;}))
+print(&quot;plan L1 L2:&quot;, allowed({&quot;L1&quot;, &quot;L2&quot;}))
+</code></pre></figure>
 </section>
 <section data-practice="06-formulation-craft/26-multi-period-timing/unit-03/practice-prose-2" data-corpus="integer-programming-python-or-tools" aria-label="Practice" tabindex="-1">
 <p data-practice-part="grader">Written for this site. Its tests were proven against a worked solution before it shipped.</p>
-<p data-practice-part="file">Your file for this practice is <code>practice/06-formulation-craft/26-multi-period-timing/prose/unit-03/practice-2/feeders.py</code>.</p>
+<p data-practice-part="file">Your files for this practice are <code>practice/06-formulation-craft/26-multi-period-timing/prose/unit-03/practice-2/feeders.py</code> and <code>practice/06-formulation-craft/26-multi-period-timing/prose/unit-03/practice-2/try_it.py</code>.</p>
+<p data-practice-part="tryit">Run executes <code>practice/06-formulation-craft/26-multi-period-timing/prose/unit-03/practice-2/try_it.py</code>, your own calls, and shows what it printed and logged. It runs no tests and gives no grade; Submit grades.</p>
 <p data-practice-part="offline">Running and submitting need the local study server. If this page was opened as a file, work on the file above and run it yourself.</p>
 <div data-practice-part="editor" hidden>
 <p data-practice-part="no-editor">The editor is not running here, and this page does not start one for you: it is a full development environment with a shell. Start it, and the runner beside it, with the one command under "Bring it up" in this corpus's EXECUTION.md, run from the corpus's root, and reload this page; until then, open the file above in your own editor.</p>

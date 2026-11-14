@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "One of eight heating setpoints, chosen with three binaries",
   "blocks": [
     {
@@ -94,6 +94,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_setpoint(model: mathopt.Model, temp: mathopt.Variable, power: mathopt.Variable,\n                 temps: list[float], powers: list[float]) -> None:\n    \"\"\"(temp, power) is one of the listed setpoints, with at most ceil(log2 n) binaries.\"\"\"\n    n = len(temps)\n    share = [model.add_variable(lb=0, ub=1, name=f\"share_{i}\") for i in range(n)]\n    model.add_linear_constraint(sum(share) == 1, name=\"one_setpoint\")\n    model.add_linear_constraint(temp == sum(t * w for t, w in zip(temps, share)), name=\"temp\")\n    model.add_linear_constraint(power == sum(p * w for p, w in zip(powers, share)), name=\"power\")\n    for b in range(max(1, math.ceil(math.log2(n)))):\n        bit = model.add_binary_variable(name=f\"bit_{b}\")              # setpoint i has code i\n        model.add_linear_constraint(sum(w for i, w in enumerate(share) if i >> b & 1) <= bit, name=f\"set_{b}\")\n        model.add_linear_constraint(sum(w for i, w in enumerate(share) if not i >> b & 1) <= 1 - bit,\n                                    name=f\"clear_{b}\")\n\n\ndef build(temps: list[float], powers: list[float]) -> tuple[mathopt.Model, mathopt.Variable, mathopt.Variable]:\n    model = mathopt.Model(name=\"setpoints\")\n    temp = model.add_variable(lb=-1e6, ub=1e6, name=\"temp\")\n    power = model.add_variable(lb=-1e6, ub=1e6, name=\"power\")\n    add_setpoint(model, temp, power, temps, powers)\n    return model, temp, power\n\n\nif __name__ == \"__main__\":\n    model, temp, power = build([70, 75, 80, 85], [420, 360, 310, 300])\n    print(sum(v.integer for v in model.variables()), \"integer variables\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom setpoints import build\n\n# Five chiller setpoints: temperature (°C) and compressor power (kW).\ntemps = [5, 7, 9, 11, 13]\npowers = [250, 210, 190, 200, 230]\n\n\ndef allowed(temp, power):\n    model, t, p = build(temps, powers)\n    t.lower_bound = t.upper_bound = temp\n    p.lower_bound = p.upper_bound = power\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nmodel, _, _ = build(temps, powers)\nprint(\"binaries for 5 setpoints:\", sum(v.integer for v in model.variables()))\nprint(\"9 °C at 190 kW:\", allowed(9, 190))\nprint(\"9 °C at 250 kW:\", allowed(9, 250))\nprint(\"10 °C at 195 kW:\", allowed(10, 195))\nprint(\"13 °C at 230 kW:\", allowed(13, 230))\n"
         }
       ]
     },
@@ -106,6 +115,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_setpoint(model: mathopt.Model, temp: mathopt.Variable, power: mathopt.Variable,\n                 temps: list[float], powers: list[float]) -> None:\n    \"\"\"(temp, power) is one of the listed setpoints, with at most ceil(log2 n) binaries.\"\"\"\n    # TODO: a weight per setpoint, a code per setpoint, and the bit rows.\n    return None\n\n\ndef build(temps: list[float], powers: list[float]) -> tuple[mathopt.Model, mathopt.Variable, mathopt.Variable]:\n    model = mathopt.Model(name=\"setpoints\")\n    temp = model.add_variable(lb=-1e6, ub=1e6, name=\"temp\")\n    power = model.add_variable(lb=-1e6, ub=1e6, name=\"power\")\n    add_setpoint(model, temp, power, temps, powers)\n    return model, temp, power\n\n\nif __name__ == \"__main__\":\n    model, temp, power = build([70, 75, 80, 85], [420, 360, 310, 300])\n    print(sum(v.integer for v in model.variables()), \"integer variables\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom setpoints import build\n\n# Five chiller setpoints: temperature (°C) and compressor power (kW).\ntemps = [5, 7, 9, 11, 13]\npowers = [250, 210, 190, 200, 230]\n\n\ndef allowed(temp, power):\n    model, t, p = build(temps, powers)\n    t.lower_bound = t.upper_bound = temp\n    p.lower_bound = p.upper_bound = power\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nmodel, _, _ = build(temps, powers)\nprint(\"binaries for 5 setpoints:\", sum(v.integer for v in model.variables()))\nprint(\"9 °C at 190 kW:\", allowed(9, 190))\nprint(\"9 °C at 250 kW:\", allowed(9, 250))\nprint(\"10 °C at 195 kW:\", allowed(10, 195))\nprint(\"13 °C at 230 kW:\", allowed(13, 230))\n"
     }
   ],
   "video": null,
@@ -113,8 +131,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 1,
     "lists": 0,
     "images": 0,
@@ -124,14 +142,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "de70a1d4a068297581281727f1ec30e4a7222e1e09302e3b0431af7dbced7159",
+  "content_sha256": "6f1959a8e3f15fa3d5285378797272c064833132f2202904929bd0301f3c4bfa",
   "starting_code": "from __future__ import annotations\n\nimport math\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_setpoint(model: mathopt.Model, temp: mathopt.Variable, power: mathopt.Variable,\n                 temps: list[float], powers: list[float]) -> None:\n    \"\"\"(temp, power) is one of the listed setpoints, with at most ceil(log2 n) binaries.\"\"\"\n    # TODO: a weight per setpoint, a code per setpoint, and the bit rows.\n    return None\n\n\ndef build(temps: list[float], powers: list[float]) -> tuple[mathopt.Model, mathopt.Variable, mathopt.Variable]:\n    model = mathopt.Model(name=\"setpoints\")\n    temp = model.add_variable(lb=-1e6, ub=1e6, name=\"temp\")\n    power = model.add_variable(lb=-1e6, ub=1e6, name=\"power\")\n    add_setpoint(model, temp, power, temps, powers)\n    return model, temp, power\n\n\nif __name__ == \"__main__\":\n    model, temp, power = build([70, 75, 80, 85], [420, 360, 310, 300])\n    print(sum(v.integer for v in model.variables()), \"integer variables\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-03/practice-2/setpoints.py",
     "test_path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-03/practice-2/test_setpoints.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-03/practice-2/setpoints.py"
+      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-03/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -172,6 +190,10 @@
     },
     "concepts": [
       "one of many options chosen with a logarithmic number of binaries through bit rows"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-03/practice-2/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-03/practice-2/try_it.py"
   }
 }

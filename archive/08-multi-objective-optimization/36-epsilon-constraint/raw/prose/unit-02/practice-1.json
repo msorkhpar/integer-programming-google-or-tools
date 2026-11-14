@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Hospital devices: a floor that keeps the better tie",
   "blocks": [
     {
@@ -43,6 +43,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Device:\n    name: str\n    beds: int         # beds kept in service\n    safety: int       # audit points\n    cost: int         # $k\n\n\ndef augmented_choice(devices: list[Device], budget: int, floor: int, span: float, rho: float = 1e-3):\n    \"\"\"(sorted names, slack) of the most beds with at least `floor` safety points, or None.\"\"\"\n    model = mathopt.Model(name=\"devices\")\n    pick = {d.name: model.add_binary_variable(name=f\"replace_{d.name}\") for d in devices}\n    model.add_linear_constraint(sum(d.cost * pick[d.name] for d in devices) <= budget, name=\"budget\")\n    above = model.add_variable(lb=0.0, name=\"above_floor\")\n    model.add_linear_constraint(sum(d.safety * pick[d.name] for d in devices) - above == floor, name=\"safety_floor\")\n    model.maximize(sum(d.beds * pick[d.name] for d in devices) + (rho / span) * above)\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    values = result.variable_values()\n    return tuple(sorted(n for n, v in pick.items() if values[v] > 0.5)), values[above]\n\n\nif __name__ == \"__main__\":\n    ward = [Device(\"Ventilator\", 12, 4, 60), Device(\"Monitor\", 8, 7, 30), Device(\"Alarm Panel\", 0, 5, 10)]\n    print(augmented_choice(ward, 100, 8, span=16))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom devices import Device, augmented_choice\n\nclinic = [Device(\"Scanner\", 90, 3, 50), Device(\"Oxygen\", 70, 8, 30),\n          Device(\"Lift\", 50, 2, 20), Device(\"Sterilizer\", 0, 6, 10)]\n\nfor floor in (0, 10, 16, 30):\n    print(f\"budget 90, at least {floor} safety:\", augmented_choice(clinic, 90, floor, span=19))\n"
         }
       ]
     },
@@ -55,6 +64,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Device:\n    name: str\n    beds: int         # beds kept in service\n    safety: int       # audit points\n    cost: int         # $k\n\n\ndef augmented_choice(devices: list[Device], budget: int, floor: int, span: float, rho: float = 1e-3):\n    \"\"\"(sorted names, slack) of the most beds with at least `floor` safety points, or None.\"\"\"\n    model = mathopt.Model(name=\"devices\")\n    pick = {d.name: model.add_binary_variable(name=f\"replace_{d.name}\") for d in devices}\n    model.add_linear_constraint(sum(d.cost * pick[d.name] for d in devices) <= budget, name=\"budget\")\n    # TODO: the safety floor, with its slack, and the objective.\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    values = result.variable_values()\n    return tuple(sorted(n for n, v in pick.items() if values[v] > 0.5)), 0.0\n\n\nif __name__ == \"__main__\":\n    ward = [Device(\"Ventilator\", 12, 4, 60), Device(\"Monitor\", 8, 7, 30), Device(\"Alarm Panel\", 0, 5, 10)]\n    print(augmented_choice(ward, 100, 8, span=16))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom devices import Device, augmented_choice\n\nclinic = [Device(\"Scanner\", 90, 3, 50), Device(\"Oxygen\", 70, 8, 30),\n          Device(\"Lift\", 50, 2, 20), Device(\"Sterilizer\", 0, 6, 10)]\n\nfor floor in (0, 10, 16, 30):\n    print(f\"budget 90, at least {floor} safety:\", augmented_choice(clinic, 90, floor, span=19))\n"
     }
   ],
   "video": null,
@@ -62,8 +80,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -73,14 +91,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "f6e57cbbf3d5fafb4f0ae383177c170e3b835edbca2c7eda0bc524abd6602f7f",
+  "content_sha256": "1ac217697072e05e9588528a6bfbd7c71a3b9acf7417d495703a5b4eb218985d",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Device:\n    name: str\n    beds: int         # beds kept in service\n    safety: int       # audit points\n    cost: int         # $k\n\n\ndef augmented_choice(devices: list[Device], budget: int, floor: int, span: float, rho: float = 1e-3):\n    \"\"\"(sorted names, slack) of the most beds with at least `floor` safety points, or None.\"\"\"\n    model = mathopt.Model(name=\"devices\")\n    pick = {d.name: model.add_binary_variable(name=f\"replace_{d.name}\") for d in devices}\n    model.add_linear_constraint(sum(d.cost * pick[d.name] for d in devices) <= budget, name=\"budget\")\n    # TODO: the safety floor, with its slack, and the objective.\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS)\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    values = result.variable_values()\n    return tuple(sorted(n for n, v in pick.items() if values[v] > 0.5)), 0.0\n\n\nif __name__ == \"__main__\":\n    ward = [Device(\"Ventilator\", 12, 4, 60), Device(\"Monitor\", 8, 7, 30), Device(\"Alarm Panel\", 0, 5, 10)]\n    print(augmented_choice(ward, 100, 8, span=16))\n",
   "exercise": {
     "main_path": "practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-02/practice-1/devices.py",
     "test_path": "practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-02/practice-1/test_devices.py",
     "run_command": [
       "python3",
-      "practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-02/practice-1/devices.py"
+      "practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -127,6 +145,10 @@
     "concepts": [
       "an equality floor with a nonnegative slack and a tiny range-scaled reward breaks ties",
       "ties on the maximized goal let a plain floor return a dominated plan"
-    ]
+    ],
+    "files": [
+      "practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/08-multi-objective-optimization/36-epsilon-constraint/prose/unit-02/practice-1/try_it.py"
   }
 }

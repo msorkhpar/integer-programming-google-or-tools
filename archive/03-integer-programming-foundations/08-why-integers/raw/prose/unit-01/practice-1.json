@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Name the rows a rounded plan breaks",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    must_do: bool = False\n    parent: str | None = None\n    group: str | None = None\n\n\ndef broken_rows(plan: set[str], projects: list[Project], budget: int) -> set[str]:\n    \"\"\"The labels of the rows a 0/1 plan breaks: budget, must_<pid>, parent_<pid>, alt_<group>.\"\"\"\n    broken = set()\n    if sum(p.cost for p in projects if p.pid in plan) > budget:\n        broken.add(\"budget\")\n    funded_in_group: dict[str, int] = {}\n    for p in projects:\n        if p.must_do and p.pid not in plan:\n            broken.add(f\"must_{p.pid}\")\n        if p.parent and p.pid in plan and p.parent not in plan:\n            broken.add(f\"parent_{p.pid}\")\n        if p.group and p.pid in plan:\n            funded_in_group[p.group] = funded_in_group.get(p.group, 0) + 1\n    broken |= {f\"alt_{g}\" for g, n in funded_in_group.items() if n > 1}\n    return broken\n\n\nif __name__ == \"__main__\":\n    mains = [Project(\"M1\", 40, 55, must_do=True), Project(\"M2\", 30, 42), Project(\"M3\", 30, 36, parent=\"M2\"),\n             Project(\"M4\", 20, 26, group=\"G1\"), Project(\"M5\", 15, 24, group=\"G1\")]\n    print(broken_rows({\"M1\", \"M2\", \"M3\", \"M4\", \"M5\"}, mains, 100))\n    print(broken_rows({\"M2\", \"M3\"}, mains, 100))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom rows import Project, broken_rows\n\n# Five mains renewals at budget 90.\nrenewals = [\n    Project(\"R1\", 35, 50, must_do=True),\n    Project(\"R2\", 25, 30),\n    Project(\"R3\", 20, 28, parent=\"R2\"),\n    Project(\"R4\", 15, 22, group=\"pump\"),\n    Project(\"R5\", 10, 14, group=\"pump\"),\n]\nfor plan in ({\"R1\", \"R2\", \"R3\"}, {\"R1\", \"R3\", \"R4\", \"R5\"}, {\"R2\", \"R3\", \"R4\"}, {\"R1\", \"R2\", \"R3\", \"R4\"}):\n    print(f\"plan {sorted(plan)}:\", sorted(broken_rows(plan, renewals, 90)))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    must_do: bool = False\n    parent: str | None = None\n    group: str | None = None\n\n\ndef broken_rows(plan: set[str], projects: list[Project], budget: int) -> set[str]:\n    \"\"\"The labels of the rows a 0/1 plan breaks: budget, must_<pid>, parent_<pid>, alt_<group>.\"\"\"\n    # TODO: check each row of the model and collect the label of every row the plan breaks.\n    return set()\n\n\nif __name__ == \"__main__\":\n    mains = [Project(\"M1\", 40, 55, must_do=True), Project(\"M2\", 30, 42), Project(\"M3\", 30, 36, parent=\"M2\"),\n             Project(\"M4\", 20, 26, group=\"G1\"), Project(\"M5\", 15, 24, group=\"G1\")]\n    print(broken_rows({\"M1\", \"M2\", \"M3\", \"M4\", \"M5\"}, mains, 100))\n    print(broken_rows({\"M2\", \"M3\"}, mains, 100))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom rows import Project, broken_rows\n\n# Five mains renewals at budget 90.\nrenewals = [\n    Project(\"R1\", 35, 50, must_do=True),\n    Project(\"R2\", 25, 30),\n    Project(\"R3\", 20, 28, parent=\"R2\"),\n    Project(\"R4\", 15, 22, group=\"pump\"),\n    Project(\"R5\", 10, 14, group=\"pump\"),\n]\nfor plan in ({\"R1\", \"R2\", \"R3\"}, {\"R1\", \"R3\", \"R4\", \"R5\"}, {\"R2\", \"R3\", \"R4\"}, {\"R1\", \"R2\", \"R3\", \"R4\"}):\n    print(f\"plan {sorted(plan)}:\", sorted(broken_rows(plan, renewals, 90)))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "13e3c7ae64561cb938cb6ad7fbf730762e636071dd3ef3291f62b44730aef6e4",
+  "content_sha256": "da1a65d3956cf5d87f83d76acabd6f1094dab57c89a05562d8d32590651d35ed",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Project:\n    pid: str\n    cost: int\n    value: int\n    must_do: bool = False\n    parent: str | None = None\n    group: str | None = None\n\n\ndef broken_rows(plan: set[str], projects: list[Project], budget: int) -> set[str]:\n    \"\"\"The labels of the rows a 0/1 plan breaks: budget, must_<pid>, parent_<pid>, alt_<group>.\"\"\"\n    # TODO: check each row of the model and collect the label of every row the plan breaks.\n    return set()\n\n\nif __name__ == \"__main__\":\n    mains = [Project(\"M1\", 40, 55, must_do=True), Project(\"M2\", 30, 42), Project(\"M3\", 30, 36, parent=\"M2\"),\n             Project(\"M4\", 20, 26, group=\"G1\"), Project(\"M5\", 15, 24, group=\"G1\")]\n    print(broken_rows({\"M1\", \"M2\", \"M3\", \"M4\", \"M5\"}, mains, 100))\n    print(broken_rows({\"M2\", \"M3\"}, mains, 100))\n",
   "exercise": {
     "main_path": "practice/03-integer-programming-foundations/08-why-integers/prose/unit-01/practice-1/rows.py",
     "test_path": "practice/03-integer-programming-foundations/08-why-integers/prose/unit-01/practice-1/test_rows.py",
     "run_command": [
       "python3",
-      "practice/03-integer-programming-foundations/08-why-integers/prose/unit-01/practice-1/rows.py"
+      "practice/03-integer-programming-foundations/08-why-integers/prose/unit-01/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -136,6 +154,10 @@
     "concepts": [
       "a rounded plan is checked row by row, and each broken row is named by its label",
       "the parent row is one-way and an alternative group allows one funded project"
-    ]
+    ],
+    "files": [
+      "practice/03-integer-programming-foundations/08-why-integers/prose/unit-01/practice-1/try_it.py"
+    ],
+    "try_file": "practice/03-integer-programming-foundations/08-why-integers/prose/unit-01/practice-1/try_it.py"
   }
 }

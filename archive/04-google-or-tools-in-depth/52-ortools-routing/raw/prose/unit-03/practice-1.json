@@ -9,7 +9,7 @@
   "unit": 3,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Building access windows for a lift engineer",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef add_time(routing, manager, travel: list[list[int]], service: list[int],\n             windows: dict[int, tuple[int, int]], shift_end: int, max_wait: int) -> None:\n    \"\"\"A \"Time\" dimension: arrival times, with service at each stop, waiting of at most max_wait\n    minutes per stop, an arrival window per node in `windows`, and everyone back by shift_end.\"\"\"\n    def busy(from_index, to_index):\n        here = manager.IndexToNode(from_index)\n        return service[here] + travel[here][manager.IndexToNode(to_index)]\n\n    routing.AddDimension(routing.RegisterTransitCallback(busy), max_wait, shift_end, False, \"Time\")\n    time_dim = routing.GetDimensionOrDie(\"Time\")\n    for node, (opens, closes) in windows.items():\n        time_dim.CumulVar(manager.NodeToIndex(node)).SetRange(opens, closes)\n\n\ndef build(travel, service, windows, shift_end, max_wait, vehicles=1):\n    \"\"\"Given: routes from the depot (node 0), priced in travel minutes, with the time rules added.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(travel), vehicles, 0)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def drive(from_index, to_index):\n        return travel[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    routing.SetArcCostEvaluatorOfAllVehicles(routing.RegisterTransitCallback(drive))\n    add_time(routing, manager, travel, service, windows, shift_end, max_wait)\n    return manager, routing\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 5, 9], [5, 0, 6], [9, 6, 0]], [0, 20, 20], {1: (0, 30), 2: (40, 90)}, 120, 30)\n    print(routing.ReadAssignmentFromRoutes([[1, 2]], True) is not None)\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom windows import build\n\n# A boiler engineer's three flats, in minutes.\ntravel = [\n    [0, 15, 25, 10],\n    [15, 0, 8, 20],\n    [25, 8, 0, 12],\n    [10, 20, 12, 0],\n]\nservice = [0, 40, 25, 30]\n\n\ndef allowed(windows, plan, shift_end=240, max_wait=30):\n    manager, routing = build(travel, service, windows, shift_end, max_wait)\n    return routing.ReadAssignmentFromRoutes([plan], True) is not None\n\n\nwindows = {1: (0, 30), 2: (50, 100), 3: (90, 160)}\nprint(\"windows 1:0-30 2:50-100 3:90-160, order [1, 2, 3]:\", allowed(windows, [1, 2, 3]))\nprint(\"same windows, order [3, 2, 1]:\", allowed(windows, [3, 2, 1]))\nprint(\"flat 3 opens at 200, max wait 30:\", allowed({**windows, 3: (200, 230)}, [1, 2, 3]))\nprint(\"flat 3 opens at 200, max wait 90:\", allowed({**windows, 3: (200, 230)}, [1, 2, 3], max_wait=90))\nprint(\"shift ends at 120:\", allowed(windows, [1, 2, 3], shift_end=120))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef add_time(routing, manager, travel: list[list[int]], service: list[int],\n             windows: dict[int, tuple[int, int]], shift_end: int, max_wait: int) -> None:\n    \"\"\"A \"Time\" dimension: arrival times, with service at each stop, waiting of at most max_wait\n    minutes per stop, an arrival window per node in `windows`, and everyone back by shift_end.\"\"\"\n    # TODO: a time callback, the \"Time\" dimension, and one window per node in `windows`.\n    return None\n\n\ndef build(travel, service, windows, shift_end, max_wait, vehicles=1):\n    \"\"\"Given: routes from the depot (node 0), priced in travel minutes, with the time rules added.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(travel), vehicles, 0)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def drive(from_index, to_index):\n        return travel[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    routing.SetArcCostEvaluatorOfAllVehicles(routing.RegisterTransitCallback(drive))\n    add_time(routing, manager, travel, service, windows, shift_end, max_wait)\n    return manager, routing\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 5, 9], [5, 0, 6], [9, 6, 0]], [0, 20, 20], {1: (0, 30), 2: (40, 90)}, 120, 30)\n    print(routing.ReadAssignmentFromRoutes([[1, 2]], True) is not None)\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom windows import build\n\n# A boiler engineer's three flats, in minutes.\ntravel = [\n    [0, 15, 25, 10],\n    [15, 0, 8, 20],\n    [25, 8, 0, 12],\n    [10, 20, 12, 0],\n]\nservice = [0, 40, 25, 30]\n\n\ndef allowed(windows, plan, shift_end=240, max_wait=30):\n    manager, routing = build(travel, service, windows, shift_end, max_wait)\n    return routing.ReadAssignmentFromRoutes([plan], True) is not None\n\n\nwindows = {1: (0, 30), 2: (50, 100), 3: (90, 160)}\nprint(\"windows 1:0-30 2:50-100 3:90-160, order [1, 2, 3]:\", allowed(windows, [1, 2, 3]))\nprint(\"same windows, order [3, 2, 1]:\", allowed(windows, [3, 2, 1]))\nprint(\"flat 3 opens at 200, max wait 30:\", allowed({**windows, 3: (200, 230)}, [1, 2, 3]))\nprint(\"flat 3 opens at 200, max wait 90:\", allowed({**windows, 3: (200, 230)}, [1, 2, 3], max_wait=90))\nprint(\"shift ends at 120:\", allowed(windows, [1, 2, 3], shift_end=120))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "6526a7dc3bacbd4940c8c7640cbd9f195d13a44fc6e7195967598bbc7c3a9134",
+  "content_sha256": "f58d37eea74b8b6c22e68f6ce5a756282a2b218e1ad1badd1a8215e86d26096e",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.constraint_solver import pywrapcp\n\n\ndef add_time(routing, manager, travel: list[list[int]], service: list[int],\n             windows: dict[int, tuple[int, int]], shift_end: int, max_wait: int) -> None:\n    \"\"\"A \"Time\" dimension: arrival times, with service at each stop, waiting of at most max_wait\n    minutes per stop, an arrival window per node in `windows`, and everyone back by shift_end.\"\"\"\n    # TODO: a time callback, the \"Time\" dimension, and one window per node in `windows`.\n    return None\n\n\ndef build(travel, service, windows, shift_end, max_wait, vehicles=1):\n    \"\"\"Given: routes from the depot (node 0), priced in travel minutes, with the time rules added.\"\"\"\n    manager = pywrapcp.RoutingIndexManager(len(travel), vehicles, 0)\n    routing = pywrapcp.RoutingModel(manager)\n\n    def drive(from_index, to_index):\n        return travel[manager.IndexToNode(from_index)][manager.IndexToNode(to_index)]\n\n    routing.SetArcCostEvaluatorOfAllVehicles(routing.RegisterTransitCallback(drive))\n    add_time(routing, manager, travel, service, windows, shift_end, max_wait)\n    return manager, routing\n\n\nif __name__ == \"__main__\":\n    manager, routing = build([[0, 5, 9], [5, 0, 6], [9, 6, 0]], [0, 20, 20], {1: (0, 30), 2: (40, 90)}, 120, 30)\n    print(routing.ReadAssignmentFromRoutes([[1, 2]], True) is not None)\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-03/practice-1/windows.py",
     "test_path": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-03/practice-1/test_windows.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-03/practice-1/windows.py"
+      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-03/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -137,6 +155,10 @@
       "a time dimension's transit is the service at the stop being left plus the travel to the next",
       "slack is waiting, bounded per stop, and a free start cumul lets the vehicle leave later",
       "an arrival window is a range set on the arrival cumul of the node's index, and the capacity is the horizon"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-03/practice-1/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/52-ortools-routing/prose/unit-03/practice-1/try_it.py"
   }
 }

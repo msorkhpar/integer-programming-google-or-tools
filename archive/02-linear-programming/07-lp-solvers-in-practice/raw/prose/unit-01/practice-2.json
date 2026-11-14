@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "One model, three solvers, one answer",
   "blocks": [
     {
@@ -61,6 +61,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass District:\n    name: str\n    value_per_km: float      # benefit of one km renewed, $k\n    cost_per_km: float       # $k\n    hours_per_km: float      # crew hours\n    max_km: float\n    min_km: float = 0.0      # km a regulator has ordered\n\n\ndef solve_on(districts: list[District], budget: float, hours: float, solver: mathopt.SolverType) -> float | None:\n    \"\"\"Build the renewal LP, solve it with `solver`, and return its objective, or None if not OPTIMAL.\"\"\"\n    model = mathopt.Model(name=\"renewal\")\n    km = {d.name: model.add_variable(lb=d.min_km, ub=d.max_km, name=f\"km_{d.name}\") for d in districts}\n    model.add_linear_constraint(sum(d.cost_per_km * km[d.name] for d in districts) <= budget, name=\"budget\")\n    model.add_linear_constraint(sum(d.hours_per_km * km[d.name] for d in districts) <= hours, name=\"crews\")\n    model.maximize(sum(d.value_per_km * km[d.name] for d in districts))\n    result = mathopt.solve(model, solver)\n    if result.termination.reason != mathopt.TerminationReason.OPTIMAL:\n        return None\n    return result.objective_value()\n\n\ndef relative_gap(a: float, b: float) -> float:\n    \"\"\"|a - b| measured against the larger magnitude, and never against less than 1.\"\"\"\n    return abs(a - b) / max(1.0, abs(a), abs(b))\n\n\ndef all_agree(values: dict[str, float | None], tol: float = 1e-6) -> bool:\n    \"\"\"True when every solver returned a value and every pair is within `tol` relative gap.\"\"\"\n    if any(v is None for v in values.values()):\n        return False\n    found = list(values.values())\n    return all(relative_gap(a, b) <= tol for i, a in enumerate(found) for b in found[i + 1:])\n\n\nif __name__ == \"__main__\":\n    demo = [District(\"North\", 9, 4, 2, 10), District(\"South\", 7, 3, 3, 8), District(\"East\", 5, 2, 1, 12)]\n    values = {s.name: solve_on(demo, 40, 30, s)\n              for s in (mathopt.SolverType.GLOP, mathopt.SolverType.HIGHS, mathopt.SolverType.PDLP)}\n    print(values, all_agree(values))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom renewal import District, all_agree, relative_gap, solve_on\n\ntowns = [District(\"Ashby\", 8, 5, 2, 9), District(\"Brook\", 6, 2, 3, 10), District(\"Cleve\", 4, 1, 1, 15)]\n\nvalues = {s.name: solve_on(towns, 50, 35, s)\n          for s in (mathopt.SolverType.GLOP, mathopt.SolverType.HIGHS, mathopt.SolverType.PDLP)}\nfor name, value in values.items():\n    print(f\"{name} at budget 50, hours 35:\", value if value is None else round(value, 6))\nprint(\"all agree within 1e-4:\", all_agree(values, 1e-4))\nprint(\"gap between 500.0 and 500.2:\", round(relative_gap(500.0, 500.2), 6))\n"
         }
       ]
     },
@@ -73,6 +82,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass District:\n    name: str\n    value_per_km: float      # benefit of one km renewed, $k\n    cost_per_km: float       # $k\n    hours_per_km: float      # crew hours\n    max_km: float\n    min_km: float = 0.0      # km a regulator has ordered\n\n\ndef solve_on(districts: list[District], budget: float, hours: float, solver: mathopt.SolverType) -> float | None:\n    \"\"\"Build the renewal LP, solve it with `solver`, and return its objective, or None if not OPTIMAL.\"\"\"\n    # TODO: one variable per district with its bounds, the budget and crews rows, the objective,\n    # then solve with `solver` and read the status before the value.\n    return 0.0\n\n\ndef relative_gap(a: float, b: float) -> float:\n    \"\"\"|a - b| measured against the larger magnitude, and never against less than 1.\"\"\"\n    # TODO\n    return 1.0\n\n\ndef all_agree(values: dict[str, float | None], tol: float = 1e-6) -> bool:\n    \"\"\"True when every solver returned a value and every pair is within `tol` relative gap.\"\"\"\n    # TODO: a missing value is a disagreement; otherwise compare every pair with relative_gap.\n    return False\n\n\nif __name__ == \"__main__\":\n    demo = [District(\"North\", 9, 4, 2, 10), District(\"South\", 7, 3, 3, 8), District(\"East\", 5, 2, 1, 12)]\n    values = {s.name: solve_on(demo, 40, 30, s)\n              for s in (mathopt.SolverType.GLOP, mathopt.SolverType.HIGHS, mathopt.SolverType.PDLP)}\n    print(values, all_agree(values))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom renewal import District, all_agree, relative_gap, solve_on\n\ntowns = [District(\"Ashby\", 8, 5, 2, 9), District(\"Brook\", 6, 2, 3, 10), District(\"Cleve\", 4, 1, 1, 15)]\n\nvalues = {s.name: solve_on(towns, 50, 35, s)\n          for s in (mathopt.SolverType.GLOP, mathopt.SolverType.HIGHS, mathopt.SolverType.PDLP)}\nfor name, value in values.items():\n    print(f\"{name} at budget 50, hours 35:\", value if value is None else round(value, 6))\nprint(\"all agree within 1e-4:\", all_agree(values, 1e-4))\nprint(\"gap between 500.0 and 500.2:\", round(relative_gap(500.0, 500.2), 6))\n"
     }
   ],
   "video": null,
@@ -80,8 +98,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 4,
-    "code": 2,
+    "paras": 5,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -91,14 +109,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "941bdb1057479e3f3b2ddaad1ed950b46090ab6db58b21d23b367e664572710d",
+  "content_sha256": "8b2e488e0e989e7dc1c7336ce8ad1bf17c7f4b837340f951e0e5349415d0c12d",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass District:\n    name: str\n    value_per_km: float      # benefit of one km renewed, $k\n    cost_per_km: float       # $k\n    hours_per_km: float      # crew hours\n    max_km: float\n    min_km: float = 0.0      # km a regulator has ordered\n\n\ndef solve_on(districts: list[District], budget: float, hours: float, solver: mathopt.SolverType) -> float | None:\n    \"\"\"Build the renewal LP, solve it with `solver`, and return its objective, or None if not OPTIMAL.\"\"\"\n    # TODO: one variable per district with its bounds, the budget and crews rows, the objective,\n    # then solve with `solver` and read the status before the value.\n    return 0.0\n\n\ndef relative_gap(a: float, b: float) -> float:\n    \"\"\"|a - b| measured against the larger magnitude, and never against less than 1.\"\"\"\n    # TODO\n    return 1.0\n\n\ndef all_agree(values: dict[str, float | None], tol: float = 1e-6) -> bool:\n    \"\"\"True when every solver returned a value and every pair is within `tol` relative gap.\"\"\"\n    # TODO: a missing value is a disagreement; otherwise compare every pair with relative_gap.\n    return False\n\n\nif __name__ == \"__main__\":\n    demo = [District(\"North\", 9, 4, 2, 10), District(\"South\", 7, 3, 3, 8), District(\"East\", 5, 2, 1, 12)]\n    values = {s.name: solve_on(demo, 40, 30, s)\n              for s in (mathopt.SolverType.GLOP, mathopt.SolverType.HIGHS, mathopt.SolverType.PDLP)}\n    print(values, all_agree(values))\n",
   "exercise": {
     "main_path": "practice/02-linear-programming/07-lp-solvers-in-practice/prose/unit-01/practice-2/renewal.py",
     "test_path": "practice/02-linear-programming/07-lp-solvers-in-practice/prose/unit-01/practice-2/test_renewal.py",
     "run_command": [
       "python3",
-      "practice/02-linear-programming/07-lp-solvers-in-practice/prose/unit-01/practice-2/renewal.py"
+      "practice/02-linear-programming/07-lp-solvers-in-practice/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -150,6 +168,10 @@
     "concepts": [
       "the same LP solved on GLOP, HiGHS and PDLP gives objectives that agree within a relative tolerance, not exactly",
       "a solve that ends without OPTIMAL has no objective to compare"
-    ]
+    ],
+    "files": [
+      "practice/02-linear-programming/07-lp-solvers-in-practice/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/02-linear-programming/07-lp-solvers-in-practice/prose/unit-01/practice-2/try_it.py"
   }
 }

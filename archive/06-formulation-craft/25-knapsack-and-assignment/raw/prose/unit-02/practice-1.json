@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Load tomorrow's material orders onto trucks",
   "blocks": [
     {
@@ -65,6 +65,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Order:\n    oid: str\n    priority: int\n    kg: int\n    m3: float\n    site: str | None = None      # orders for the same job site travel together\n\n\n@dataclass(frozen=True)\nclass Truck:\n    tid: str\n    max_kg: int\n    max_m3: float\n\n\ndef add_loading_rules(model: mathopt.Model, x: dict, orders: list[Order], trucks: list[Truck]) -> None:\n    \"\"\"Each order on at most one truck, every truck within weight and volume, a site's orders together.\"\"\"\n    for o in orders:\n        model.add_linear_constraint(sum(x[o.oid, t.tid] for t in trucks) <= 1, name=f\"once_{o.oid}\")\n    for t in trucks:\n        model.add_linear_constraint(sum(o.kg * x[o.oid, t.tid] for o in orders) <= t.max_kg, name=f\"kg_{t.tid}\")\n        model.add_linear_constraint(sum(o.m3 * x[o.oid, t.tid] for o in orders) <= t.max_m3, name=f\"m3_{t.tid}\")\n    sites: dict[str, list[Order]] = {}\n    for o in orders:\n        if o.site:\n            sites.setdefault(o.site, []).append(o)\n    for site, members in sites.items():\n        first = members[0]\n        for o in members[1:]:\n            for t in trucks:\n                model.add_linear_constraint(x[o.oid, t.tid] == x[first.oid, t.tid], name=f\"with_{o.oid}_{t.tid}\")\n\n\ndef build(orders: list[Order], trucks: list[Truck]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"truck-loading\")\n    x = {(o.oid, t.tid): model.add_binary_variable(name=f\"x_{o.oid}_{t.tid}\") for o in orders for t in trucks}\n    add_loading_rules(model, x, orders, trucks)\n    model.maximize(sum(o.priority * x[o.oid, t.tid] for o in orders for t in trucks))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Order(\"O1\", 3, 400, 2.0), Order(\"O2\", 5, 900, 1.0, \"S1\")], [Truck(\"T1\", 1000, 3.0)])\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom loading import Order, Truck, build\n\norders = [Order(\"P1\", 6, 700, 1.5), Order(\"P2\", 3, 400, 2.0), Order(\"P3\", 5, 650, 1.0, site=\"Quay\"),\n          Order(\"P4\", 2, 300, 0.5, site=\"Quay\"), Order(\"P5\", 4, 500, 2.5)]\ntrucks = [Truck(\"V1\", 1400, 3.0), Truck(\"V2\", 1000, 4.0)]\n\n\ndef allowed(loads):\n    model, x = build(orders, trucks)\n    for (oid, tid), var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if loads.get(oid) == tid else 0.0\n    return mathopt.solve(model, mathopt.SolverType.HIGHS).termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"P1,P2 on V1:\", allowed({\"P1\": \"V1\", \"P2\": \"V1\"}))\nprint(\"P1 on V1, P3,P4 on V2:\", allowed({\"P1\": \"V1\", \"P3\": \"V2\", \"P4\": \"V2\"}))\nprint(\"P3 on V1, P4 on V2:\", allowed({\"P3\": \"V1\", \"P4\": \"V2\"}))\nprint(\"P3 on V1 alone:\", allowed({\"P3\": \"V1\"}))\n\nmodel, x = build(orders, trucks)\nresult = mathopt.solve(model, mathopt.SolverType.HIGHS)\nprint(\"best priority shipped:\", round(result.objective_value(), 2))\n"
         }
       ]
     },
@@ -77,6 +86,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Order:\n    oid: str\n    priority: int\n    kg: int\n    m3: float\n    site: str | None = None      # orders for the same job site travel together\n\n\n@dataclass(frozen=True)\nclass Truck:\n    tid: str\n    max_kg: int\n    max_m3: float\n\n\ndef add_loading_rules(model: mathopt.Model, x: dict, orders: list[Order], trucks: list[Truck]) -> None:\n    \"\"\"Each order on at most one truck, every truck within weight and volume, a site's orders together.\"\"\"\n    # TODO: the rows of the four loading rules.\n    return None\n\ndef build(orders: list[Order], trucks: list[Truck]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"truck-loading\")\n    x = {(o.oid, t.tid): model.add_binary_variable(name=f\"x_{o.oid}_{t.tid}\") for o in orders for t in trucks}\n    add_loading_rules(model, x, orders, trucks)\n    model.maximize(sum(o.priority * x[o.oid, t.tid] for o in orders for t in trucks))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Order(\"O1\", 3, 400, 2.0), Order(\"O2\", 5, 900, 1.0, \"S1\")], [Truck(\"T1\", 1000, 3.0)])\n    print(len(list(model.linear_constraints())), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom ortools.math_opt.python import mathopt\n\nfrom loading import Order, Truck, build\n\norders = [Order(\"P1\", 6, 700, 1.5), Order(\"P2\", 3, 400, 2.0), Order(\"P3\", 5, 650, 1.0, site=\"Quay\"),\n          Order(\"P4\", 2, 300, 0.5, site=\"Quay\"), Order(\"P5\", 4, 500, 2.5)]\ntrucks = [Truck(\"V1\", 1400, 3.0), Truck(\"V2\", 1000, 4.0)]\n\n\ndef allowed(loads):\n    model, x = build(orders, trucks)\n    for (oid, tid), var in x.items():\n        var.lower_bound = var.upper_bound = 1.0 if loads.get(oid) == tid else 0.0\n    return mathopt.solve(model, mathopt.SolverType.HIGHS).termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\nprint(\"P1,P2 on V1:\", allowed({\"P1\": \"V1\", \"P2\": \"V1\"}))\nprint(\"P1 on V1, P3,P4 on V2:\", allowed({\"P1\": \"V1\", \"P3\": \"V2\", \"P4\": \"V2\"}))\nprint(\"P3 on V1, P4 on V2:\", allowed({\"P3\": \"V1\", \"P4\": \"V2\"}))\nprint(\"P3 on V1 alone:\", allowed({\"P3\": \"V1\"}))\n\nmodel, x = build(orders, trucks)\nresult = mathopt.solve(model, mathopt.SolverType.HIGHS)\nprint(\"best priority shipped:\", round(result.objective_value(), 2))\n"
     }
   ],
   "video": null,
@@ -84,8 +102,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -95,14 +113,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "d086b94be341361b182d18b2a232b695e6c55496837259e910bfb6bf46bc3eb8",
+  "content_sha256": "dbaba9029d3a0bb03b6f8ccbc7190684772814c0e3913da8f4d5a20230fe3f60",
   "starting_code": "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\nfrom ortools.math_opt.python import mathopt\n\n\n@dataclass(frozen=True)\nclass Order:\n    oid: str\n    priority: int\n    kg: int\n    m3: float\n    site: str | None = None      # orders for the same job site travel together\n\n\n@dataclass(frozen=True)\nclass Truck:\n    tid: str\n    max_kg: int\n    max_m3: float\n\n\ndef add_loading_rules(model: mathopt.Model, x: dict, orders: list[Order], trucks: list[Truck]) -> None:\n    \"\"\"Each order on at most one truck, every truck within weight and volume, a site's orders together.\"\"\"\n    # TODO: the rows of the four loading rules.\n    return None\n\ndef build(orders: list[Order], trucks: list[Truck]) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"truck-loading\")\n    x = {(o.oid, t.tid): model.add_binary_variable(name=f\"x_{o.oid}_{t.tid}\") for o in orders for t in trucks}\n    add_loading_rules(model, x, orders, trucks)\n    model.maximize(sum(o.priority * x[o.oid, t.tid] for o in orders for t in trucks))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    model, x = build([Order(\"O1\", 3, 400, 2.0), Order(\"O2\", 5, 900, 1.0, \"S1\")], [Truck(\"T1\", 1000, 3.0)])\n    print(len(list(model.linear_constraints())), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-1/loading.py",
     "test_path": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-1/test_loading.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-1/loading.py"
+      "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -148,6 +166,10 @@
     },
     "concepts": [
       "several knapsacks need one binary per item and knapsack, an at-most-once row per item and a capacity row per knapsack"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/25-knapsack-and-assignment/prose/unit-02/practice-1/try_it.py"
   }
 }

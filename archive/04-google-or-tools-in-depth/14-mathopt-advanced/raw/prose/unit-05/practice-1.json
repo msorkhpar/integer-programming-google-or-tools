@@ -9,7 +9,7 @@
   "unit": 5,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "The best plan so far, from every solution the solver reports",
   "blocks": [
     {
@@ -51,6 +51,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef make_tracker(objective: dict, maximize: bool):\n    \"\"\"(callback for MIP_SOLUTION, history of the best objective value after each reported solution).\"\"\"\n    history: list[float] = []\n\n    def callback(data: mathopt.CallbackData) -> mathopt.CallbackResult:\n        value = sum(coef * data.solution.get(v, 0.0) for v, coef in objective.items())\n        if history:\n            value = max(value, history[-1]) if maximize else min(value, history[-1])\n        history.append(value)\n        return mathopt.CallbackResult()\n\n    return callback, history\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    a = model.add_binary_variable(name=\"a\")\n    callback, history = make_tracker({a: 3.0}, maximize=True)\n    callback(mathopt.CallbackData(event=mathopt.Event.MIP_SOLUTION, solution={a: 1.0}))\n    print(history)\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom tracker import make_tracker\n\n# Three parcels, maximize their value.\nmodel = mathopt.Model(name=\"parcels\")\np = [model.add_binary_variable(name=f\"parcel{i}\") for i in range(3)]\ncallback, history = make_tracker({p[0]: 6.0, p[1]: 4.0, p[2]: 9.0}, maximize=True)\n\nfor solution in ({p[0]: 1.0}, {p[0]: 1.0, p[1]: 1.0}, {p[1]: 1.0}, {p[2]: 1.0, p[1]: 1.0}):\n    result = callback(mathopt.CallbackData(event=mathopt.Event.MIP_SOLUTION, solution=solution))\n    print(\"history after\", sorted(v.name for v in solution), \"->\", history, \"terminate\", result and result.terminate)\n\nlow_callback, low_history = make_tracker({p[0]: 6.0, p[1]: 4.0}, maximize=False)\nfor solution in ({p[0]: 1.0, p[1]: 1.0}, {p[1]: 1.0}, {p[0]: 1.0}):\n    low_callback(mathopt.CallbackData(event=mathopt.Event.MIP_SOLUTION, solution=solution))\nprint(\"history when minimizing:\", low_history)\n"
         }
       ]
     },
@@ -63,6 +72,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef make_tracker(objective: dict, maximize: bool):\n    \"\"\"(callback for MIP_SOLUTION, history of the best objective value after each reported solution).\"\"\"\n    history: list[float] = []\n\n    def callback(data: mathopt.CallbackData) -> mathopt.CallbackResult:\n        # TODO: this solution's value, then the best so far, appended to history.\n        return mathopt.CallbackResult()\n\n    return callback, history\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    a = model.add_binary_variable(name=\"a\")\n    callback, history = make_tracker({a: 3.0}, maximize=True)\n    callback(mathopt.CallbackData(event=mathopt.Event.MIP_SOLUTION, solution={a: 1.0}))\n    print(history)\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nfrom ortools.math_opt.python import mathopt\n\nfrom tracker import make_tracker\n\n# Three parcels, maximize their value.\nmodel = mathopt.Model(name=\"parcels\")\np = [model.add_binary_variable(name=f\"parcel{i}\") for i in range(3)]\ncallback, history = make_tracker({p[0]: 6.0, p[1]: 4.0, p[2]: 9.0}, maximize=True)\n\nfor solution in ({p[0]: 1.0}, {p[0]: 1.0, p[1]: 1.0}, {p[1]: 1.0}, {p[2]: 1.0, p[1]: 1.0}):\n    result = callback(mathopt.CallbackData(event=mathopt.Event.MIP_SOLUTION, solution=solution))\n    print(\"history after\", sorted(v.name for v in solution), \"->\", history, \"terminate\", result and result.terminate)\n\nlow_callback, low_history = make_tracker({p[0]: 6.0, p[1]: 4.0}, maximize=False)\nfor solution in ({p[0]: 1.0, p[1]: 1.0}, {p[1]: 1.0}, {p[0]: 1.0}):\n    low_callback(mathopt.CallbackData(event=mathopt.Event.MIP_SOLUTION, solution=solution))\nprint(\"history when minimizing:\", low_history)\n"
     }
   ],
   "video": null,
@@ -70,8 +88,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -81,14 +99,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "e2f40a0780827e7e1e381b33b3072ca0c944d88ca69442fcc8058d391695fb23",
+  "content_sha256": "fb6bb6e26baef877fd59122a85501a5fddbc15158ffa823f42dc8e5ff9810c1f",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef make_tracker(objective: dict, maximize: bool):\n    \"\"\"(callback for MIP_SOLUTION, history of the best objective value after each reported solution).\"\"\"\n    history: list[float] = []\n\n    def callback(data: mathopt.CallbackData) -> mathopt.CallbackResult:\n        # TODO: this solution's value, then the best so far, appended to history.\n        return mathopt.CallbackResult()\n\n    return callback, history\n\n\nif __name__ == \"__main__\":\n    model = mathopt.Model()\n    a = model.add_binary_variable(name=\"a\")\n    callback, history = make_tracker({a: 3.0}, maximize=True)\n    callback(mathopt.CallbackData(event=mathopt.Event.MIP_SOLUTION, solution={a: 1.0}))\n    print(history)\n",
   "exercise": {
     "main_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-1/tracker.py",
     "test_path": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-1/test_tracker.py",
     "run_command": [
       "python3",
-      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-1/tracker.py"
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -134,6 +152,10 @@
     },
     "concepts": [
       "a MIP_SOLUTION callback that keeps the best plan value itself"
-    ]
+    ],
+    "files": [
+      "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-1/try_it.py"
+    ],
+    "try_file": "practice/04-google-or-tools-in-depth/14-mathopt-advanced/prose/unit-05/practice-1/try_it.py"
   }
 }

@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Inspections every plan must include",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef tighten(cost: dict, budget: int, hours: dict, need: dict) -> tuple[set, set]:\n    \"\"\"Inspections every allowed plan must include, and inspections no allowed plan can include.\n\n    `hours[d][j]` is what inspection j gives district d, `need[d]` the hours district d must get.\n    Each row is used on its own, and the pass repeats until nothing changes.\n    \"\"\"\n    ones: set = set()\n    zeros: set = set()\n    changed = True\n    while changed:\n        changed = False\n        for d, gives in hours.items():\n            for j, h in gives.items():\n                if j in ones or j in zeros or h <= 0:\n                    continue\n                most_without = sum(g for k, g in gives.items() if k not in zeros and k != j)\n                if most_without < need[d]:               # the district cannot be covered without j\n                    ones.add(j)\n                    changed = True\n        spent = sum(cost[j] for j in ones)\n        for j in cost:\n            if j not in ones and j not in zeros and spent + cost[j] > budget:\n                zeros.add(j)                              # j does not fit next to what must be done\n                changed = True\n    return ones, zeros\n\n\ndef build(cost: dict, budget: int, hours: dict, need: dict, value: dict, *, integer: bool = True,\n          fixings: tuple[set, set] | None = None) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"inspections\")\n    x = {j: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{j}\") for j in cost}\n    model.add_linear_constraint(sum(cost[j] * x[j] for j in cost) <= budget, name=\"budget\")\n    for d, gives in hours.items():\n        model.add_linear_constraint(sum(h * x[j] for j, h in gives.items()) >= need[d], name=f\"cover_{d}\")\n    if fixings is not None:\n        ones, zeros = fixings\n        for j in ones:\n            x[j].lower_bound = 1\n        for j in zeros:\n            x[j].upper_bound = 0\n    model.maximize(sum(value[j] * x[j] for j in cost))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    print(tighten({\"A\": 3, \"B\": 2}, 4, {\"north\": {\"A\": 5, \"B\": 1}}, {\"north\": 4}))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom inspections import tighten\n\n# Four site visits: cost, and hours each gives to two districts.\ncost = {\"P\": 3, \"Q\": 6, \"R\": 2, \"T\": 1}\nhours = {\"valley\": {\"P\": 4, \"Q\": 2, \"R\": 1}, \"ridge\": {\"Q\": 3, \"R\": 2, \"T\": 2}}\n\nones, zeros = tighten(cost, 7, hours, {\"valley\": 5, \"ridge\": 3})\nprint(\"budget 7, fixed at 1:\", sorted(ones))\nprint(\"budget 7, fixed at 0:\", sorted(zeros))\nones, zeros = tighten(cost, 12, hours, {\"valley\": 2, \"ridge\": 1})\nprint(\"budget 12, fixed at 1:\", sorted(ones))\nprint(\"budget 12, fixed at 0:\", sorted(zeros))\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef tighten(cost: dict, budget: int, hours: dict, need: dict) -> tuple[set, set]:\n    \"\"\"Inspections every allowed plan must include, and inspections no allowed plan can include.\n\n    `hours[d][j]` is what inspection j gives district d, `need[d]` the hours district d must get.\n    Each row is used on its own, and the pass repeats until nothing changes.\n    \"\"\"\n    # TODO: fix what the rows force, one row at a time, until nothing changes.\n    return set(), set()\n\n\ndef build(cost: dict, budget: int, hours: dict, need: dict, value: dict, *, integer: bool = True,\n          fixings: tuple[set, set] | None = None) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"inspections\")\n    x = {j: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{j}\") for j in cost}\n    model.add_linear_constraint(sum(cost[j] * x[j] for j in cost) <= budget, name=\"budget\")\n    for d, gives in hours.items():\n        model.add_linear_constraint(sum(h * x[j] for j, h in gives.items()) >= need[d], name=f\"cover_{d}\")\n    if fixings is not None:\n        ones, zeros = fixings\n        for j in ones:\n            x[j].lower_bound = 1\n        for j in zeros:\n            x[j].upper_bound = 0\n    model.maximize(sum(value[j] * x[j] for j in cost))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    print(tighten({\"A\": 3, \"B\": 2}, 4, {\"north\": {\"A\": 5, \"B\": 1}}, {\"north\": 4}))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom inspections import tighten\n\n# Four site visits: cost, and hours each gives to two districts.\ncost = {\"P\": 3, \"Q\": 6, \"R\": 2, \"T\": 1}\nhours = {\"valley\": {\"P\": 4, \"Q\": 2, \"R\": 1}, \"ridge\": {\"Q\": 3, \"R\": 2, \"T\": 2}}\n\nones, zeros = tighten(cost, 7, hours, {\"valley\": 5, \"ridge\": 3})\nprint(\"budget 7, fixed at 1:\", sorted(ones))\nprint(\"budget 7, fixed at 0:\", sorted(zeros))\nones, zeros = tighten(cost, 12, hours, {\"valley\": 2, \"ridge\": 1})\nprint(\"budget 12, fixed at 1:\", sorted(ones))\nprint(\"budget 12, fixed at 0:\", sorted(zeros))\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "bd94f06636c83a43361ac838146c5ce0fb2775f0ae3d217041987ef6dac62971",
+  "content_sha256": "1119051db7680a7f8dbba56cb42d28cd095dbf9d3ac723b4e8070cd8f0bebcbf",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef tighten(cost: dict, budget: int, hours: dict, need: dict) -> tuple[set, set]:\n    \"\"\"Inspections every allowed plan must include, and inspections no allowed plan can include.\n\n    `hours[d][j]` is what inspection j gives district d, `need[d]` the hours district d must get.\n    Each row is used on its own, and the pass repeats until nothing changes.\n    \"\"\"\n    # TODO: fix what the rows force, one row at a time, until nothing changes.\n    return set(), set()\n\n\ndef build(cost: dict, budget: int, hours: dict, need: dict, value: dict, *, integer: bool = True,\n          fixings: tuple[set, set] | None = None) -> tuple[mathopt.Model, dict]:\n    model = mathopt.Model(name=\"inspections\")\n    x = {j: model.add_variable(lb=0, ub=1, is_integer=integer, name=f\"x_{j}\") for j in cost}\n    model.add_linear_constraint(sum(cost[j] * x[j] for j in cost) <= budget, name=\"budget\")\n    for d, gives in hours.items():\n        model.add_linear_constraint(sum(h * x[j] for j, h in gives.items()) >= need[d], name=f\"cover_{d}\")\n    if fixings is not None:\n        ones, zeros = fixings\n        for j in ones:\n            x[j].lower_bound = 1\n        for j in zeros:\n            x[j].upper_bound = 0\n    model.maximize(sum(value[j] * x[j] for j in cost))\n    return model, x\n\n\nif __name__ == \"__main__\":\n    print(tighten({\"A\": 3, \"B\": 2}, 4, {\"north\": {\"A\": 5, \"B\": 1}}, {\"north\": 4}))\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-02/practice-1/inspections.py",
     "test_path": "practice/06-formulation-craft/29-strong-formulations/prose/unit-02/practice-1/test_inspections.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/29-strong-formulations/prose/unit-02/practice-1/inspections.py"
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -145,6 +163,10 @@
     "concepts": [
       "fixings found from one row change what another row leaves, so the pass repeats",
       "a capacity row leaves each variable its capacity less what the must-dos are sure to use"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/29-strong-formulations/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/29-strong-formulations/prose/unit-02/practice-1/try_it.py"
   }
 }

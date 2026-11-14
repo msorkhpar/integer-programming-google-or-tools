@@ -9,7 +9,7 @@
   "unit": 4,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Overtime at tiered prices",
   "blocks": [
     {
@@ -48,6 +48,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport pyomo.environ as pyo\n\n\ndef plan(jobs: dict[str, tuple[float, float]], regular: float,\n         hours: list[float], cost: list[float]) -> tuple[float, float, float]:\n    \"\"\"Choose jobs (name -> (hours, value)) to maximize value minus overtime cost.\n\n    Overtime beyond `regular` hours costs the piecewise-linear curve through (hours[k], cost[k]).\n    Returns (net value, overtime hours, overtime cost).\n    \"\"\"\n    m = pyo.ConcreteModel()\n    m.J = pyo.Set(initialize=list(jobs))\n    m.x = pyo.Var(m.J, domain=pyo.Binary)\n    m.over = pyo.Var(bounds=(hours[0], hours[-1]))\n    m.pay = pyo.Var(bounds=(0, None))\n    m.time = pyo.Constraint(expr=sum(jobs[j][0] * m.x[j] for j in m.J) <= regular + m.over)\n    m.curve = pyo.Piecewise(m.pay, m.over, pw_pts=list(hours), f_rule=list(cost),\n                            pw_constr_type=\"LB\", pw_repn=\"INC\")\n    m.net = pyo.Objective(expr=sum(jobs[j][1] * m.x[j] for j in m.J) - m.pay, sense=pyo.maximize)\n    solver = pyo.SolverFactory(\"appsi_highs\")\n    solver.config.mip_gap = 0.0\n    solver.solve(m)\n    return pyo.value(m.net), m.over.value, m.pay.value\n\n\nif __name__ == \"__main__\":\n    work = {\"A\": (30, 900), \"B\": (20, 500), \"C\": (25, 400)}\n    print(plan(work, 40, [0, 10, 20, 40], [0, 200, 500, 1300]))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\n# Pyomo logs every set it builds and the whole solver log; keep its own logger to warnings.\nlogging.getLogger(\"pyomo\").setLevel(logging.WARNING)\n\nfrom overtime import plan\n\n# Bus garage jobs: name -> (hours, value $); overtime curve through (hours, cost).\njobs = {\"engine\": (25, 2000), \"gearbox\": (15, 1100), \"seats\": (10, 500), \"glass\": (20, 700)}\nhours = [0, 8, 16, 30]\ncost = [0, 280, 720, 1700]\nfor regular in (50, 35):\n    net, over, pay = plan(jobs, regular, hours, cost)\n    print(f\"regular {regular}h: net {round(net, 2)}, overtime {round(over, 2)}h costing {round(pay, 2)}\")\n"
         }
       ]
     },
@@ -60,6 +69,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport pyomo.environ as pyo\n\n\ndef plan(jobs: dict[str, tuple[float, float]], regular: float,\n         hours: list[float], cost: list[float]) -> tuple[float, float, float]:\n    \"\"\"Choose jobs (name -> (hours, value)) to maximize value minus overtime cost.\n\n    Overtime beyond `regular` hours costs the piecewise-linear curve through (hours[k], cost[k]).\n    Returns (net value, overtime hours, overtime cost).\n    \"\"\"\n    # TODO: x per job; overtime hours and their cost as variables; the time row; a Piecewise for the\n    #       cost curve; the objective; solve with appsi_highs.\n    return 0.0, 0.0, 0.0\n\n\nif __name__ == \"__main__\":\n    work = {\"A\": (30, 900), \"B\": (20, 500), \"C\": (25, 400)}\n    print(plan(work, 40, [0, 10, 20, 40], [0, 200, 500, 1300]))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\n# Pyomo logs every set it builds and the whole solver log; keep its own logger to warnings.\nlogging.getLogger(\"pyomo\").setLevel(logging.WARNING)\n\nfrom overtime import plan\n\n# Bus garage jobs: name -> (hours, value $); overtime curve through (hours, cost).\njobs = {\"engine\": (25, 2000), \"gearbox\": (15, 1100), \"seats\": (10, 500), \"glass\": (20, 700)}\nhours = [0, 8, 16, 30]\ncost = [0, 280, 720, 1700]\nfor regular in (50, 35):\n    net, over, pay = plan(jobs, regular, hours, cost)\n    print(f\"regular {regular}h: net {round(net, 2)}, overtime {round(over, 2)}h costing {round(pay, 2)}\")\n"
     }
   ],
   "video": null,
@@ -67,8 +85,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 2,
+    "paras": 4,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -78,14 +96,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "43b08ede55f70283478ba8dfd96f9e67abb11cc6e19872423f81a07fa14198be",
+  "content_sha256": "6de265a0be6474a031f86c14b4ebe3f11f5a0245f8ad092117a2aa1c8335065a",
   "starting_code": "from __future__ import annotations\n\nimport pyomo.environ as pyo\n\n\ndef plan(jobs: dict[str, tuple[float, float]], regular: float,\n         hours: list[float], cost: list[float]) -> tuple[float, float, float]:\n    \"\"\"Choose jobs (name -> (hours, value)) to maximize value minus overtime cost.\n\n    Overtime beyond `regular` hours costs the piecewise-linear curve through (hours[k], cost[k]).\n    Returns (net value, overtime hours, overtime cost).\n    \"\"\"\n    # TODO: x per job; overtime hours and their cost as variables; the time row; a Piecewise for the\n    #       cost curve; the objective; solve with appsi_highs.\n    return 0.0, 0.0, 0.0\n\n\nif __name__ == \"__main__\":\n    work = {\"A\": (30, 900), \"B\": (20, 500), \"C\": (25, 400)}\n    print(plan(work, 40, [0, 10, 20, 40], [0, 200, 500, 1300]))\n",
   "exercise": {
     "main_path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-04/practice-1/overtime.py",
     "test_path": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-04/practice-1/test_overtime.py",
     "run_command": [
       "python3",
-      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-04/practice-1/overtime.py"
+      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-04/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -128,6 +146,10 @@
       "which relation a Piecewise component states",
       "when Pyomo writes plain rows for a curve",
       "the default representation and HiGHS"
-    ]
+    ],
+    "files": [
+      "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-04/practice-1/try_it.py"
+    ],
+    "try_file": "practice/05-other-modeling-frameworks-and-solvers/19-pyomo/prose/unit-04/practice-1/try_it.py"
   }
 }

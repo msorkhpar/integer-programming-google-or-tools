@@ -9,7 +9,7 @@
   "unit": 1,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Report what a CBC run found, and only what it found",
   "blocks": [
     {
@@ -52,6 +52,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport pulp\n\n\ndef report(prob: pulp.LpProblem) -> tuple[str, float | None]:\n    \"\"\"After prob.solve(...): (\"proved\", value), (\"unproved\", value) or (\"no plan\", None).\"\"\"\n    if prob.status != pulp.LpStatusOptimal:\n        return \"no plan\", None\n    verdict = \"proved\" if prob.sol_status == pulp.LpSolutionOptimal else \"unproved\"\n    return verdict, pulp.value(prob.objective)\n\n\nif __name__ == \"__main__\":\n    demo = pulp.LpProblem(\"demo\", pulp.LpMaximize)\n    a = demo.add_variable(\"a\", 0, 1, cat=pulp.LpBinary)\n    b = demo.add_variable(\"b\", 0, 1, cat=pulp.LpBinary)\n    demo += 3 * a + 2 * b, \"value\"\n    demo += a + b <= 1, \"one\"\n    demo.solve(pulp.PULP_CBC_CMD(msg=False))\n    print(report(demo))\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport pulp\n\nfrom verdict import report\n\n\ndef library_problem(vans):\n    \"\"\"A library service's branch refits: maximize books added with `vans` delivery vans.\"\"\"\n    prob = pulp.LpProblem(\"branches\", pulp.LpMaximize)\n    b = {k: prob.add_variable(f\"b_{k}\", 0, 1, cat=pulp.LpBinary) for k in (\"mill\", \"dock\", \"park\")}\n    prob += 500 * b[\"mill\"] + 350 * b[\"dock\"] + 200 * b[\"park\"], \"books\"\n    prob += 3 * b[\"mill\"] + 2 * b[\"dock\"] + 1 * b[\"park\"] <= vans, \"vans\"\n    return prob, b\n\n\nprob, b = library_problem(vans=4)\nprob.solve(pulp.PULP_CBC_CMD(msg=False))\nprint(\"vans 4, search finished:\", report(prob))\nprob.sol_status = pulp.LpSolutionIntegerFeasible\nprint(\"vans 4, read as stopped by a limit:\", report(prob))\nprob, b = library_problem(vans=4)\nprob += b[\"mill\"] + b[\"dock\"] >= 2, \"both\"\nprob.solve(pulp.PULP_CBC_CMD(msg=False))\nprint(\"vans 4, mill and dock both required:\", report(prob))\n"
         }
       ]
     },
@@ -64,6 +73,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport pulp\n\n\ndef report(prob: pulp.LpProblem) -> tuple[str, float | None]:\n    \"\"\"After prob.solve(...): (\"proved\", value), (\"unproved\", value) or (\"no plan\", None).\"\"\"\n    # TODO: read prob.status and prob.sol_status, and give a value only when there is a plan.\n    return \"proved\", None\n\nif __name__ == \"__main__\":\n    demo = pulp.LpProblem(\"demo\", pulp.LpMaximize)\n    a = demo.add_variable(\"a\", 0, 1, cat=pulp.LpBinary)\n    b = demo.add_variable(\"b\", 0, 1, cat=pulp.LpBinary)\n    demo += 3 * a + 2 * b, \"value\"\n    demo += a + b <= 1, \"one\"\n    demo.solve(pulp.PULP_CBC_CMD(msg=False))\n    print(report(demo))\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport pulp\n\nfrom verdict import report\n\n\ndef library_problem(vans):\n    \"\"\"A library service's branch refits: maximize books added with `vans` delivery vans.\"\"\"\n    prob = pulp.LpProblem(\"branches\", pulp.LpMaximize)\n    b = {k: prob.add_variable(f\"b_{k}\", 0, 1, cat=pulp.LpBinary) for k in (\"mill\", \"dock\", \"park\")}\n    prob += 500 * b[\"mill\"] + 350 * b[\"dock\"] + 200 * b[\"park\"], \"books\"\n    prob += 3 * b[\"mill\"] + 2 * b[\"dock\"] + 1 * b[\"park\"] <= vans, \"vans\"\n    return prob, b\n\n\nprob, b = library_problem(vans=4)\nprob.solve(pulp.PULP_CBC_CMD(msg=False))\nprint(\"vans 4, search finished:\", report(prob))\nprob.sol_status = pulp.LpSolutionIntegerFeasible\nprint(\"vans 4, read as stopped by a limit:\", report(prob))\nprob, b = library_problem(vans=4)\nprob += b[\"mill\"] + b[\"dock\"] >= 2, \"both\"\nprob.solve(pulp.PULP_CBC_CMD(msg=False))\nprint(\"vans 4, mill and dock both required:\", report(prob))\n"
     }
   ],
   "video": null,
@@ -71,8 +89,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 3,
-    "code": 1,
+    "paras": 4,
+    "code": 2,
     "tables": 0,
     "lists": 1,
     "images": 0,
@@ -82,14 +100,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "364623d72e4ef50e07ce6cb203691ed6bd1671804d0c4d69e25a2e7c330a633f",
+  "content_sha256": "93118589b90254e84f9a95988c616dd8b34bbaad4b4ebb831ce37921287bc113",
   "starting_code": "from __future__ import annotations\n\nimport pulp\n\n\ndef report(prob: pulp.LpProblem) -> tuple[str, float | None]:\n    \"\"\"After prob.solve(...): (\"proved\", value), (\"unproved\", value) or (\"no plan\", None).\"\"\"\n    # TODO: read prob.status and prob.sol_status, and give a value only when there is a plan.\n    return \"proved\", None\n\nif __name__ == \"__main__\":\n    demo = pulp.LpProblem(\"demo\", pulp.LpMaximize)\n    a = demo.add_variable(\"a\", 0, 1, cat=pulp.LpBinary)\n    b = demo.add_variable(\"b\", 0, 1, cat=pulp.LpBinary)\n    demo += 3 * a + 2 * b, \"value\"\n    demo += a + b <= 1, \"one\"\n    demo.solve(pulp.PULP_CBC_CMD(msg=False))\n    print(report(demo))\n",
   "exercise": {
     "main_path": "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-01/practice-2/verdict.py",
     "test_path": "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-01/practice-2/test_verdict.py",
     "run_command": [
       "python3",
-      "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-01/practice-2/verdict.py"
+      "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-01/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -140,6 +158,10 @@
     },
     "concepts": [
       "status and sol_status are read together: a proved optimum, a plan without proof, or no plan"
-    ]
+    ],
+    "files": [
+      "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-01/practice-2/try_it.py"
+    ],
+    "try_file": "practice/05-other-modeling-frameworks-and-solvers/20-pulp/prose/unit-01/practice-2/try_it.py"
   }
 }

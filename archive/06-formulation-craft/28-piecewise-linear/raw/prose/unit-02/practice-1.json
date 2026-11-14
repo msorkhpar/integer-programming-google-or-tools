@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 1,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "A booster pump's power curve, exact in both directions",
   "blocks": [
     {
@@ -81,6 +81,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_power_curve(model: mathopt.Model, flow: mathopt.Variable, power: mathopt.Variable,\n                    xs: tuple[float, ...], ys: tuple[float, ...]) -> None:\n    \"\"\"Rows that make power = f(flow) exactly, for the curve through (xs[j], ys[j]).\"\"\"\n    pick, part_flow, part_power = [], [], []\n    for s in range(len(xs) - 1):\n        on = model.add_binary_variable(name=f\"on_{s}\")                  # the pump runs in band s\n        q = model.add_variable(lb=0, name=f\"q_{s}\")                    # the flow, if in band s, else 0\n        model.add_linear_constraint(q >= xs[s] * on, name=f\"band_lo_{s}\")\n        model.add_linear_constraint(q <= xs[s + 1] * on, name=f\"band_hi_{s}\")\n        rate = (ys[s + 1] - ys[s]) / (xs[s + 1] - xs[s])\n        pick.append(on)\n        part_flow.append(q)\n        part_power.append((ys[s] - rate * xs[s]) * on + rate * q)\n    model.add_linear_constraint(sum(pick) == 1, name=\"one_band\")\n    model.add_linear_constraint(flow == sum(part_flow), name=\"flow_parts\")\n    model.add_linear_constraint(power == sum(part_power), name=\"power_parts\")\n\n\ndef build(xs: tuple[float, ...], ys: tuple[float, ...]) -> tuple[mathopt.Model, mathopt.Variable, mathopt.Variable]:\n    model = mathopt.Model(name=\"booster\")\n    flow = model.add_variable(lb=0, name=\"flow\")\n    power = model.add_variable(lb=-1e9, ub=1e9, name=\"power\")\n    add_power_curve(model, flow, power, xs, ys)\n    return model, flow, power\n\n\nif __name__ == \"__main__\":\n    model, flow, power = build((0, 20, 40, 60, 80), (0, 30, 42, 70, 120))\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom booster import build\n\n# A fan's curve: flow and power, slopes 2.0, 0.5, 1.5.\nxs, ys = (0, 10, 30, 50), (0, 20, 30, 60)\n\ndef accepted(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(flow, power):\n    model, q, p = build(xs, ys)\n    q.lower_bound = q.upper_bound = flow\n    p.lower_bound = p.upper_bound = power\n    return accepted(model)\n\n\nprint(\"flow 20, power 25:\", allowed(20, 25))\nprint(\"flow 40, power 45:\", allowed(40, 45))\nprint(\"flow 20, power 24:\", allowed(20, 24))\nprint(\"flow 20, power 30:\", allowed(20, 30))\nprint(\"flow 50, power 60:\", allowed(50, 60))\nprint(\"flow 55, power 70:\", allowed(55, 70))\n"
         }
       ]
     },
@@ -93,6 +102,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_power_curve(model: mathopt.Model, flow: mathopt.Variable, power: mathopt.Variable,\n                    xs: tuple[float, ...], ys: tuple[float, ...]) -> None:\n    \"\"\"Rows that make power = f(flow) exactly, for the curve through (xs[j], ys[j]).\"\"\"\n    # TODO: tie each (flow, power) to one segment of the curve.\n    return None\n\n\ndef build(xs: tuple[float, ...], ys: tuple[float, ...]) -> tuple[mathopt.Model, mathopt.Variable, mathopt.Variable]:\n    model = mathopt.Model(name=\"booster\")\n    flow = model.add_variable(lb=0, name=\"flow\")\n    power = model.add_variable(lb=-1e9, ub=1e9, name=\"power\")\n    add_power_curve(model, flow, power, xs, ys)\n    return model, flow, power\n\n\nif __name__ == \"__main__\":\n    model, flow, power = build((0, 20, 40, 60, 80), (0, 30, 42, 70, 120))\n    print(model.get_num_linear_constraints(), \"rows\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\nfrom datetime import timedelta\n\nfrom ortools.math_opt.python import mathopt\n\nfrom booster import build\n\n# A fan's curve: flow and power, slopes 2.0, 0.5, 1.5.\nxs, ys = (0, 10, 30, 50), (0, 20, 30, 60)\n\ndef accepted(model):\n    params = mathopt.SolveParameters(time_limit=timedelta(seconds=5))\n    result = mathopt.solve(model, mathopt.SolverType.HIGHS, params=params)\n    return result.termination.reason == mathopt.TerminationReason.OPTIMAL\n\n\ndef allowed(flow, power):\n    model, q, p = build(xs, ys)\n    q.lower_bound = q.upper_bound = flow\n    p.lower_bound = p.upper_bound = power\n    return accepted(model)\n\n\nprint(\"flow 20, power 25:\", allowed(20, 25))\nprint(\"flow 40, power 45:\", allowed(40, 45))\nprint(\"flow 20, power 24:\", allowed(20, 24))\nprint(\"flow 20, power 30:\", allowed(20, 30))\nprint(\"flow 50, power 60:\", allowed(50, 60))\nprint(\"flow 55, power 70:\", allowed(55, 70))\n"
     }
   ],
   "video": null,
@@ -100,8 +118,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 6,
-    "code": 2,
+    "paras": 7,
+    "code": 3,
     "tables": 1,
     "lists": 0,
     "images": 0,
@@ -111,14 +129,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "b9c4989e65bdcf04df8cd5f421f887516a52394c798cfd34532b8f3a5b18903f",
+  "content_sha256": "58bb1258f2874d347242040c948ba2cc1d6b86a671c078e0380cd99c0c855108",
   "starting_code": "from __future__ import annotations\n\nfrom ortools.math_opt.python import mathopt\n\n\ndef add_power_curve(model: mathopt.Model, flow: mathopt.Variable, power: mathopt.Variable,\n                    xs: tuple[float, ...], ys: tuple[float, ...]) -> None:\n    \"\"\"Rows that make power = f(flow) exactly, for the curve through (xs[j], ys[j]).\"\"\"\n    # TODO: tie each (flow, power) to one segment of the curve.\n    return None\n\n\ndef build(xs: tuple[float, ...], ys: tuple[float, ...]) -> tuple[mathopt.Model, mathopt.Variable, mathopt.Variable]:\n    model = mathopt.Model(name=\"booster\")\n    flow = model.add_variable(lb=0, name=\"flow\")\n    power = model.add_variable(lb=-1e9, ub=1e9, name=\"power\")\n    add_power_curve(model, flow, power, xs, ys)\n    return model, flow, power\n\n\nif __name__ == \"__main__\":\n    model, flow, power = build((0, 20, 40, 60, 80), (0, 30, 42, 70, 120))\n    print(model.get_num_linear_constraints(), \"rows\")\n",
   "exercise": {
     "main_path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-1/booster.py",
     "test_path": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-1/test_booster.py",
     "run_command": [
       "python3",
-      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-1/booster.py"
+      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-1/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -161,6 +179,10 @@
       "only two neighbouring weights may be positive, the SOS2 rule",
       "one binary per segment writes the neighbour rule for a curve of any shape",
       "a point of the curve as weights on the breakpoints, and why weights alone are not enough"
-    ]
+    ],
+    "files": [
+      "practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-1/try_it.py"
+    ],
+    "try_file": "practice/06-formulation-craft/28-piecewise-linear/prose/unit-02/practice-1/try_it.py"
   }
 }

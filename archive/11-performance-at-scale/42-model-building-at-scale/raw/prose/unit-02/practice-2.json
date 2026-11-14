@@ -9,7 +9,7 @@
   "unit": 2,
   "kind": "practice",
   "ordinal": 2,
-  "ingested": "2026-11-13",
+  "ingested": "2026-11-14",
   "title": "Speed up a slow builder ten times",
   "blocks": [
     {
@@ -56,6 +56,15 @@
           "type": "code",
           "lang": "python",
           "text": "from __future__ import annotations\n\nimport random\nimport statistics\nimport time\n\nimport pandas as pd\nfrom ortools.math_opt.python import mathopt\n\n\ndef build_slow(tasks: pd.DataFrame, options: pd.DataFrame, capacity: pd.DataFrame) -> mathopt.Model:\n    \"\"\"The team's builder: correct, and slow, because every lookup scans a whole table.\"\"\"\n    model = mathopt.Model(name=\"inspections\")\n    y = {}\n    for _, o in options.iterrows():\n        y[o.task, o.week] = model.add_binary_variable(name=f\"y_{o.task}_{o.week}\")\n    for _, t in tasks.iterrows():\n        weeks = options[options.task == t.task][\"week\"]                     # scans every option\n        model.add_linear_constraint(mathopt.LinearExpression() + sum(y[t.task, w] for w in weeks) <= 1,\n                                    name=f\"once_{t.task}\")\n    for _, c in capacity.iterrows():\n        load = mathopt.LinearExpression()\n        for _, o in options[options.week == c.week].iterrows():              # scans every option\n            hours = tasks[tasks.task == o.task][\"hours\"].iloc[0]             # scans every task\n            load += float(hours) * y[o.task, o.week]\n        model.add_linear_constraint(load <= float(c.hours), name=f\"crew_{c.week}\")\n    objective = mathopt.LinearExpression()\n    for _, o in options.iterrows():\n        objective += float(tasks[tasks.task == o.task][\"value\"].iloc[0]) * y[o.task, o.week]\n    model.maximize(objective)\n    return model\n\n\ndef build_fast(tasks: pd.DataFrame, options: pd.DataFrame, capacity: pd.DataFrame) -> mathopt.Model:\n    \"\"\"The same model as build_slow, built with lookups made once.\"\"\"\n    model = mathopt.Model(name=\"inspections\")\n    hours = dict(zip(tasks[\"task\"], tasks[\"hours\"]))\n    value = dict(zip(tasks[\"task\"], tasks[\"value\"]))\n    by_task, by_week, terms = {}, {}, []\n    for task, week in zip(options[\"task\"], options[\"week\"]):\n        var = model.add_binary_variable(name=f\"y_{task}_{week}\")\n        by_task.setdefault(task, []).append(var)\n        by_week.setdefault(week, []).append(float(hours[task]) * var)\n        terms.append(float(value[task]) * var)\n    for task in tasks[\"task\"]:\n        model.add_linear_constraint(mathopt.fast_sum(by_task.get(task, [])) <= 1, name=f\"once_{task}\")\n    for week, cap in zip(capacity[\"week\"], capacity[\"hours\"]):\n        model.add_linear_constraint(mathopt.fast_sum(by_week.get(week, [])) <= float(cap), name=f\"crew_{week}\")\n    model.maximize(mathopt.fast_sum(terms))\n    return model\n\n\ndef instance(n: int, seed: int = 1) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:\n    \"\"\"A made-up instance: n one-week inspection tasks, each allowed in up to three of 12 weeks.\"\"\"\n    draw = random.Random(seed)\n    tasks = pd.DataFrame({\"task\": [f\"T{i:04d}\" for i in range(n)],\n                          \"hours\": [draw.randint(4, 40) for _ in range(n)],\n                          \"value\": [draw.randint(1, 90) for _ in range(n)]})\n    rows = [(t, w) for t in tasks[\"task\"] for w in sorted(draw.sample(range(1, 13), draw.randint(1, 3)))]\n    options = pd.DataFrame(rows, columns=[\"task\", \"week\"])\n    capacity = pd.DataFrame({\"week\": range(1, 13), \"hours\": [draw.randint(200, 900) for _ in range(12)]})\n    return tasks, options, capacity\n\n\nif __name__ == \"__main__\":\n    tasks, options, capacity = instance(1_500)\n    same = build_fast(tasks, options, capacity).export_model() == build_slow(tasks, options, capacity).export_model()\n    print(\"identical models:\", same)\n    ratios = []\n    for _ in range(3):\n        start = time.perf_counter()\n        build_slow(tasks, options, capacity)\n        slow = time.perf_counter() - start\n        start = time.perf_counter()\n        build_fast(tasks, options, capacity)\n        ratios.append(slow / (time.perf_counter() - start))\n    print(f\"build_fast is {statistics.median(ratios):.0f}x faster on 1,500 tasks (median of 3 rounds; \"\n          \"your machine's number will differ)\")\n"
+        },
+        {
+          "type": "para",
+          "text": "File: try_it.py"
+        },
+        {
+          "type": "code",
+          "lang": "python",
+          "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport pandas as pd\n\nfrom inspections import build_fast, build_slow, instance\n\ntasks = pd.DataFrame({\"task\": [\"V1\", \"V2\", \"V3\"], \"hours\": [10, 6, 14], \"value\": [25, 15, 40]})\noptions = pd.DataFrame({\"task\": [\"V1\", \"V2\", \"V2\", \"V3\"], \"week\": [1, 1, 2, 2]})\ncapacity = pd.DataFrame({\"week\": [2, 1, 3], \"hours\": [18, 12, 9]})\n\nfast = build_fast(tasks, options, capacity)\nprint(\"variables, three tasks:\", fast.get_num_variables())\nprint(\"rows, three tasks:\", fast.get_num_linear_constraints())\nprint(\"same as slow, three tasks:\", fast.export_model() == build_slow(tasks, options, capacity).export_model())\n\ntasks, options, capacity = instance(60, seed=7)\nprint(\"same as slow, 60 made-up tasks:\",\n      build_fast(tasks, options, capacity).export_model() == build_slow(tasks, options, capacity).export_model())\n"
         }
       ]
     },
@@ -68,6 +77,15 @@
       "type": "code",
       "lang": "python",
       "text": "from __future__ import annotations\n\nimport random\nimport statistics\nimport time\n\nimport pandas as pd\nfrom ortools.math_opt.python import mathopt\n\n\ndef build_slow(tasks: pd.DataFrame, options: pd.DataFrame, capacity: pd.DataFrame) -> mathopt.Model:\n    \"\"\"The team's builder: correct, and slow, because every lookup scans a whole table.\"\"\"\n    model = mathopt.Model(name=\"inspections\")\n    y = {}\n    for _, o in options.iterrows():\n        y[o.task, o.week] = model.add_binary_variable(name=f\"y_{o.task}_{o.week}\")\n    for _, t in tasks.iterrows():\n        weeks = options[options.task == t.task][\"week\"]                     # scans every option\n        model.add_linear_constraint(mathopt.LinearExpression() + sum(y[t.task, w] for w in weeks) <= 1,\n                                    name=f\"once_{t.task}\")\n    for _, c in capacity.iterrows():\n        load = mathopt.LinearExpression()\n        for _, o in options[options.week == c.week].iterrows():              # scans every option\n            hours = tasks[tasks.task == o.task][\"hours\"].iloc[0]             # scans every task\n            load += float(hours) * y[o.task, o.week]\n        model.add_linear_constraint(load <= float(c.hours), name=f\"crew_{c.week}\")\n    objective = mathopt.LinearExpression()\n    for _, o in options.iterrows():\n        objective += float(tasks[tasks.task == o.task][\"value\"].iloc[0]) * y[o.task, o.week]\n    model.maximize(objective)\n    return model\n\n\ndef build_fast(tasks: pd.DataFrame, options: pd.DataFrame, capacity: pd.DataFrame) -> mathopt.Model:\n    \"\"\"The same model as build_slow, built with lookups made once.\"\"\"\n    # TODO: build exactly build_slow's model, without scanning a table inside a loop.\n    return mathopt.Model(name=\"inspections\")\n\n\ndef instance(n: int, seed: int = 1) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:\n    \"\"\"A made-up instance: n one-week inspection tasks, each allowed in up to three of 12 weeks.\"\"\"\n    draw = random.Random(seed)\n    tasks = pd.DataFrame({\"task\": [f\"T{i:04d}\" for i in range(n)],\n                          \"hours\": [draw.randint(4, 40) for _ in range(n)],\n                          \"value\": [draw.randint(1, 90) for _ in range(n)]})\n    rows = [(t, w) for t in tasks[\"task\"] for w in sorted(draw.sample(range(1, 13), draw.randint(1, 3)))]\n    options = pd.DataFrame(rows, columns=[\"task\", \"week\"])\n    capacity = pd.DataFrame({\"week\": range(1, 13), \"hours\": [draw.randint(200, 900) for _ in range(12)]})\n    return tasks, options, capacity\n\n\nif __name__ == \"__main__\":\n    tasks, options, capacity = instance(1_500)\n    same = build_fast(tasks, options, capacity).export_model() == build_slow(tasks, options, capacity).export_model()\n    print(\"identical models:\", same)\n    ratios = []\n    for _ in range(3):\n        start = time.perf_counter()\n        build_slow(tasks, options, capacity)\n        slow = time.perf_counter() - start\n        start = time.perf_counter()\n        build_fast(tasks, options, capacity)\n        ratios.append(slow / (time.perf_counter() - start))\n    print(f\"build_fast is {statistics.median(ratios):.0f}x faster on 1,500 tasks (median of 3 rounds; \"\n          \"your machine's number will differ)\")\n"
+    },
+    {
+      "type": "para",
+      "text": "File: try_it.py"
+    },
+    {
+      "type": "code",
+      "lang": "python",
+      "text": "\"\"\"Run executes this file. Change the calls and see what prints. Submit grades.\"\"\"\nimport logging\n\n# Turn the logger up, so the `log.debug` lines of your code show under the printed lines.\nlogging.basicConfig(level=logging.DEBUG, format=\"%(levelname)s %(message)s\")\n\nimport pandas as pd\n\nfrom inspections import build_fast, build_slow, instance\n\ntasks = pd.DataFrame({\"task\": [\"V1\", \"V2\", \"V3\"], \"hours\": [10, 6, 14], \"value\": [25, 15, 40]})\noptions = pd.DataFrame({\"task\": [\"V1\", \"V2\", \"V2\", \"V3\"], \"week\": [1, 1, 2, 2]})\ncapacity = pd.DataFrame({\"week\": [2, 1, 3], \"hours\": [18, 12, 9]})\n\nfast = build_fast(tasks, options, capacity)\nprint(\"variables, three tasks:\", fast.get_num_variables())\nprint(\"rows, three tasks:\", fast.get_num_linear_constraints())\nprint(\"same as slow, three tasks:\", fast.export_model() == build_slow(tasks, options, capacity).export_model())\n\ntasks, options, capacity = instance(60, seed=7)\nprint(\"same as slow, 60 made-up tasks:\",\n      build_fast(tasks, options, capacity).export_model() == build_slow(tasks, options, capacity).export_model())\n"
     }
   ],
   "video": null,
@@ -75,8 +93,8 @@
   "attachments": [],
   "counts": {
     "headings": 3,
-    "paras": 5,
-    "code": 2,
+    "paras": 6,
+    "code": 3,
     "tables": 0,
     "lists": 0,
     "images": 0,
@@ -86,14 +104,14 @@
     "html": 0,
     "disclosures": 1
   },
-  "content_sha256": "172e2759846136b9b946f43c451bb8c4f10a84ed03b99fc28808b5e61682c51c",
+  "content_sha256": "7c2cdac4413a1eac507adbe9ec2d41eda71475a7bd8bd9cb8f88f7911f8c938b",
   "starting_code": "from __future__ import annotations\n\nimport random\nimport statistics\nimport time\n\nimport pandas as pd\nfrom ortools.math_opt.python import mathopt\n\n\ndef build_slow(tasks: pd.DataFrame, options: pd.DataFrame, capacity: pd.DataFrame) -> mathopt.Model:\n    \"\"\"The team's builder: correct, and slow, because every lookup scans a whole table.\"\"\"\n    model = mathopt.Model(name=\"inspections\")\n    y = {}\n    for _, o in options.iterrows():\n        y[o.task, o.week] = model.add_binary_variable(name=f\"y_{o.task}_{o.week}\")\n    for _, t in tasks.iterrows():\n        weeks = options[options.task == t.task][\"week\"]                     # scans every option\n        model.add_linear_constraint(mathopt.LinearExpression() + sum(y[t.task, w] for w in weeks) <= 1,\n                                    name=f\"once_{t.task}\")\n    for _, c in capacity.iterrows():\n        load = mathopt.LinearExpression()\n        for _, o in options[options.week == c.week].iterrows():              # scans every option\n            hours = tasks[tasks.task == o.task][\"hours\"].iloc[0]             # scans every task\n            load += float(hours) * y[o.task, o.week]\n        model.add_linear_constraint(load <= float(c.hours), name=f\"crew_{c.week}\")\n    objective = mathopt.LinearExpression()\n    for _, o in options.iterrows():\n        objective += float(tasks[tasks.task == o.task][\"value\"].iloc[0]) * y[o.task, o.week]\n    model.maximize(objective)\n    return model\n\n\ndef build_fast(tasks: pd.DataFrame, options: pd.DataFrame, capacity: pd.DataFrame) -> mathopt.Model:\n    \"\"\"The same model as build_slow, built with lookups made once.\"\"\"\n    # TODO: build exactly build_slow's model, without scanning a table inside a loop.\n    return mathopt.Model(name=\"inspections\")\n\n\ndef instance(n: int, seed: int = 1) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:\n    \"\"\"A made-up instance: n one-week inspection tasks, each allowed in up to three of 12 weeks.\"\"\"\n    draw = random.Random(seed)\n    tasks = pd.DataFrame({\"task\": [f\"T{i:04d}\" for i in range(n)],\n                          \"hours\": [draw.randint(4, 40) for _ in range(n)],\n                          \"value\": [draw.randint(1, 90) for _ in range(n)]})\n    rows = [(t, w) for t in tasks[\"task\"] for w in sorted(draw.sample(range(1, 13), draw.randint(1, 3)))]\n    options = pd.DataFrame(rows, columns=[\"task\", \"week\"])\n    capacity = pd.DataFrame({\"week\": range(1, 13), \"hours\": [draw.randint(200, 900) for _ in range(12)]})\n    return tasks, options, capacity\n\n\nif __name__ == \"__main__\":\n    tasks, options, capacity = instance(1_500)\n    same = build_fast(tasks, options, capacity).export_model() == build_slow(tasks, options, capacity).export_model()\n    print(\"identical models:\", same)\n    ratios = []\n    for _ in range(3):\n        start = time.perf_counter()\n        build_slow(tasks, options, capacity)\n        slow = time.perf_counter() - start\n        start = time.perf_counter()\n        build_fast(tasks, options, capacity)\n        ratios.append(slow / (time.perf_counter() - start))\n    print(f\"build_fast is {statistics.median(ratios):.0f}x faster on 1,500 tasks (median of 3 rounds; \"\n          \"your machine's number will differ)\")\n",
   "exercise": {
     "main_path": "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-2/inspections.py",
     "test_path": "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-2/test_inspections.py",
     "run_command": [
       "python3",
-      "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-2/inspections.py"
+      "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-2/try_it.py"
     ],
     "test_command": [
       "python3",
@@ -150,6 +168,10 @@
     "concepts": [
       "a faster builder is accepted only when its exported model equals the reference builder's",
       "a ModelProto filled from arrays becomes a model through Model.from_model_proto, and its rules are the builder's to keep"
-    ]
+    ],
+    "files": [
+      "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-2/try_it.py"
+    ],
+    "try_file": "practice/11-performance-at-scale/42-model-building-at-scale/prose/unit-02/practice-2/try_it.py"
   }
 }
